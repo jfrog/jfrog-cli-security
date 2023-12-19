@@ -21,7 +21,19 @@
 
 # 🆕 Adding Command
 
+Embedded Plugin `Command` can be defined as defined at:
 
+[plugins/components/structure.go](github.com/jfrog/jfrog-cli-core/plugins/components/structure.go)
+
+When defining the Action of the command the CLI will pass you a `Context` with all the related command information to be parsed and executed as defined at:
+
+[plugins/components/commandcomp.go](github.com/jfrog/jfrog-cli-core/plugins/components/commandcomp.go)
+
+### NOTE
+
+> Before adding any new general logic to handle any attributes from `Context` make sure to first checkout: [plugins/commonutils.go](github.com/jfrog/jfrog-cli-core/plugins/commonutils.go)
+
+> Before adding any new CLI related constants (Flags, Env vars...) please make sure they are not defined already at: [cliutils](github.com/jfrog/jfrog-cli-core/cliutils)
 
 
 <br>

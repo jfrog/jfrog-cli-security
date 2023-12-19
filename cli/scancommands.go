@@ -4,28 +4,28 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
+	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
+	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
-	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/commands/scan/scan"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/scan/scan"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 // TODO: replace dependencies at commands/utils from jfrog-cli-core/v2 to jfrog-cli-security
@@ -56,69 +56,69 @@ func GetAuditAndScansCommands() []components.Command {
 			Action:      AuditCmd,
 		},
 		{
-			Name:         "curation-audit",
-			Aliases:      []string{"ca"},
-			Flags:        flags.GetCommandFlags(flags.CurationAudit),
-			Description:        curationDocs.GetDescription(),
-			Action:       CurationCmd,
+			Name:        "curation-audit",
+			Aliases:     []string{"ca"},
+			Flags:       flags.GetCommandFlags(flags.CurationAudit),
+			Description: curationDocs.GetDescription(),
+			Action:      CurationCmd,
 		},
 
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
-			Name:         "audit-mvn",
-			Aliases:      []string{"am"},
-			Flags:        flags.GetCommandFlags(flags.AuditMvn),
-			Description:        auditSpecificDocs.GetMvnDescription(),
+			Name:        "audit-mvn",
+			Aliases:     []string{"am"},
+			Flags:       flags.GetCommandFlags(flags.AuditMvn),
+			Description: auditSpecificDocs.GetMvnDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Maven)
 			},
 			Hidden: true,
 		},
 		{
-			Name:         "audit-gradle",
-			Aliases:      []string{"ag"},
-			Flags:        flags.GetCommandFlags(flags.AuditGradle),
-			Description:        auditSpecificDocs.GetGradleDescription(),
+			Name:        "audit-gradle",
+			Aliases:     []string{"ag"},
+			Flags:       flags.GetCommandFlags(flags.AuditGradle),
+			Description: auditSpecificDocs.GetGradleDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Gradle)
 			},
 			Hidden: true,
 		},
 		{
-			Name:         "audit-npm",
-			Aliases:      []string{"an"},
-			Flags:        flags.GetCommandFlags(flags.AuditNpm),
-			Description:        auditSpecificDocs.GetNpmDescription(),
+			Name:        "audit-npm",
+			Aliases:     []string{"an"},
+			Flags:       flags.GetCommandFlags(flags.AuditNpm),
+			Description: auditSpecificDocs.GetNpmDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Npm)
 			},
 			Hidden: true,
 		},
 		{
-			Name:         "audit-go",
-			Aliases:      []string{"ago"},
-			Flags:        flags.GetCommandFlags(flags.AuditGo),
-			Description:        auditSpecificDocs.GetGoDescription(),
+			Name:        "audit-go",
+			Aliases:     []string{"ago"},
+			Flags:       flags.GetCommandFlags(flags.AuditGo),
+			Description: auditSpecificDocs.GetGoDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Go)
 			},
 			Hidden: true,
 		},
 		{
-			Name:         "audit-pip",
-			Aliases:      []string{"ap"},
-			Flags:        flags.GetCommandFlags(flags.AuditPip),
-			Description:        auditSpecificDocs.GetPipDescription(),
+			Name:        "audit-pip",
+			Aliases:     []string{"ap"},
+			Flags:       flags.GetCommandFlags(flags.AuditPip),
+			Description: auditSpecificDocs.GetPipDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Pip)
 			},
 			Hidden: true,
 		},
 		{
-			Name:         "audit-pipenv",
-			Aliases:      []string{"ape"},
-			Flags:        flags.GetCommandFlags(flags.AuditPipenv),
-			Description:        auditSpecificDocs.GetPipenvDescription(),
+			Name:        "audit-pipenv",
+			Aliases:     []string{"ape"},
+			Flags:       flags.GetCommandFlags(flags.AuditPipenv),
+			Description: auditSpecificDocs.GetPipenvDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Pipenv)
 			},

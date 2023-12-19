@@ -6,8 +6,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 )
 
 const (
@@ -102,8 +102,8 @@ const (
 	WorkingDirs                  = "working-dirs"
 
 	// Unique curation flags
-	CurationOutput       = "curation-format"
-	CurationThreads      = "curation-threads"
+	CurationOutput  = "curation-format"
+	CurationThreads = "curation-threads"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -202,8 +202,8 @@ var flagsMap = map[string]components.Flag{
 		components.SetHiddenBoolFlag(),
 	),
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
-	CurationThreads: components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
-	CurationOutput: components.NewStringFlag(XrOutput, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
+	CurationOutput:   components.NewStringFlag(XrOutput, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {

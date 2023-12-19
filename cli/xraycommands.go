@@ -50,46 +50,46 @@ func GetXrayNameSpaceCommands() []components.Command {
 			},
 		},
 		{
-			Name:         "audit-mvn",
-			Aliases:      []string{"am"},
-			Flags:        flags.GetCommandFlags(flags.AuditMvn),
-			Description:        auditSpecificDocs.GetMvnDescription(),
+			Name:        "audit-mvn",
+			Aliases:     []string{"am"},
+			Flags:       flags.GetCommandFlags(flags.AuditMvn),
+			Description: auditSpecificDocs.GetMvnDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Maven)
 			},
 		},
 		{
-			Name:         "audit-gradle",
-			Aliases:      []string{"ag"},
-			Flags:        flags.GetCommandFlags(flags.AuditGradle),
-			Description:        auditSpecificDocs.GetGradleDescription(),
+			Name:        "audit-gradle",
+			Aliases:     []string{"ag"},
+			Flags:       flags.GetCommandFlags(flags.AuditGradle),
+			Description: auditSpecificDocs.GetGradleDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Gradle)
 			},
 		},
 		{
-			Name:         "audit-npm",
-			Aliases:      []string{"an"},
-			Flags:        flags.GetCommandFlags(flags.AuditNpm),
-			Description:        auditSpecificDocs.GetNpmDescription(),
+			Name:        "audit-npm",
+			Aliases:     []string{"an"},
+			Flags:       flags.GetCommandFlags(flags.AuditNpm),
+			Description: auditSpecificDocs.GetNpmDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Npm)
 			},
 		},
 		{
-			Name:         "audit-go",
-			Aliases:      []string{"ago"},
-			Flags:        flags.GetCommandFlags(flags.AuditGo),
-			Description:        auditSpecificDocs.GetGoDescription(),
+			Name:        "audit-go",
+			Aliases:     []string{"ago"},
+			Flags:       flags.GetCommandFlags(flags.AuditGo),
+			Description: auditSpecificDocs.GetGoDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Go)
 			},
 		},
 		{
-			Name:         "audit-pip",
-			Aliases:      []string{"ap"},
-			Flags:        flags.GetCommandFlags(flags.AuditPip),
-			Description:        auditSpecificDocs.GetPipDescription(),
+			Name:        "audit-pip",
+			Aliases:     []string{"ap"},
+			Flags:       flags.GetCommandFlags(flags.AuditPip),
+			Description: auditSpecificDocs.GetPipDescription(),
 			Action: func(c *components.Context) error {
 				return AuditSpecificCmd(c, coreutils.Pip)
 			},
