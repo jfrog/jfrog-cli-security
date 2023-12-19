@@ -4,12 +4,19 @@ import (
 	"time"
 
 	corecommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/cliutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/curl"
-	"github.com/jfrog/jfrog-cli-security/commands/offlineupdate"
+	"github.com/jfrog/jfrog-cli-security/commands/xray/curl"
+	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
+
+	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
+	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	curlDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/curl"
+	offlineupdateDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/offlineupdate"
 )
 
 func GetXrayNameSpaceCommands() []components.Command {
@@ -17,32 +24,74 @@ func GetXrayNameSpaceCommands() []components.Command {
 		{
 			Name:            "curl",
 			Aliases:         []string{"cl"},
-			Flags:           GetCommandFlags(XrCurl),
-			Description:     curl.GetDescription(),
-			Arguments:       curl.GetArguments(),
+			Flags:           flags.GetCommandFlags(flags.XrCurl),
+			Description:     curlDocs.GetDescription(),
+			Arguments:       curlDocs.GetArguments(),
 			SkipFlagParsing: true,
 			Action:          curlCmd,
 		},
 		{
 			Name:        "offline-update",
 			Aliases:     []string{"ou"},
-			Flags:       GetCommandFlags(OfflineUpdate),
-			Description: offlineupdate.GetDescription(),
-			// Usage: offlineupdate.Usage,
-			HelpName:    corecommondocs.CreateUsage("xr offline-update", offlineupdatedocs.GetDescription(), offlineupdatedocs.Usage),
+			Flags:       flags.GetCommandFlags(flags.OfflineUpdate),
+			Description: offlineupdateDocs.GetDescription(),
 			Action:      offlineUpdates,
 		},
-		
+
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
-			Name:         "scan",
-			Aliases:      []string{"s"},
-			Flags:        GetCommandFlags(XrScan),
-			Description:  scandocs.GetDescription(),
-			Arguments:    scandocs.GetArguments(),
-			HelpName:     corecommondocs.CreateUsage("xr scan", scandocs.GetDescription(), scandocs.Usage),
+			Name:        "scan",
+			Aliases:     []string{"s"},
+			Flags:       flags.GetCommandFlags(flags.XrScan),
+			Description: scanDocs.GetDescription(),
+			Arguments:   scanDocs.GetArguments(),
 			Action: func(c *components.Context) error {
-				return cliutils.RunCmdWithDeprecationWarning("scan", "xr", c, scan.ScanCmd)
+				return pluginsCommon.RunCmdWithDeprecationWarning("scan", "xr", c, ScanCmd)
+			},
+		},
+		{
+			Name:         "audit-mvn",
+			Aliases:      []string{"am"},
+			Flags:        flags.GetCommandFlags(flags.AuditMvn),
+			Description:        auditSpecificDocs.GetMvnDescription(),
+			Action: func(c *components.Context) error {
+				return AuditSpecificCmd(c, coreutils.Maven)
+			},
+		},
+		{
+			Name:         "audit-gradle",
+			Aliases:      []string{"ag"},
+			Flags:        flags.GetCommandFlags(flags.AuditGradle),
+			Description:        auditSpecificDocs.GetGradleDescription(),
+			Action: func(c *components.Context) error {
+				return AuditSpecificCmd(c, coreutils.Gradle)
+			},
+		},
+		{
+			Name:         "audit-npm",
+			Aliases:      []string{"an"},
+			Flags:        flags.GetCommandFlags(flags.AuditNpm),
+			Description:        auditSpecificDocs.GetNpmDescription(),
+			Action: func(c *components.Context) error {
+				return AuditSpecificCmd(c, coreutils.Npm)
+			},
+		},
+		{
+			Name:         "audit-go",
+			Aliases:      []string{"ago"},
+			Flags:        flags.GetCommandFlags(flags.AuditGo),
+			Description:        auditSpecificDocs.GetGoDescription(),
+			Action: func(c *components.Context) error {
+				return AuditSpecificCmd(c, coreutils.Go)
+			},
+		},
+		{
+			Name:         "audit-pip",
+			Aliases:      []string{"ap"},
+			Flags:        flags.GetCommandFlags(flags.AuditPip),
+			Description:        auditSpecificDocs.GetPipDescription(),
+			Action: func(c *components.Context) error {
+				return AuditSpecificCmd(c, coreutils.Pip)
 			},
 		},
 	}
@@ -51,11 +100,11 @@ func GetXrayNameSpaceCommands() []components.Command {
 // Base on a given context from the CLI, create the curl command and execute it.
 func curlCmd(c *components.Context) error {
 	// Parse context and validate it for the command.
-	if show, err := cliutils.ShowCmdHelpIfNeeded(c, c.Arguments); show || err != nil {
+	if show, err := pluginsCommon.ShowCmdHelpIfNeeded(c, c.Arguments); show || err != nil {
 		return err
 	}
 	if len(c.Arguments) < 1 {
-		return cliutils.WrongNumberOfArgumentsHandler(c)
+		return pluginsCommon.WrongNumberOfArgumentsHandler(c)
 	}
 	// Create and execute the curl command.
 	xrCurlCmd, err := newXrCurlCommand(c)
@@ -66,7 +115,7 @@ func curlCmd(c *components.Context) error {
 }
 
 func newXrCurlCommand(c *components.Context) (*curl.XrCurlCommand, error) {
-	xrCurlCommand := curl.NewXrCurlCommand(*corecommon.NewCurlCommand().SetArguments(cliutils.ExtractArguments(c)))
+	xrCurlCommand := curl.NewXrCurlCommand(*corecommon.NewCurlCommand().SetArguments(pluginsCommon.ExtractArguments(c)))
 	xrDetails, err := xrCurlCommand.GetServerDetails()
 	if err != nil {
 		return nil, err
@@ -90,31 +139,31 @@ func offlineUpdates(c *components.Context) error {
 
 func getOfflineUpdatesFlag(c *components.Context) (offlineFlags *offlineupdate.OfflineUpdatesFlags, err error) {
 	offlineFlags = new(offlineupdate.OfflineUpdatesFlags)
-	offlineFlags.License = c.GetStringFlagValue(LicenseId)
+	offlineFlags.License = c.GetStringFlagValue(flags.LicenseId)
 	if len(offlineFlags.License) < 1 {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory", LicenseId)
+		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.LicenseId)
 	}
-	offlineFlags.Version = c.GetStringFlagValue(Version)
-	offlineFlags.Target = c.GetStringFlagValue(Target)
+	offlineFlags.Version = c.GetStringFlagValue(flags.Version)
+	offlineFlags.Target = c.GetStringFlagValue(flags.Target)
 	// Handle V3 flags
-	stream := c.GetStringFlagValue(Stream)
-	offlineFlags.IsPeriodicUpdate = c.GetBoolFlagValue(Periodic)
+	stream := c.GetStringFlagValue(flags.Stream)
+	offlineFlags.IsPeriodicUpdate = c.GetBoolFlagValue(flags.Periodic)
 	// If a 'stream' flag was provided - validate its value and return.
 	if stream != "" {
-		offlineFlags.Stream, err = validateStream(stream)
+		offlineFlags.Stream, err = offlineupdate.ValidateStream(stream)
 		return
 	}
 	if offlineFlags.IsPeriodicUpdate {
-		return nil, errorutils.CheckErrorf("the %s option is only valid with %s", Periodic, Stream)
+		return nil, errorutils.CheckErrorf("the %s option is only valid with %s", flags.Periodic, flags.Stream)
 	}
 	// Handle V1 flags
-	from := c.GetStringFlagValue(From)
-	to := c.GetStringFlagValue(To)
+	from := c.GetStringFlagValue(flags.From)
+	to := c.GetStringFlagValue(flags.To)
 	if len(to) > 0 && len(from) < 1 {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory, when the --%s option is sent", From, To)
+		return nil, errorutils.CheckErrorf("the --%s option is mandatory, when the --%s option is sent", flags.From, flags.To)
 	}
 	if len(from) > 0 && len(to) < 1 {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory, when the --%s option is sent", To, From)
+		return nil, errorutils.CheckErrorf("the --%s option is mandatory, when the --%s option is sent", flags.To, flags.From)
 	}
 	if len(from) > 0 && len(to) > 0 {
 		offlineFlags.From, err = dateToMilliseconds(from)
@@ -126,15 +175,6 @@ func getOfflineUpdatesFlag(c *components.Context) (offlineFlags *offlineupdate.O
 		err = errorutils.CheckError(err)
 	}
 	return
-}
-
-// Verify that the given string is a valid optional stream.
-func validateStream(stream string) (string, error) {
-	streams := offlineupdate.NewValidStreams()
-	if streams.StreamsMap[stream] {
-		return stream, nil
-	}
-	return "", errorutils.CheckErrorf("Invalid stream type: %s, Possible values are: %v", stream, streams.GetValidStreamsString())
 }
 
 func dateToMilliseconds(date string) (dateInMillisecond int64, err error) {
