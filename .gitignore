@@ -5,3 +5,17 @@
 
 # IOS
 *.DS_Store
+
+# Vim
+*~
+*.swp
+
+# Gradle
+.gradle
+
+# npm build files
+node_modules
+
+# Test files
+tmp
+out
