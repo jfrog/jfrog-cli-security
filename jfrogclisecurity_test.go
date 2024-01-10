@@ -3,46 +3,31 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/log"
+	"github.com/jfrog/jfrog-cli-security/tests/utils"
+
+	configTests "github.com/jfrog/jfrog-cli-security/tests"
+
 	clientLog "github.com/jfrog/jfrog-client-go/utils/log"
+
+	"os"
+	"testing"
 )
 
 const (
-	CliIntegrationTests = "github.com/jfrog/jfrog-cli-security/tests/integration"
+	CliIntegrationTests = "github.com/jfrog/jfrog-cli-security/"
 )
 
 func TestMain(m *testing.M) {
-	setupTests()
+	setupIntegrationTests()
 	result := m.Run()
-
+	tearDownIntegrationTests()
 	os.Exit(result)
 }
 
-func TestUnitTests(t *testing.T) {
-	// Create temp jfrog home
-	cleanUpJfrogHome, err := coreTests.SetJfrogHome()
-	if err != nil {
-		clientLog.Error(err)
-		os.Exit(1)
-	}
-	// Clean from previous tests.
-	defer cleanUpJfrogHome()
-
-	packages := clientTests.GetTestPackages("./...")
-	packages = clientTests.ExcludeTestsPackage(packages, CliIntegrationTests)
-	assert.NoError(t, clientTests.RunTests(packages, false))
-}
-
-func setupTests() {
+func setupIntegrationTests() {
 	// Disable usage report.
 	if err := os.Setenv(coreutils.ReportUsage, "false"); err != nil {
 		clientLog.Error(fmt.Sprintf("Couldn't set env: %s. Error: %s", coreutils.ReportUsage, err.Error()))
@@ -56,4 +41,14 @@ func setupTests() {
 	// General
 	flag.Parse()
 	log.SetDefaultLogger()
+	// Init
+	utils.InitTestCliDetails()
+	utils.AuthenticateArtifactory()
+	utils.CreateRequiredRepositories()
+}
+
+func tearDownIntegrationTests() {
+	// Important - Virtual repositories must be deleted first
+	utils.DeleteRepos(configTests.CreatedVirtualRepositories)
+	utils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
 }

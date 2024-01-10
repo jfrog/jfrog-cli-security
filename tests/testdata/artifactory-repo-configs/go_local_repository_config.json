@@ -1,0 +1,5 @@
+{
+  "key": "${GO_REPO}",
+  "rclass": "local",
+  "packageType": "go"
+}
