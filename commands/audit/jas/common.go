@@ -12,7 +12,6 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -230,7 +229,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 }
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
-	assert.NoError(t, dependencies.DownloadAnalyzerManagerIfNeeded())
+	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded())
 	scanner, err := NewJasScanner(workingDirs, &FakeServerDetails, "")
 	assert.NoError(t, err)
 	return scanner, func() {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -198,4 +199,70 @@ func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
 		}
 	}
 	return scanner.FormattedError(err)
+}
+
+// Download the latest AnalyzerManager executable if not cached locally.
+// By default, the zip is downloaded directly from jfrog releases.
+func DownloadAnalyzerManagerIfNeeded() error {
+	downloadPath, err := GetAnalyzerManagerDownloadPath()
+	if err != nil {
+		return err
+	}
+	artDetails, remotePath, err := getAnalyzerManagerRemoteDetails(downloadPath)
+	if err != nil {
+		return err
+	}
+	// Check if the AnalyzerManager should be downloaded.
+	// First get the latest AnalyzerManager checksum from Artifactory.
+	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
+	if err != nil {
+		return err
+	}
+	downloadUrl := artDetails.ArtifactoryUrl + remotePath
+	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
+	if err != nil {
+		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
+	}
+	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
+	if err != nil {
+		return err
+	}
+	// Find current AnalyzerManager checksum.
+	checksumFilePath := filepath.Join(analyzerManagerDir, dependencies.ChecksumFileName)
+	exist, err := fileutils.IsFileExists(checksumFilePath, false)
+	if err != nil {
+		return err
+	}
+	if exist {
+		var sha2 []byte
+		sha2, err = fileutils.ReadFile(checksumFilePath)
+		if err != nil {
+			return err
+		}
+		// If the checksums are identical, there's no need to download.
+		if remoteFileDetails.Checksum.Sha256 == string(sha2) {
+			return nil
+		}
+	}
+	// Download & unzip the analyzer manager files
+	log.Debug("The 'Analyzer Manager' app is not cached locally. Downloading it now...")
+	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
+		return err
+	}
+	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+}
+
+func getAnalyzerManagerRemoteDetails(downloadPath string) (server *config.ServerDetails, fullRemotePath string, err error) {
+	var remoteRepo string
+	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
+	if err != nil {
+		return
+	}
+	if remoteRepo != "" {
+		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
+		return
+	}
+	log.Debug("'" + coreutils.ReleasesRemoteEnv + "' environment variable is not configured. The Analyzer Manager app will be downloaded directly from releases.jfrog.io if needed.")
+	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
+	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -35,7 +34,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 }
 
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
-	assert.NoError(t, dependencies.DownloadAnalyzerManagerIfNeeded())
+	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded())
 
 	scanResults := &utils.Results{ScaResults: []utils.ScaScanResult{{Technology: coreutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
 	err := runJasScannersAndSetResults(scanResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, nil, "", false)
