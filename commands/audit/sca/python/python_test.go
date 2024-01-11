@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -25,11 +26,11 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		if rootNode[0].Nodes != nil {
 			// Test direct dependency
-			directDepNode := sca.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
+			directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
 			// Test child module
-			childNode := sca.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
+			childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
 			// Test sub child module
-			sca.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
+			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
 	}
 }
@@ -45,10 +46,10 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	assert.Contains(t, uniqueDeps, pythonPackageTypeIdentifier+"ptyprocess:0.7.0")
 	assert.Len(t, rootNode, 1)
 	if assert.GreaterOrEqual(t, len(rootNode[0].Nodes), 2) {
-		childNode := sca.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.7.0")
+		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.7.0")
 		if childNode != nil {
 			// Test child module
-			sca.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
+			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
 	}
 }
@@ -67,9 +68,9 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		if rootNode[0].Nodes != nil {
 			// Test root module
-			directDepNode := sca.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.7.0")
+			directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.7.0")
 			// Test child module
-			sca.GetAndAssertNode(t, directDepNode.Nodes, "ptyprocess:0.7.0")
+			tests.GetAndAssertNode(t, directDepNode.Nodes, "ptyprocess:0.7.0")
 		}
 	}
 }
@@ -93,10 +94,10 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 	if len(rootNode) > 0 {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		// Test child module
-		childNode := sca.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.8.0")
+		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.8.0")
 		// Test sub child module
 		if assert.NotNil(t, childNode) {
-			sca.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
+			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
 	}
 }
@@ -128,10 +129,10 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	if len(rootNode) > 0 {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		// Test child module
-		childNode := sca.GetAndAssertNode(t, rootNode[0].Nodes, "pytest:5.4.3")
+		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pytest:5.4.3")
 		// Test sub child module
 		if assert.NotNil(t, childNode) {
-			sca.GetAndAssertNode(t, childNode.Nodes, "packaging:23.2")
+			tests.GetAndAssertNode(t, childNode.Nodes, "packaging:23.2")
 		}
 	}
 }

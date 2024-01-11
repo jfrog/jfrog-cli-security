@@ -2,19 +2,15 @@ package sca
 
 import (
 	"fmt"
-	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	testsutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -78,36 +74,7 @@ func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progr
 }
 
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {
-	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
-	assert.NoError(t, biutils.CopyDir(filepath.Join("..", "..", "..", "..", "tests", "testdata", sourceDir), tempDirPath, true, nil))
-	wd, err := os.Getwd()
-	assert.NoError(t, err, "Failed to get current dir")
-	chdirCallback := testsutils.ChangeDirWithCallback(t, wd, tempDirPath)
-	return tempDirPath, func() {
-		chdirCallback()
-		createTempDirCallback()
-	}
-}
-
-func GetAndAssertNode(t *testing.T, modules []*xrayUtils.GraphNode, moduleId string) *xrayUtils.GraphNode {
-	module := GetModule(modules, moduleId)
-	assert.NotNil(t, module, "Module '"+moduleId+"' doesn't exist")
-	return module
-}
-
-// GetModule gets a specific module from the provided modules list
-func GetModule(modules []*xrayUtils.GraphNode, moduleId string) *xrayUtils.GraphNode {
-	for _, module := range modules {
-		splitIdentifier := strings.Split(module.Id, "//")
-		id := splitIdentifier[0]
-		if len(splitIdentifier) > 1 {
-			id = splitIdentifier[1]
-		}
-		if id == moduleId {
-			return module
-		}
-	}
-	return nil
+	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", sourceDir))
 }
 
 // GetExecutableVersion gets an executable version and prints to the debug log if possible.

@@ -12,9 +12,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
@@ -217,7 +217,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	startTime := time.Now()
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		fullDependencyTrees, uniqueDeps, err = java.BuildDependencyTree(params, tech)
+		fullDependencyTrees, uniqueDeps, err = java.BuildDependencyTree(serverDetails, params.DepsRepo(), params.UseWrapper(), params.IsMavenDepTreeInstalled(), tech)
 	case coreutils.Npm:
 		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case coreutils.Yarn:

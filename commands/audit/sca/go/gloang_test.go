@@ -8,6 +8,7 @@ import (
 
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
@@ -60,16 +61,16 @@ func TestBuildGoDependencyList(t *testing.T) {
 	// Test go version node
 	goVersion, err := utils.GetParsedGoVersion()
 	assert.NoError(t, err)
-	sca.GetAndAssertNode(t, rootNode[0].Nodes, strings.ReplaceAll(goVersion.GetVersion(), "go", goSourceCodePrefix))
+	tests.GetAndAssertNode(t, rootNode[0].Nodes, strings.ReplaceAll(goVersion.GetVersion(), "go", goSourceCodePrefix))
 
 	// Test child without sub nodes
-	child1 := sca.GetAndAssertNode(t, rootNode[0].Nodes, "golang.org/x/text:v0.3.3")
+	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "golang.org/x/text:v0.3.3")
 	assert.Len(t, child1.Nodes, 0)
 
 	// Test child with 1 sub node
-	child2 := sca.GetAndAssertNode(t, rootNode[0].Nodes, "rsc.io/quote:v1.5.2")
+	child2 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "rsc.io/quote:v1.5.2")
 	assert.Len(t, child2.Nodes, 1)
-	sca.GetAndAssertNode(t, child2.Nodes, "rsc.io/sampler:v1.3.0")
+	tests.GetAndAssertNode(t, child2.Nodes, "rsc.io/sampler:v1.3.0")
 }
 
 func removeTxtSuffix(txtFileName string) error {
