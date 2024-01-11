@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/jfrog/jfrog-cli-security/scangraph"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
 	"github.com/jfrog/gofrog/parallel"
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -450,4 +452,8 @@ func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]form
 		scanErrors = append(scanErrors, errorSlice...)
 	}
 	return scanErrors
+}
+
+func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {
+	return NewScanCommand().SetServerDetails(serverDetails).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
 }
