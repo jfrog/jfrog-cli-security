@@ -13,6 +13,10 @@ import (
 	"testing"
 )
 
+const (
+	CliIntegrationTests = "github.com/jfrog/jfrog-cli-security"
+)
+
 func TestUnitTests(t *testing.T) {
 	if *configTests.SkipUnitTests {
 		t.Skip("Skipping unit tests.")

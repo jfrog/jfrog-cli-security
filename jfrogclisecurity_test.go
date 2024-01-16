@@ -16,10 +16,6 @@ import (
 	"testing"
 )
 
-const (
-	CliIntegrationTests = "github.com/jfrog/jfrog-cli-security/"
-)
-
 func TestMain(m *testing.M) {
 	setupIntegrationTests()
 	result := m.Run()
