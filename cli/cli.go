@@ -8,12 +8,12 @@ import (
 func GetJfrogCliSecurityApp() components.App {
 	app := components.CreateEmbeddedApp(
 		"security",
-		GetAuditAndScansCommands(),
+		getAuditAndScansCommands(),
 	)
 	app.Subcommands = append(app.Subcommands, components.Namespace{
 		Name:        string(cliutils.Xr),
 		Description: "Xray commands.",
-		Commands:    GetXrayNameSpaceCommands(),
+		Commands:    getXrayNameSpaceCommands(),
 	})
 	return app
 }

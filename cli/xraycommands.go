@@ -19,7 +19,7 @@ import (
 	offlineupdateDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/offlineupdate"
 )
 
-func GetXrayNameSpaceCommands() []components.Command {
+func getXrayNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
 			Name:            "curl",

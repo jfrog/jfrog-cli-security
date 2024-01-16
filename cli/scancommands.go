@@ -34,7 +34,7 @@ const auditScanCategory = "Audit & Scan"
 
 const dockerScanCmdHiddenName = "dockerscan"
 
-func GetAuditAndScansCommands() []components.Command {
+func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
 		{
 			Name:        "scan",

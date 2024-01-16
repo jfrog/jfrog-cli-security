@@ -207,8 +207,8 @@ func TestGetScaScansToPreform(t *testing.T) {
 			},
 		},
 		{
-			name:   "Test all",
-			wd:     dir,
+			name: "Test all",
+			wd:   dir,
 			params: func() *AuditParams {
 				return NewAuditParams().SetIsRecursiveScan(true).SetWorkingDirs([]string{dir})
 			},
