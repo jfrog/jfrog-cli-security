@@ -83,6 +83,8 @@ func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphSca
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
+	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+	isRecursiveScan := len(auditCmd.workingDirs) == 0
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
@@ -94,7 +96,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
-		SetExclusions(auditCmd.exclusions)
+		SetExclusions(auditCmd.exclusions).
+		SetIsRecursiveScan(isRecursiveScan)
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
