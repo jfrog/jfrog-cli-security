@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
+	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -25,6 +27,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
+	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -94,6 +98,12 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 
 // Docker scan tests
 
+func TestDockerScanWithProgressBar(t *testing.T) {
+	callback := commonTests.MockProgressInitialization()
+	defer callback()
+	TestDockerScan(t)
+}
+
 func TestDockerScan(t *testing.T) {
 	cleanup := initNativeDockerWithXrayTest(t)
 	defer cleanup()
@@ -128,8 +138,36 @@ func initNativeDockerWithXrayTest(t *testing.T) func() {
 	securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
 	// Create server config to use with the command.
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	// Add docker scan mock command
+	securityTests.TestApplication.Commands = append(securityTests.TestApplication.Commands, dockerScanMockCommand(t))
 	return func() {
 		clientTestUtils.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
+		// remove docker scan mock command
+		securityTests.TestApplication.Commands = securityTests.TestApplication.Commands[:len(securityTests.TestApplication.Commands)-1]
+	}
+}
+
+func dockerScanMockCommand(t *testing.T) components.Command {
+	return components.Command{
+		Name:  "docker",
+		Flags: docs.GetCommandFlags(docs.DockerScan),
+		Action: func(c *components.Context) error {
+			args := pluginsCommon.ExtractArguments(c)
+			var cmd, image string
+			// We may have prior flags before push/pull commands for the docker client.
+			for _, arg := range args {
+				if !strings.HasPrefix(arg, "-") {
+					if cmd == "" {
+						cmd = arg
+					} else {
+						image = arg
+						break
+					}
+				}
+			}
+			assert.Equal(t, "scan", cmd)
+			return cli.DockerScan(c, image)
+		},
 	}
 }
 
@@ -141,7 +179,8 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 	if assert.NoError(t, dockerPullCommand.Run()) {
 		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 		// Run docker scan on image
-		output := coreTests.RunCmdWithOutput(t, getDockerScanCommandForTest(t, imageTag, "").Run)
+		cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--format=json", "--fail=false", "--min-severity=low", "--fixable-only"}
+		output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
 		}
@@ -149,28 +188,12 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 		if watchName == "" {
 			return
 		}
-		output = coreTests.RunCmdWithOutput(t, getDockerScanCommandForTest(t, imageTag, watchName).Run)
+		cmdArgs = append(cmdArgs, "--watches="+watchName)
+		output = securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
 		}
 	}
-}
-
-func getDockerScanCommandForTest(t *testing.T, imageTag, watchName string) *scan.DockerScanCommand {
-	minSeverity, err := utils.GetSeveritiesFormat("low")
-	require.NoError(t, err)
-	cmd := scan.NewDockerScanCommand().SetImageTag(imageTag)
-	cmd.SetServerDetails(securityTests.XrDetails).
-		SetIncludeLicenses(true).
-		SetIncludeVulnerabilities(watchName == "").
-		SetOutputFormat(format.Json).
-		SetFail(false).
-		SetMinSeverityFilter(minSeverity).
-		SetFixableOnly(true)
-	if watchName != "" {
-		cmd.SetWatches([]string{watchName})
-	}
-	return cmd
 }
 
 func createTestWatch(t *testing.T) (string, func()) {
@@ -208,12 +231,6 @@ func createTestWatch(t *testing.T) (string, func()) {
 		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
-}
-
-func TestDockerScanWithProgressBar(t *testing.T) {
-	callback := commonTests.MockProgressInitialization()
-	defer callback()
-	TestDockerScan(t)
 }
 
 // Curation tests

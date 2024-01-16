@@ -32,6 +32,18 @@ const (
 )
 
 const (
+	Mvn    = "mvn"
+	Gradle = "gradle"
+	Npm    = "npm"
+	Yarn   = "yarn"
+	Nuget  = "nuget"
+	Go     = "go"
+	Pip    = "pip"
+	Pipenv = "pipenv"
+	Poetry = "poetry"
+)
+
+const (
 	// Base flags keys
 	ServerId    = "server-id"
 	url         = "url"
@@ -55,18 +67,6 @@ const (
 )
 
 const (
-	Mvn    = "mvn"
-	Gradle = "gradle"
-	Npm    = "npm"
-	Yarn   = "yarn"
-	Nuget  = "nuget"
-	Go     = "go"
-	Pip    = "pip"
-	Pipenv = "pipenv"
-	Poetry = "poetry"
-)
-
-const (
 	// Unique offline-update flags keys
 	LicenseId = "license-id"
 	From      = "from"
@@ -81,7 +81,7 @@ const (
 	scanRecursive       = scanPrefix + Recursive
 	scanRegexp          = scanPrefix + RegexpFlag
 	scanAnt             = scanPrefix + AntFlag
-	XrOutput            = "format"
+	OutputFormat        = "format"
 	BypassArchiveLimits = "bypass-archive-limits"
 	Watches             = "watches"
 	RepoPath            = "repo-path"
@@ -114,13 +114,16 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, Project, Vuln, XrOutput, Fail, ExtendedTable, Rescan,
+		url, user, password, accessToken, ServerId, Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan,
+	},
+	DockerScan: {
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
 	},
 	Audit: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, XrOutput, ExcludeTestDeps,
+		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
 	},
 	CurationAudit: {
@@ -128,22 +131,22 @@ var commandFlags = map[string][]string{
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable, useWrapperAudit,
+		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
 	},
 	AuditGradle: {
-		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, Project, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditNpm: {
-		url, user, password, accessToken, ServerId, DepType, Project, ExclusionsAudit, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, DepType, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditGo: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPip: {
-		url, user, password, accessToken, ServerId, RequirementsFile, Project, ExclusionsAudit, Watches, RepoPath, Licenses, XrOutput, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, RequirementsFile, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPipenv: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, XrOutput, ExtendedTable,
+		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
 }
 
@@ -173,8 +176,8 @@ var flagsMap = map[string]components.Flag{
 	Watches:       components.NewStringFlag(Watches, "A comma-separated list of Xray watches, to determine Xray's violations creation."),
 	RepoPath:      components.NewStringFlag(RepoPath, "Target repo path, to enable Xray to determine watches accordingly."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
-	XrOutput: components.NewStringFlag(
-		XrOutput,
+	OutputFormat: components.NewStringFlag(
+		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
 		components.WithStrDefaultValue("table"),
 	),
@@ -215,7 +218,7 @@ var flagsMap = map[string]components.Flag{
 	),
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
 	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
-	CurationOutput:   components.NewStringFlag(XrOutput, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {

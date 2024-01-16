@@ -3,6 +3,7 @@ package tests
 import (
 	"flag"
 
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
@@ -21,6 +22,8 @@ var (
 
 	XrayCli     *coreTests.JfrogCli
 	PlatformCli *coreTests.JfrogCli
+
+	TestApplication *components.App
 
 	timestampAdded bool
 )

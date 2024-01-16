@@ -6,10 +6,8 @@ import (
 )
 
 func GetJfrogCliSecurityApp() components.App {
-	app := components.CreateApp(
+	app := components.CreateEmbeddedApp(
 		"security",
-		"v1.0.0",
-		"Jfrog Security CLI embedded plugin",
 		GetAuditAndScansCommands(),
 	)
 	app.Subcommands = append(app.Subcommands, components.Namespace{
