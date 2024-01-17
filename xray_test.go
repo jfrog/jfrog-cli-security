@@ -30,7 +30,7 @@ func TestXrayOfflineDBSyncV3(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, "")
 	// Validate license-id
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou")
-	assert.EqualError(t, err, "the --license-id option is mandatory")
+	assert.EqualError(t, err, "Mandatory flag 'license-id' is missing")
 	// Periodic valid only with stream
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou", "--license-id=123", "--periodic")
 	assert.EqualError(t, err, fmt.Sprintf("the %s option is only valid with %s", securityDocs.Periodic, securityDocs.Stream))
