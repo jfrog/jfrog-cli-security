@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -285,24 +285,6 @@ func TestXrayAuditNoTech(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestXrayAuditDetectTech(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
-	// Copy the maven project from the testdata to a temp dir
-	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
-	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
-	defer clientTests.ChangeDirAndAssert(t, prevWd)
-	// Run generic audit on mvn project with a vulnerable dependency
-	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--licenses", "--format="+string(format.SimpleJson))
-	var results formats.SimpleJsonResults
-	err := json.Unmarshal([]byte(output), &results)
-	assert.NoError(t, err)
-	// Expects the ImpactedPackageType of the known vulnerability to be maven
-	assert.Equal(t, strings.ToLower(results.Vulnerabilities[0].ImpactedDependencyType), "maven")
-}
-
 func TestXrayAuditMultiProjects(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -455,6 +437,24 @@ func testXrayAuditJas(t *testing.T, format string, project string) string {
 	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+format)
 }
 
+func TestXrayAuditDetectTech(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
+	// Copy the maven project from the testdata to a temp dir
+	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
+	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+	// Run generic audit on mvn project with a vulnerable dependency
+	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--licenses", "--format="+string(format.SimpleJson))
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err)
+	// Expects the ImpactedPackageType of the known vulnerability to be maven
+	assert.Equal(t, strings.ToLower(results.Vulnerabilities[0].ImpactedDependencyType), "maven")
+}
+
 func TestXrayRecursiveScan(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -479,7 +479,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 	defer chDirCallback()
 
 	// We anticipate the execution of a recursive scan to encompass both the inner NPM project and the inner .NET project.
-	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format=json")
+	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format=json")
 
 	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 5, 0)
