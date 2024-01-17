@@ -20,7 +20,6 @@ var (
 	RtAuth        auth.ServiceDetails
 	RtHttpDetails httputils.HttpClientDetails
 
-	XrayCli     *coreTests.JfrogCli
 	PlatformCli *coreTests.JfrogCli
 
 	TestApplication *components.App

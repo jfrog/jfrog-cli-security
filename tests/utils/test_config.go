@@ -52,9 +52,6 @@ func InitTestCliDetails() {
 	testApplication := cli.GetJfrogCliSecurityApp()
 
 	configTests.TestApplication = &testApplication
-	if configTests.XrayCli == nil {
-		configTests.XrayCli = coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(*configTests.TestApplication)() }, "xr", creds)
-	}
 	if configTests.PlatformCli == nil {
 		configTests.PlatformCli = coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(*configTests.TestApplication)() }, "", creds)
 	}

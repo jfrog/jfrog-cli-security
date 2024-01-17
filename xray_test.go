@@ -16,10 +16,10 @@ func TestXrayCurl(t *testing.T) {
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	// Check curl command with the default configured server.
-	err := securityTests.XrayCli.WithoutCredentials().Exec("curl", "-XGET", "/api/v1/system/version")
+	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/v1/system/version")
 	assert.NoError(t, err)
 	// Check curl command with '--server-id' flag
-	err = securityTests.XrayCli.WithoutCredentials().Exec("curl", "-XGET", "/api/system/version", "--server-id=default")
+	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/system/version", "--server-id=default")
 	assert.NoError(t, err)
 	// Check curl command with invalid server id - should get an error.
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/system/version", "--server-id=not_configured_name")
