@@ -454,3 +454,39 @@ func testXrayAuditJas(t *testing.T, format string, project string) string {
 	defer chdirCallback()
 	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+format)
 }
+
+func TestXrayRecursiveScan(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers")
+	// Creating an inner NPM project
+	npmDirPath, err := os.MkdirTemp(tempDirPath, "npm-project")
+	assert.NoError(t, err)
+	npmProjectToCopyPath := filepath.Join(projectDir, "npm", "npm")
+	assert.NoError(t, biutils.CopyDir(npmProjectToCopyPath, npmDirPath, true, nil))
+
+	// Creating an inner .NET project
+	dotnetDirPath, err := os.MkdirTemp(tempDirPath, "dotnet-project")
+	assert.NoError(t, err)
+	dotnetProjectToCopyPath := filepath.Join(projectDir, "dotnet", "dotnet-single")
+	assert.NoError(t, biutils.CopyDir(dotnetProjectToCopyPath, dotnetDirPath, true, nil))
+
+	curWd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	chDirCallback := clientTests.ChangeDirWithCallback(t, curWd, tempDirPath)
+	defer chDirCallback()
+
+	// We anticipate the execution of a recursive scan to encompass both the inner NPM project and the inner .NET project.
+	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format=json")
+
+	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 5, 0)
+
+	var results []services.ScanResponse
+	err = json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err)
+	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
+	assert.Len(t, results, 2)
+}
