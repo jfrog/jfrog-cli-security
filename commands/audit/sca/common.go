@@ -10,41 +10,11 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"golang.org/x/exp/maps"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-const maxUniqueAppearances = 10
-
-func BuildXrayDependencyTree(treeHelper map[string][]string, nodeId string) (*xrayUtils.GraphNode, []string) {
-	rootNode := &xrayUtils.GraphNode{
-		Id:    nodeId,
-		Nodes: []*xrayUtils.GraphNode{},
-	}
-	dependencyAppearances := map[string]int8{}
-	populateXrayDependencyTree(rootNode, treeHelper, &dependencyAppearances)
-	return rootNode, maps.Keys(dependencyAppearances)
-}
-
-func populateXrayDependencyTree(currNode *xrayUtils.GraphNode, treeHelper map[string][]string, dependencyAppearances *map[string]int8) {
-	(*dependencyAppearances)[currNode.Id]++
-	// Recursively create & append all node's dependencies.
-	for _, childDepId := range treeHelper[currNode.Id] {
-		childNode := &xrayUtils.GraphNode{
-			Id:     childDepId,
-			Nodes:  []*xrayUtils.GraphNode{},
-			Parent: currNode,
-		}
-		if (*dependencyAppearances)[childDepId] >= maxUniqueAppearances || childNode.NodeHasLoop() {
-			continue
-		}
-		currNode.Nodes = append(currNode.Nodes, childNode)
-		populateXrayDependencyTree(childNode, treeHelper, dependencyAppearances)
-	}
-}
 
 func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology coreutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	scanGraphParams.XrayGraphScanParams().DependenciesGraph = dependencyTree

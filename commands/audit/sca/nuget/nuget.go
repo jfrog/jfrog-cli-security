@@ -10,7 +10,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -225,7 +225,7 @@ func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils
 				treeMap[parent] = []string{dependencyId}
 			}
 		}
-		dependencyTree, uniqueDeps := sca.BuildXrayDependencyTree(treeMap, nugetPackageTypeIdentifier+module.Id)
+		dependencyTree, uniqueDeps := coreXray.BuildXrayDependencyTree(treeMap, nugetPackageTypeIdentifier+module.Id)
 		nodes = append(nodes, dependencyTree)
 		for _, uniqueDep := range uniqueDeps {
 			uniqueDepsSet.Add(uniqueDep)

@@ -12,7 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -210,7 +210,7 @@ func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, r
 			treeMap[xrayDepId] = subDeps
 		}
 	}
-	return sca.BuildXrayDependencyTree(treeMap, rootXrayId)
+	return coreXray.BuildXrayDependencyTree(treeMap, rootXrayId)
 }
 
 func getXrayDependencyId(yarnDependency *biutils.YarnDependency) string {
