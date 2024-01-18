@@ -1,15 +1,19 @@
 package cli
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 )
 
 func GetJfrogCliSecurityApp() components.App {
-	app := components.CreateApp(
+	app := components.CreateEmbeddedApp(
 		"security",
-		"v1.0.0",
-		"Jfrog Security CLI embedded plugin",
-		[]components.Command{},
+		getAuditAndScansCommands(),
 	)
+	app.Subcommands = append(app.Subcommands, components.Namespace{
+		Name:        string(cliutils.Xr),
+		Description: "Xray commands.",
+		Commands:    getXrayNameSpaceCommands(),
+	})
 	return app
 }

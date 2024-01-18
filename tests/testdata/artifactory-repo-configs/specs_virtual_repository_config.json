@@ -1,0 +1,6 @@
+{
+  "key": "${VIRTUAL_REPO}",
+  "packageType": "generic",
+  "repositories": ["${REPO1}"],
+  "rclass": "virtual"
+}

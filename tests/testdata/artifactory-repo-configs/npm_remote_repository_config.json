@@ -1,0 +1,6 @@
+{
+  "key": "${NPM_REMOTE_REPO}",
+  "rclass": "remote",
+  "packageType": "npm",
+  "url": "https://registry.npmjs.org"
+}

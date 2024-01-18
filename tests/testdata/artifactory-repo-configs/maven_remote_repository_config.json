@@ -1,0 +1,6 @@
+{
+  "key": "${MAVEN_REMOTE_REPO}",
+  "rclass": "remote",
+  "packageType": "maven",
+  "url": "https://repo.maven.apache.org/maven2"
+}
