@@ -91,12 +91,13 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		return
 	}
 	var cmd *exec.Cmd
+	multiScanId := os.Getenv("JF_MSI")
 	if len(outputFile) > 0 {
-		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, am.MultiScanId)
-		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, am.MultiScanId)
+		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
+		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)
 	} else {
-		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, am.MultiScanId)
-		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, am.MultiScanId)
+		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, multiScanId)
+		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile)
 	}
 	defer func() {
 		if cmd.ProcessState != nil && !cmd.ProcessState.Exited() {
