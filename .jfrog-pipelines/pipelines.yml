@@ -1,0 +1,68 @@
+resources:
+  - name: securityCliGit
+    type: GitRepo
+    configuration:
+      path: jfrog/jfrog-cli-security
+      branches:
+        include: dev
+      gitProvider: il_automation
+
+pipelines:
+  - name: release_security_cli
+    configuration:
+      runtime:
+        type: image
+        image:
+          custom:
+            name: releases-docker.jfrog.io/jfrog-ecosystem-integration-env
+            tag: latest
+      environmentVariables:
+        readOnly:
+          NEXT_VERSION: 0.0.0
+
+    steps:
+      - name: Release
+        type: Bash
+        configuration:
+          inputResources:
+            - name: securityCliGit
+              trigger: false
+          integrations:
+            - name: il_automation
+            - name: ecosys_entplus_deployer
+        execution:
+          onExecute:
+            - cd $res_securityCliGit_resourcePath
+
+            # Set env
+            - export CI=true
+
+            # Make sure version provided
+            - echo "Checking variables"
+            - test -n "$NEXT_VERSION" -a "$NEXT_VERSION" != "0.0.0"
+
+            # Configure Git and merge from the dev
+            - git checkout main
+            - git remote set-url origin https://$int_il_automation_token@github.com/jfrog/jfrog-cli-security.git
+            - git merge origin/dev
+            - git tag v${NEXT_VERSION}
+
+            # Download JFrog CLI
+            - curl -fL https://install-cli.jfrog.io | sh
+            - jf c rm --quiet
+            - jf c add internal --url=$int_ecosys_entplus_deployer_url --user=$int_ecosys_entplus_deployer_user --password=$int_ecosys_entplus_deployer_apikey
+
+            # Audit
+            - jf audit --fail=false
+
+            # Push to main
+            - git clean -fd
+            - git push
+            - git push --tags
+
+            # Merge changes to dev
+            - git checkout dev
+            - git merge origin/main
+            - git push
+          onComplete:
+            - jf c rm --quiet
