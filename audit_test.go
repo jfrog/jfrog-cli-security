@@ -24,8 +24,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
-// XrayCli -> PlatformCli
-
 func TestXrayAuditNpmJson(t *testing.T) {
 	output := testXrayAuditNpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
