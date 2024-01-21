@@ -32,7 +32,7 @@ pipelines:
             - name: ecosys_entplus_deployer
         execution:
           onExecute:
-            - cd $res_frogbotGit_resourcePath
+            - cd $res_securityCliGit_resourcePath
 
             # Set env
             - export CI=true
