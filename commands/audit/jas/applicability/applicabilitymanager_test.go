@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO: ADD
 var mockDirectDependencies = []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}
 var mockMultiRootDirectDependencies = []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency", "issueId_3_direct_dependency", "issueId_4_direct_dependency"}
 
