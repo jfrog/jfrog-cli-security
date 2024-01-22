@@ -36,7 +36,7 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
-	JF_MSI                                    = "JF_MSI"
+	jfMsiEnvVariable                          = "JF_MSI"
 )
 
 type ApplicabilityStatus string
@@ -92,7 +92,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		return
 	}
 	var cmd *exec.Cmd
-	multiScanId := os.Getenv(JF_MSI)
+	multiScanId := os.Getenv(jfMsiEnvVariable)
 	if len(outputFile) > 0 {
 		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
 		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)
