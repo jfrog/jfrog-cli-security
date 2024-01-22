@@ -3,7 +3,7 @@
 ## Table of Contents
 
 - [📖 Guidelines](#-guidelines)
-- [🏠🏗️ Local development](#🏠🏗️-local-development)
+- [🏠🏗️ Local development](#%EF%B8%8F-local-development)
 - [🚦 Running Tests](#-running-tests)
 
 ## 📖 Guidelines
