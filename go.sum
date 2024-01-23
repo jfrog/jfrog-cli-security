@@ -7,8 +7,8 @@ github.com/CycloneDX/cyclonedx-go v0.7.2/go.mod h1:K2bA+324+Og0X84fA8HhN2X066K7B
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
-github.com/ProtonMail/go-crypto v0.0.0-20230923063757-afb1ddc0824c h1:kMFnB0vCcX7IL/m9Y5LO+KQYv+t1CQOiFe6+SV2J7bE=
-github.com/ProtonMail/go-crypto v0.0.0-20230923063757-afb1ddc0824c/go.mod h1:EjAoLdwvbIOoOQr3ihjnSoLZRtE8azugULFRteWMNc0=
+github.com/ProtonMail/go-crypto v1.0.0 h1:LRuvITjQWX+WIfr930YHG2HNfjR1uOfyf5vE0kC2U78=
+github.com/ProtonMail/go-crypto v1.0.0/go.mod h1:EjAoLdwvbIOoOQr3ihjnSoLZRtE8azugULFRteWMNc0=
 github.com/VividCortex/ewma v1.2.0 h1:f58SaIzcDXrSy3kWaHNvuJgJ3Nmz59Zji6XoJR/q1ow=
 github.com/VividCortex/ewma v1.2.0/go.mod h1:nz4BbCtbLyFDeC9SUHbtcT5644juEuWfUAUnGx7j5l4=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
@@ -49,8 +49,8 @@ github.com/dsnet/golib v0.0.0-20171103203638-1ea166775780/go.mod h1:Lj+Z9rebOhdf
 github.com/elazarl/goproxy v0.0.0-20230808193330-2592e75ae04a h1:mATvB/9r/3gvcejNsXKSkQ6lcIaNec2nyfOdlTBR2lU=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
-github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240122125708-3cbd739079cb h1:QFxIKfMdZYgQ9we3EbP2yQfT573ww8UxzcGkZrQgcPk=
-github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240122125708-3cbd739079cb/go.mod h1:d1SCUv30AX9gvcdDus3DcDKrpIOFvbgj/5f1LShmQqs=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240123153356-189fa386e6c7 h1:yQ99olI2465U7cMRr9lWCNV4eMoJxuygwxAUL34+YPc=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240123153356-189fa386e6c7/go.mod h1:RVn4pIkR5fPUnr8gFXt61ou3pCNrrDdRQUpcolP4lhw=
 github.com/forPelevin/gomoji v1.1.8 h1:JElzDdt0TyiUlecy6PfITDL6eGvIaxqYH1V52zrd0qQ=
 github.com/forPelevin/gomoji v1.1.8/go.mod h1:8+Z3KNGkdslmeGZBC3tCrwMrcPy5GRzAD+gL9NAwMXg=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
@@ -89,8 +89,8 @@ github.com/jedib0t/go-pretty/v6 v6.5.3 h1:GIXn6Er/anHTkVUoufs7ptEvxdD6KIhR7Axa2w
 github.com/jedib0t/go-pretty/v6 v6.5.3/go.mod h1:5LQIxa52oJ/DlDSLv0HEkWOFMDGoWkJb9ss5KqPpJBg=
 github.com/jfrog/archiver/v3 v3.6.0 h1:OVZ50vudkIQmKMgA8mmFF9S0gA47lcag22N13iV3F1w=
 github.com/jfrog/archiver/v3 v3.6.0/go.mod h1:fCAof46C3rAXgZurS8kNRNdSVMKBbZs+bNNhPYxLldI=
-github.com/jfrog/build-info-go v1.9.20 h1:tQF6EMjt/EEX8syTrgpL/c7FjhlBSjtv848jNvxpMp8=
-github.com/jfrog/build-info-go v1.9.20/go.mod h1:Vxv6zmx4e1NWsx40OHaDWCCYDeYAq2yXzpJ4nsDChbE=
+github.com/jfrog/build-info-go v1.9.21 h1:bcD0SEC2lEilhjE+aDB3xlvA8zsr4Kw/bFzvr9Tcj9I=
+github.com/jfrog/build-info-go v1.9.21/go.mod h1:Vxv6zmx4e1NWsx40OHaDWCCYDeYAq2yXzpJ4nsDChbE=
 github.com/jfrog/gofrog v1.5.1 h1:2AXL8hHu1jJFMIoCqTp2OyRUfEqEp4nC7J8fwn6KtwE=
 github.com/jfrog/gofrog v1.5.1/go.mod h1:SZ1EPJUruxrVGndOzHd+LTiwWYKMlHqhKD+eu+v5Hqg=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=
