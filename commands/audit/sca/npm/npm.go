@@ -35,14 +35,14 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 
 	treeDepsParam := createTreeDepsParam(params)
 
-	restoreNpmrcFunc, err := configNpmResolutionServerIfNeeded(params)
+	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(params)
 	if err != nil {
 		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
 		return
 	}
 	defer func() {
-		if restoreNpmrcFunc != nil {
-			err = errors.Join(err, restoreNpmrcFunc())
+		if clearResolutionServerFunc != nil {
+			err = errors.Join(err, clearResolutionServerFunc())
 		}
 	}()
 
@@ -63,29 +63,17 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 }
 
 // Generates a .npmrc file to configure an Artifactory server as the resolver server.
-func configNpmResolutionServerIfNeeded(params utils.AuditParams) (restoreNpmrcFunc func() error, err error) {
-	if params == nil {
-		err = fmt.Errorf("got empty params upon configuring resolution server")
+func configNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
+	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
+	if params.DepsRepo() == "" {
 		return
 	}
 	serverDetails, err := params.ServerDetails()
-	if err != nil || serverDetails == nil {
-		return
-	}
-	depsRepo := params.DepsRepo()
-	if depsRepo == "" {
+	if err != nil {
 		return
 	}
 
-	npmCmd := npm.NewNpmCommand("install", false).SetServerDetails(serverDetails)
-	if err = npmCmd.PreparePrerequisites(depsRepo); err != nil {
-		return
-	}
-	if err = npmCmd.CreateTempNpmrc(); err != nil {
-		return
-	}
-	restoreNpmrcFunc = npmCmd.RestoreNpmrcFunc()
-	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
+	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
 	return
 }
 
