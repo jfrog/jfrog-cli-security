@@ -268,16 +268,27 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	log.Debug("Using resolver config from", configFilePath)
 	repoConfig, err := project.ReadResolutionOnlyConfiguration(configFilePath)
 	if err != nil {
-		err = fmt.Errorf("failed while reading %s.yaml config file: %s", tech.String(), err.Error())
-		return
+		var missingResolverErr *project.MissingResolverErr
+		if !errors.As(err, &missingResolverErr) {
+			err = fmt.Errorf("failed while reading %s.yaml config file: %s", tech.String(), err.Error())
+			return
+		}
+		// When the resolver repository is absent from the configuration file, ReadResolutionOnlyConfiguration throws an error.
+		// However, this situation isn't considered an error here as the resolver repository isn't mandatory for constructing the dependencies tree.
+		err = nil
 	}
-	details, err := repoConfig.ServerDetails()
-	if err != nil {
-		err = fmt.Errorf("failed getting server details: %s", err.Error())
-		return
+
+	// If the resolver repository doesn't exist and triggers a MissingResolverErr in ReadResolutionOnlyConfiguration, the repoConfig becomes nil. In this scenario, there is no depsRepo to set, nor is there a necessity to do so.
+	if repoConfig != nil {
+		log.Debug("Using resolver config from", configFilePath)
+		details, e := repoConfig.ServerDetails()
+		if e != nil {
+			err = fmt.Errorf("failed getting server details: %s", e.Error())
+		} else {
+			params.SetServerDetails(details)
+			params.SetDepsRepo(repoConfig.TargetRepo())
+		}
 	}
-	params.SetServerDetails(details)
-	params.SetDepsRepo(repoConfig.TargetRepo())
 	return
 }
 
