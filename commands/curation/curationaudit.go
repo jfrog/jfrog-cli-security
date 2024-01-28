@@ -205,10 +205,6 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 				continue
 			}
 		}
-
-		if err := ca.auditTree(coreutils.Technology(tech), results); err != nil {
-			return err
-		}
 		if err := ca.auditTree(coreutils.Technology(tech), results); err != nil {
 			return err
 		}

@@ -18,8 +18,8 @@ github.com/andybalholm/brotli v1.1.0/go.mod h1:sms7XGricyQI9K10gOSf56VKKWS4oLer5
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFIImctFaOjnTIavg87rW78vTPkQqLI8=
 github.com/apparentlymart/go-textseg/v13 v13.0.0/go.mod h1:ZK2fH7c4NqDTLtiYLvIkEghdlcqw7yxLeM89kiTRPUo=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
-github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240125153251-690b6ff81342 h1:hQZXJsloXM6nfjqKbU8cDJoEKT3q5MUmGRu9a9J4HFU=
-github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240125153251-690b6ff81342/go.mod h1:RVn4pIkR5fPUnr8gFXt61ou3pCNrrDdRQUpcolP4lhw=
+github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240128143007-6f7ec6d0f733 h1:TW2xFrsJGqRYP6lJUYD/u/Tg/0/44SnjUkqBx+WEm+E=
+github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240128143007-6f7ec6d0f733/go.mod h1:RVn4pIkR5fPUnr8gFXt61ou3pCNrrDdRQUpcolP4lhw=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
