@@ -123,6 +123,7 @@ func TestHideSecret(t *testing.T) {
 		{secret: "12", expectedOutput: "***"},
 		{secret: "123", expectedOutput: "***"},
 		{secret: "123456789", expectedOutput: "123************"},
+		// jfrog-ignore: test case
 		{secret: "3478hfnkjhvd848446gghgfh", expectedOutput: "347************"},
 	}
 
