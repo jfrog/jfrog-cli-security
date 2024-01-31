@@ -89,6 +89,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
+
 	auditParams := NewAuditParams().
 		SetXrayGraphScanParams(auditCmd.CreateXrayGraphScanParams()).
 		SetWorkingDirs(workingDirs).
@@ -181,7 +182,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.xrayGraphScanParams.MultiScanId, auditParams.thirdPartyApplicabilityScan)
+		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan)
 	}
 	return
 }

@@ -50,8 +50,8 @@ func TestBuildGoDependencyList(t *testing.T) {
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
-
-	assert.Equal(t, "https://user:sdsdccs2232@api.go.here/artifactoryapi/go/test-remote|direct", os.Getenv("GOPROXY"))
+	// jfrog-ignore: test case
+	assert.Equal(t, "https://user:sdsdccs2232@api.go.here/artifactory/api/go/test-remote|direct", os.Getenv("GOPROXY"))
 	assert.NotEmpty(t, rootNode)
 
 	// Check root module
