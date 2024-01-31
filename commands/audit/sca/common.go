@@ -1,7 +1,13 @@
 package sca
 
 import (
+	"bytes"
 	"fmt"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
@@ -10,10 +16,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
 )
 
 func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology coreutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
@@ -61,6 +63,34 @@ func LogExecutableVersion(executable string) {
 	}
 	version := strings.TrimSpace(string(verBytes))
 	log.Debug(fmt.Sprintf("Used %q version: %s", executable, version))
+}
+
+func RunCmdAndGetOutput(executablePath, workingDir string, rawArgs ...string) (stdResult, errResult []byte, err error) {
+	// Prepare the command
+	args := make([]string, 0)
+	for i := 0; i < len(rawArgs); i++ {
+		if strings.TrimSpace(rawArgs[i]) != "" {
+			args = append(args, rawArgs[i])
+		}
+	}
+	cmdName := filepath.Base(executablePath)
+	command := exec.Command(executablePath, args...)
+	command.Dir = workingDir
+	outBuffer := bytes.NewBuffer([]byte{})
+	command.Stdout = outBuffer
+	errBuffer := bytes.NewBuffer([]byte{})
+	command.Stderr = errBuffer
+	// Run the command
+	log.Debug(fmt.Sprintf("Running '%s %s' command at %s", cmdName, strings.Join(rawArgs, " "), workingDir))
+	err = command.Run()
+	errResult = errBuffer.Bytes()
+	stdResult = outBuffer.Bytes()
+	if err != nil {
+		err = fmt.Errorf("error while running '%s %s': %s\n%s", executablePath, strings.Join(args, " "), err.Error(), strings.TrimSpace(string(errResult)))
+		return
+	}
+	log.Debug(fmt.Sprintf("%s '%s' standard output is:\n%s", cmdName, strings.Join(args, " "), strings.TrimSpace(string(stdResult))))
+	return
 }
 
 // BuildImpactPathsForScanResponse builds the full impact paths for each vulnerability found in the scanResult argument, using the dependencyTrees argument.

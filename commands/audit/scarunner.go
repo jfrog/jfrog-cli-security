@@ -17,6 +17,7 @@ import (
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
@@ -205,6 +206,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 		fullDependencyTrees, uniqueDeps, err = java.BuildDependencyTree(serverDetails, params.DepsRepo(), params.UseWrapper(), params.IsMavenDepTreeInstalled(), tech)
 	case coreutils.Npm:
 		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
+	case coreutils.Pnpm:
+		fullDependencyTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
 	case coreutils.Yarn:
 		fullDependencyTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case coreutils.Go:
