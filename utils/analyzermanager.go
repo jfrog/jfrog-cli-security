@@ -109,7 +109,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 	}()
 	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
-	if err != nil {
+	if isCI() || err != nil {
 		if len(output) > 0 {
 			log.Debug(fmt.Sprintf("%s %q output: %s", workingDir, strings.Join(cmd.Args, " "), string(output)))
 		}
@@ -165,6 +165,10 @@ func GetAnalyzerManagerExecutableName() string {
 	return analyzerManager
 }
 
+func isCI() bool {
+	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
+}
+
 func SetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) error {
 	if serverDetails == nil {
 		return errors.New("cant get xray server details")
@@ -181,12 +185,14 @@ func SetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) error {
 	if err := os.Setenv(jfTokenEnvVariable, serverDetails.AccessToken); errorutils.CheckError(err) != nil {
 		return err
 	}
-	analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
-	if err != nil {
-		return err
-	}
-	if err = os.Setenv(logDirEnvVariable, analyzerManagerLogFolder); errorutils.CheckError(err) != nil {
-		return err
+	if !isCI() {
+		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
+		if err != nil {
+			return err
+		}
+		if err = os.Setenv(logDirEnvVariable, analyzerManagerLogFolder); errorutils.CheckError(err) != nil {
+			return err
+		}
 	}
 	return nil
 }
