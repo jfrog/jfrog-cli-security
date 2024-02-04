@@ -2,10 +2,10 @@ package audit
 
 import (
 	"errors"
+	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -170,6 +170,12 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
 		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
+	}
+
+	if auditParams.xrayGraphScanParams.XscGitInfoContext != nil {
+		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
+			return nil, err
+		}
 	}
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
