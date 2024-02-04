@@ -10,7 +10,9 @@ import (
 const (
 	JfrogCurationDirName = "curation"
 
-	CurationsDir         = "JFROG_CLI_CURATION_DIR"
+	CurationsDir = "JFROG_CLI_CURATION_DIR"
+
+	// #nosec G101 -- Not credentials.
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
 )
 
