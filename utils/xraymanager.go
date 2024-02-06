@@ -46,6 +46,7 @@ func SendXscGitInfoRequestIfEnabled(graphScanParams *services.XrayGraphScanParam
 			return fmt.Errorf("failed sending Git Info request to XSC service, error: %s ", err.Error())
 		}
 		graphScanParams.MultiScanId = multiScanId
+		log.Debug(fmt.Sprintf("Created xsc git info successfully. multi_scan_id: %s", multiScanId))
 		if err = os.Setenv("JF_MSI", multiScanId); err != nil {
 			// Not a fatal error, if not set the scan will not be shown at the XSC UI, should not fail the scan.
 			log.Debug(fmt.Sprintf("failed setting MSI as environment variable. Cause: %s", err.Error()))
