@@ -176,6 +176,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
 			return nil, err
 		}
+		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
 	}
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.

@@ -40,17 +40,20 @@ func SendXscGitInfoRequestIfEnabled(graphScanParams *services.XrayGraphScanParam
 	if graphScanParams.XscVersion, err = xrayManager.XscEnabled(); err != nil {
 		return err
 	}
-	if graphScanParams.XscVersion != "" && graphScanParams.MultiScanId == "" {
-		multiScanId, err := xrayManager.SendXscGitInfoRequest(graphScanParams.XscGitInfoContext)
-		if err != nil {
-			return fmt.Errorf("failed sending Git Info request to XSC service, error: %s ", err.Error())
-		}
-		graphScanParams.MultiScanId = multiScanId
-		log.Debug(fmt.Sprintf("Created xsc git info successfully. multi_scan_id %s", multiScanId))
-		if err = os.Setenv("JF_MSI", multiScanId); err != nil {
-			// Not a fatal error, if not set the scan will not be shown at the XSC UI, should not fail the scan.
-			log.Debug(fmt.Sprintf("failed setting MSI as environment variable. Cause: %s", err.Error()))
-		}
+	if graphScanParams.XscVersion == "" || graphScanParams.MultiScanId != "" {
+		// XSC is not enabled or multiScanId already provided.
+		return
+	}
+	// Generate multiScanId and set it to the scan params.
+	multiScanId, err := xrayManager.SendXscGitInfoRequest(graphScanParams.XscGitInfoContext)
+	if err != nil {
+		return fmt.Errorf("failed sending Git Info request to XSC service, error: %s ", err.Error())
+	}
+	graphScanParams.MultiScanId = multiScanId
+	log.Debug(fmt.Sprintf("Created xsc git info successfully. multi_scan_id %s", multiScanId))
+	if err = os.Setenv("JF_MSI", multiScanId); err != nil {
+		// Not a fatal error, if not set the scan will not be shown at the XSC UI, should not fail the scan.
+		log.Debug(fmt.Sprintf("failed setting MSI as environment variable. Cause: %s", err.Error()))
 	}
 	return nil
 }
