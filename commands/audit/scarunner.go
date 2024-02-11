@@ -243,7 +243,10 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
 		return
 	}
-
+	if tech == coreutils.Pnpm {
+		// Pnpm doesn't have a configuration file, it uses npm's configuration file.
+		tech = coreutils.Npm
+	}
 	configFilePath, exists, err := project.GetProjectConfFilePath(techType[tech])
 	if err != nil {
 		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
