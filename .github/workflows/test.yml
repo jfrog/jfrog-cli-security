@@ -33,6 +33,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "16"
+      - name: Setup Pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
       - name: Install Java
         uses: actions/setup-java@v3
         with:

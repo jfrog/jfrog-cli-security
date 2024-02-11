@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
-	"strings"
+
+	// "strings"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/gofrog/io"
+	// "github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+
+	// "github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
@@ -56,23 +60,23 @@ func getPnpmExecPath() (string, error) {
 	if pnpmExecPath == "" {
 		return "", errors.New("could not find the 'pnpm' executable in the system PATH")
 	}
-	log.Debug("Using pnpm executable:", pnpmExecPath)
-	// Validate pnpm version
-	_, _, err = sca.RunCmdAndGetOutput(pnpmExecPath, "", "--version")
+	log.Debug("Using Pnpm executable:", pnpmExecPath)
+	// Validate pnpm version command
+	version, err := getPnpmCmd(pnpmExecPath, "", "--version").RunWithOutput()
 	if err != nil {
 		return "", err
 	}
+	log.Debug("Pnpm version:", string(version))
 	return pnpmExecPath, nil
 }
 
 // Run 'pnpm ls ...' command and parse the returned result to create a dependencies map of.
 func calculateDependencies(executablePath, workingDir string) ([]pnpmLsProject, error) {
-	npmLsCmdContent, errData, err := sca.RunCmdAndGetOutput(executablePath, workingDir, "ls", "--depth", "Infinity", "--json", "--long")
+	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", "--depth", "Infinity", "--json", "--long").RunWithOutput()
 	if err != nil {
 		return nil, err
-	} else if len(errData) > 0 {
-		log.Warn("Encountered some issues while running 'pnpm ls' command:\n" + strings.TrimSpace(string(errData)))
 	}
+	log.Debug("Pnpm ls command output:\n", string(npmLsCmdContent))
 	output := &[]pnpmLsProject{}
 	if err := json.Unmarshal(npmLsCmdContent, output); err != nil {
 		return nil, err
@@ -134,4 +138,12 @@ func appendUniqueChild(children []string, candidateDependency string) []string {
 		}
 	}
 	return append(children, candidateDependency)
+}
+
+func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
+	command := io.NewCommand(pnpmExecPath, cmd, args)
+	if workingDir != "" {
+		command.Dir = workingDir
+	}
+	return command
 }
