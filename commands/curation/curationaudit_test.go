@@ -404,23 +404,25 @@ func TestDoCurationAudit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
-			configurationDir := filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
+			configurationDir := tt.pathToTest //filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-
-			mockServer, config := curationServer(t, tt.expectedRequest, tt.requestToFail, tt.requestToError)
+			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
+			defer callback2()
+			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
 			curationCmd := NewCurationAuditCommand()
+			curationCmd.SetIsCurationCmd(true)
 			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(true)
+			curationCmd.SetIgnoreConfigFile(tt.ignoreConfFile)
 			rootDir, err := os.Getwd()
 			assert.NoError(t, err)
 			// Set the working dir for npm project.
-			callback = clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project"))
+			callback = clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, "/.jfrog"))
 			defer callback()
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
@@ -435,12 +437,16 @@ func TestDoCurationAudit(t *testing.T) {
 				assert.EqualError(t, gotError, errMsgExpected)
 			}
 			// Add the mock server to the expected blocked message url
-			for index := range tt.expectedResp {
-				tt.expectedResp[index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[index].BlockedPackageUrl)
+			for key := range tt.expectedResp {
+				for index := range tt.expectedResp[key] {
+					tt.expectedResp[key][index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[key][index].BlockedPackageUrl)
+				}
 			}
-			gotResults := results["npm_test:1.0.0"]
-			assert.Equal(t, tt.expectedResp, gotResults)
+			assert.Equal(t, tt.expectedResp, results)
 			for _, requestDone := range tt.expectedRequest {
+				assert.True(t, requestDone)
+			}
+			for _, requestDone := range tt.expectedBuildRequest {
 				assert.True(t, requestDone)
 			}
 		})
@@ -448,23 +454,69 @@ func TestDoCurationAudit(t *testing.T) {
 }
 
 func getTestCasesForDoCurationAudit() []struct {
-	name            string
-	expectedRequest map[string]bool
-	requestToFail   map[string]bool
-	expectedResp    []*PackageStatus
-	requestToError  map[string]bool
-	expectedError   string
+	name                 string
+	pathToTest           string
+	expectedBuildRequest map[string]bool
+	expectedRequest      map[string]bool
+	requestToFail        map[string]bool
+	expectedResp         map[string][]*PackageStatus
+	requestToError       map[string]bool
+	expectedError        string
+	ignoreConfFile       bool
 } {
 	tests := []struct {
-		name            string
-		expectedRequest map[string]bool
-		requestToFail   map[string]bool
-		expectedResp    []*PackageStatus
-		requestToError  map[string]bool
-		expectedError   string
+		name                 string
+		pathToTest           string
+		expectedBuildRequest map[string]bool
+		expectedRequest      map[string]bool
+		requestToFail        map[string]bool
+		expectedResp         map[string][]*PackageStatus
+		requestToError       map[string]bool
+		expectedError        string
+		ignoreConfFile       bool
 	}{
 		{
-			name: "npm tree - two blocked package ",
+			name:       "maven tree - one blocked package",
+			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", ".jfrog"),
+			expectedBuildRequest: map[string]bool{
+				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
+			},
+			expectedRequest: map[string]bool{
+				"/maven-remote/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar": false,
+				"/maven-remote/junit/junit/4.11/junit-4.11.jar":                      false,
+				"/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar":         false,
+			},
+			requestToFail: map[string]bool{
+				"/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar": false,
+			},
+			expectedResp: map[string][]*PackageStatus{
+				"org.jfrog:cli-test:1.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.2",
+						ParentName:        "commons-io:commons-io",
+						BlockedPackageUrl: "/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar",
+						PackageName:       "commons-io:commons-io",
+						PackageVersion:    "1.2",
+						BlockingReason:    "Policy violations",
+						PkgType:           "maven",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+			},
+			requestToError: nil,
+			expectedError:  "",
+		},
+		{
+			name:           "npm tree - two blocked package ",
+			ignoreConfFile: true,
+			pathToTest:     filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -472,28 +524,32 @@ func getTestCasesForDoCurationAudit() []struct {
 			requestToFail: map[string]bool{
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
-			expectedResp: []*PackageStatus{
-				{
-					Action:            "blocked",
-					ParentVersion:     "1.13.6",
-					ParentName:        "underscore",
-					BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
-					PackageName:       "underscore",
-					PackageVersion:    "1.13.6",
-					BlockingReason:    "Policy violations",
-					PkgType:           "npm",
-					DepRelation:       "direct",
-					Policy: []Policy{
-						{
-							Policy:    "pol1",
-							Condition: "cond1",
+			expectedResp: map[string][]*PackageStatus{
+				"npm_test:1.0.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.13.6",
+						ParentName:        "underscore",
+						BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
+						PackageName:       "underscore",
+						PackageVersion:    "1.13.6",
+						BlockingReason:    "Policy violations",
+						PkgType:           "npm",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
 						},
 					},
 				},
 			},
 		},
 		{
-			name: "npm tree - two blocked one error",
+			name:           "npm tree - two blocked one error",
+			ignoreConfFile: true,
+			pathToTest:     filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -504,21 +560,23 @@ func getTestCasesForDoCurationAudit() []struct {
 			requestToError: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
-			expectedResp: []*PackageStatus{
-				{
-					Action:            "blocked",
-					ParentVersion:     "1.13.6",
-					ParentName:        "underscore",
-					BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
-					PackageName:       "underscore",
-					PackageVersion:    "1.13.6",
-					BlockingReason:    "Policy violations",
-					PkgType:           "npm",
-					DepRelation:       "direct",
-					Policy: []Policy{
-						{
-							Policy:    "pol1",
-							Condition: "cond1",
+			expectedResp: map[string][]*PackageStatus{
+				"npm_test:1.0.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.13.6",
+						ParentName:        "underscore",
+						BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
+						PackageName:       "underscore",
+						PackageVersion:    "1.13.6",
+						BlockingReason:    "Policy violations",
+						PkgType:           "npm",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
 						},
 					},
 				},
@@ -531,7 +589,7 @@ func getTestCasesForDoCurationAudit() []struct {
 	return tests
 }
 
-func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -548,6 +606,9 @@ func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail
 			}
 		}
 		if r.Method == http.MethodGet {
+			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
+				expectedBuildRequest[r.RequestURI] = true
+			}
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +

@@ -191,11 +191,11 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	if params.Progress() != nil {
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
-	serverDetails, err := params.ServerDetails()
+	err = SetResolutionRepoIfExists(params, tech)
 	if err != nil {
 		return
 	}
-	err = SetResolutionRepoIfExists(params, tech)
+	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return
 	}

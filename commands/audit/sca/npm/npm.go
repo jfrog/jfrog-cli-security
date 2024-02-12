@@ -68,6 +68,7 @@ func configNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutio
 	if params.DepsRepo() == "" {
 		return
 	}
+
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return
