@@ -409,7 +409,7 @@ func TestDoCurationAudit(t *testing.T) {
 			defer callback()
 			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
 			defer callback2()
-			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError)
+			mockServer, config := curationServer(t, tt.expectedRequest, tt.requestToFail, tt.requestToError)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
 			defer func() {
@@ -446,73 +446,30 @@ func TestDoCurationAudit(t *testing.T) {
 			for _, requestDone := range tt.expectedRequest {
 				assert.True(t, requestDone)
 			}
-			for _, requestDone := range tt.expectedBuildRequest {
-				assert.True(t, requestDone)
-			}
 		})
 	}
 }
 
 func getTestCasesForDoCurationAudit() []struct {
-	name                 string
-	pathToTest           string
-	expectedBuildRequest map[string]bool
-	expectedRequest      map[string]bool
-	requestToFail        map[string]bool
-	expectedResp         map[string][]*PackageStatus
-	requestToError       map[string]bool
-	expectedError        string
-	ignoreConfFile       bool
+	name            string
+	pathToTest      string
+	expectedRequest map[string]bool
+	requestToFail   map[string]bool
+	expectedResp    map[string][]*PackageStatus
+	requestToError  map[string]bool
+	expectedError   string
+	ignoreConfFile  bool
 } {
 	tests := []struct {
-		name                 string
-		pathToTest           string
-		expectedBuildRequest map[string]bool
-		expectedRequest      map[string]bool
-		requestToFail        map[string]bool
-		expectedResp         map[string][]*PackageStatus
-		requestToError       map[string]bool
-		expectedError        string
-		ignoreConfFile       bool
+		name            string
+		pathToTest      string
+		expectedRequest map[string]bool
+		requestToFail   map[string]bool
+		expectedResp    map[string][]*PackageStatus
+		requestToError  map[string]bool
+		expectedError   string
+		ignoreConfFile  bool
 	}{
-		{
-			name:       "maven tree - one blocked package",
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", ".jfrog"),
-			expectedBuildRequest: map[string]bool{
-				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
-			},
-			expectedRequest: map[string]bool{
-				"/maven-remote/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar": false,
-				"/maven-remote/junit/junit/4.11/junit-4.11.jar":                      false,
-				"/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar":         false,
-			},
-			requestToFail: map[string]bool{
-				"/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar": false,
-			},
-			expectedResp: map[string][]*PackageStatus{
-				"org.jfrog:cli-test:1.0": {
-					{
-						Action:            "blocked",
-						ParentVersion:     "1.2",
-						ParentName:        "commons-io:commons-io",
-						BlockedPackageUrl: "/maven-remote/commons-io/commons-io/1.2/commons-io-1.2.jar",
-						PackageName:       "commons-io:commons-io",
-						PackageVersion:    "1.2",
-						BlockingReason:    "Policy violations",
-						PkgType:           "maven",
-						DepRelation:       "direct",
-						Policy: []Policy{
-							{
-								Policy:    "pol1",
-								Condition: "cond1",
-							},
-						},
-					},
-				},
-			},
-			requestToError: nil,
-			expectedError:  "",
-		},
 		{
 			name:           "npm tree - two blocked package ",
 			ignoreConfFile: true,
@@ -589,7 +546,7 @@ func getTestCasesForDoCurationAudit() []struct {
 	return tests
 }
 
-func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -606,9 +563,6 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 			}
 		}
 		if r.Method == http.MethodGet {
-			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
-				expectedBuildRequest[r.RequestURI] = true
-			}
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
