@@ -4,37 +4,36 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
-
-	// "strings"
+	"path/filepath"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
-	// "github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
-	// "github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-type pnpmLsProject struct {
-	Name         string                      `json:"name"`
-	Version      string                      `json:"version"`
-	Dependencies map[string]pnpmLsDependency `json:"dependencies,omitempty"`
-}
-
 type pnpmLsDependency struct {
 	From         string                      `json:"from"`
 	Version      string                      `json:"version"`
 	Dependencies map[string]pnpmLsDependency `json:"dependencies,omitempty"`
-	// binary location
-	Resolved string `json:"resolved"`
+}
+
+type pnpmLsProject struct {
+	Name            string                      `json:"name"`
+	Version         string                      `json:"version"`
+	Dependencies    map[string]pnpmLsDependency `json:"dependencies,omitempty"`
+	DevDependencies map[string]pnpmLsDependency `json:"devDependencies,omitempty"`
 }
 
 func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	// Prepare
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return
@@ -43,55 +42,77 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	if err != nil {
 		return
 	}
-	// Run 'pnpm ls...' command and parse the returned result to create a dependencies map.
-	projectInfo, err := calculateDependencies(pnpmExecPath, currentDir)
-	if err != nil {
+	// Build
+	if err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
 		return
 	}
-	dependencyTrees, uniqueDeps = parsePnpmDependenciesList(projectInfo)
-	return
+	return calculateDependencies(pnpmExecPath, currentDir, params)
 }
 
-func getPnpmExecPath() (string, error) {
-	pnpmExecPath, err := exec.LookPath("pnpm")
-	if err != nil {
-		return "", err
+func getPnpmExecPath() (pnpmExecPath string, err error) {
+	if pnpmExecPath, err = exec.LookPath("pnpm"); errorutils.CheckError(err) != nil {
+		return
 	}
 	if pnpmExecPath == "" {
-		return "", errors.New("could not find the 'pnpm' executable in the system PATH")
+		err = errors.New("could not find the 'pnpm' executable in the system PATH")
+		return
 	}
 	log.Debug("Using Pnpm executable:", pnpmExecPath)
 	// Validate pnpm version command
 	version, err := getPnpmCmd(pnpmExecPath, "", "--version").RunWithOutput()
-	if err != nil {
-		return "", err
+	if errorutils.CheckError(err) != nil {
+		return
 	}
 	log.Debug("Pnpm version:", string(version))
-	return pnpmExecPath, nil
+	return
 }
 
-// Run 'pnpm ls ...' command and parse the returned result to create a dependencies map of.
-func calculateDependencies(executablePath, workingDir string) ([]pnpmLsProject, error) {
-	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", "--depth", "Infinity", "--json", "--long").RunWithOutput()
+func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
+	command := io.NewCommand(pnpmExecPath, cmd, args)
+	if workingDir != "" {
+		command.Dir = workingDir
+	}
+	return command
+}
+
+// Install is required when "pnpm-lock.yaml" lock file or "node_modules/.pnpm" directory not exists.
+func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
+	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
-		return nil, err
+		return
+	}
+	pnpmDirExists, err := fileutils.IsDirExists(filepath.Join(workingDir, "node_modules", ".pnpm"), false)
+	if err != nil || (lockFileExists && pnpmDirExists) {
+		return
+	}
+	// Install is needed
+	log.Debug("Installing Pnpm project:", workingDir)
+	return getPnpmCmd(pnpmExecPath, workingDir, "install").GetCmd().Run()
+}
+
+// Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies map of.
+func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	lsArgs := append([]string{"--depth", "Infinity", "--json", "--long"}, params.Args()...)
+	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()
+	if err != nil {
+		return
 	}
 	log.Debug("Pnpm ls command output:\n", string(npmLsCmdContent))
 	output := &[]pnpmLsProject{}
-	if err := json.Unmarshal(npmLsCmdContent, output); err != nil {
-		return nil, err
+	if err = json.Unmarshal(npmLsCmdContent, output); err != nil {
+		return
 	}
-	return *output, nil
+	dependencyTrees, uniqueDeps = parsePnpmLSContent(*output)
+	return
 }
 
-func parsePnpmDependenciesList(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string) {
+func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string) {
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, project := range projectInfo {
-		treeMap := createProjectDependenciesTree(project)
 		// Parse the dependencies into Xray dependency tree format
-		dependencyTree, uniqueProjectDeps := coreXray.BuildXrayDependencyTree(treeMap, getDependencyId(project.Name, project.Version))
+		dependencyTree, uniqueProjectDeps := coreXray.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
+		// Add results
 		dependencyTrees = append(dependencyTrees, dependencyTree)
-		// Add the dependencies to the unique dependencies set
 		uniqueDepsSet.AddElements(uniqueProjectDeps...)
 	}
 	uniqueDeps = uniqueDepsSet.ToSlice()
@@ -100,16 +121,21 @@ func parsePnpmDependenciesList(projectInfo []pnpmLsProject) (dependencyTrees []*
 
 func createProjectDependenciesTree(project pnpmLsProject) map[string][]string {
 	treeMap := make(map[string][]string)
-	// Create a map of the project's dependencies
 	directDependencies := []string{}
-	projectId := getDependencyId(project.Name, project.Version)
+	// Handle production-dependencies
 	for depName, dependency := range project.Dependencies {
 		directDependency := getDependencyId(depName, dependency.Version)
 		directDependencies = append(directDependencies, directDependency)
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
 	}
+	// Handle dev-dependencies
+	for depName, dependency := range project.DevDependencies {
+		directDependency := getDependencyId(depName, dependency.Version)
+		directDependencies = append(directDependencies, directDependency)
+		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
+	}
 	if len(directDependencies) > 0 {
-		treeMap[projectId] = directDependencies
+		treeMap[getDependencyId(project.Name, project.Version)] = directDependencies
 	}
 	return treeMap
 }
@@ -138,12 +164,4 @@ func appendUniqueChild(children []string, candidateDependency string) []string {
 		}
 	}
 	return append(children, candidateDependency)
-}
-
-func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
-	command := io.NewCommand(pnpmExecPath, cmd, args)
-	if workingDir != "" {
-		command.Dir = workingDir
-	}
-	return command
 }

@@ -35,6 +35,7 @@ const (
 	Mvn    = "mvn"
 	Gradle = "gradle"
 	Npm    = "npm"
+	Pnpm   = "pnpm"
 	Yarn   = "yarn"
 	Nuget  = "nuget"
 	Go     = "go"
@@ -124,7 +125,7 @@ var commandFlags = map[string][]string{
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
-		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, CurationThreads,
@@ -203,7 +204,8 @@ var flagsMap = map[string]components.Flag{
 	),
 	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
 	Gradle:  components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),
-	Npm:     components.NewBoolFlag(Npm, "Set to true to request audit for an npm project."),
+	Npm:     components.NewBoolFlag(Npm, "Set to true to request audit for a npm project."),
+	Pnpm:    components.NewBoolFlag(Pnpm, "Set to true to request audit for a Pnpm project."),
 	Yarn:    components.NewBoolFlag(Yarn, "Set to true to request audit for a Yarn project."),
 	Nuget:   components.NewBoolFlag(Nuget, "Set to true to request audit for a .NET project."),
 	Pip:     components.NewBoolFlag(Pip, "Set to true to request audit for a Pip project."),
