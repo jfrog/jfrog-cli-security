@@ -404,7 +404,7 @@ func TestDoCurationAudit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
-			configurationDir := tt.pathToTest //filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
+			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
 			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
