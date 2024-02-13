@@ -16,6 +16,7 @@ type SimpleJsonResults struct {
 	Iacs                      []SourceCodeRow               `json:"iacViolations"`
 	Sast                      []SourceCodeRow               `json:"sastViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`
+	MultiScanId               string                        `json:"multi_scan_id,omitempty"`
 }
 
 type SeverityDetails struct {
