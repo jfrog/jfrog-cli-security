@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	xrayConfig "github.com/jfrog/jfrog-cli-security/config"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -55,9 +54,9 @@ const (
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
 var supportedTech = map[coreutils.Technology]func() (bool, error){
-	coreutils.Npm: nil,
+	coreutils.Npm: func() (bool, error) { return true, nil },
 	coreutils.Maven: func() (bool, error) {
-		return clientutils.GetBoolEnvValue(xrayConfig.CurationMavenSupport, false)
+		return clientutils.GetBoolEnvValue(utils.CurationMavenSupport, false)
 	},
 }
 
@@ -195,16 +194,15 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 			log.Info(fmt.Sprintf(errorTemplateUnsupportedTech, tech))
 			continue
 		}
-		if supportedFunc != nil {
-			supported, err := supportedFunc()
-			if err != nil {
-				return err
-			}
-			if !supported {
-				log.Info(fmt.Sprintf(errorTemplateUnsupportedTech, tech))
-				continue
-			}
+		supported, err := supportedFunc()
+		if err != nil {
+			return err
 		}
+		if !supported {
+			log.Info(fmt.Sprintf(errorTemplateUnsupportedTech, tech))
+			continue
+		}
+
 		if err := ca.auditTree(coreutils.Technology(tech), results); err != nil {
 			return err
 		}
@@ -278,6 +276,7 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 	}
 	// Fetch status for each node from a flatten graph which, has no duplicate nodes.
 	packagesStatusMap := sync.Map{}
+	// if error returned we still want to produce a report, so we don't fail the next step
 	err = analyzer.fetchNodesStatus(flattenGraph, &packagesStatusMap, rootNodes)
 	analyzer.GraphsRelations(fullDependenciesTrees, &packagesStatusMap,
 		&packagesStatus)
@@ -371,11 +370,7 @@ func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (
 	if err != nil {
 		return nil, err
 	}
-	resolverParams, err := project.GetRepoConfigByPrefix(configFilePath, project.ProjectConfigResolverPrefix, vConfig)
-	if err != nil {
-		return nil, err
-	}
-	return resolverParams, nil
+	return project.GetRepoConfigByPrefix(configFilePath, project.ProjectConfigResolverPrefix, vConfig)
 }
 
 func (nc *treeAnalyzer) GraphsRelations(fullDependenciesTrees []*xrayUtils.GraphNode, preProcessMap *sync.Map, packagesStatus *[]*PackageStatus) {
@@ -557,11 +552,10 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 }
 
 func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.GraphNode, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
-	if tech == coreutils.Npm {
-		downloadUrl, name, scope, version := getNpmNameScopeAndVersion(node.Id, artiUrl, repo, coreutils.Npm.String())
-		return []string{downloadUrl}, name, scope, version
-	}
-	if tech == coreutils.Maven {
+	switch tech {
+	case coreutils.Npm:
+		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, coreutils.Npm.String())
+	case coreutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node.Types)
 	}
 	return
@@ -573,7 +567,7 @@ func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.Graph
 func getMavenNameScopeAndVersion(id, artiUrl, repo string, types *[]string) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, "gav://")
 	allParts := strings.Split(id, ":")
-	if len(allParts) < 2 {
+	if len(allParts) < 3 {
 		return
 	}
 	nameVersion := allParts[1] + "-" + allParts[2]
@@ -593,7 +587,7 @@ func getMavenNameScopeAndVersion(id, artiUrl, repo string, types *[]string) (dow
 
 // The graph holds, for each node, the component ID (xray representation)
 // from which we extract the package name, version, and construct the Artifactory download URL.
-func getNpmNameScopeAndVersion(id, artiUrl, repo, tech string) (downloadUrl, name, scope, version string) {
+func getNpmNameScopeAndVersion(id, artiUrl, repo, tech string) (downloadUrl []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, tech+"://")
 
 	nameVersion := strings.Split(id, ":")
@@ -609,14 +603,14 @@ func getNpmNameScopeAndVersion(id, artiUrl, repo, tech string) (downloadUrl, nam
 	return buildNpmDownloadUrl(artiUrl, repo, name, scope, version), name, scope, version
 }
 
-func buildNpmDownloadUrl(url, repo, name, scope, version string) string {
+func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 	var packageUrl string
 	if scope != "" {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, scope, name, name, version)
 	} else {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
-	return packageUrl
+	return []string{packageUrl}
 }
 
 func DetectNumOfThreads(threadsCount int) (int, error) {

@@ -19,7 +19,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	xrayConfig "github.com/jfrog/jfrog-cli-security/config"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -206,7 +205,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	case coreutils.Maven, coreutils.Gradle:
 		curationCacheFolder := ""
 		if params.IsCurationCmd() {
-			curationCacheFolder, err = xrayConfig.GetCurationMavenCacheFolder()
+			curationCacheFolder, err = xrayutils.GetCurationMavenCacheFolder()
 			if err != nil {
 				return
 			}
@@ -235,11 +234,11 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
-	if err != nil || (len(uniqueDeps) == 0 && uniqDepsWithTypes == nil) {
+	if err != nil || (len(uniqueDeps) == 0 && len(uniqDepsWithTypes) == 0) {
 		return
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
-	if uniqDepsWithTypes != nil {
+	if len(uniqDepsWithTypes) > 0 {
 		flatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
@@ -334,14 +333,16 @@ func createFlatTree(uniqueDeps []string) (*xrayCmdUtils.GraphNode, error) {
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
 }
 
-func logDeps(uniqueDeps any) error {
-	if log.GetLogger().GetLogLevel() == log.DEBUG {
+func logDeps(uniqueDeps any) (err error) {
+	if log.GetLogger().GetLogLevel() != log.DEBUG {
 		// Avoid printing and marshaling if not on DEBUG mode.
-		jsonList, err := json.Marshal(uniqueDeps)
-		if errorutils.CheckError(err) != nil {
-			return err
-		}
-		log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
+		return
 	}
-	return nil
+	jsonList, err := json.Marshal(uniqueDeps)
+	if errorutils.CheckError(err) != nil {
+		return err
+	}
+	log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
+
+	return
 }

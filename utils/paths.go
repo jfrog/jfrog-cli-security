@@ -1,4 +1,4 @@
-package config
+package utils
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -16,7 +16,7 @@ const (
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
 )
 
-func GetJfrogCurationFolder() (string, error) {
+func getJfrogCurationFolder() (string, error) {
 	dependenciesDir := os.Getenv(CurationsDir)
 	if dependenciesDir != "" {
 		return utils.AddTrailingSlashIfNeeded(dependenciesDir), nil
@@ -28,8 +28,8 @@ func GetJfrogCurationFolder() (string, error) {
 	return filepath.Join(jfrogHome, JfrogCurationDirName), nil
 }
 
-func GetCurationCacheFolder() (string, error) {
-	curationFolder, err := GetJfrogCurationFolder()
+func getCurationCacheFolder() (string, error) {
+	curationFolder, err := getJfrogCurationFolder()
 	if err != nil {
 		return "", err
 	}
@@ -37,7 +37,7 @@ func GetCurationCacheFolder() (string, error) {
 }
 
 func GetCurationMavenCacheFolder() (string, error) {
-	curationFolder, err := GetCurationCacheFolder()
+	curationFolder, err := getCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
