@@ -418,6 +418,7 @@ func CurationCmd(c *components.Context) error {
 		return err
 	}
 	curationAuditCommand.SetServerDetails(serverDetails).
+		SetIsCurationCmd(true).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).

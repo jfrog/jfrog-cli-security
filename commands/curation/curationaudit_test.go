@@ -159,8 +159,8 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDownloadUrl, gotName, gotScope, gotVersion := getNpmNameScopeAndVersion(tt.componentId, tt.artiUrl, tt.repo, tt.repo)
-			assert.Equal(t, tt.wantDownloadUrl, gotDownloadUrl, "getNameScopeAndVersion() gotDownloadUrl = %v, want %v", gotDownloadUrl, tt.wantDownloadUrl)
+			gotDownloadUrls, gotName, gotScope, gotVersion := getNpmNameScopeAndVersion(tt.componentId, tt.artiUrl, tt.repo, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrl, gotDownloadUrls[0], "getNameScopeAndVersion() gotDownloadUrl = %v, want %v", gotDownloadUrls[0], tt.wantDownloadUrl)
 			assert.Equal(t, tt.wantName, gotName, "getNpmNameScopeAndVersion() gotName = %v, want %v", gotName, tt.wantName)
 			assert.Equal(t, tt.wantScope, gotScope, "getNpmNameScopeAndVersion() gotScope = %v, want %v", gotScope, tt.wantScope)
 			assert.Equal(t, tt.wantVersion, gotVersion, "getNpmNameScopeAndVersion() gotVersion = %v, want %v", gotVersion, tt.wantVersion)
@@ -435,11 +435,12 @@ func TestDoCurationAudit(t *testing.T) {
 				assert.EqualError(t, gotError, errMsgExpected)
 			}
 			// Add the mock server to the expected blocked message url
-			for index := range tt.expectedResp {
-				tt.expectedResp[index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[index].BlockedPackageUrl)
+			for key := range tt.expectedResp {
+				for index := range tt.expectedResp[key] {
+					tt.expectedResp[key][index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[key][index].BlockedPackageUrl)
+				}
 			}
-			gotResults := results["npm_test:1.0.0"]
-			assert.Equal(t, tt.expectedResp, gotResults)
+			assert.Equal(t, tt.expectedResp, results)
 			for _, requestDone := range tt.expectedRequest {
 				assert.True(t, requestDone)
 			}
@@ -451,7 +452,7 @@ func getTestCasesForDoCurationAudit() []struct {
 	name            string
 	expectedRequest map[string]bool
 	requestToFail   map[string]bool
-	expectedResp    []*PackageStatus
+	expectedResp    map[string][]*PackageStatus
 	requestToError  map[string]bool
 	expectedError   string
 } {
@@ -459,7 +460,7 @@ func getTestCasesForDoCurationAudit() []struct {
 		name            string
 		expectedRequest map[string]bool
 		requestToFail   map[string]bool
-		expectedResp    []*PackageStatus
+		expectedResp    map[string][]*PackageStatus
 		requestToError  map[string]bool
 		expectedError   string
 	}{
@@ -472,21 +473,23 @@ func getTestCasesForDoCurationAudit() []struct {
 			requestToFail: map[string]bool{
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
-			expectedResp: []*PackageStatus{
-				{
-					Action:            "blocked",
-					ParentVersion:     "1.13.6",
-					ParentName:        "underscore",
-					BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
-					PackageName:       "underscore",
-					PackageVersion:    "1.13.6",
-					BlockingReason:    "Policy violations",
-					PkgType:           "npm",
-					DepRelation:       "direct",
-					Policy: []Policy{
-						{
-							Policy:    "pol1",
-							Condition: "cond1",
+			expectedResp: map[string][]*PackageStatus{
+				"npm_test:1.0.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.13.6",
+						ParentName:        "underscore",
+						BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
+						PackageName:       "underscore",
+						PackageVersion:    "1.13.6",
+						BlockingReason:    "Policy violations",
+						PkgType:           "npm",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
 						},
 					},
 				},
@@ -504,21 +507,23 @@ func getTestCasesForDoCurationAudit() []struct {
 			requestToError: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
-			expectedResp: []*PackageStatus{
-				{
-					Action:            "blocked",
-					ParentVersion:     "1.13.6",
-					ParentName:        "underscore",
-					BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
-					PackageName:       "underscore",
-					PackageVersion:    "1.13.6",
-					BlockingReason:    "Policy violations",
-					PkgType:           "npm",
-					DepRelation:       "direct",
-					Policy: []Policy{
-						{
-							Policy:    "pol1",
-							Condition: "cond1",
+			expectedResp: map[string][]*PackageStatus{
+				"npm_test:1.0.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.13.6",
+						ParentName:        "underscore",
+						BlockedPackageUrl: "/api/npm/npms/underscore/-/underscore-1.13.6.tgz",
+						PackageName:       "underscore",
+						PackageVersion:    "1.13.6",
+						BlockingReason:    "Policy violations",
+						PkgType:           "npm",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
 						},
 					},
 				},
@@ -579,4 +584,76 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
 	return confFilePath
+}
+
+func Test_getMavenNameScopeAndVersion(t *testing.T) {
+	type args struct {
+		id      string
+		artiUrl string
+		repo    string
+		types   *[]string
+	}
+	tests := []struct {
+		name             string
+		args             args
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name: "maven url jar",
+			args: args{
+				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
+				artiUrl: "http://test:9000/artifactory",
+				repo:    "maven-remote",
+				types:   &[]string{"jar"},
+			},
+			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar"},
+			wantName:         "org.apache.tomcat.embed:tomcat-embed-jasper",
+			wantVersion:      "8.0.33",
+		},
+		{
+			name: "maven url jar and war",
+			args: args{
+				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
+				artiUrl: "http://test:9000/artifactory",
+				repo:    "maven-remote",
+				types:   &[]string{"jar", "war"},
+			},
+			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar",
+				"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.war"},
+			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
+			wantVersion: "8.0.33",
+		},
+		{
+			name: "maven url pom - no expected url",
+			args: args{
+				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
+				artiUrl: "http://test:9000/artifactory",
+				repo:    "maven-remote",
+				types:   &[]string{"pom"},
+			},
+			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
+			wantVersion: "8.0.33",
+		},
+		{
+			name: "bad id",
+			args: args{
+				id:      "gav://org.apache.tomcat.embed:8.0.33",
+				artiUrl: "http://test:9000/artifactory",
+				repo:    "maven-remote",
+				types:   &[]string{"jar"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getMavenNameScopeAndVersion(tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
+			assert.Equalf(t, tt.wantDownloadUrls, gotDownloadUrls, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
+			assert.Equalf(t, tt.wantName, gotName, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
+			assert.Equalf(t, tt.wantScope, gotScope, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
+			assert.Equalf(t, tt.wantVersion, gotVersion, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
+		})
+	}
 }

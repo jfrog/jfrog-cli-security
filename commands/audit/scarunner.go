@@ -190,19 +190,33 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	if params.Progress() != nil {
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
 	err = SetResolutionRepoIfExists(params, tech)
 	if err != nil {
 		return
 	}
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return
+	}
 	var uniqueDeps []string
+	var uniqDepsWithTypes map[string][]string
 	startTime := time.Now()
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		fullDependencyTrees, uniqueDeps, err = java.BuildDependencyTree(serverDetails, params.DepsRepo(), params.UseWrapper(), params.IsMavenDepTreeInstalled(), tech)
+		curationCacheFolder := ""
+		if params.IsCurationCmd() {
+			curationCacheFolder, err = xrayutils.GetCurationMavenCacheFolder()
+			if err != nil {
+				return
+			}
+		}
+		fullDependencyTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
+			Server:                  serverDetails,
+			DepsRepo:                params.DepsRepo(),
+			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
+			IsCurationCmd:           params.IsCurationCmd(),
+			CurationCacheFolder:     curationCacheFolder,
+		}, tech)
 	case coreutils.Npm:
 		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case coreutils.Yarn:
@@ -220,17 +234,21 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
-	if err != nil || len(uniqueDeps) == 0 {
+	if err != nil || (len(uniqueDeps) == 0 && len(uniqDepsWithTypes) == 0) {
 		return
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
+	if len(uniqDepsWithTypes) > 0 {
+		flatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
+		return
+	}
 	flatTree, err = createFlatTree(uniqueDeps)
 	return
 }
 
 // Associates a technology with another of a different type in the structure.
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
-var techType = map[coreutils.Technology]project.ProjectType{
+var TechType = map[coreutils.Technology]project.ProjectType{
 	coreutils.Maven: project.Maven, coreutils.Gradle: project.Gradle, coreutils.Npm: project.Npm, coreutils.Yarn: project.Yarn, coreutils.Go: project.Go, coreutils.Pip: project.Pip,
 	coreutils.Pipenv: project.Pipenv, coreutils.Poetry: project.Poetry, coreutils.Nuget: project.Nuget, coreutils.Dotnet: project.Dotnet,
 }
@@ -241,7 +259,7 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 		return
 	}
 
-	configFilePath, exists, err := project.GetProjectConfFilePath(techType[tech])
+	configFilePath, exists, err := project.GetProjectConfFilePath(TechType[tech])
 	if err != nil {
 		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 		return
@@ -250,7 +268,7 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 		// Nuget and Dotnet are identified similarly in the detection process. To prevent redundancy, Dotnet is filtered out earlier in the process, focusing solely on detecting Nuget.
 		// Consequently, it becomes necessary to verify the presence of dotnet.yaml when Nuget detection occurs.
 		if tech == coreutils.Nuget {
-			configFilePath, exists, err = project.GetProjectConfFilePath(techType[coreutils.Dotnet])
+			configFilePath, exists, err = project.GetProjectConfFilePath(TechType[coreutils.Dotnet])
 			if err != nil {
 				err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 				return
@@ -292,18 +310,39 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	return
 }
 
+func createFlatTreeWithTypes(uniqueDeps map[string][]string) (*xrayCmdUtils.GraphNode, error) {
+	if err := logDeps(uniqueDeps); err != nil {
+		return nil, err
+	}
+	var uniqueNodes []*xrayCmdUtils.GraphNode
+	for uniqueDep, types := range uniqueDeps {
+		p := types
+		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep, Types: &p})
+	}
+	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+}
+
 func createFlatTree(uniqueDeps []string) (*xrayCmdUtils.GraphNode, error) {
-	if log.GetLogger().GetLogLevel() == log.DEBUG {
-		// Avoid printing and marshaling if not on DEBUG mode.
-		jsonList, err := json.Marshal(uniqueDeps)
-		if errorutils.CheckError(err) != nil {
-			return nil, err
-		}
-		log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
+	if err := logDeps(uniqueDeps); err != nil {
+		return nil, err
 	}
 	uniqueNodes := []*xrayCmdUtils.GraphNode{}
 	for _, uniqueDep := range uniqueDeps {
 		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
 	}
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+}
+
+func logDeps(uniqueDeps any) (err error) {
+	if log.GetLogger().GetLogLevel() != log.DEBUG {
+		// Avoid printing and marshaling if not on DEBUG mode.
+		return
+	}
+	jsonList, err := json.Marshal(uniqueDeps)
+	if errorutils.CheckError(err) != nil {
+		return err
+	}
+	log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
+
+	return
 }

@@ -1,6 +1,7 @@
 package sca
 
 import (
+	"golang.org/x/exp/maps"
 	"reflect"
 	"testing"
 
@@ -12,13 +13,13 @@ import (
 )
 
 func TestBuildXrayDependencyTree(t *testing.T) {
-	treeHelper := make(map[string][]string)
-	rootDep := []string{"topDep1", "topDep2", "topDep3"}
-	topDep1 := []string{"midDep1", "midDep2"}
-	topDep2 := []string{"midDep2", "midDep3"}
-	midDep1 := []string{"bottomDep1"}
-	midDep2 := []string{"bottomDep2", "bottomDep3"}
-	bottomDep3 := []string{"leafDep"}
+	treeHelper := make(map[string]coreXray.DepTreeNode)
+	rootDep := coreXray.DepTreeNode{Children: []string{"topDep1", "topDep2", "topDep3"}}
+	topDep1 := coreXray.DepTreeNode{Children: []string{"midDep1", "midDep2"}}
+	topDep2 := coreXray.DepTreeNode{Children: []string{"midDep2", "midDep3"}}
+	midDep1 := coreXray.DepTreeNode{Children: []string{"bottomDep1"}}
+	midDep2 := coreXray.DepTreeNode{Children: []string{"bottomDep2", "bottomDep3"}}
+	bottomDep3 := coreXray.DepTreeNode{Children: []string{"leafDep"}}
 	treeHelper["rootDep"] = rootDep
 	treeHelper["topDep1"] = topDep1
 	treeHelper["topDep2"] = topDep2
@@ -69,7 +70,7 @@ func TestBuildXrayDependencyTree(t *testing.T) {
 
 	tree, uniqueDeps := coreXray.BuildXrayDependencyTree(treeHelper, "rootDep")
 
-	assert.ElementsMatch(t, expectedUniqueDeps, uniqueDeps)
+	assert.ElementsMatch(t, expectedUniqueDeps, maps.Keys(uniqueDeps))
 	assert.True(t, tests.CompareTree(tree, rootNode))
 }
 
