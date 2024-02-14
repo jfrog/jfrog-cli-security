@@ -34,6 +34,8 @@ type AuditParams interface {
 	SetIgnoreConfigFile(ignoreConfigFile bool) *AuditBasicParams
 	IsMavenDepTreeInstalled() bool
 	SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams
+	IsCurationCmd() bool
+	SetIsCurationCmd(bool) *AuditBasicParams
 }
 
 type AuditBasicParams struct {
@@ -45,6 +47,7 @@ type AuditBasicParams struct {
 	insecureTls                      bool
 	ignoreConfigFile                 bool
 	isMavenDepTreeInstalled          bool
+	isCurationCmd                    bool
 	pipRequirementsFile              string
 	depsRepo                         string
 	installCommandName               string
@@ -190,5 +193,13 @@ func (abp *AuditBasicParams) IsMavenDepTreeInstalled() bool {
 
 func (abp *AuditBasicParams) SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams {
 	abp.isMavenDepTreeInstalled = isMavenDepTreeInstalled
+	return abp
+}
+
+func (abp *AuditBasicParams) IsCurationCmd() bool {
+	return abp.isCurationCmd
+}
+func (abp *AuditBasicParams) SetIsCurationCmd(isCurationCmd bool) *AuditBasicParams {
+	abp.isCurationCmd = isCurationCmd
 	return abp
 }
