@@ -3,6 +3,7 @@ package yarn
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"path/filepath"
 
 	"github.com/jfrog/build-info-go/build"
@@ -199,7 +200,7 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 
 // Parse the dependencies into a Xray dependency tree format
 func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string) {
-	treeMap := make(map[string][]string)
+	treeMap := make(map[string]coreXray.DepTreeNode)
 	for _, dependency := range dependencies {
 		xrayDepId := getXrayDependencyId(dependency)
 		var subDeps []string
@@ -207,10 +208,11 @@ func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, r
 			subDeps = append(subDeps, getXrayDependencyId(dependencies[biutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]))
 		}
 		if len(subDeps) > 0 {
-			treeMap[xrayDepId] = subDeps
+			treeMap[xrayDepId] = coreXray.DepTreeNode{Children: subDeps}
 		}
 	}
-	return coreXray.BuildXrayDependencyTree(treeMap, rootXrayId)
+	graph, uniqDeps := coreXray.BuildXrayDependencyTree(treeMap, rootXrayId)
+	return graph, maps.Keys(uniqDeps)
 }
 
 func getXrayDependencyId(yarnDependency *biutils.YarnDependency) string {
