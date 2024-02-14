@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -113,14 +114,14 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 		dependencyTree, uniqueProjectDeps := coreXray.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
 		// Add results
 		dependencyTrees = append(dependencyTrees, dependencyTree)
-		uniqueDepsSet.AddElements(uniqueProjectDeps...)
+		uniqueDepsSet.AddElements(maps.Keys(uniqueProjectDeps)...)
 	}
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return
 }
 
-func createProjectDependenciesTree(project pnpmLsProject) map[string][]string {
-	treeMap := make(map[string][]string)
+func createProjectDependenciesTree(project pnpmLsProject) map[string]coreXray.DepTreeNode {
+	treeMap := make(map[string]coreXray.DepTreeNode)
 	directDependencies := []string{}
 	// Handle production-dependencies
 	for depName, dependency := range project.Dependencies {
@@ -135,7 +136,7 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string][]string {
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
 	}
 	if len(directDependencies) > 0 {
-		treeMap[getDependencyId(project.Name, project.Version)] = directDependencies
+		treeMap[getDependencyId(project.Name, project.Version)] = coreXray.DepTreeNode{Children: directDependencies}
 	}
 	return treeMap
 }
@@ -145,13 +146,13 @@ func getDependencyId(depName, version string) string {
 	return utils.NpmPackageTypeIdentifier + depName + ":" + version
 }
 
-func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string][]string) {
+func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]coreXray.DepTreeNode) {
 	for depName, dependency := range dependencies {
 		dependencyId := getDependencyId(depName, dependency.Version)
-		if children, ok := result[parent]; ok {
-			result[parent] = appendUniqueChild(children, dependencyId)
+		if node, ok := result[parent]; ok {
+			node.Children = appendUniqueChild(node.Children, dependencyId)
 		} else {
-			result[parent] = []string{dependencyId}
+			result[parent] = coreXray.DepTreeNode{Children: []string{dependencyId}}
 		}
 		appendTransitiveDependencies(dependencyId, dependency.Dependencies, result)
 	}
