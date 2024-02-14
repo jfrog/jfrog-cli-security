@@ -404,11 +404,10 @@ func TestDoCurationAudit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
-			configurationDir := tt.pathToTest
+			configurationDir := filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
-			defer callback2()
+
 			mockServer, config := curationServer(t, tt.expectedRequest, tt.requestToFail, tt.requestToError)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
@@ -416,13 +415,12 @@ func TestDoCurationAudit(t *testing.T) {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
 			curationCmd := NewCurationAuditCommand()
-			curationCmd.SetIsCurationCmd(true)
 			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(tt.ignoreConfFile)
+			curationCmd.SetIgnoreConfigFile(true)
 			rootDir, err := os.Getwd()
 			assert.NoError(t, err)
 			// Set the working dir for npm project.
-			callback = clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, "/.jfrog"))
+			callback = clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project"))
 			defer callback()
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
@@ -452,28 +450,22 @@ func TestDoCurationAudit(t *testing.T) {
 
 func getTestCasesForDoCurationAudit() []struct {
 	name            string
-	pathToTest      string
 	expectedRequest map[string]bool
 	requestToFail   map[string]bool
 	expectedResp    map[string][]*PackageStatus
 	requestToError  map[string]bool
 	expectedError   string
-	ignoreConfFile  bool
 } {
 	tests := []struct {
 		name            string
-		pathToTest      string
 		expectedRequest map[string]bool
 		requestToFail   map[string]bool
 		expectedResp    map[string][]*PackageStatus
 		requestToError  map[string]bool
 		expectedError   string
-		ignoreConfFile  bool
 	}{
 		{
-			name:           "npm tree - two blocked package ",
-			ignoreConfFile: true,
-			pathToTest:     filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			name: "npm tree - two blocked package ",
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -504,9 +496,7 @@ func getTestCasesForDoCurationAudit() []struct {
 			},
 		},
 		{
-			name:           "npm tree - two blocked one error",
-			ignoreConfFile: true,
-			pathToTest:     filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			name: "npm tree - two blocked one error",
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -594,76 +584,4 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
 	return confFilePath
-}
-
-func Test_getMavenNameScopeAndVersion(t *testing.T) {
-	type args struct {
-		id      string
-		artiUrl string
-		repo    string
-		types   *[]string
-	}
-	tests := []struct {
-		name             string
-		args             args
-		wantDownloadUrls []string
-		wantName         string
-		wantScope        string
-		wantVersion      string
-	}{
-		{
-			name: "maven url jar",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar"},
-			},
-			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar"},
-			wantName:         "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion:      "8.0.33",
-		},
-		{
-			name: "maven url jar and war",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar", "war"},
-			},
-			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar",
-				"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.war"},
-			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion: "8.0.33",
-		},
-		{
-			name: "maven url pom - no expected url",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"pom"},
-			},
-			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion: "8.0.33",
-		},
-		{
-			name: "bad id",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar"},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotDownloadUrls, gotName, gotScope, gotVersion := getMavenNameScopeAndVersion(tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantDownloadUrls, gotDownloadUrls, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantName, gotName, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantScope, gotScope, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantVersion, gotVersion, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-		})
-	}
 }
