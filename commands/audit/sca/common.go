@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -28,7 +29,11 @@ func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progr
 	}
 	log.Info(scanMessage + "...")
 	var scanResults *services.ScanResponse
-	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams)
+	xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+	if err != nil {
+		return nil, err
+	}
+	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 	if err != nil {
 		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", string(technology), err.Error())
 		return

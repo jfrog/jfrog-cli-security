@@ -20,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	xrutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -344,7 +345,16 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFil
 					SetXrayVersion(xrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
 					SetSeverityLevel(scanCmd.minSeverityFilter)
-				scanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams)
+				xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+				if err != nil {
+					return err
+				}
+				if params.XscGitInfoContext != nil {
+					if err = utils.SendXscGitInfoRequestIfEnabled(scanGraphParams.XrayGraphScanParams(), xrayManager); err != nil {
+						return err
+					}
+				}
+				scanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
 					log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})

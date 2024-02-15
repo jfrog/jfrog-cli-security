@@ -14,6 +14,8 @@ type Results struct {
 
 	ExtendedScanResults *ExtendedScanResults
 	JasError            error
+
+	MultiScanId string
 }
 
 func NewAuditResults() *Results {
