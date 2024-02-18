@@ -10,7 +10,9 @@ import (
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -86,7 +88,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
 	}
 	// Install is needed
 	log.Debug("Installing Pnpm project:", workingDir)
-	return getPnpmCmd(pnpmExecPath, workingDir, "install").GetCmd().Run()
+	return getPnpmCmd(pnpmExecPath, workingDir, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
 }
 
 // Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
@@ -157,10 +159,8 @@ func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsD
 }
 
 func appendUniqueChild(children []string, candidateDependency string) []string {
-	for _, existingChild := range children {
-		if existingChild == candidateDependency {
-			return children
-		}
+	if slices.Contains(children, candidateDependency) {
+		return children
 	}
 	return append(children, candidateDependency)
 }
