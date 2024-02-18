@@ -3,6 +3,7 @@ package scangraph
 import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -13,22 +14,11 @@ const (
 	ScanTypeMinXrayVersion  = "3.37.2"
 )
 
-func RunScanGraphAndGetResults(params *ScanGraphParams) (*services.ScanResponse, error) {
-	xrayManager, err := utils.CreateXrayServiceManager(params.serverDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayVersion, ScanTypeMinXrayVersion)
+func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
+	err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayVersion, ScanTypeMinXrayVersion)
 	if err != nil {
 		// Remove scan type param if Xray version is under the minimum supported version
 		params.xrayGraphScanParams.ScanType = ""
-	}
-
-	if params.xrayGraphScanParams.XscGitInfoContext != nil {
-		if params.xrayGraphScanParams.XscVersion, err = xrayManager.XscEnabled(); err != nil {
-			return nil, err
-		}
 	}
 
 	scanId, err := xrayManager.ScanGraph(*params.xrayGraphScanParams)

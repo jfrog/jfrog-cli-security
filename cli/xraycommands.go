@@ -41,6 +41,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "scan",
+			Hidden:      true,
 			Aliases:     []string{"s"},
 			Flags:       flags.GetCommandFlags(flags.XrScan),
 			Description: scanDocs.GetDescription(),
@@ -51,6 +52,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		},
 		{
 			Name:        "audit-mvn",
+			Hidden:      true,
 			Aliases:     []string{"am"},
 			Flags:       flags.GetCommandFlags(flags.AuditMvn),
 			Description: auditSpecificDocs.GetMvnDescription(),
@@ -60,6 +62,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		},
 		{
 			Name:        "audit-gradle",
+			Hidden:      true,
 			Aliases:     []string{"ag"},
 			Flags:       flags.GetCommandFlags(flags.AuditGradle),
 			Description: auditSpecificDocs.GetGradleDescription(),
@@ -69,6 +72,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		},
 		{
 			Name:        "audit-npm",
+			Hidden:      true,
 			Aliases:     []string{"an"},
 			Flags:       flags.GetCommandFlags(flags.AuditNpm),
 			Description: auditSpecificDocs.GetNpmDescription(),
@@ -78,6 +82,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		},
 		{
 			Name:        "audit-go",
+			Hidden:      true,
 			Aliases:     []string{"ago"},
 			Flags:       flags.GetCommandFlags(flags.AuditGo),
 			Description: auditSpecificDocs.GetGoDescription(),
@@ -87,6 +92,7 @@ func getXrayNameSpaceCommands() []components.Command {
 		},
 		{
 			Name:        "audit-pip",
+			Hidden:      true,
 			Aliases:     []string{"ap"},
 			Flags:       flags.GetCommandFlags(flags.AuditPip),
 			Description: auditSpecificDocs.GetPipDescription(),

@@ -230,7 +230,10 @@ func validateXrayContext(c *components.Context, serverDetails *coreConfig.Server
 }
 
 func isProjectProvided(c *components.Context) bool {
-	return c.GetStringFlagValue(flags.Project) != "" || os.Getenv(coreutils.Project) != ""
+	if c.IsFlagSet(flags.Project) {
+		return c.GetStringFlagValue(flags.Project) != ""
+	}
+	return os.Getenv(coreutils.Project) != ""
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
