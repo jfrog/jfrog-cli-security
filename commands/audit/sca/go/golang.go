@@ -4,12 +4,11 @@ import (
 	"fmt"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	goartifactoryutils "github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/golang"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	goutils "github.com/jfrog/jfrog-cli-core/v2/utils/golang"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"os"
 	"strings"
 )
 
@@ -32,7 +31,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	remoteGoRepo := params.DepsRepo()
 	if remoteGoRepo != "" {
-		if err = setGoProxy(server, remoteGoRepo); err != nil {
+		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo); err != nil {
 			return
 		}
 	}
@@ -69,15 +68,6 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	dependencyTree = []*xrayUtils.GraphNode{rootNode}
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return
-}
-
-func setGoProxy(server *config.ServerDetails, remoteGoRepo string) error {
-	repoUrl, err := goutils.GetArtifactoryRemoteRepoUrl(server, remoteGoRepo)
-	if err != nil {
-		return err
-	}
-	repoUrl += "|direct"
-	return os.Setenv("GOPROXY", repoUrl)
 }
 
 func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string]) {
