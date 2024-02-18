@@ -35,12 +35,12 @@ const (
 	globalPackagesNotFoundErrorMessage = "could not find global packages path at:"
 )
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params utils.AuditParams, exclusionPattern string) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return
 	}
-	sol, err := solution.Load(wd, "", log.Logger)
+	sol, err := solution.Load(wd, "", exclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
 		// This issue is resolved by executing the 'nuget restore' command followed by running solution.Load again. Therefore, in this scenario, we need to proceed with this process.
@@ -49,7 +49,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	if isInstallRequired(params, sol) {
 		log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-		sol, err = runDotnetRestoreAndLoadSolution(params, wd)
+		sol, err = runDotnetRestoreAndLoadSolution(params, wd, exclusionPattern)
 		if err != nil {
 			return
 		}
@@ -74,7 +74,7 @@ func isInstallRequired(params utils.AuditParams, sol solution.Solution) bool {
 
 // Generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
 // Additionally, re-loads the project's Solution so the dependencies sources will be identified
-func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd string) (sol solution.Solution, err error) {
+func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd, exclusionPattern string) (sol solution.Solution, err error) {
 	// Creating a temporary copy of the project in order to run 'install' command without effecting the original directory + creating the jfrog config for artifactory resolution
 	tmpWd, err := fileutils.CreateTempDir()
 	if err != nil {
@@ -129,7 +129,7 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd string
 	if err != nil {
 		return
 	}
-	sol, err = solution.Load(tmpWd, "", log.Logger)
+	sol, err = solution.Load(tmpWd, "", exclusionPattern, log.Logger)
 	return
 }
 

@@ -223,7 +223,7 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) 
 }
 
 func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map[string][]*PackageStatus) error {
-	flattenGraph, fullDependenciesTrees, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
+	flattenGraph, fullDependenciesTrees, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech, "")
 	if err != nil {
 		return err
 	}

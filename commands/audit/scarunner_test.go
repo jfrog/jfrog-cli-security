@@ -160,7 +160,7 @@ func TestGetExcludePattern(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := getExcludePattern(test.params(), test.recursive)
+			result := getExcludePattern(test.params())
 			assert.Equal(t, test.expected, result)
 		})
 	}

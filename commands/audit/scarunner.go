@@ -74,7 +74,7 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
 	for _, requestedDirectory := range params.workingDirs {
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.isRecursiveScan, params.Technologies(), getRequestedDescriptors(params), getExcludePattern(params, params.isRecursiveScan))
+		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.isRecursiveScan, params.Technologies(), getRequestedDescriptors(params), getExcludePattern(params))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -107,12 +107,12 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 	return requestedDescriptors
 }
 
-func getExcludePattern(params *AuditParams, recursive bool) string {
+func getExcludePattern(params *AuditParams) string {
 	exclusions := params.Exclusions()
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, DefaultExcludePatterns...)
 	}
-	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, recursive)
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.isRecursiveScan)
 }
 
 // Preform the SCA scan for the given scan information.
@@ -122,7 +122,7 @@ func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, sc
 	if err = os.Chdir(scan.WorkingDirectory); err != nil {
 		return errorutils.CheckError(err)
 	}
-	flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+	flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology, getExcludePattern(params))
 	if techErr != nil {
 		return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
@@ -184,7 +184,7 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
+func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology, exclusionPattern string) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	log.Info(logMessage + "...")
 	if params.Progress() != nil {
@@ -230,7 +230,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			RemotePypiRepo:      params.DepsRepo(),
 			PipRequirementsFile: params.PipRequirementsFile()})
 	case coreutils.Nuget:
-		fullDependencyTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+		fullDependencyTrees, uniqueDeps, err = nuget.BuildDependencyTree(params, exclusionPattern)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
