@@ -70,9 +70,7 @@ func getPnpmExecPath() (pnpmExecPath string, err error) {
 
 func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Command {
 	command := io.NewCommand(pnpmExecPath, cmd, args)
-	if workingDir != "" {
-		command.Dir = workingDir
-	}
+	command.Dir = workingDir
 	return command
 }
 
@@ -91,7 +89,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
 	return getPnpmCmd(pnpmExecPath, workingDir, "install").GetCmd().Run()
 }
 
-// Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies map of.
+// Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
 func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	lsArgs := append([]string{"--depth", "Infinity", "--json", "--long"}, params.Args()...)
 	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()
