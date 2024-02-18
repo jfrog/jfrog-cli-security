@@ -50,6 +50,8 @@ github.com/dsnet/golib v0.0.0-20171103203638-1ea166775780/go.mod h1:Lj+Z9rebOhdf
 github.com/elazarl/goproxy v0.0.0-20230808193330-2592e75ae04a h1:mATvB/9r/3gvcejNsXKSkQ6lcIaNec2nyfOdlTBR2lU=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240218092040-355a8de24d28 h1:oovCHq2vSEvGeBFIUrqf+k1Ws7L4AvHGBTi3Jqrawbc=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20240218092040-355a8de24d28/go.mod h1:xKh03WzFK7YlZtHNJdOzkMvFjyq75yeUWW5EKNKV2Qk=
 github.com/forPelevin/gomoji v1.1.8 h1:JElzDdt0TyiUlecy6PfITDL6eGvIaxqYH1V52zrd0qQ=
 github.com/forPelevin/gomoji v1.1.8/go.mod h1:8+Z3KNGkdslmeGZBC3tCrwMrcPy5GRzAD+gL9NAwMXg=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
@@ -94,8 +96,6 @@ github.com/jfrog/gofrog v1.6.0 h1:jOwb37nHY2PnxePNFJ6e6279Pgkr3di05SbQQw47Mq8=
 github.com/jfrog/gofrog v1.6.0/go.mod h1:SZ1EPJUruxrVGndOzHd+LTiwWYKMlHqhKD+eu+v5Hqg=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240214142246-bb1e61c953ac h1:dOPjCfPHtCdpp2e3yGeZZ7EieFxvlY6E45XGVqto5Mg=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240214142246-bb1e61c953ac/go.mod h1:xKh03WzFK7YlZtHNJdOzkMvFjyq75yeUWW5EKNKV2Qk=
 github.com/jfrog/jfrog-client-go v1.28.1-0.20240214150718-c734e234d315 h1:A/pujr4z8wSFK5Atrr5NHnsl1Y758zP2++R99qNKDyE=
 github.com/jfrog/jfrog-client-go v1.28.1-0.20240214150718-c734e234d315/go.mod h1:fV5wrs86ihQkFKfMKpGxMbNf3mbVT4LUf320C1T9C2M=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
