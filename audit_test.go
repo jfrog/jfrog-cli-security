@@ -50,6 +50,32 @@ func testXrayAuditNpm(t *testing.T, format string) string {
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--npm", "--licenses", "--format="+format)
 }
 
+func TestXrayAuditPnpmJson(t *testing.T) {
+	output := testXrayAuditPnpm(t, string(format.Json))
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+}
+
+func TestXrayAuditPnpmSimpleJson(t *testing.T) {
+	output := testXrayAuditPnpm(t, string(format.SimpleJson))
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1)
+}
+
+func testXrayAuditPnpm(t *testing.T, format string) string {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
+	// Copy the npm project from the testdata to a temp dir
+	assert.NoError(t, biutils.CopyDir(npmProjectPath, tempDirPath, true, nil))
+	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+	// Run pnpm install before executing audit
+	assert.NoError(t, exec.Command("pnpm", "install").Run())
+	// Add dummy descriptor file to check that we run only specific audit
+	addDummyPackageDescriptor(t, true)
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--pnpm", "--licenses", "--format="+format)
+}
+
 func TestXrayAuditYarnV2Json(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v2", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.Json))

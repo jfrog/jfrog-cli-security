@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	ignoreScriptsFlag = "--ignore-scripts"
+	IgnoreScriptsFlag = "--ignore-scripts"
 )
 
 func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
@@ -97,8 +97,8 @@ func createTreeDepsParam(params utils.AuditParams) biutils.NpmTreeDepListParam {
 
 // Add the --ignore-scripts to prevent execution of npm scripts during npm install.
 func addIgnoreScriptsFlag(npmArgs []string) []string {
-	if !slices.Contains(npmArgs, ignoreScriptsFlag) {
-		return append(npmArgs, ignoreScriptsFlag)
+	if !slices.Contains(npmArgs, IgnoreScriptsFlag) {
+		return append(npmArgs, IgnoreScriptsFlag)
 	}
 	return npmArgs
 }
