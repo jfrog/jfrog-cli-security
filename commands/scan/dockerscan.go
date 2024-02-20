@@ -3,16 +3,16 @@ package scan
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -40,6 +40,11 @@ func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanComm
 	return dsc
 }
 
+func (dsc *DockerScanCommand) SetIsTar(isTar bool) *DockerScanCommand {
+	dsc.isTar = isTar
+	return dsc
+}
+
 func (dsc *DockerScanCommand) Run() (err error) {
 	// Validate Xray minimum version
 	_, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
@@ -63,17 +68,19 @@ func (dsc *DockerScanCommand) Run() (err error) {
 	}()
 
 	// Run the 'docker save' command, to create tar file from the docker image, and pass it to the indexer-app
-	if dsc.progress != nil {
-		dsc.progress.SetHeadlineMsg("Creating image archive 📦")
-	}
-	log.Info("Creating image archive...")
-	imageTarPath := filepath.Join(tempDirPath, "image.tar")
-	dockerSaveCmd := exec.Command("docker", "save", dsc.imageTag, "-o", imageTarPath)
-	var stderr bytes.Buffer
-	dockerSaveCmd.Stderr = &stderr
-	err = dockerSaveCmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed running command: '%s' with error: %s - %s", strings.Join(dockerSaveCmd.Args, " "), err.Error(), stderr.String())
+	imageTarPath := dsc.imageTag
+	if !dsc.isTar {
+		if dsc.progress != nil {
+			dsc.progress.SetHeadlineMsg("Creating image archive 📦")
+		}
+		log.Info("Creating image archive...")
+		dockerSaveCmd := exec.Command("docker", "save", dsc.imageTag, "-o", imageTarPath)
+		var stderr bytes.Buffer
+		dockerSaveCmd.Stderr = &stderr
+		err = dockerSaveCmd.Run()
+		if err != nil {
+			return fmt.Errorf("failed running command: '%s' with error: %s - %s", strings.Join(dockerSaveCmd.Args, " "), err.Error(), stderr.String())
+		}
 	}
 
 	// Perform scan on image.tar
