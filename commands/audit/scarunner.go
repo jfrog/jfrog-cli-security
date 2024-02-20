@@ -17,6 +17,7 @@ import (
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
@@ -216,6 +217,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 		}, tech)
 	case coreutils.Npm:
 		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
+	case coreutils.Pnpm:
+		fullDependencyTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
 	case coreutils.Yarn:
 		fullDependencyTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case coreutils.Go:
@@ -255,7 +258,6 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
 		return
 	}
-
 	configFilePath, exists, err := project.GetProjectConfFilePath(TechType[tech])
 	if err != nil {
 		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())

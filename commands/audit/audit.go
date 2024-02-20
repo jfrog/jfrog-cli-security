@@ -179,7 +179,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	results.ScaError = runScaScan(auditParams, results) // runScaScan(auditParams, results)
+	results.ScaError = runScaScan(auditParams, results)
 
 	// Wait for the Download of the AnalyzerManager to complete.
 	if err = errGroup.Wait(); err != nil {
