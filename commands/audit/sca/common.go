@@ -2,20 +2,33 @@ package sca
 
 import (
 	"fmt"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"testing"
 )
+
+var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
+
+func GetExcludePattern(params utils.AuditParams) string {
+	exclusions := params.Exclusions()
+	if len(exclusions) == 0 {
+		exclusions = append(exclusions, DefaultExcludePatterns...)
+	}
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
+}
 
 func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology coreutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	scanGraphParams.XrayGraphScanParams().DependenciesGraph = dependencyTree

@@ -3,6 +3,12 @@ package nuget
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
 	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/entities"
@@ -11,17 +17,13 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/exp/maps"
-	"io/fs"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -35,11 +37,12 @@ const (
 	globalPackagesNotFoundErrorMessage = "could not find global packages path at:"
 )
 
-func BuildDependencyTree(params utils.AuditParams, exclusionPattern string) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return
 	}
+	exclusionPattern := sca.GetExcludePattern(params)
 	sol, err := solution.Load(wd, "", exclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
