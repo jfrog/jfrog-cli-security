@@ -4,11 +4,11 @@ go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.22
+	github.com/jfrog/build-info-go v1.9.23
 	github.com/jfrog/gofrog v1.6.0
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.48.0
-	github.com/jfrog/jfrog-client-go v1.37.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.48.1
+	github.com/jfrog/jfrog-client-go v1.37.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.8.4
