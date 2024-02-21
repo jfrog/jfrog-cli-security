@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.20
+go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
