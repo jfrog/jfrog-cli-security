@@ -1,14 +1,14 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.20
+go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.21
+	github.com/jfrog/build-info-go v1.9.23
 	github.com/jfrog/gofrog v1.6.0
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.47.12
-	github.com/jfrog/jfrog-client-go v1.36.1
+	github.com/jfrog/jfrog-cli-core/v2 v2.48.1
+	github.com/jfrog/jfrog-client-go v1.37.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.8.4
@@ -100,6 +100,4 @@ require (
 
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20240220100151-b1fba3ad794d
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240218093454-1c352a93c23d
-
-replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20240220100016-1eeca190af8e
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
