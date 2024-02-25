@@ -22,15 +22,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
-
-var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
 func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 	// Prepare
@@ -75,7 +72,7 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
 	for _, requestedDirectory := range params.workingDirs {
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.isRecursiveScan, params.Technologies(), getRequestedDescriptors(params), getExcludePattern(params, params.isRecursiveScan))
+		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -106,14 +103,6 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 		requestedDescriptors[coreutils.Pip] = []string{params.PipRequirementsFile()}
 	}
 	return requestedDescriptors
-}
-
-func getExcludePattern(params *AuditParams, recursive bool) string {
-	exclusions := params.Exclusions()
-	if len(exclusions) == 0 {
-		exclusions = append(exclusions, DefaultExcludePatterns...)
-	}
-	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, recursive)
 }
 
 // Preform the SCA scan for the given scan information.
