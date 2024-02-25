@@ -72,6 +72,7 @@ func isInstallRequired(params utils.AuditParams, sol solution.Solution) bool {
 	return len(params.InstallCommandArgs()) > 0 || !solDependencySourcesExists || !solProjectsExists
 }
 
+// TODO ERAN fix test + comments
 // Generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
 // Additionally, re-loads the project's Solution so the dependencies sources will be identified
 func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd string) (sol solution.Solution, err error) {
@@ -102,27 +103,22 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd string
 	}
 
 	toolType := bidotnet.ConvertNameToToolType(toolName)
-
-	var installCommandArgs []string
-	// Set up an Artifactory server as a resolution server if needed
 	depsRepo := params.DepsRepo()
-	if depsRepo != "" {
+	var installCommandArgs []string
+	if depsRepo != "" { //TODO ERAN in order to test resolution from Artifactory add 'false &&' to the if
 		var serverDetails *config.ServerDetails
-		serverDetails, err = params.ServerDetails()
-		if err != nil {
+		if serverDetails, err = params.ServerDetails(); err != nil {
 			err = fmt.Errorf("failed to get server details: %s", err.Error())
 			return
 		}
 
-		log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
-
-		var configFile *os.File
-		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, false)
-		if err != nil {
-			err = fmt.Errorf("failed while attempting to generate a configuration file for setting up Artifactory as a resolution server")
+		var clearResolutionServerFunc func() error
+		if installCommandArgs, clearResolutionServerFunc, err = dotnet.SetArtifactoryAsResolutionServer(serverDetails, depsRepo, tmpWd, toolType, true); err != nil {
 			return
 		}
-		installCommandArgs = append(installCommandArgs, toolType.GetTypeFlagPrefix()+"configfile", configFile.Name())
+		defer func() {
+			err = errors.Join(err, clearResolutionServerFunc())
+		}()
 	}
 
 	err = runDotnetRestore(tmpWd, params, toolType, installCommandArgs)
