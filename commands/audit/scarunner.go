@@ -105,14 +105,6 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 	return requestedDescriptors
 }
 
-// func getExcludePattern(params *AuditParams) string {
-// 	exclusions := params.Exclusions()
-// 	if len(exclusions) == 0 {
-// 		exclusions = append(exclusions, sca.DefaultExcludePatterns...)
-// 	}
-// 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.isRecursiveScan)
-// }
-
 // Preform the SCA scan for the given scan information.
 // This method will change the working directory to the scan's working directory.
 func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) (err error) {
