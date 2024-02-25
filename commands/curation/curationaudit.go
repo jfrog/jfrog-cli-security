@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -49,15 +50,47 @@ const (
 		"This package manager however isn't supported by this command."
 
 	TotalConcurrentRequests = 10
+
+	MinArtiMavenSupport = "7.82.0"
+	MinArtiXraySupport  = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
-var supportedTech = map[coreutils.Technology]func() (bool, error){
-	coreutils.Npm: func() (bool, error) { return true, nil },
-	coreutils.Maven: func() (bool, error) {
-		return clientutils.GetBoolEnvValue(utils.CurationMavenSupport, false)
+var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (bool, error){
+	coreutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	coreutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(coreutils.Maven, MinArtiMavenSupport, MinArtiXraySupport, utils.CurationMavenSupport)
 	},
+}
+
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, minRtVersion, minXrayVersion, envName string) (bool, error) {
+	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
+	if err != nil {
+		return false, err
+	}
+	rtVersion, err := rtManager.GetVersion()
+	if err != nil {
+		return false, err
+	}
+	_, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	if err != nil {
+		return false, err
+	}
+
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, minXrayVersion)
+	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, minRtVersion)
+	if xrayVersionErr != nil || rtVersionErr != nil {
+		// though artifactory or xray is not in the required version, the feature can be enabled with env variable.
+		flag, errResolveFlag := clientutils.GetBoolEnvValue(envName, false)
+		if errResolveFlag != nil {
+			log.Error(errResolveFlag)
+		} else if flag {
+			return flag, nil
+		}
+		return false, errors.Join(xrayVersionErr, rtVersionErr)
+	}
+	return true, nil
 }
 
 type ErrorsResp struct {
@@ -194,7 +227,7 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 			log.Info(fmt.Sprintf(errorTemplateUnsupportedTech, tech))
 			continue
 		}
-		supported, err := supportedFunc()
+		supported, err := supportedFunc(ca)
 		if err != nil {
 			return err
 		}
@@ -208,6 +241,23 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 		}
 	}
 	return nil
+}
+
+func (ca *CurationAuditCommand) getRtManagerAndAuth(tech coreutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
+	if ca.PackageManagerConfig == nil {
+		if err = ca.SetRepo(tech); err != nil {
+			return
+		}
+	}
+	serverDetails, err = ca.PackageManagerConfig.ServerDetails()
+	if err != nil {
+		return
+	}
+	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) utils.AuditParams {
@@ -231,15 +281,7 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 	if len(fullDependenciesTrees) == 0 {
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
 	}
-	if err = ca.SetRepo(tech); err != nil {
-		return err
-	}
-	// Resolve the dependencies of the project.
-	serverDetails, err := ca.PackageManagerConfig.ServerDetails()
-	if err != nil {
-		return err
-	}
-	rtManager, err := rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return err
 	}
