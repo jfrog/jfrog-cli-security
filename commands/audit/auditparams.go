@@ -8,7 +8,6 @@ import (
 type AuditParams struct {
 	xrayGraphScanParams *services.XrayGraphScanParams
 	workingDirs         []string
-	exclusions          []string
 	installFunc         func(tech string) error
 	fixableOnly         bool
 	minSeverityFilter   string
@@ -16,7 +15,6 @@ type AuditParams struct {
 	xrayVersion string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
-	isRecursiveScan             bool
 }
 
 func NewAuditParams() *AuditParams {
@@ -40,20 +38,6 @@ func (params *AuditParams) WorkingDirs() []string {
 
 func (params *AuditParams) XrayVersion() string {
 	return params.xrayVersion
-}
-
-func (params *AuditParams) Exclusions() []string {
-	return params.exclusions
-}
-
-func (params *AuditParams) SetExclusions(exclusions []string) *AuditParams {
-	params.exclusions = exclusions
-	return params
-}
-
-func (params *AuditParams) SetIsRecursiveScan(isRecursiveScan bool) *AuditParams {
-	params.isRecursiveScan = isRecursiveScan
-	return params
 }
 
 func (params *AuditParams) SetXrayGraphScanParams(xrayGraphScanParams *services.XrayGraphScanParams) *AuditParams {

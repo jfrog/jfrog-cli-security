@@ -1,16 +1,62 @@
 package sca
 
 import (
-	"golang.org/x/exp/maps"
 	"reflect"
 	"testing"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestGetExcludePattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   func() *utils.AuditBasicParams
+		expected string
+	}{
+		{
+			name: "Test exclude pattern recursive",
+			params: func() *utils.AuditBasicParams {
+				param := &utils.AuditBasicParams{}
+				param.SetExclusions([]string{"exclude1", "exclude2"}).SetIsRecursiveScan(true)
+				return param
+			},
+			expected: "(^exclude1$)|(^exclude2$)",
+		},
+		{
+			name:     "Test no exclude pattern recursive",
+			params:   func() *utils.AuditBasicParams { return (&utils.AuditBasicParams{}).SetIsRecursiveScan(true) },
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+		},
+		{
+			name: "Test exclude pattern not recursive",
+			params: func() *utils.AuditBasicParams {
+				param := &utils.AuditBasicParams{}
+				param.SetExclusions([]string{"exclude1", "exclude2"})
+				return param
+			},
+			expected: "(^exclude1$)|(^exclude2$)",
+		},
+		{
+			name:     "Test no exclude pattern",
+			params:   func() *utils.AuditBasicParams { return &utils.AuditBasicParams{} },
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := GetExcludePattern(test.params())
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
 
 func TestBuildXrayDependencyTree(t *testing.T) {
 	treeHelper := make(map[string]coreXray.DepTreeNode)
