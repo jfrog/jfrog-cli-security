@@ -65,6 +65,13 @@ var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (boo
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, minRtVersion, minXrayVersion, envName string) (bool, error) {
+	flag, errResolveFlag := clientutils.GetBoolEnvValue(envName, false)
+	if errResolveFlag != nil {
+		log.Error(errResolveFlag)
+	}
+	if flag {
+		return true, nil
+	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return false, err
@@ -82,12 +89,6 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, minRtVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		// though artifactory or xray is not in the required version, the feature can be enabled with env variable.
-		flag, errResolveFlag := clientutils.GetBoolEnvValue(envName, false)
-		if errResolveFlag != nil {
-			log.Error(errResolveFlag)
-		} else if flag {
-			return flag, nil
-		}
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
 	}
 	return true, nil
