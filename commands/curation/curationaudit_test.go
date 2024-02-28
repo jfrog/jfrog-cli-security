@@ -407,7 +407,6 @@ func TestDoCurationAudit(t *testing.T) {
 			configurationDir := filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-
 			mockServer, config := curationServer(t, tt.expectedRequest, tt.requestToFail, tt.requestToError)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
