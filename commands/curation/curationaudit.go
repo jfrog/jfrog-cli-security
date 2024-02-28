@@ -65,21 +65,16 @@ var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (boo
 }
 
 func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, minRtVersion, minXrayVersion, envName string) (bool, error) {
-	flag, errResolveFlag := clientutils.GetBoolEnvValue(envName, false)
-	if errResolveFlag != nil {
-		log.Error(errResolveFlag)
-	}
-	if flag {
+	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
 		return true, nil
+	} else if err != nil {
+		log.Error(err)
 	}
-	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
+	rtVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
 	if err != nil {
 		return false, err
 	}
-	rtVersion, err := rtManager.GetVersion()
-	if err != nil {
-		return false, err
-	}
+
 	_, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
 		return false, err
@@ -92,6 +87,18 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
 	}
 	return true, nil
+}
+
+func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech coreutils.Technology) (string, *config.ServerDetails, error) {
+	rtManager, serveDetails, err := ca.getRtManagerAndAuth(tech)
+	if err != nil {
+		return "", nil, err
+	}
+	rtVersion, err := rtManager.GetVersion()
+	if err != nil {
+		return "", nil, err
+	}
+	return rtVersion, serveDetails, err
 }
 
 type ErrorsResp struct {
