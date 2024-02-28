@@ -28,7 +28,7 @@ func getJfrogCurationFolder() (string, error) {
 	return filepath.Join(jfrogHome, JfrogCurationDirName), nil
 }
 
-func getCurationCacheFolder() (string, error) {
+func GetCurationCacheFolder() (string, error) {
 	curationFolder, err := getJfrogCurationFolder()
 	if err != nil {
 		return "", err
@@ -37,7 +37,7 @@ func getCurationCacheFolder() (string, error) {
 }
 
 func GetCurationMavenCacheFolder() (string, error) {
-	curationFolder, err := getCurationCacheFolder()
+	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}

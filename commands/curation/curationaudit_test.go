@@ -433,7 +433,12 @@ func TestDoCurationAudit(t *testing.T) {
 				callbackPreTest()
 			}
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, "/.jfrog"))
-			defer callback3()
+			defer func() {
+				cacheFolder, err := utils.GetCurationCacheFolder()
+				require.NoError(t, err)
+				assert.NoError(t, fileutils.RemoveTempDir(cacheFolder))
+				callback3()
+			}()
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
