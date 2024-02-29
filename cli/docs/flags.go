@@ -178,7 +178,7 @@ var flagsMap = map[string]components.Flag{
 	Watches:       components.NewStringFlag(Watches, "A comma-separated list of Xray watches, to determine Xray's violations creation."),
 	RepoPath:      components.NewStringFlag(RepoPath, "Target repo path, to enable Xray to determine watches accordingly."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
-	UseTar:        components.NewBoolFlag(UseTar, "Lets you scan a already-saved docker save .tar file instrad of an image."),
+	UseTar:        components.NewBoolFlag(UseTar, "Set to true to force request docker scan on a .tar file instead of an image."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
