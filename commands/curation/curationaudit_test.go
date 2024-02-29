@@ -432,7 +432,7 @@ func TestDoCurationAudit(t *testing.T) {
 				assert.NoError(t, err)
 				callbackPreTest()
 			}
-			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, "/.jfrog"))
+			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
 			defer func() {
 				cacheFolder, err := utils.GetCurationCacheFolder()
 				require.NoError(t, err)

@@ -2,7 +2,6 @@ package utils
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"path/filepath"
 )
@@ -19,7 +18,7 @@ const (
 func getJfrogCurationFolder() (string, error) {
 	dependenciesDir := os.Getenv(CurationsDir)
 	if dependenciesDir != "" {
-		return utils.AddTrailingSlashIfNeeded(dependenciesDir), nil
+		return dependenciesDir, nil
 	}
 	jfrogHome, err := coreutils.GetJfrogHomeDir()
 	if err != nil {
