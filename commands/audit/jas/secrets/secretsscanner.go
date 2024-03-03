@@ -20,6 +20,8 @@ const (
 type SecretScanManager struct {
 	secretsScannerResults []*sarif.Run
 	scanner               *jas.JasScanner
+	configFileName        string
+	resultsFileName       string
 }
 
 // The getSecretsScanResults function runs the secrets scan flow, which includes the following steps:
@@ -29,24 +31,31 @@ type SecretScanManager struct {
 // Return values:
 // []utils.IacOrSecretResult: a list of the secrets that were found.
 // error: An error object (if any).
-func RunSecretsScan(scanner *jas.JasScanner) (results []*sarif.Run, err error) {
-	secretScanManager := newSecretsScanManager(scanner)
+func RunSecretsScan(scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults) (err error) {
+	var scannerTempDir string
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Secrets)); err != nil {
+		return
+	}
+	secretScanManager := newSecretsScanManager(scanner, scannerTempDir)
 	log.Info("Running secrets scanning...")
 	if err = secretScanManager.scanner.Run(secretScanManager); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
 		return
 	}
-	results = secretScanManager.secretsScannerResults
+	results := secretScanManager.secretsScannerResults
 	if len(results) > 0 {
 		log.Info("Found", utils.GetResultsLocationCount(results...), "secrets")
 	}
+	ExtendedScanResults.SecretsScanResults = results
 	return
 }
 
-func newSecretsScanManager(scanner *jas.JasScanner) (manager *SecretScanManager) {
+func newSecretsScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *SecretScanManager) {
 	return &SecretScanManager{
 		secretsScannerResults: []*sarif.Run{},
 		scanner:               scanner,
+		configFileName:        filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:       filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
@@ -60,7 +69,7 @@ func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.scanner.ResultsFileName, module.SourceRoot, secretsDocsUrlSuffix)
+	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix)
 	if err != nil {
 		return
 	}
@@ -88,17 +97,17 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 		Scans: []secretsScanConfiguration{
 			{
 				Roots:       roots,
-				Output:      s.scanner.ResultsFileName,
+				Output:      s.resultsFileName,
 				Type:        secretsScannerType,
 				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets),
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(s.scanner.ConfigFileName, configFileContent, utils.Secrets)
+	return jas.CreateScannersConfigFile(s.configFileName, configFileContent, utils.Secrets)
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
-	return s.scanner.AnalyzerManager.Exec(s.scanner.ConfigFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails)
+	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails)
 }
 
 func maskSecret(secret string) string {

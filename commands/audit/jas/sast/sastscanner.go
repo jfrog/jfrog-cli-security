@@ -2,15 +2,13 @@ package sast
 
 import (
 	"fmt"
-
-	"path/filepath"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
+	"path/filepath"
 )
 
 const (
@@ -22,10 +20,16 @@ const (
 type SastScanManager struct {
 	sastScannerResults []*sarif.Run
 	scanner            *jas.JasScanner
+	configFileName     string
+	resultsFileName    string
 }
 
-func RunSastScan(scanner *jas.JasScanner) (results []*sarif.Run, err error) {
-	sastScanManager := newSastScanManager(scanner)
+func RunSastScan(scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults) (err error) {
+	var scannerTempDir string
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Sast)); err != nil {
+		return
+	}
+	sastScanManager := newSastScanManager(scanner, scannerTempDir)
 	log.Info("Running SAST scanning...")
 	if err = sastScanManager.scanner.Run(sastScanManager); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Sast, err)
@@ -34,15 +38,17 @@ func RunSastScan(scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	if len(sastScanManager.sastScannerResults) > 0 {
 		log.Info("Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
 	}
-	results = sastScanManager.sastScannerResults
+	results := sastScanManager.sastScannerResults
+	ExtendedScanResults.SastScanResults = results
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner) (manager *SastScanManager) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *SastScanManager) {
 	return &SastScanManager{
 		sastScannerResults: []*sarif.Run{},
 		scanner:            scanner,
-	}
+		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif")}
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
@@ -52,11 +58,10 @@ func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = ssm.createConfigFile(module); err != nil {
 		return
 	}
-	scanner := ssm.scanner
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(scanner.ResultsFileName, module.SourceRoot, sastDocsUrlSuffix)
+	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, sastDocsUrlSuffix)
 	if err != nil {
 		return
 	}
@@ -97,11 +102,11 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(ssm.scanner.ConfigFileName, configFileContent, utils.Sast)
+	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, utils.Sast)
 }
 
 func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
-	return ssm.scanner.AnalyzerManager.ExecWithOutputFile(ssm.scanner.ConfigFileName, sastScanCommand, wd, ssm.scanner.ResultsFileName, ssm.scanner.ServerDetails)
+	return ssm.scanner.AnalyzerManager.ExecWithOutputFile(ssm.configFileName, sastScanCommand, wd, ssm.resultsFileName, ssm.scanner.ServerDetails)
 }
 
 // In the Sast scanner, there can be multiple results with the same location.

@@ -41,8 +41,7 @@ var (
 )
 
 type JasScanner struct {
-	ConfigFileName        string
-	ResultsFileName       string
+	TempDir               string
 	AnalyzerManager       utils.AnalyzerManager
 	ServerDetails         *config.ServerDetails
 	JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
@@ -58,12 +57,11 @@ func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (s
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
 		return
 	}
+	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.ConfigFileName = filepath.Join(tempDir, "config.yaml")
-	scanner.ResultsFileName = filepath.Join(tempDir, "results.sarif")
 	scanner.JFrogAppsConfig, err = createJFrogAppsConfig(workingDirs)
 	return
 }
@@ -95,9 +93,6 @@ type ScannerCmd interface {
 func (a *JasScanner) Run(scannerCmd ScannerCmd) (err error) {
 	for _, module := range a.JFrogAppsConfig.Modules {
 		func() {
-			defer func() {
-				err = errors.Join(err, deleteJasProcessFiles(a.ConfigFileName, a.ResultsFileName))
-			}()
 			if err = scannerCmd.Run(module); err != nil {
 				return
 			}
@@ -273,4 +268,16 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 		return DefaultExcludePatterns
 	}
 	return excludePatterns
+}
+
+func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, error) {
+	if scanner.TempDir == "" {
+		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
+	}
+	scannerTempDir := scanner.TempDir + "/" + scanType
+	err := os.MkdirAll(scannerTempDir, 0777)
+	if err != nil {
+		return "", err
+	}
+	return scannerTempDir, nil
 }

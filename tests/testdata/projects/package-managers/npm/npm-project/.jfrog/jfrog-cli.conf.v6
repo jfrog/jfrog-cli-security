@@ -1,8 +1,8 @@
 {
   "servers": [
     {
-      "url": "http://127.0.0.1:62857/",
-      "artifactoryUrl": "http://127.0.0.1:62857/",
+      "url": "http://127.0.0.1:52017/",
+      "artifactoryUrl": "http://127.0.0.1:52017/",
       "user": "admin",
       "password": "password",
       "serverId": "test"

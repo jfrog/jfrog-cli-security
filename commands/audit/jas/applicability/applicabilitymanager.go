@@ -1,10 +1,9 @@
 package applicability
 
 import (
-	"path/filepath"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"path/filepath"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -29,6 +28,8 @@ type ApplicabilityScanManager struct {
 	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
+	configFileName           string
+	resultsFileName          string
 }
 
 // The getApplicabilityScanResults function runs the applicability scan flow, which includes the following steps:
@@ -41,8 +42,12 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool) (results []*sarif.Run, err error) {
-	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis)
+	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, ExtendedScanResults *utils.ExtendedScanResults) (err error) {
+	var scannerTempDir string
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
+		return
+	}
+	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
 	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
 		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
 		return
@@ -51,11 +56,11 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
 	}
-	results = applicabilityScanManager.applicabilityScanResults
+	ExtendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
 	return
 }
 
-func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool) (manager *ApplicabilityScanManager) {
+func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
 		applicabilityScanResults: []*sarif.Run{},
@@ -64,6 +69,8 @@ func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, direct
 		xrayResults:              xrayScanResults,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
+		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
@@ -124,7 +131,7 @@ func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err err
 	if err = asm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(asm.scanner.ResultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix)
+	workingDirResults, err := jas.ReadJasScanRunsFromFile(asm.resultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix)
 	if err != nil {
 		return
 	}
@@ -168,7 +175,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 		Scans: []scanConfiguration{
 			{
 				Roots:                roots,
-				Output:               asm.scanner.ResultsFileName,
+				Output:               asm.resultsFileName,
 				Type:                 applicabilityScanType,
 				GrepDisable:          false,
 				CveWhitelist:         asm.directDependenciesCves,
@@ -177,13 +184,13 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(asm.scanner.ConfigFileName, configFileContent, utils.Applicability)
+	return jas.CreateScannersConfigFile(asm.configFileName, configFileContent, utils.Applicability)
 }
 
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for
 // advance security feature
 func (asm *ApplicabilityScanManager) runAnalyzerManager() error {
-	return asm.scanner.AnalyzerManager.Exec(asm.scanner.ConfigFileName, applicabilityScanCommand, filepath.Dir(asm.scanner.AnalyzerManager.AnalyzerManagerFullPath), asm.scanner.ServerDetails)
+	return asm.scanner.AnalyzerManager.Exec(asm.configFileName, applicabilityScanCommand, filepath.Dir(asm.scanner.AnalyzerManager.AnalyzerManagerFullPath), asm.scanner.ServerDetails)
 }
 
 func removeElementFromSlice(skipDirs []string, element string) []string {
