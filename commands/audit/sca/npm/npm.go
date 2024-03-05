@@ -35,7 +35,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 
 	treeDepsParam := createTreeDepsParam(params)
 
-	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(params)
+	clearResolutionServerFunc, err := ConfigNpmResolutionServerIfNeeded(params)
 	if err != nil {
 		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
 		return
@@ -63,7 +63,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 }
 
 // Generates a .npmrc file to configure an Artifactory server as the resolver server.
-func configNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
+func ConfigNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
 	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
 	if params.DepsRepo() == "" {
 		return

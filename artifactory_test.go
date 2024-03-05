@@ -46,6 +46,12 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Npm,
 		},
 		{
+			testProjectPath: []string{"npm", "npm-no-lock"},
+			resolveRepoName: securityTests.PnpmRemoteRepo,
+			cacheRepoName:   securityTests.PnpmRemoteRepo,
+			projectType:     project.Pnpm,
+		},
+		{
 			testProjectPath: []string{"dotnet", "dotnet-single"},
 			resolveRepoName: securityTests.NugetRemoteRepo,
 			cacheRepoName:   securityTests.NugetRemoteRepo,
