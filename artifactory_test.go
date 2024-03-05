@@ -2,11 +2,13 @@ package main
 
 import (
 	"errors"
-	"github.com/stretchr/testify/require"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -151,7 +153,7 @@ func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []s
 	}
 
 	// Executing the 'audit' command on an uninstalled project, we anticipate the resolution of dependencies from the configured Artifactory server and repository.
-	assert.NoError(t, securityTests.PlatformCli.WithoutCredentials().Exec("audit"))
+	assert.NoError(t, securityTests.PlatformCli.WithoutCredentials().Exec("audit", fmt.Sprintf("--%s", projectType.String())))
 
 	// Following resolution from Artifactory, we anticipate the repository's cache to contain data.
 	output := coreTests.RunCmdWithOutput(t, func() error {
