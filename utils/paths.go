@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"os"
 	"path/filepath"
@@ -35,10 +37,23 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationMavenCacheFolder() (string, error) {
+func GetCurationMavenCacheFolder(withProjectDir bool) (string, error) {
 	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(curationFolder, "maven"), nil
+	projectDir := ""
+	if withProjectDir {
+		workingDir, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		hasher := sha1.New()
+		_, err = hasher.Write([]byte(workingDir))
+		if err != nil {
+			return "", err
+		}
+		projectDir = hex.EncodeToString(hasher.Sum(nil))
+	}
+	return filepath.Join(curationFolder, "maven", projectDir), nil
 }

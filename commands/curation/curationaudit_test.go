@@ -496,7 +496,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
-				curationCache, err := utils.GetCurationMavenCacheFolder()
+				curationCache, err := utils.GetCurationMavenCacheFolder(false)
 				require.NoError(t, err)
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
 			},
