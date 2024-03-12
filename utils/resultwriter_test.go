@@ -114,7 +114,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 			maxCveScore:         "3.0",
 			applicable:          "Not applicable",
 			fixedVersions:       []string{"3.0.1"},
-			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not covered       | `example-package 3.0.0`       | 3.0.1   |",
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not applicable       | `example-package 3.0.0`       | 3.0.1   |",
 		},
 	}
 
