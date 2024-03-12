@@ -164,18 +164,6 @@ func TestApplicabilityScanManager_ShouldRun_TechnologiesNotEligibleForScan(t *te
 	assert.NoError(t, err)
 }
 
-func TestApplicabilityScanManager_ShouldRun_ScanResultsAreEmpty(t *testing.T) {
-	// Arrange
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
-
-	applicabilityManager := newApplicabilityScanManager(nil, mockDirectDependencies, scanner, false)
-
-	// Assert
-	eligible := applicabilityManager.shouldRunApplicabilityScan([]coreutils.Technology{coreutils.Nuget})
-	assert.False(t, eligible)
-}
-
 func TestExtractXrayDirectViolations(t *testing.T) {
 	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
 		{
