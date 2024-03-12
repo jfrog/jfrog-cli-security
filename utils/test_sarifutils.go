@@ -13,6 +13,19 @@ func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 	return run
 }
 
+func CreateRunWithDummyResultsAndRuleProperties(property, value string, results ...*sarif.Result) *sarif.Run {
+	run := sarif.NewRunWithInformationURI("", "")
+	for _, result := range results {
+		if result.RuleID != nil {
+			run.AddRule(*result.RuleID)
+		}
+		run.AddResult(result)
+	}
+	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties)
+	run.Tool.Driver.Rules[0].Properties[property] = value
+	return run
+}
+
 func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
 	return &sarif.Result{
 		Message:   *sarif.NewTextMessage(msg),

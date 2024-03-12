@@ -45,6 +45,7 @@ const (
 	Applicable                ApplicabilityStatus = "Applicable"
 	NotApplicable             ApplicabilityStatus = "Not Applicable"
 	ApplicabilityUndetermined ApplicabilityStatus = "Undetermined"
+	NotCovered                ApplicabilityStatus = "Not covered"
 	NotScanned                ApplicabilityStatus = ""
 )
 

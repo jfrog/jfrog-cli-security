@@ -77,7 +77,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 7.5      | Applicable       | `example-package 1.0.0`       | 1.0.1, 1.0.2   |",
 		},
 		{
-			name:                "Non-applicable vulnerability",
+			name:                "Not-scanned vulnerability",
 			formattedDeps:       "`example-package 2.0.0`",
 			maxCveScore:         "6.2",
 			applicable:          "",
@@ -91,6 +91,30 @@ func TestGetSarifTableDescription(t *testing.T) {
 			applicable:          "",
 			fixedVersions:       []string{},
 			expectedDescription: "| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| 3.0      | `example-package 3.0.0`       | No fix available   |",
+		},
+		{
+			name:                "Non-covered vulnerability",
+			formattedDeps:       "`example-package 3.0.0`",
+			maxCveScore:         "3.0",
+			applicable:          "Not covered",
+			fixedVersions:       []string{"3.0.1"},
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not covered       | `example-package 3.0.0`       | 3.0.1   |",
+		},
+		{
+			name:                "Undetermined vulnerability",
+			formattedDeps:       "`example-package 3.0.0`",
+			maxCveScore:         "3.0",
+			applicable:          "Undetermined",
+			fixedVersions:       []string{"3.0.1"},
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Undetermined       | `example-package 3.0.0`       | 3.0.1   |",
+		},
+		{
+			name:                "Not-applicable vulnerability",
+			formattedDeps:       "`example-package 3.0.0`",
+			maxCveScore:         "3.0",
+			applicable:          "Not applicable",
+			fixedVersions:       []string{"3.0.1"},
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not covered       | `example-package 3.0.0`       | 3.0.1   |",
 		},
 	}
 

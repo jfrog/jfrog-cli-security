@@ -930,15 +930,14 @@ func convertCves(cves []services.Cve) []formats.CveRow {
 
 // If at least one cve is applicable - final value is applicable
 // Else if at least one cve is undetermined - final value is undetermined
+// Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
 func getApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves []formats.CveRow) ApplicabilityStatus {
-	if !entitledForJas || len(applicabilityScanResults) == 0 {
+	if !entitledForJas || len(applicabilityScanResults) == 0 || len(cves) == 0 {
 		return NotScanned
 	}
-	if len(cves) == 0 {
-		return ApplicabilityUndetermined
-	}
 	foundUndetermined := false
+	foundNotCoveredValue := false
 	for _, cve := range cves {
 		if cve.Applicability != nil {
 			if cve.Applicability.Status == string(Applicable) {
@@ -947,10 +946,16 @@ func getApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 			if cve.Applicability.Status == string(ApplicabilityUndetermined) {
 				foundUndetermined = true
 			}
+			if cve.Applicability.Status == string(NotCovered) {
+				foundNotCoveredValue = true
+			}
 		}
 	}
 	if foundUndetermined {
 		return ApplicabilityUndetermined
+	}
+	if foundNotCoveredValue {
+		return NotCovered
 	}
 	return NotApplicable
 }
@@ -962,16 +967,21 @@ func getCveApplicabilityField(cve formats.CveRow, applicabilityScanResults []*sa
 
 	applicability := formats.Applicability{}
 	resultFound := false
+	var applicabilityStatuses []ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
+		rule, _ := applicabilityRun.GetRuleById(CveToApplicabilityRuleId(cve.Id))
+		if rule != nil {
+			applicability.ScannerDescription = GetRuleFullDescription(rule)
+			status := getApplicabilityStatusFromRule(rule)
+			if status != "" {
+				applicabilityStatuses = append(applicabilityStatuses, status)
+			}
+		}
 		result, _ := applicabilityRun.GetResultByRuleId(CveToApplicabilityRuleId(cve.Id))
 		if result == nil {
 			continue
 		}
 		resultFound = true
-		rule, _ := applicabilityRun.GetRuleById(CveToApplicabilityRuleId(cve.Id))
-		if rule != nil {
-			applicability.ScannerDescription = GetRuleFullDescription(rule)
-		}
 		// Add new evidences from locations
 		for _, location := range result.Locations {
 			fileName := GetRelativeLocationFileName(location, applicabilityRun.Invocations)
@@ -992,6 +1002,8 @@ func getCveApplicabilityField(cve formats.CveRow, applicabilityScanResults []*sa
 		}
 	}
 	switch {
+	case len(applicabilityStatuses) > 0:
+		applicability.Status = setApplicabilityStatusFromRule(applicabilityStatuses)
 	case !resultFound:
 		applicability.Status = string(ApplicabilityUndetermined)
 	case len(applicability.Evidence) == 0:
@@ -1047,4 +1059,47 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 	}
 	dependencyName = split[0]
 	return
+}
+
+func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) ApplicabilityStatus {
+	if rule.Properties["applicability"] != nil {
+		switch rule.Properties["applicability"].(string) {
+		case "not_covered":
+			return NotCovered
+		case "undetermined":
+			return ApplicabilityUndetermined
+		case "not_applicable":
+			return NotApplicable
+		case "applicable":
+			return Applicable
+		}
+	}
+	return ""
+}
+
+// If at least one status is applicable - final value is applicable
+// Else if at least one status is undetermined - final value is undetermined
+// Else if at least one status is not covered -> final value is not covered
+// Else (case when all statuses are not applicable) -> final value is not applicable
+func setApplicabilityStatusFromRule(applicabilityStatuses []ApplicabilityStatus) string {
+	foundUndetermined := false
+	foundNotCovered := false
+	for _, status := range applicabilityStatuses {
+		if status == Applicable {
+			return string(Applicable)
+		}
+		if status == ApplicabilityUndetermined {
+			foundUndetermined = true
+		}
+		if status == NotCovered {
+			foundNotCovered = true
+		}
+	}
+	if foundUndetermined {
+		return string(ApplicabilityUndetermined)
+	}
+	if foundNotCovered {
+		return string(NotCovered)
+	}
+	return string(NotApplicable)
 }

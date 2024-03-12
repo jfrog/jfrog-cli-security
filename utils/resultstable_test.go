@@ -447,7 +447,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 				EntitledForJas: true,
 			},
 			cves:           nil,
-			expectedResult: ApplicabilityUndetermined,
+			expectedResult: NotScanned,
 			expectedCves:   nil,
 		},
 		{
@@ -515,6 +515,47 @@ func TestGetApplicableCveValue(t *testing.T) {
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: ApplicabilityUndetermined,
 			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2"}},
+		},
+		{
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "applicable", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve3")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+			expectedResult: Applicable,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(Applicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+			},
+		},
+		{
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: NotCovered,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
+			},
+		},
+		{
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultsAndRuleProperties("applicability", "undetermined", CreateDummyPassingResult("applic_testCve2")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: ApplicabilityUndetermined,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(ApplicabilityUndetermined)}},
+			},
 		},
 	}
 
@@ -1040,6 +1081,35 @@ func TestPrepareSast(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedOutput, prepareSast(tc.input, false))
+		})
+	}
+}
+
+func TestSetApplicabilityStatusFromRule(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          []ApplicabilityStatus
+		expectedOutput string
+	}{
+		{
+			name:           "Applicable wins all statuses",
+			input:          []ApplicabilityStatus{ApplicabilityUndetermined, Applicable, NotCovered, NotApplicable},
+			expectedOutput: string(Applicable),
+		},
+		{
+			name:           "Undetermined wins not covered",
+			input:          []ApplicabilityStatus{NotCovered, ApplicabilityUndetermined, NotCovered, NotApplicable},
+			expectedOutput: string(ApplicabilityUndetermined),
+		},
+		{
+			name:           "Not covered wins not applicable",
+			input:          []ApplicabilityStatus{NotApplicable, NotCovered, NotApplicable},
+			expectedOutput: string(NotCovered),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedOutput, setApplicabilityStatusFromRule(tc.input))
 		})
 	}
 }

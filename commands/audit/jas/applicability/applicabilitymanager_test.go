@@ -334,3 +334,25 @@ func TestParseResults_AllCvesNotApplicable(t *testing.T) {
 		assert.NotEmpty(t, applicabilityManager.applicabilityScanResults[0].Results)
 	}
 }
+
+func TestParseResults_ApplicableCveExist1(t *testing.T) {
+	// Arrange
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
+	applicabilityManager.scanner.ResultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", "new_ca_status.sarif")
+
+	// Act
+	var err error
+	applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.scanner.ResultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
+
+	if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
+		assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
+		assert.NotEmpty(t, applicabilityManager.applicabilityScanResults[0].Results)
+		assert.Len(t, applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules, 4)
+		assert.Equal(t, "applicable", applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[0].Properties["applicability"])
+		assert.Equal(t, "undetermined", applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[1].Properties["applicability"])
+		assert.Equal(t, "not_covered", applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[2].Properties["applicability"])
+		assert.Equal(t, "not_applicable", applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[3].Properties["applicability"])
+	}
+}
