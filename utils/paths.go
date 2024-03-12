@@ -1,6 +1,7 @@
 package utils
 
 import (
+	// #nosec G505 -- Not in use for secrets.
 	"crypto/sha1"
 	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -48,6 +49,7 @@ func GetCurationMavenCacheFolder(withProjectDir bool) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		// #nosec G401 -- Not a secret hash.
 		hasher := sha1.New()
 		_, err = hasher.Write([]byte(workingDir))
 		if err != nil {
