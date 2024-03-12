@@ -1063,7 +1063,11 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) ApplicabilityStatus {
 	if rule.Properties["applicability"] != nil {
-		switch rule.Properties["applicability"].(string) {
+		status, ok := rule.Properties["applicability"].(string)
+		if !ok {
+			log.Debug(fmt.Sprintf("failed to get applicability status from rule properties for rule_id %s", rule.ID))
+		}
+		switch status {
 		case "not_covered":
 			return NotCovered
 		case "undetermined":
