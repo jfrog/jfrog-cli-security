@@ -43,6 +43,10 @@ type ApplicabilityScanManager struct {
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool) (results []*sarif.Run, err error) {
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis)
+	if !applicabilityScanManager.cvesExists() {
+		log.Debug("We couldn't find any vulnerable dependencies. Skipping....")
+		return
+	}
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
