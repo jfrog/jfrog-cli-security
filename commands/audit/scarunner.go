@@ -261,7 +261,8 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 	}
 
 	if dirExist {
-		if dirIsEmpty, err := fileutils.IsDirEmpty(curationCacheFolder); err != nil || !dirIsEmpty {
+		if dirIsEmpty, scopErr := fileutils.IsDirEmpty(curationCacheFolder); scopErr != nil || !dirIsEmpty {
+			err = scopErr
 			return
 		}
 	}
