@@ -670,7 +670,8 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
 					w.Header().Add("content-type", "text/html")
-					w.Write(f)
+					_, err = w.Write(f)
+					require.NoError(t, err)
 					return
 				}
 			}

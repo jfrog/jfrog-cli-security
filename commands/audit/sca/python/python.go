@@ -117,8 +117,9 @@ func getDependencies(serverDetails *config.ServerDetails, tech coreutils.Technol
 		sca.LogExecutableVersion(string(auditPython.Tool))
 	}
 	if auditPython.IsCurationCmd {
-		pipUrls, err := processPipDownloadsUrlsFromReportFile()
-		if err != nil {
+		pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
+		if errProcessed != nil {
+			err = errProcessed
 			return
 		}
 		params.SetDownloadUrls(pipUrls)
