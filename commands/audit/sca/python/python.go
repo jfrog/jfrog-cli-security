@@ -34,7 +34,6 @@ type AuditPython struct {
 	RemotePypiRepo      string
 	PipRequirementsFile string
 	IsCurationCmd       bool
-	reportFilePath      string
 }
 
 func BuildDependencyTree(serverDetails *config.ServerDetails, tech coreutils.Technology, params xrayutils2.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
