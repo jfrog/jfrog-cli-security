@@ -40,6 +40,8 @@ type AuditParams interface {
 	Exclusions() []string
 	SetIsRecursiveScan(isRecursiveScan bool) *AuditBasicParams
 	IsRecursiveScan() bool
+	SetDownloadUrls(urlsMap map[string]string)
+	GetDownloadUrls() map[string]string
 }
 
 type AuditBasicParams struct {
@@ -61,6 +63,7 @@ type AuditBasicParams struct {
 	dependenciesForApplicabilityScan []string
 	exclusions                       []string
 	isRecursiveScan                  bool
+	downloadUrls                     map[string]string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() []string {
@@ -227,4 +230,11 @@ func (abp *AuditBasicParams) SetIsRecursiveScan(isRecursiveScan bool) *AuditBasi
 
 func (abp *AuditBasicParams) IsRecursiveScan() bool {
 	return abp.isRecursiveScan
+}
+
+func (abp *AuditBasicParams) SetDownloadUrls(urlsMap map[string]string) {
+	abp.downloadUrls = urlsMap
+}
+func (abp *AuditBasicParams) GetDownloadUrls() map[string]string {
+	return abp.downloadUrls
 }

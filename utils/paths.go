@@ -42,3 +42,11 @@ func GetCurationMavenCacheFolder() (string, error) {
 	}
 	return filepath.Join(curationFolder, "maven"), nil
 }
+
+func GetCurationPipCacheFolder() (string, error) {
+	curationFolder, err := GetCurationCacheFolder()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(curationFolder, "pip"), nil
+}

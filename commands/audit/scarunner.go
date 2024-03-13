@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -216,11 +215,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	case coreutils.Go:
 		fullDependencyTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
 	case coreutils.Pipenv, coreutils.Pip, coreutils.Poetry:
-		fullDependencyTrees, uniqueDeps, err = python.BuildDependencyTree(&python.AuditPython{
-			Server:              serverDetails,
-			Tool:                pythonutils.PythonTool(tech),
-			RemotePypiRepo:      params.DepsRepo(),
-			PipRequirementsFile: params.PipRequirementsFile()})
+		fullDependencyTrees, uniqueDeps, err = python.BuildDependencyTree(serverDetails, tech, params)
 	case coreutils.Nuget:
 		fullDependencyTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	default:
