@@ -177,18 +177,18 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 
 func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
 	if tech == coreutils.Maven {
-		return xrayutils.GetCurationMavenCacheFolder(true)
+		return xrayutils.GetCurationMavenCacheFolder()
 	}
 	return "", nil
 }
 
 func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
-	// in case it's not curation command these params will be empty
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
 		return
 	}
+	// In case it's not curation command these 'curationLogMsg' be empty
 	logMessage += curationLogMsg
 	log.Info(logMessage + "...")
 	if params.Progress() != nil {
@@ -248,25 +248,26 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 }
 
 func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutils.Technology) (logMessage string, curationCacheFolder string, err error) {
-	if params.IsCurationCmd() {
-		curationCacheFolder, err = getCurationCacheByTech(tech)
-		if err != nil {
-			return logMessage, curationCacheFolder, err
-		}
-
-		if isExist, err := fileutils.IsDirExists(curationCacheFolder, false); isExist {
-			if isEmpty, err := fileutils.IsDirEmpty(curationCacheFolder); !isEmpty {
-				return logMessage, curationCacheFolder, err
-			} else if err != nil {
-				return logMessage, curationCacheFolder, err
-			}
-		} else if err != nil {
-			return logMessage, curationCacheFolder, err
-		}
-
-		logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
-
+	if !params.IsCurationCmd() {
+		return
 	}
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+		return
+	}
+
+	dirExist, err := fileutils.IsDirExists(curationCacheFolder, false)
+	if err != nil {
+		return
+	}
+
+	if dirExist {
+		if dirIsEmpty, err := fileutils.IsDirEmpty(curationCacheFolder); err != nil || !dirIsEmpty {
+			return
+		}
+	}
+
+	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+
 	return logMessage, curationCacheFolder, err
 }
 

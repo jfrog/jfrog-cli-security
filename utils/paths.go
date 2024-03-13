@@ -38,24 +38,21 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationMavenCacheFolder(withProjectDir bool) (string, error) {
+func GetCurationMavenCacheFolder() (projectDir string, err error) {
 	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
-	projectDir := ""
-	if withProjectDir {
-		workingDir, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-		// #nosec G401 -- Not a secret hash.
-		hasher := sha1.New()
-		_, err = hasher.Write([]byte(workingDir))
-		if err != nil {
-			return "", err
-		}
-		projectDir = hex.EncodeToString(hasher.Sum(nil))
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(curationFolder, "maven", projectDir), nil
+	// #nosec G401 -- Not a secret hash.
+	hasher := sha1.New()
+	_, err = hasher.Write([]byte(workingDir))
+	if err != nil {
+		return "", err
+	}
+	projectDir = filepath.Join(curationFolder, "maven", hex.EncodeToString(hasher.Sum(nil)))
+	return
 }

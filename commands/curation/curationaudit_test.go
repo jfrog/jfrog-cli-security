@@ -500,7 +500,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				assert.NoError(t, err)
 				// set the cache to test project dir, in order to fill its cache with dependencies
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationMavenCacheFolder(true)
+				curationCache, err := utils.GetCurationMavenCacheFolder()
 				callbackPreTest()
 				require.NoError(t, err)
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
