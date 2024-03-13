@@ -99,7 +99,7 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	// Run getModulesDependencyTrees
 	params := &xrayutils.AuditBasicParams{}
 	params.SetPipRequirementsFile("requirements.txt")
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pypi, params)
+	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pip, params)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -125,7 +125,7 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "ptyprocess:0.7.0",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pypi, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pipenv, &xrayutils.AuditBasicParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pypi, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Poetry, &xrayutils.AuditBasicParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
