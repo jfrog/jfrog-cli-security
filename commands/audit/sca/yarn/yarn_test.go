@@ -6,6 +6,7 @@ import (
 	utils2 "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
@@ -60,6 +61,14 @@ func TestIsInstallRequired(t *testing.T) {
 	installRequired, err := isInstallRequired(tempDirPath, []string{})
 	assert.NoError(t, err)
 	assert.True(t, installRequired)
+
+	// Validates we are not operating on an empty test dir.
+	// Yarn 1, That is currently installed on the machines that are running the tests, allows running 'install' on an empty project. This makes the test pass without actually checking what needs to be checked.
+	// This check can be deleted after the Yarn version on the runner machine will be upgraded to Yarn berry.
+	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
+	assert.NoError(t, err)
+	assert.False(t, isTempDirEmpty)
+
 	executablePath, err := biutils.GetYarnExecutable()
 	assert.NoError(t, err)
 
@@ -86,9 +95,14 @@ func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, 
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
-	fullPath, err := filepath.Abs(yarnProjectPath)
+	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
+
+	// Validates we are not operating on an empty test dir.
+	// Yarn 1, That is currently installed on the machines that are running the tests, allows running 'install' on an empty project. This makes the test pass without actually checking what needs to be checked.
+	// This check can be deleted after the Yarn version on the runner machine will be upgraded to Yarn berry.
+	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
 	assert.NoError(t, err)
-	assert.NoError(t, utils2.CopyDir(fullPath, tempDirPath, true, nil))
+	assert.False(t, isTempDirEmpty)
 
 	executablePath, err := biutils.GetYarnExecutable()
 	assert.NoError(t, err)
