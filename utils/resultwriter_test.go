@@ -64,7 +64,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 		name                string
 		formattedDeps       string
 		maxCveScore         string
-		applicable          string
+		status              ApplicabilityStatus
 		fixedVersions       []string
 		expectedDescription string
 	}{
@@ -72,7 +72,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 			name:                "Applicable vulnerability",
 			formattedDeps:       "`example-package 1.0.0`",
 			maxCveScore:         "7.5",
-			applicable:          "Applicable",
+			status:              "Applicable",
 			fixedVersions:       []string{"1.0.1", "1.0.2"},
 			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 7.5      | Applicable       | `example-package 1.0.0`       | 1.0.1, 1.0.2   |",
 		},
@@ -80,7 +80,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 			name:                "Not-scanned vulnerability",
 			formattedDeps:       "`example-package 2.0.0`",
 			maxCveScore:         "6.2",
-			applicable:          "",
+			status:              "",
 			fixedVersions:       []string{"2.0.1"},
 			expectedDescription: "| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| 6.2      | `example-package 2.0.0`       | 2.0.1   |",
 		},
@@ -88,15 +88,15 @@ func TestGetSarifTableDescription(t *testing.T) {
 			name:                "No fixed versions",
 			formattedDeps:       "`example-package 3.0.0`",
 			maxCveScore:         "3.0",
-			applicable:          "",
+			status:              "",
 			fixedVersions:       []string{},
 			expectedDescription: "| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| 3.0      | `example-package 3.0.0`       | No fix available   |",
 		},
 		{
-			name:                "Non-covered vulnerability",
+			name:                "Not-covered vulnerability",
 			formattedDeps:       "`example-package 3.0.0`",
 			maxCveScore:         "3.0",
-			applicable:          "Not covered",
+			status:              "Not covered",
 			fixedVersions:       []string{"3.0.1"},
 			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not covered       | `example-package 3.0.0`       | 3.0.1   |",
 		},
@@ -104,23 +104,23 @@ func TestGetSarifTableDescription(t *testing.T) {
 			name:                "Undetermined vulnerability",
 			formattedDeps:       "`example-package 3.0.0`",
 			maxCveScore:         "3.0",
-			applicable:          "Undetermined",
+			status:              "Undetermined",
 			fixedVersions:       []string{"3.0.1"},
 			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Undetermined       | `example-package 3.0.0`       | 3.0.1   |",
 		},
 		{
-			name:                "Not-applicable vulnerability",
+			name:                "Not-status vulnerability",
 			formattedDeps:       "`example-package 3.0.0`",
 			maxCveScore:         "3.0",
-			applicable:          "Not applicable",
+			status:              "Not status",
 			fixedVersions:       []string{"3.0.1"},
-			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not applicable       | `example-package 3.0.0`       | 3.0.1   |",
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not status       | `example-package 3.0.0`       | 3.0.1   |",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output := getSarifTableDescription(tc.formattedDeps, tc.maxCveScore, tc.applicable, tc.fixedVersions)
+			output := getSarifTableDescription(tc.formattedDeps, tc.maxCveScore, tc.status.String(), tc.fixedVersions)
 			assert.Equal(t, tc.expectedDescription, output)
 		})
 	}
