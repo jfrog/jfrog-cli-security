@@ -272,7 +272,7 @@ func executeCommand(executable string, args ...string) error {
 }
 
 func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder string, reportFileName string) []string {
-	args := []string{"-m", "pip", "install", "--ignore-installed"}
+	args := []string{"-m", "pip", "install"}
 	if requirementsFile == "" {
 		// Run 'pip install .'
 		args = append(args, ".")
@@ -287,7 +287,10 @@ func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder st
 		args = append(args, "--cache-dir", cacheFolder)
 	}
 	if reportFileName != "" {
+		// For report to include download urls, pip should ignore installed packages.
+		args = append(args, "--ignore-installed")
 		args = append(args, "--report", reportFileName)
+
 	}
 	return args
 }
