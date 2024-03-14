@@ -62,9 +62,6 @@ func TestIsInstallRequired(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, installRequired)
 
-	// Validates we are not operating on an empty test dir.
-	// Yarn 1, That is currently installed on the machines that are running the tests, allows running 'install' on an empty project. This makes the test pass without actually checking what needs to be checked.
-	// This check can be deleted after the Yarn version on the runner machine will be upgraded to Yarn berry.
 	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
 	assert.NoError(t, err)
 	assert.False(t, isTempDirEmpty)
@@ -97,9 +94,6 @@ func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, 
 	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
 	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
 
-	// Validates we are not operating on an empty test dir.
-	// Yarn 1, That is currently installed on the machines that are running the tests, allows running 'install' on an empty project. This makes the test pass without actually checking what needs to be checked.
-	// This check can be deleted after the Yarn version on the runner machine will be upgraded to Yarn berry.
 	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
 	assert.NoError(t, err)
 	assert.False(t, isTempDirEmpty)
