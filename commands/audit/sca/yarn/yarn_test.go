@@ -55,7 +55,7 @@ func TestParseYarnDependenciesList(t *testing.T) {
 func TestIsInstallRequired(t *testing.T) {
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	yarnProjectPath := filepath.Join("..", "..", "..", "testdata", "yarn-project")
+	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
 	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
 	installRequired, err := isInstallRequired(tempDirPath, []string{})
 	assert.NoError(t, err)
@@ -85,8 +85,10 @@ func TestRunYarnInstallAccordingToVersion(t *testing.T) {
 func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, params []string) {
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	yarnProjectPath := filepath.Join("..", "..", "..", "testdata", "yarn-project")
-	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
+	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
+	fullPath, err := filepath.Abs(yarnProjectPath)
+	assert.NoError(t, err)
+	assert.NoError(t, utils2.CopyDir(fullPath, tempDirPath, true, nil))
 
 	executablePath, err := biutils.GetYarnExecutable()
 	assert.NoError(t, err)
