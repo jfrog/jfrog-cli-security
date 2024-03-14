@@ -281,7 +281,9 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) 
 	case coreutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
 	case coreutils.Pip:
-		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
+		if ca.PipRequirementsFile() == "" {
+			ca.SetPipRequirementsFile("requirements.txt")
+		}
 	}
 
 	return ca.AuditParams

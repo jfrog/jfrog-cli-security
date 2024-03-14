@@ -1,8 +1,10 @@
 package python
 
 import (
+	"errors"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -183,4 +185,41 @@ func TestGetPipInstallArgs(t *testing.T) {
 
 	assert.Equal(t, []string{"-m", "pip", "install", ".", "-i", "https://user@pass:remote.url/repo"}, getPipInstallArgs("", "https://user@pass:remote.url/repo", "", ""))
 	assert.Equal(t, []string{"-m", "pip", "install", "-r", "requirements.txt", "-i", "https://user@pass:remote.url/repo"}, getPipInstallArgs("requirements.txt", "https://user@pass:remote.url/repo", "", ""))
+}
+
+func Test_curationPassThroughError(t *testing.T) {
+	tests := []struct {
+		name              string
+		isCurationCommand bool
+		errFromPip        error
+		expected          string
+	}{
+		{
+			name:              "curation command and error include 403",
+			isCurationCommand: true,
+			errFromPip:        errors.New("tes error from pip HTTP error 403"),
+			expected:          "Failed to get dependencies tree for python project, Please verify pass-through enabled on the curated repos",
+		},
+		{
+			name:              "not curation cmd",
+			isCurationCommand: false,
+			errFromPip:        errors.New("tes error from pip HTTP error 403"),
+		},
+		{
+			name:              "curation cmd, not 403 error",
+			isCurationCommand: true,
+			errFromPip:        errors.New("tes error from pip HTTP error 500"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := curationPassThroughError(&AuditPython{IsCurationCmd: tt.isCurationCommand}, tt.errFromPip)
+			if tt.expected != "" {
+				require.NotNil(t, err)
+				strings.Contains(err.Error(), tt.expected)
+			} else {
+				require.Nil(t, err)
+			}
+		})
+	}
 }
