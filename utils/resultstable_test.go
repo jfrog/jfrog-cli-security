@@ -802,7 +802,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 13,
+						SeverityNumValue: 17,
 					},
 					Finding: "other iac finding",
 					Location: formats.Location{
@@ -817,7 +817,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -832,7 +832,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -899,7 +899,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 9,
+						SeverityNumValue: 11,
 					},
 					Finding: "other secret finding",
 					Location: formats.Location{
@@ -914,7 +914,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -929,7 +929,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -1005,7 +1005,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 13,
+						SeverityNumValue: 17,
 					},
 					Finding: "other sast finding",
 					Location: formats.Location{
@@ -1020,7 +1020,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{
@@ -1073,7 +1073,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{
@@ -1100,32 +1100,32 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	testCases := []struct {
 		name           string
 		input          []ApplicabilityStatus
-		expectedOutput string
+		expectedOutput ApplicabilityStatus
 	}{
 		{
 			name:           "applicable wins all statuses",
 			input:          []ApplicabilityStatus{ApplicabilityUndetermined, Applicable, NotCovered, NotApplicable},
-			expectedOutput: string(Applicable),
+			expectedOutput: Applicable,
 		},
 		{
 			name:           "undetermined wins not covered",
 			input:          []ApplicabilityStatus{NotCovered, ApplicabilityUndetermined, NotCovered, NotApplicable},
-			expectedOutput: string(ApplicabilityUndetermined),
+			expectedOutput: ApplicabilityUndetermined,
 		},
 		{
 			name:           "not covered wins not applicable",
 			input:          []ApplicabilityStatus{NotApplicable, NotCovered, NotApplicable},
-			expectedOutput: string(NotCovered),
+			expectedOutput: NotCovered,
 		},
 		{
 			name:           "all statuses are not applicable",
 			input:          []ApplicabilityStatus{NotApplicable, NotApplicable, NotApplicable},
-			expectedOutput: string(NotApplicable),
+			expectedOutput: NotApplicable,
 		},
 		{
 			name:           "no statuses",
 			input:          []ApplicabilityStatus{},
-			expectedOutput: string(NotScanned),
+			expectedOutput: NotScanned,
 		},
 	}
 	for _, tc := range testCases {
