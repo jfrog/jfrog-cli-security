@@ -3,6 +3,8 @@ package pnpm
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	biutils "github.com/jfrog/build-info-go/utils"
 	"os/exec"
 	"path/filepath"
 
@@ -46,10 +48,21 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 		return
 	}
 	// Build
-	if err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
+	var tempDirForDependenciesCalculation string
+	if tempDirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
 		return
 	}
-	return calculateDependencies(pnpmExecPath, currentDir, params)
+
+	var dirToCalcDependenciesOn string
+	if tempDirForDependenciesCalculation == "" {
+		dirToCalcDependenciesOn = currentDir
+	} else {
+		dirToCalcDependenciesOn = tempDirForDependenciesCalculation
+		defer func() {
+			err = errors.Join(err, biutils.RemoveTempDir(tempDirForDependenciesCalculation))
+		}()
+	}
+	return calculateDependencies(pnpmExecPath, dirToCalcDependenciesOn, params)
 }
 
 func getPnpmExecPath() (pnpmExecPath string, err error) {
@@ -77,7 +90,9 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 }
 
 // Install is required when "pnpm-lock.yaml" lock file or "node_modules/.pnpm" directory not exists.
-func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
+// If "node_modules/.pnpm" doesn't exist we copy the project to a temporary dir and perform the 'install' on the copy, because we don't want to have node_modules in the original cloned
+// Directory if it wasn't exist before
+func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependenciesCalculation string, err error) {
 	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
 		return
@@ -88,7 +103,32 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
 	}
 	// Install is needed
 	log.Debug("Installing Pnpm project:", workingDir)
-	return getPnpmCmd(pnpmExecPath, workingDir, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	workingDirToRunInstallOn := workingDir
+
+	// If node_modules/.pnpm doesn't exist we clone the project to a temporary dir so the original project will not be effected by the newly added files of the 'install' command
+	if !pnpmDirExists {
+		tempDirForDependenciesCalculation, err = fileutils.CreateTempDir()
+		if err != nil {
+			err = fmt.Errorf("failed to create a temporary dir: %w", err)
+			return
+		}
+		defer func() {
+			// If we have an error for any reason we delete the temp dir
+			if err != nil {
+				err = errors.Join(err, fileutils.RemoveTempDir(tempDirForDependenciesCalculation))
+			}
+		}()
+
+		err = biutils.CopyDir(workingDir, tempDirForDependenciesCalculation, true, nil)
+		if err != nil {
+			err = fmt.Errorf("failed copying project to temp dir: %w", err)
+			return
+		}
+		workingDirToRunInstallOn = tempDirForDependenciesCalculation
+	}
+
+	err = getPnpmCmd(pnpmExecPath, workingDirToRunInstallOn, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	return
 }
 
 // Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
