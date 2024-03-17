@@ -266,7 +266,7 @@ func curationPassThroughError(auditPython *AuditPython, errFromPip error) (err e
 	if !auditPython.IsCurationCmd {
 		return
 	}
-	if strings.Contains(strings.ToLower(errFromPip.Error()), "http error 403") {
+	if errFromPip != nil && strings.Contains(strings.ToLower(errFromPip.Error()), "http error 403") {
 		err = errors.New("Failed to get dependencies tree for python project, Please verify pass-through enabled on the curated repos")
 	}
 	return
