@@ -1,6 +1,9 @@
 package utils
 
 import (
+	// #nosec G505 -- Not in use for secrets.
+	"crypto/sha1"
+	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"os"
 	"path/filepath"
@@ -36,12 +39,23 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationMavenCacheFolder() (string, error) {
+func GetCurationMavenCacheFolder() (projectDir string, err error) {
 	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(curationFolder, "maven"), nil
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	// #nosec G401 -- Not a secret hash.
+	hasher := sha1.New()
+	_, err = hasher.Write([]byte(workingDir))
+	if err != nil {
+		return "", err
+	}
+	projectDir = filepath.Join(curationFolder, "maven", hex.EncodeToString(hasher.Sum(nil)))
+	return
 }
 
 func GetCurationPipCacheFolder() (string, error) {
