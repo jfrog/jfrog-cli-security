@@ -13,9 +13,11 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -237,7 +239,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 }
 
 func GetTestDataPath() string {
-	return filepath.Join("..", "..", "..", "..", "tests", "testdata", "other")
+	return filepath.Join("..", "..", "tests", "testdata", "other")
 }
 
 func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType) bool {
@@ -273,4 +275,13 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 		return DefaultExcludePatterns
 	}
 	return excludePatterns
+}
+
+func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+		log.Debug(e)
+		return
+	}
+	entitled, err = xrayManager.IsEntitled(utils.ApplicabilityFeatureId)
+	return
 }

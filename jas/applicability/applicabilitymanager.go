@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -17,10 +17,13 @@ import (
 )
 
 const (
-	applicabilityScanType      = "analyze-applicability"
-	applicabilityScanCommand   = "ca"
-	applicabilityDocsUrlSuffix = "contextual-analysis"
+	ApplicabilityScannerType        = "analyze-applicability"
+	applicabilityScanCommand        = "ca"
+	applicabilityDocsUrlSuffix      = "contextual-analysis"
+	ApplicabilityDockerScanScanType = "analyze-applicability-docker-scan"
 )
+
+type ApplicabilityScanType string
 
 type ApplicabilityScanManager struct {
 	applicabilityScanResults []*sarif.Run
@@ -29,6 +32,7 @@ type ApplicabilityScanManager struct {
 	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
+	commandType              string
 }
 
 // The getApplicabilityScanResults function runs the applicability scan flow, which includes the following steps:
@@ -41,8 +45,8 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool) (results []*sarif.Run, err error) {
-	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis)
+	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType) (results []*sarif.Run, err error) {
+	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType)
 	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
 		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
 		return
@@ -55,7 +59,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	return
 }
 
-func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool) (manager *ApplicabilityScanManager) {
+func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
 		applicabilityScanResults: []*sarif.Run{},
@@ -64,6 +68,7 @@ func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, direct
 		xrayResults:              xrayScanResults,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
+		commandType:              string(scanType),
 	}
 }
 
@@ -152,6 +157,7 @@ type scanConfiguration struct {
 	CveWhitelist         []string `yaml:"cve-whitelist"`
 	IndirectCveWhitelist []string `yaml:"indirect-cve-whitelist"`
 	SkippedDirs          []string `yaml:"skipped-folders"`
+	ScanType             string   `yaml:"scantype"`
 }
 
 func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module) error {
@@ -169,7 +175,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			{
 				Roots:                roots,
 				Output:               asm.scanner.ResultsFileName,
-				Type:                 applicabilityScanType,
+				Type:                 asm.commandType,
 				GrepDisable:          false,
 				CveWhitelist:         asm.directDependenciesCves,
 				IndirectCveWhitelist: asm.indirectDependenciesCves,
