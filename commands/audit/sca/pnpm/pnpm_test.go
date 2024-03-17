@@ -98,6 +98,7 @@ func TestInstallProjectIfNeeded(t *testing.T) {
 	assert.NoError(t, err)
 
 	tempDirForDependenciesCalculation, err := installProjectIfNeeded(pnpmExecPath, currentDir)
+	assert.NoError(t, err)
 	assert.NotEmpty(t, tempDirForDependenciesCalculation)
 
 	nodeModulesExist, err := fileutils.IsDirExists(filepath.Join(tempDirForDependenciesCalculation, "node_modules"), false)
