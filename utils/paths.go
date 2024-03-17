@@ -13,6 +13,7 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
+	CurationPipSupport   = "JFROG_CLI_CURATION_PIP"
 )
 
 func getJfrogCurationFolder() (string, error) {

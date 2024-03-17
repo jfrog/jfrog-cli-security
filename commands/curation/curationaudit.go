@@ -53,17 +53,19 @@ const (
 
 	TotalConcurrentRequests = 10
 
-	MinArtiMavenSupport = "7.82.0"
-	MinArtiXraySupport  = "3.92.0"
+	MinArtiPassThroughSupport = "7.82.0"
+	MinXrayPassTHroughSupport = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
 var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	coreutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
-	coreutils.Pip: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	coreutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(coreutils.Pip, MinArtiPassThroughSupport, MinXrayPassTHroughSupport, utils.CurationPipSupport)
+	},
 	coreutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Maven, MinArtiMavenSupport, MinArtiXraySupport, utils.CurationMavenSupport)
+		return ca.checkSupportByVersionOrEnv(coreutils.Maven, MinArtiPassThroughSupport, MinXrayPassTHroughSupport, utils.CurationMavenSupport)
 	},
 }
 
