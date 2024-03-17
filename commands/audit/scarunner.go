@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"os"
 	"time"
 
@@ -174,12 +175,26 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
+func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
+	if tech == coreutils.Maven {
+		return xrayutils.GetCurationMavenCacheFolder()
+	}
+	return "", nil
+}
+
 func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
+	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
+	if err != nil {
+		return
+	}
+	// In case it's not curation command these 'curationLogMsg' be empty
+	logMessage += curationLogMsg
 	log.Info(logMessage + "...")
 	if params.Progress() != nil {
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
+
 	err = SetResolutionRepoIfExists(params, tech)
 	if err != nil {
 		return
@@ -191,15 +206,9 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	var uniqueDeps []string
 	var uniqDepsWithTypes map[string][]string
 	startTime := time.Now()
+
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		curationCacheFolder := ""
-		if params.IsCurationCmd() {
-			curationCacheFolder, err = xrayutils.GetCurationMavenCacheFolder()
-			if err != nil {
-				return
-			}
-		}
 		fullDependencyTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
@@ -236,6 +245,31 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	}
 	flatTree, err = createFlatTree(uniqueDeps)
 	return
+}
+
+func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutils.Technology) (logMessage string, curationCacheFolder string, err error) {
+	if !params.IsCurationCmd() {
+		return
+	}
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+		return
+	}
+
+	dirExist, err := fileutils.IsDirExists(curationCacheFolder, false)
+	if err != nil {
+		return
+	}
+
+	if dirExist {
+		if dirIsEmpty, scopErr := fileutils.IsDirEmpty(curationCacheFolder); scopErr != nil || !dirIsEmpty {
+			err = scopErr
+			return
+		}
+	}
+
+	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+
+	return logMessage, curationCacheFolder, err
 }
 
 // Associates a technology with another of a different type in the structure.
