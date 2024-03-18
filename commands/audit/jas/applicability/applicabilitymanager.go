@@ -43,8 +43,8 @@ type ApplicabilityScanManager struct {
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool) (results []*sarif.Run, err error) {
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis)
-	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
-		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
+	if !applicabilityScanManager.cvesExists() {
+		log.Debug("We couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager); err != nil {
@@ -130,10 +130,6 @@ func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err err
 	}
 	asm.applicabilityScanResults = append(asm.applicabilityScanResults, workingDirResults...)
 	return
-}
-
-func (asm *ApplicabilityScanManager) shouldRunApplicabilityScan(technologies []coreutils.Technology) bool {
-	return asm.cvesExists() && coreutils.ContainsApplicabilityScannableTech(technologies)
 }
 
 func (asm *ApplicabilityScanManager) cvesExists() bool {
