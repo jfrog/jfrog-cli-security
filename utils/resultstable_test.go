@@ -528,9 +528,9 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - applicable wins all statuses",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "applicable", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve3")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve3")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
@@ -544,8 +544,8 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - not covered wins not applicable",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
@@ -558,8 +558,8 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - undetermined wins not covered",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultsAndRuleProperties("applicability", "undetermined", CreateDummyPassingResult("applic_testCve2")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", CreateDummyPassingResult("applic_testCve2")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},

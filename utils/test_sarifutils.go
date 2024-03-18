@@ -13,7 +13,7 @@ func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 	return run
 }
 
-func CreateRunWithDummyResultsAndRuleProperties(property, value string, result *sarif.Result) *sarif.Run {
+func CreateRunWithDummyResultAndRuleProperties(property, value string, result *sarif.Result) *sarif.Run {
 	run := sarif.NewRunWithInformationURI("", "")
 	if result.RuleID != nil {
 		run.AddRule(*result.RuleID)
