@@ -24,6 +24,7 @@ type AuditCommand struct {
 	IncludeLicenses        bool
 	Fail                   bool
 	PrintExtendedTable     bool
+	IsTar                  bool
 	AuditParams
 }
 
@@ -53,6 +54,11 @@ func (auditCmd *AuditCommand) SetIncludeVulnerabilities(include bool) *AuditComm
 
 func (auditCmd *AuditCommand) SetIncludeLicenses(include bool) *AuditCommand {
 	auditCmd.IncludeLicenses = include
+	return auditCmd
+}
+
+func (auditCmd *AuditCommand) SetIsTar(isTar bool) *AuditCommand {
+	auditCmd.IsTar = isTar
 	return auditCmd
 }
 

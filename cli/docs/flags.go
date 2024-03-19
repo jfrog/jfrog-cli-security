@@ -87,6 +87,7 @@ const (
 	Watches             = "watches"
 	RepoPath            = "repo-path"
 	Licenses            = "licenses"
+	UseTar              = "tar"
 	Fail                = "fail"
 	ExtendedTable       = "extended-table"
 	MinSeverity         = "min-severity"
@@ -121,7 +122,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+		ServerId, Project, Watches, RepoPath, Licenses, UseTar, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
@@ -177,6 +178,7 @@ var flagsMap = map[string]components.Flag{
 	Watches:       components.NewStringFlag(Watches, "A comma-separated list of Xray watches, to determine Xray's violations creation."),
 	RepoPath:      components.NewStringFlag(RepoPath, "Target repo path, to enable Xray to determine watches accordingly."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
+	UseTar:        components.NewBoolFlag(UseTar, "Set to true to force request docker scan on a .tar file instead of an image."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
