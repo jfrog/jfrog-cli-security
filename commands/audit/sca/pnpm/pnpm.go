@@ -114,7 +114,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependen
 			return
 		}
 		defer func() {
-			//If an error occurs for any reason, we proceed to delete the temporary directory.
+			// If an error occurs for any reason, we proceed to delete the temporary directory.
 			if err != nil {
 				err = errors.Join(err, fileutils.RemoveTempDir(tempDirForDependenciesCalculation))
 			}
