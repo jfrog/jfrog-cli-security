@@ -57,6 +57,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	if tempDirForDependenciesCalculation == "" {
 		dirToCalcDependenciesOn = currentDir
 	} else {
+		// If tempDirForDependenciesCalculation contains a non-empty value, it means we executed 'install' on a temporary directory on which we need to calculate the dependencies and remove it at the end
 		dirToCalcDependenciesOn = tempDirForDependenciesCalculation
 		defer func() {
 			err = errors.Join(err, biutils.RemoveTempDir(tempDirForDependenciesCalculation))
@@ -89,9 +90,9 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 	return command
 }
 
-// Install is required when "pnpm-lock.yaml" lock file or "node_modules/.pnpm" directory not exists.
-// If "node_modules/.pnpm" doesn't exist we copy the project to a temporary dir and perform the 'install' on the copy, because we don't want to have node_modules in the original cloned
-// Directory if it wasn't exist before
+// Installation is necessary when either the "pnpm-lock.yaml" lock file or the "node_modules/.pnpm" directory does not exist.
+// If the "node_modules/.pnpm" directory doesn't exist, we duplicate the project to a temporary directory and conduct the 'install' operation on the duplicate, to ensure that the original clone does not retain the node_modules directory if it didn't exist previously.
+// In such instances, the path of the temporary directory will be returned as the 'tempDirForDependenciesCalculation' variable.
 func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependenciesCalculation string, err error) {
 	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
@@ -105,7 +106,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependen
 	log.Debug("Installing Pnpm project:", workingDir)
 	workingDirToRunInstallOn := workingDir
 
-	// If node_modules/.pnpm doesn't exist we clone the project to a temporary dir so the original project will not be effected by the newly added files of the 'install' command
+	// If the node_modules/.pnpm directory doesn't exist, we clone the project to a temporary directory to ensure that the original project remains unaffected by the newly added files from the 'install' command.
 	if !pnpmDirExists {
 		tempDirForDependenciesCalculation, err = fileutils.CreateTempDir()
 		if err != nil {
@@ -113,7 +114,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependen
 			return
 		}
 		defer func() {
-			// If we have an error for any reason we delete the temp dir
+			//If an error occurs for any reason, we proceed to delete the temporary directory.
 			if err != nil {
 				err = errors.Join(err, fileutils.RemoveTempDir(tempDirForDependenciesCalculation))
 			}
