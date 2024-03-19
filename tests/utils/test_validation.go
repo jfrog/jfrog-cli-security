@@ -53,22 +53,25 @@ func VerifySimpleJsonScanResults(t *testing.T, content string, minVulnerabilitie
 	}
 }
 
-func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets, minApplicable int) {
+func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets, minApplicable, minNotCovered int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
 		assert.GreaterOrEqual(t, len(results.Sast), minSastViolations, "Found less sast then expected")
 		assert.GreaterOrEqual(t, len(results.Secrets), minSecrets, "Found less secrets then expected")
 		assert.GreaterOrEqual(t, len(results.Iacs), minIacViolations, "Found less IaC then expected")
-		var applicableResults, notApplicableResults int
+		var applicableResults, notApplicableResults, notCoveredResults int
 		for _, vuln := range results.Vulnerabilities {
 			if vuln.Applicable == string(utils.NotApplicable) {
 				notApplicableResults++
 			} else if vuln.Applicable == string(utils.Applicable) {
 				applicableResults++
+			} else if vuln.Applicable == string(utils.NotCovered) {
+				notCoveredResults++
 			}
 		}
 		assert.GreaterOrEqual(t, applicableResults, minApplicable, "Found less applicableResults then expected")
 		assert.GreaterOrEqual(t, notApplicableResults, 1, "Found less notApplicableResults then expected")
+		assert.GreaterOrEqual(t, notCoveredResults, minNotCovered, "Found less notCoveredResults then expected")
 	}
 }
