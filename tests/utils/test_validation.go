@@ -62,11 +62,12 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 		assert.GreaterOrEqual(t, len(results.Iacs), minIacViolations, "Found less IaC then expected")
 		var applicableResults, notApplicableResults, notCoveredResults int
 		for _, vuln := range results.Vulnerabilities {
-			if vuln.Applicable == string(utils.NotApplicable) {
+			switch vuln.Applicable {
+			case string(utils.NotApplicable):
 				notApplicableResults++
-			} else if vuln.Applicable == string(utils.Applicable) {
+			case string(utils.Applicable):
 				applicableResults++
-			} else if vuln.Applicable == string(utils.NotCovered) {
+			case string(utils.NotCovered):
 				notCoveredResults++
 			}
 		}
