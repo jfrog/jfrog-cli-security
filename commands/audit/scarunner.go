@@ -213,6 +213,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
+			UseWrapper:              params.UseWrapper(),
 			IsCurationCmd:           params.IsCurationCmd(),
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
