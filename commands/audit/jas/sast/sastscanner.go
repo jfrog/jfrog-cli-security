@@ -24,7 +24,7 @@ type SastScanManager struct {
 	resultsFileName    string
 }
 
-func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Sast)); err != nil {
 		return
@@ -40,7 +40,7 @@ func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Ja
 	}
 	results := sastScanManager.sastScannerResults
 	auditParallelRunner.Mu.Lock()
-	ExtendedScanResults.SastScanResults = append(ExtendedScanResults.SastScanResults, results...)
+	extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
 	auditParallelRunner.Mu.Unlock()
 	return
 }

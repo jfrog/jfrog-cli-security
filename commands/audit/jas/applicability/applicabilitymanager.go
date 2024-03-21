@@ -42,7 +42,7 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string, scannedTechnologies []coreutils.Technology,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
@@ -57,7 +57,7 @@ func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayRe
 		return
 	}
 	auditParallelRunner.Mu.Lock()
-	ExtendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
+	extendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
 	auditParallelRunner.Mu.Unlock()
 	return
 }

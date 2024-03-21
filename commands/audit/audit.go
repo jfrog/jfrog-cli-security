@@ -196,7 +196,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}()
 	auditParallelRunner.Runner.Run()
 	log.Debug("finish running")
-	//auditParallelRunner.ErrorsQueue.GetError()
+	// auditParallelRunner.ErrorsQueue.GetError()
 	return
 }
 
