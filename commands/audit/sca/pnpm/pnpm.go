@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	biutils "github.com/jfrog/build-info-go/utils"
 	"os/exec"
 	"path/filepath"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -48,22 +48,21 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 		return
 	}
 	// Build
-	var tempDirForDependenciesCalculation string
-	if tempDirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
+	var dirForDependenciesCalculation string
+	if dirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
 		return
 	}
 
-	var dirToCalcDependenciesOn string
-	if tempDirForDependenciesCalculation == "" {
-		dirToCalcDependenciesOn = currentDir
+	if dirForDependenciesCalculation == "" {
+		// If we didn't execute 'install' dirForDependenciesCalculation contains an empty value and the dependencies calculation should be performed on the original cloned dir
+		dirForDependenciesCalculation = currentDir
 	} else {
-		// If tempDirForDependenciesCalculation contains a non-empty value, it means we executed 'install' on a temporary directory on which we need to calculate the dependencies and remove it at the end
-		dirToCalcDependenciesOn = tempDirForDependenciesCalculation
+		// If tempDirForDependenciesCalculation contains a non-empty value, it means we created a temporary directory during the execution of 'install' command, and it needs to removed at the end
 		defer func() {
-			err = errors.Join(err, biutils.RemoveTempDir(tempDirForDependenciesCalculation))
+			err = errors.Join(err, biutils.RemoveTempDir(dirForDependenciesCalculation))
 		}()
 	}
-	return calculateDependencies(pnpmExecPath, dirToCalcDependenciesOn, params)
+	return calculateDependencies(pnpmExecPath, dirForDependenciesCalculation, params)
 }
 
 func getPnpmExecPath() (pnpmExecPath string, err error) {
@@ -91,9 +90,9 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 }
 
 // Installation is necessary when either the "pnpm-lock.yaml" lock file or the "node_modules/.pnpm" directory does not exist.
-// If the "node_modules/.pnpm" directory doesn't exist, we duplicate the project to a temporary directory and conduct the 'install' operation on the duplicate, to ensure that the original clone does not retain the node_modules directory if it didn't exist previously.
-// In such instances, the path of the temporary directory will be returned as the 'tempDirForDependenciesCalculation' variable.
-func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependenciesCalculation string, err error) {
+// If install is needed, we duplicate the project to a temporary directory and conduct the 'install' operation on the duplicate, to ensure that the original clone does not retain the node_modules directory if it didn't exist previously.
+// Upon 'install' the path to the duplicate directory will be returned.
+func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependenciesCalculation string, err error) {
 	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
 		return
@@ -102,33 +101,25 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (tempDirForDependen
 	if err != nil || (lockFileExists && pnpmDirExists) {
 		return
 	}
-	// Install is needed
+	// Install is needed and will be performed on a copy of the cloned dir
 	log.Debug("Installing Pnpm project:", workingDir)
-	workingDirToRunInstallOn := workingDir
-
-	// If the node_modules/.pnpm directory doesn't exist, we clone the project to a temporary directory to ensure that the original project remains unaffected by the newly added files from the 'install' command.
-	if !pnpmDirExists {
-		tempDirForDependenciesCalculation, err = fileutils.CreateTempDir()
-		if err != nil {
-			err = fmt.Errorf("failed to create a temporary dir: %w", err)
-			return
-		}
-		defer func() {
-			// If an error occurs for any reason, we proceed to delete the temporary directory.
-			if err != nil {
-				err = errors.Join(err, fileutils.RemoveTempDir(tempDirForDependenciesCalculation))
-			}
-		}()
-
-		err = biutils.CopyDir(workingDir, tempDirForDependenciesCalculation, true, nil)
-		if err != nil {
-			err = fmt.Errorf("failed copying project to temp dir: %w", err)
-			return
-		}
-		workingDirToRunInstallOn = tempDirForDependenciesCalculation
+	dirForDependenciesCalculation, err = fileutils.CreateTempDir()
+	if err != nil {
+		err = fmt.Errorf("failed to create a temporary dir: %w", err)
+		return
 	}
-
-	err = getPnpmCmd(pnpmExecPath, workingDirToRunInstallOn, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	defer func() {
+		// If an error occurs for any reason, we proceed to delete the temporary directory.
+		if err != nil {
+			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
+		}
+	}()
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, nil)
+	if err != nil {
+		err = fmt.Errorf("failed copying project to temp dir: %w", err)
+		return
+	}
+	err = getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
 	return
 }
 
