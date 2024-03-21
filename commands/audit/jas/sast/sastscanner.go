@@ -24,14 +24,14 @@ type SastScanManager struct {
 	resultsFileName    string
 }
 
-func RunSastScan(scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults) (err error) {
+func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Sast)); err != nil {
 		return
 	}
 	sastScanManager := newSastScanManager(scanner, scannerTempDir)
 	log.Info("Running SAST scanning...")
-	if err = sastScanManager.scanner.Run(sastScanManager); err != nil {
+	if err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Sast, err)
 		return
 	}
@@ -39,7 +39,9 @@ func RunSastScan(scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedSca
 		log.Info("Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
 	}
 	results := sastScanManager.sastScannerResults
-	ExtendedScanResults.SastScanResults = results
+	auditParallelRunner.Mu.Lock()
+	ExtendedScanResults.SastScanResults = append(ExtendedScanResults.SastScanResults, results...)
+	auditParallelRunner.Mu.Unlock()
 	return
 }
 
@@ -52,9 +54,6 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.Sast) {
-		return
-	}
 	if err = ssm.createConfigFile(module); err != nil {
 		return
 	}

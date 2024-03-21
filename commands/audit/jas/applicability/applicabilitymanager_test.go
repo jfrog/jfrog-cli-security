@@ -157,11 +157,12 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 }
 
 func TestApplicabilityScanManager_ShouldRun_TechnologiesNotEligibleForScan(t *testing.T) {
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
 	var results utils.ExtendedScanResults
-	err := RunApplicabilityScan(jas.FakeBasicXrayResults, mockDirectDependencies, []coreutils.Technology{coreutils.Nuget, coreutils.Go}, scanner, false, &results)
+	err := RunApplicabilityScan(&auditParallelRunnerForTest, jas.FakeBasicXrayResults, mockDirectDependencies, []coreutils.Technology{coreutils.Nuget, coreutils.Go}, scanner, false, &results, scanner.JFrogAppsConfig.Modules[0])
 
 	// Assert
 	assert.Nil(t, results.ApplicabilityScanResults)

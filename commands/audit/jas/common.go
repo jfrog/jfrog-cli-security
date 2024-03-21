@@ -3,10 +3,12 @@ package jas
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/exp/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -62,11 +64,11 @@ func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (s
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.JFrogAppsConfig, err = createJFrogAppsConfig(workingDirs)
+	scanner.JFrogAppsConfig, err = CreateJFrogAppsConfig(workingDirs)
 	return
 }
 
-func createJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
+func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
@@ -90,14 +92,12 @@ type ScannerCmd interface {
 	Run(module jfrogappsconfig.Module) (err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd) (err error) {
-	for _, module := range a.JFrogAppsConfig.Modules {
-		func() {
-			if err = scannerCmd.Run(module); err != nil {
-				return
-			}
-		}()
-	}
+func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (err error) {
+	func() {
+		if err = scannerCmd.Run(module); err != nil {
+			return
+		}
+	}()
 	return
 }
 
@@ -274,7 +274,13 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, e
 	if scanner.TempDir == "" {
 		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
 	}
-	scannerTempDir := scanner.TempDir + "/" + scanType
+	rand.Seed(uint64(time.Now().UnixNano()))
+	randomString := ""
+	for i := 0; i < 4; i++ {
+		randomDigit := rand.Intn(10)
+		randomString += fmt.Sprintf("%d", randomDigit)
+	}
+	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + randomString
 	err := os.MkdirAll(scannerTempDir, 0777)
 	if err != nil {
 		return "", err

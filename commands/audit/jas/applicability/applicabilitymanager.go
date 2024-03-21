@@ -41,8 +41,8 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, ExtendedScanResults *utils.ExtendedScanResults) (err error) {
+func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string, scannedTechnologies []coreutils.Technology,
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
@@ -52,11 +52,13 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
-	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager); err != nil {
+	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
 	}
+	auditParallelRunner.Mu.Lock()
 	ExtendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
+	auditParallelRunner.Mu.Unlock()
 	return
 }
 
@@ -117,9 +119,6 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.Applicability) {
-		return
-	}
 	if len(asm.scanner.JFrogAppsConfig.Modules) > 1 {
 		log.Info("Running applicability scanning in the", module.SourceRoot, "directory...")
 	} else {
@@ -199,4 +198,12 @@ func removeElementFromSlice(skipDirs []string, element string) []string {
 		return skipDirs
 	}
 	return slices.Delete(skipDirs, deleteIndex, deleteIndex+1)
+}
+
+func convertDirectDependecies(directDependencies []*string) []string {
+	var stringsBack []string
+	for _, d := range directDependencies {
+		stringsBack = append(stringsBack, *d)
+	}
+	return stringsBack
 }

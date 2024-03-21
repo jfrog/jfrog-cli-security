@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -21,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -28,11 +27,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"os"
+	"time"
 )
 
 var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
-func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
+func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditParams, results *xrayutils.Results) (err error) {
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
@@ -61,12 +62,16 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 	for _, scan := range scans {
 		// Run the scan
 		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
-		if wdScanErr := executeScaScan(serverDetails, params, scan); wdScanErr != nil {
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, wdScanErr.Error()))
-			continue
+		log.Debug("added 1 sca scan task")
+		auditParallelRunner.ScaScansWg.Add(1)
+		_, wdScanErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, params, scan), auditParallelRunner.ErrorsQueue.AddError)
+		if wdScanErr != nil {
+			err = fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, wdScanErr.Error())
 		}
 		// Add the scan to the results
-		results.ScaResults = append(results.ScaResults, *scan)
+		auditParallelRunner.Mu.Lock()
+		results.ScaResults = append(results.ScaResults, scan)
+		auditParallelRunner.Mu.Unlock()
 	}
 	return
 }
@@ -118,27 +123,35 @@ func getExcludePattern(params *AuditParams, recursive bool) string {
 
 // Preform the SCA scan for the given scan information.
 // This method will change the working directory to the scan's working directory.
-func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) (err error) {
-	// Get the dependency tree for the technology in the working directory.
-	if err = os.Chdir(scan.WorkingDirectory); err != nil {
-		return errorutils.CheckError(err)
+func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) parallel.TaskFunc {
+	return func(threadId int) (err error) {
+		defer func() {
+			log.Debug("remove 1 sca scan task")
+			auditParallelRunner.ScaScansWg.Done()
+		}()
+		// Get the dependency tree for the technology in the working directory.
+		if err = os.Chdir(scan.WorkingDirectory); err != nil {
+			return errorutils.CheckError(err)
+		}
+		flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+		if techErr != nil {
+			return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
+		}
+		if flattenTree == nil || len(flattenTree.Nodes) == 0 {
+			return errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
+		}
+		// Scan the dependency tree.
+		scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, flattenTree, fullDependencyTrees)
+		if xrayErr != nil {
+			return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
+		}
+		scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
+		addThirdPartyDependenciesToParams(params, scan.Technology, flattenTree, fullDependencyTrees)
+		auditParallelRunner.Mu.Lock()
+		scan.XrayResults = append(scan.XrayResults, scanResults...)
+		auditParallelRunner.Mu.Unlock()
+		return
 	}
-	flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
-	if techErr != nil {
-		return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
-	}
-	if flattenTree == nil || len(flattenTree.Nodes) == 0 {
-		return errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
-	}
-	// Scan the dependency tree.
-	scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, flattenTree, fullDependencyTrees)
-	if xrayErr != nil {
-		return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
-	}
-	scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
-	addThirdPartyDependenciesToParams(params, scan.Technology, flattenTree, fullDependencyTrees)
-	scan.XrayResults = append(scan.XrayResults, scanResults...)
-	return
 }
 
 func runScaWithTech(tech coreutils.Technology, params *AuditParams, serverDetails *config.ServerDetails, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
