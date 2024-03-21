@@ -134,13 +134,13 @@ func TestRunDotnetRestoreAndLoadSolution(t *testing.T) {
 		dotnetProjectPath := filepath.Join(testDataDir, "dotnet", projectName)
 		assert.NoError(t, utils.CopyDir(dotnetProjectPath, tempDirPath, true, nil))
 
-		sol, err := solution.Load(tempDirPath, "", log.Logger)
+		sol, err := solution.Load(tempDirPath, "", "", log.Logger)
 		assert.NoError(t, err)
 		assert.Empty(t, sol.GetProjects())
 		assert.Empty(t, sol.GetDependenciesSources())
 
 		params := &xrayUtils2.AuditBasicParams{}
-		sol, err = runDotnetRestoreAndLoadSolution(params, tempDirPath)
+		sol, err = runDotnetRestoreAndLoadSolution(params, tempDirPath, "")
 		assert.NoError(t, err)
 		assert.NotEmpty(t, sol.GetProjects())
 		assert.NotEmpty(t, sol.GetDependenciesSources())

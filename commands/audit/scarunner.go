@@ -4,15 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
@@ -21,7 +23,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -30,8 +31,6 @@ import (
 	"os"
 	"time"
 )
-
-var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
 func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditParams, results *xrayutils.Results) (err error) {
 	// Prepare
@@ -80,7 +79,7 @@ func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditPar
 func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
 	for _, requestedDirectory := range params.workingDirs {
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.isRecursiveScan, params.Technologies(), getRequestedDescriptors(params), getExcludePattern(params, params.isRecursiveScan))
+		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
@@ -111,14 +110,6 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 		requestedDescriptors[coreutils.Pip] = []string{params.PipRequirementsFile()}
 	}
 	return requestedDescriptors
-}
-
-func getExcludePattern(params *AuditParams, recursive bool) string {
-	exclusions := params.Exclusions()
-	if len(exclusions) == 0 {
-		exclusions = append(exclusions, DefaultExcludePatterns...)
-	}
-	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, recursive)
 }
 
 // Preform the SCA scan for the given scan information.
@@ -198,12 +189,26 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
+func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
+	if tech == coreutils.Maven {
+		return xrayutils.GetCurationMavenCacheFolder()
+	}
+	return "", nil
+}
+
 func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
+	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
+	if err != nil {
+		return
+	}
+	// In case it's not curation command these 'curationLogMsg' be empty
+	logMessage += curationLogMsg
 	log.Info(logMessage + "...")
 	if params.Progress() != nil {
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
+
 	err = SetResolutionRepoIfExists(params, tech)
 	if err != nil {
 		return
@@ -215,15 +220,9 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	var uniqueDeps []string
 	var uniqDepsWithTypes map[string][]string
 	startTime := time.Now()
+
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		curationCacheFolder := ""
-		if params.IsCurationCmd() {
-			curationCacheFolder, err = xrayutils.GetCurationMavenCacheFolder()
-			if err != nil {
-				return
-			}
-		}
 		fullDependencyTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
@@ -260,6 +259,31 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	}
 	flatTree, err = createFlatTree(uniqueDeps)
 	return
+}
+
+func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutils.Technology) (logMessage string, curationCacheFolder string, err error) {
+	if !params.IsCurationCmd() {
+		return
+	}
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+		return
+	}
+
+	dirExist, err := fileutils.IsDirExists(curationCacheFolder, false)
+	if err != nil {
+		return
+	}
+
+	if dirExist {
+		if dirIsEmpty, scopErr := fileutils.IsDirEmpty(curationCacheFolder); scopErr != nil || !dirIsEmpty {
+			err = scopErr
+			return
+		}
+	}
+
+	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+
+	return logMessage, curationCacheFolder, err
 }
 
 // Associates a technology with another of a different type in the structure.

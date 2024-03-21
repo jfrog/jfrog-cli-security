@@ -1,8 +1,10 @@
 package utils
 
 import (
+	// #nosec G505 -- Not in use for secrets.
+	"crypto/sha1"
+	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"path/filepath"
 )
@@ -19,7 +21,7 @@ const (
 func getJfrogCurationFolder() (string, error) {
 	dependenciesDir := os.Getenv(CurationsDir)
 	if dependenciesDir != "" {
-		return utils.AddTrailingSlashIfNeeded(dependenciesDir), nil
+		return dependenciesDir, nil
 	}
 	jfrogHome, err := coreutils.GetJfrogHomeDir()
 	if err != nil {
@@ -28,7 +30,7 @@ func getJfrogCurationFolder() (string, error) {
 	return filepath.Join(jfrogHome, JfrogCurationDirName), nil
 }
 
-func getCurationCacheFolder() (string, error) {
+func GetCurationCacheFolder() (string, error) {
 	curationFolder, err := getJfrogCurationFolder()
 	if err != nil {
 		return "", err
@@ -36,10 +38,21 @@ func getCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationMavenCacheFolder() (string, error) {
-	curationFolder, err := getCurationCacheFolder()
+func GetCurationMavenCacheFolder() (projectDir string, err error) {
+	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(curationFolder, "maven"), nil
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	// #nosec G401 -- Not a secret hash.
+	hasher := sha1.New()
+	_, err = hasher.Write([]byte(workingDir))
+	if err != nil {
+		return "", err
+	}
+	projectDir = filepath.Join(curationFolder, "maven", hex.EncodeToString(hasher.Sum(nil)))
+	return
 }

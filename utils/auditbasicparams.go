@@ -36,6 +36,10 @@ type AuditParams interface {
 	SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams
 	IsCurationCmd() bool
 	SetIsCurationCmd(bool) *AuditBasicParams
+	SetExclusions(exclusions []string) *AuditBasicParams
+	Exclusions() []string
+	SetIsRecursiveScan(isRecursiveScan bool) *AuditBasicParams
+	IsRecursiveScan() bool
 }
 
 type AuditBasicParams struct {
@@ -55,6 +59,8 @@ type AuditBasicParams struct {
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
+	exclusions                       []string
+	isRecursiveScan                  bool
 }
 
 func (abp *AuditBasicParams) DirectDependencies() []string {
@@ -199,7 +205,26 @@ func (abp *AuditBasicParams) SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled 
 func (abp *AuditBasicParams) IsCurationCmd() bool {
 	return abp.isCurationCmd
 }
+
 func (abp *AuditBasicParams) SetIsCurationCmd(isCurationCmd bool) *AuditBasicParams {
 	abp.isCurationCmd = isCurationCmd
 	return abp
+}
+
+func (abp *AuditBasicParams) Exclusions() []string {
+	return abp.exclusions
+}
+
+func (abp *AuditBasicParams) SetExclusions(exclusions []string) *AuditBasicParams {
+	abp.exclusions = exclusions
+	return abp
+}
+
+func (abp *AuditBasicParams) SetIsRecursiveScan(isRecursiveScan bool) *AuditBasicParams {
+	abp.isRecursiveScan = isRecursiveScan
+	return abp
+}
+
+func (abp *AuditBasicParams) IsRecursiveScan() bool {
+	return abp.isRecursiveScan
 }

@@ -1,0 +1,6 @@
+version: 1
+type: maven
+resolver:
+    serverId: test
+    snapshotRepo: maven-remote
+    releaseRepo: maven-remote

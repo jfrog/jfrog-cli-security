@@ -7,13 +7,16 @@ import (
 	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -159,8 +162,8 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDownloadUrls, gotName, gotScope, gotVersion := getNpmNameScopeAndVersion(tt.componentId, tt.artiUrl, tt.repo, tt.repo)
-			assert.Equal(t, tt.wantDownloadUrl, gotDownloadUrls[0], "getNameScopeAndVersion() gotDownloadUrl = %v, want %v", gotDownloadUrls[0], tt.wantDownloadUrl)
+			gotDownloadUrl, gotName, gotScope, gotVersion := getNpmNameScopeAndVersion(tt.componentId, tt.artiUrl, tt.repo, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrl, gotDownloadUrl[0], "getNameScopeAndVersion() gotDownloadUrl = %v, want %v", gotDownloadUrl[0], tt.wantDownloadUrl)
 			assert.Equal(t, tt.wantName, gotName, "getNpmNameScopeAndVersion() gotName = %v, want %v", gotName, tt.wantName)
 			assert.Equal(t, tt.wantScope, gotScope, "getNpmNameScopeAndVersion() gotScope = %v, want %v", gotScope, tt.wantScope)
 			assert.Equal(t, tt.wantVersion, gotVersion, "getNpmNameScopeAndVersion() gotVersion = %v, want %v", gotVersion, tt.wantVersion)
@@ -404,24 +407,38 @@ func TestDoCurationAudit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
-			configurationDir := filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog")
+			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-
-			mockServer, config := curationServer(t, tt.expectedRequest, tt.requestToFail, tt.requestToError)
+			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
+			defer callback2()
+			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
 			curationCmd := NewCurationAuditCommand()
+			curationCmd.SetIsCurationCmd(true)
 			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(true)
+			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			rootDir, err := os.Getwd()
 			assert.NoError(t, err)
 			// Set the working dir for npm project.
-			callback = clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project"))
-			defer callback()
+			require.NoError(t, err)
+			if tt.preTestExec != "" {
+				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
+				_, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
+				assert.NoError(t, err)
+				callbackPreTest()
+			}
+			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
+			defer func() {
+				cacheFolder, err := utils.GetCurationCacheFolder()
+				require.NoError(t, err)
+				assert.NoError(t, fileutils.RemoveTempDir(cacheFolder))
+				callback3()
+			}()
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
@@ -434,6 +451,11 @@ func TestDoCurationAudit(t *testing.T) {
 					tt.expectedError[strings.Index(tt.expectedError, "/")+1:]
 				assert.EqualError(t, gotError, errMsgExpected)
 			}
+			defer func() {
+				if tt.cleanDependencies != nil {
+					assert.NoError(t, tt.cleanDependencies())
+				}
+			}()
 			// Add the mock server to the expected blocked message url
 			for key := range tt.expectedResp {
 				for index := range tt.expectedResp[key] {
@@ -444,28 +466,84 @@ func TestDoCurationAudit(t *testing.T) {
 			for _, requestDone := range tt.expectedRequest {
 				assert.True(t, requestDone)
 			}
+			for _, requestDone := range tt.expectedBuildRequest {
+				assert.True(t, requestDone)
+			}
 		})
 	}
 }
 
-func getTestCasesForDoCurationAudit() []struct {
-	name            string
-	expectedRequest map[string]bool
-	requestToFail   map[string]bool
-	expectedResp    map[string][]*PackageStatus
-	requestToError  map[string]bool
-	expectedError   string
-} {
-	tests := []struct {
-		name            string
-		expectedRequest map[string]bool
-		requestToFail   map[string]bool
-		expectedResp    map[string][]*PackageStatus
-		requestToError  map[string]bool
-		expectedError   string
-	}{
+type testCase struct {
+	name                   string
+	pathToTest             string
+	pathToPreTest          string
+	preTestExec            string
+	funcToGetGoals         func(t *testing.T) []string
+	shouldIgnoreConfigFile bool
+	expectedBuildRequest   map[string]bool
+	expectedRequest        map[string]bool
+	requestToFail          map[string]bool
+	expectedResp           map[string][]*PackageStatus
+	requestToError         map[string]bool
+	expectedError          string
+	cleanDependencies      func() error
+}
+
+func getTestCasesForDoCurationAudit() []testCase {
+	tests := []testCase{
 		{
-			name: "npm tree - two blocked package ",
+			name:          "maven tree - one blocked package",
+			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
+			preTestExec:   "mvn",
+			funcToGetGoals: func(t *testing.T) []string {
+				rootDir, err := os.Getwd()
+				assert.NoError(t, err)
+				// set the cache to test project dir, in order to fill its cache with dependencies
+				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join("..", "test"))
+				curationCache, err := utils.GetCurationMavenCacheFolder()
+				callbackPreTest()
+				require.NoError(t, err)
+				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
+			},
+			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "test", ".jfrog"),
+			expectedBuildRequest: map[string]bool{
+				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
+			},
+			cleanDependencies: func() error {
+				return os.RemoveAll(filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation",
+					".jfrog", "curation", "cache", "maven", "org", "webjars", "npm"))
+			},
+			requestToFail: map[string]bool{
+				"/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar": false,
+			},
+			expectedResp: map[string][]*PackageStatus{
+				"test:my-app:1.0.0": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "1.13.6",
+						ParentName:        "org.webjars.npm:underscore",
+						BlockedPackageUrl: "/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar",
+						PackageName:       "org.webjars.npm:underscore",
+						PackageVersion:    "1.13.6",
+						BlockingReason:    "Policy violations",
+						PkgType:           "maven",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+			},
+			requestToError: nil,
+			expectedError:  "",
+		},
+		{
+			name:                   "npm tree - two blocked package ",
+			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -496,7 +574,9 @@ func getTestCasesForDoCurationAudit() []struct {
 			},
 		},
 		{
-			name: "npm tree - two blocked one error",
+			name:                   "npm tree - two blocked one error",
+			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz":  false,
@@ -536,7 +616,7 @@ func getTestCasesForDoCurationAudit() []struct {
 	return tests
 }
 
-func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -553,6 +633,12 @@ func curationServer(t *testing.T, expectedRequest map[string]bool, requestToFail
 			}
 		}
 		if r.Method == http.MethodGet {
+			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
+				expectedBuildRequest[r.RequestURI] = true
+			}
+			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
+				expectedBuildRequest[r.RequestURI] = true
+			}
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +
@@ -584,76 +670,4 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
 	return confFilePath
-}
-
-func Test_getMavenNameScopeAndVersion(t *testing.T) {
-	type args struct {
-		id      string
-		artiUrl string
-		repo    string
-		types   *[]string
-	}
-	tests := []struct {
-		name             string
-		args             args
-		wantDownloadUrls []string
-		wantName         string
-		wantScope        string
-		wantVersion      string
-	}{
-		{
-			name: "maven url jar",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar"},
-			},
-			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar"},
-			wantName:         "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion:      "8.0.33",
-		},
-		{
-			name: "maven url jar and war",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar", "war"},
-			},
-			wantDownloadUrls: []string{"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar",
-				"http://test:9000/artifactory/maven-remote/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.war"},
-			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion: "8.0.33",
-		},
-		{
-			name: "maven url pom - no expected url",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"pom"},
-			},
-			wantName:    "org.apache.tomcat.embed:tomcat-embed-jasper",
-			wantVersion: "8.0.33",
-		},
-		{
-			name: "bad id",
-			args: args{
-				id:      "gav://org.apache.tomcat.embed:8.0.33",
-				artiUrl: "http://test:9000/artifactory",
-				repo:    "maven-remote",
-				types:   &[]string{"jar"},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotDownloadUrls, gotName, gotScope, gotVersion := getMavenNameScopeAndVersion(tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantDownloadUrls, gotDownloadUrls, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantName, gotName, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantScope, gotScope, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-			assert.Equalf(t, tt.wantVersion, gotVersion, "getMavenNameScopeAndVersion(%v, %v, %v, %v)", tt.args.id, tt.args.artiUrl, tt.args.repo, tt.args.types)
-		})
-	}
 }

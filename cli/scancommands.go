@@ -357,8 +357,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
-		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
+		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -373,7 +372,8 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
 	return auditCmd, err
 }
 

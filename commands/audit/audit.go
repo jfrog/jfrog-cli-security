@@ -95,9 +95,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
-		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
-		SetExclusions(auditCmd.exclusions).
-		SetIsRecursiveScan(isRecursiveScan)
+		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
+	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return

@@ -1,14 +1,14 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.20
+go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.21
-	github.com/jfrog/gofrog v1.6.0
+	github.com/jfrog/build-info-go v1.9.24
+	github.com/jfrog/gofrog v1.6.3
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.47.12
-	github.com/jfrog/jfrog-client-go v1.36.1
+	github.com/jfrog/jfrog-cli-core/v2 v2.49.0
+	github.com/jfrog/jfrog-client-go v1.38.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.8.4
@@ -21,7 +21,7 @@ require (
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/BurntSushi/toml v1.3.2 // indirect
-	github.com/CycloneDX/cyclonedx-go v0.7.2 // indirect
+	github.com/CycloneDX/cyclonedx-go v0.8.0 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
@@ -98,6 +98,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240218125754-97305051f203
+// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240218093454-1c352a93c23d
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
+
+// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
