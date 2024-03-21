@@ -248,7 +248,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 
 	scanResults := xrutils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{XrayResults: flatResults}}
+	scanResults.ScaResults = []*xrutils.ScaScanResult{{XrayResults: flatResults}}
 
 	if err = xrutils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).

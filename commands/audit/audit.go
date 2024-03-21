@@ -2,18 +2,17 @@ package audit
 
 import (
 	"errors"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
-	"os"
-
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"golang.org/x/sync/errgroup"
-
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"os"
 )
 
 type AuditCommand struct {
@@ -147,7 +146,6 @@ func (auditCmd *AuditCommand) CommandName() string {
 func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
-
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
@@ -165,12 +163,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		return
 	}
 
-	errGroup := new(errgroup.Group)
-	if results.ExtendedScanResults.EntitledForJas {
-		// Download (if needed) the analyzer manager in a background routine.
-		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
-	}
-
 	if auditParams.xrayGraphScanParams.XscGitInfoContext != nil {
 		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
 			return nil, err
@@ -178,18 +170,33 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
 	}
 
-	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	results.ScaError = runScaScan(auditParams, results)
-
-	// Wait for the Download of the AnalyzerManager to complete.
-	if err = errGroup.Wait(); err != nil {
-		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
-	}
-
-	// Run scanners only if the user is entitled for Advanced Security
+	auditParallelRunner := utils.CreateAuditParallelRunner()
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan)
+		// Download (if needed) the analyzer manager and run scanners.
+		auditParallelRunner.JasWg.Add(1)
+		log.Debug("added 1 am task")
+		_, err = auditParallelRunner.Runner.AddTaskWithError(func(_ int) error {
+			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, auditParams.DirectDependencies(), serverDetails,
+				auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams)
+		}, auditParallelRunner.ErrorsQueue.AddError)
 	}
+
+	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
+	err = runScaScan(auditParallelRunner, auditParams, results)
+	if err != nil {
+		return
+	}
+	go func() {
+		auditParallelRunner.JasWg.Wait()
+		log.Debug("finishing am and scanners")
+		auditParallelRunner.ScaScansWg.Wait()
+		log.Debug("finishing sca")
+		auditParallelRunner.Runner.Done()
+		log.Debug("done total run")
+	}()
+	auditParallelRunner.Runner.Run()
+	log.Debug("finish running")
+	//auditParallelRunner.ErrorsQueue.GetError()
 	return
 }
 
@@ -199,5 +206,19 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 		return
 	}
 	entitled, err = xrayManager.IsEntitled(xrayutils.ApplicabilityFeatureId)
+	return
+}
+
+func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results, directDependencies []string,
+	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, auditParams *AuditParams) (err error) {
+	defer func() {
+		log.Debug("remove 1 am task")
+		auditParallelRunner.JasWg.Done()
+	}()
+	err = utils.DownloadAnalyzerManagerIfNeeded()
+	if err != nil {
+		return
+	}
+	err = RunJasScannersAndSetResults(auditParallelRunner, scanResults, directDependencies, serverDetails, workingDirs, progress, thirdPartyApplicabilityScan, auditParams)
 	return
 }

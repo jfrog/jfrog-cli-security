@@ -27,7 +27,7 @@ func TestCreateJFrogAppsConfig(t *testing.T) {
 
 	for _, testCase := range createJFrogAppsConfigCases {
 		t.Run(fmt.Sprintf("%v", testCase.workingDirs), func(t *testing.T) {
-			jfrogAppsConfig, err := createJFrogAppsConfig(testCase.workingDirs)
+			jfrogAppsConfig, err := CreateJFrogAppsConfig(testCase.workingDirs)
 			assert.NoError(t, err)
 			assert.NotNil(t, jfrogAppsConfig)
 			if len(testCase.workingDirs) == 0 {
@@ -49,7 +49,7 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 	chdirCallback := clientTestUtils.ChangeDirWithCallback(t, wd, "testdata")
 	defer chdirCallback()
 
-	jfrogAppsConfig, err := createJFrogAppsConfig([]string{})
+	jfrogAppsConfig, err := CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	assert.NotNil(t, jfrogAppsConfig)
 	assert.Equal(t, "1.0", jfrogAppsConfig.Version)

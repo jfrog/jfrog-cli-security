@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
+	"os"
 )
 
 func TestExcludeSuppressResults(t *testing.T) {
@@ -87,4 +88,25 @@ func TestAddScoreToRunRules(t *testing.T) {
 		addScoreToRunRules(test.sarifRun)
 		assert.Equal(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
 	}
+}
+
+func TestCreateScannerTempDirectory(t *testing.T) {
+	scanner, cleanUp := InitJasTest(t)
+	defer cleanUp()
+	tempDir, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	assert.NoError(t, err)
+	assert.NotEmpty(t, tempDir)
+
+	// Check directory exists.
+	_, err = os.Stat(tempDir)
+	assert.NoError(t, err)
+}
+
+func TestCreateScannerTempDirectory_baseDirIsEmpty(t *testing.T) {
+	scanner, cleanUp := InitJasTest(t)
+	defer cleanUp()
+
+	scanner.TempDir = ""
+	_, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	assert.Error(t, err)
 }

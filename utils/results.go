@@ -8,7 +8,7 @@ import (
 )
 
 type Results struct {
-	ScaResults  []ScaScanResult
+	ScaResults  []*ScaScanResult
 	XrayVersion string
 	ScaError    error
 
