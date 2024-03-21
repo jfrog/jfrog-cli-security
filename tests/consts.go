@@ -86,8 +86,8 @@ var reposConfigMap = map[*string]string{
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
-		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
-		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -95,8 +95,8 @@ func GetNonVirtualRepositories() map[*string]string {
 // Return virtual repositories for the test suites, respectfully
 func GetVirtualRepositories() map[*string]string {
 	virtualReposMap := map[*bool][]*string{
-		TestDockerScan: {&DockerVirtualRepo},
-		TestSecurity:   {&GoVirtualRepo},
+		TestDockerScan:  {&DockerVirtualRepo},
+		TestArtifactory: {&GoVirtualRepo},
 	}
 	return getNeededRepositories(virtualReposMap)
 }

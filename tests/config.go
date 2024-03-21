@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
+	clientLog "github.com/jfrog/jfrog-client-go/utils/log"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
@@ -29,8 +30,13 @@ var (
 
 // Test flags
 var (
-	TestSecurity   *bool
-	TestDockerScan *bool
+	AllTests        *bool
+	TestUnit        *bool
+	TestArtifactory *bool
+	TestXray        *bool
+	TestAudit       *bool
+	TestScan        *bool
+	TestDockerScan  *bool
 
 	JfrogUrl           *string
 	JfrogUser          *string
@@ -41,13 +47,16 @@ var (
 
 	ContainerRegistry *string
 
-	HideUnitTestLog *bool
-	SkipUnitTests   *bool
-	ciRunId         *string
+	ciRunId *string
 )
 
 func init() {
-	TestSecurity = flag.Bool("test.security", true, "Test Security")
+	AllTests = flag.Bool("test.all", false, "Run all tests")
+	TestUnit = flag.Bool("test.unit", true, "Unit tests")
+	TestArtifactory = flag.Bool("test.artifactory", false, "Test Artifactory integration")
+	TestXray = flag.Bool("test.xray", false, "Test Xray integration")
+	TestAudit = flag.Bool("test.audit", false, "Test Audit command")
+	TestScan = flag.Bool("test.scan", false, "Test Scan commands")
 	TestDockerScan = flag.Bool("test.dockerScan", false, "Test Docker scan")
 
 	JfrogUrl = flag.String("jfrog.url", "http://localhost:8081/", "JFrog platform url")
@@ -59,8 +68,19 @@ func init() {
 
 	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8082", "Container registry")
 
-	HideUnitTestLog = flag.Bool("test.hideUnitTestLog", false, "Hide unit tests logs and print it in a file")
-	SkipUnitTests = flag.Bool("test.skipUnitTests", false, "Skip unit tests")
-
 	ciRunId = flag.String("ci.runId", "", "A unique identifier used as a suffix to create repositories and builds in the tests")
+}
+
+func InitTestFlags() {
+	flag.Parse()
+	shouldRunAllTests := *AllTests
+	if shouldRunAllTests {
+		clientLog.Info("All tests flag is set. Running all tests.")
+		*TestUnit = true
+		*TestArtifactory = true
+		*TestXray = true
+		*TestAudit = true
+		*TestScan = true
+		*TestDockerScan = true
+	}
 }

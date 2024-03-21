@@ -1,10 +1,6 @@
 name: JFrog CLI Security Tests
 on:
   push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
   # Triggers the workflow on labeled PRs only.
   pull_request_target:
     types: [ labeled ]
@@ -13,17 +9,71 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove 'safe to test' label
+        uses: actions-ecosystem/action-remove-labels@v1
+        if: ${{ github.event_name != 'push' }}
+        with:
+          labels: "safe to test"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21.x
+
+      - name: Go Cache
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Check code compilation
+        run: go vet -v ./...
+
+  tests:
+    needs: Pretest
+    name: ${{ matrix.suite.name }} Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}-latest
+    env:
+      JFROG_CLI_LOG_LEVEL: "DEBUG"
+      GOPROXY: direct
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
     strategy:
       fail-fast: false
       matrix:
+        suite:
+        - name: 'Unit'
+          testFlags: '--test.unit'
+        
+        - name: 'Artifactory Integration'
+          testFlags: '--test.artifactory --test.unit=false'
+
+        - name: 'Xray Integration'
+          testFlags: '--test.xray --test.unit=false'
+
+        - name: 'Audit'
+          testFlags: '--test.audit --test.unit=false'
+
+        - name: 'Scans'
+          testFlags: '--test.scan --test.unit=false'
+          ubuntuTestFlags: '--test.scan --test.dockerScan --test.unit=false'
+
         os: [ ubuntu, windows, macos ]
-    env:
-      GOPROXY: direct
-      GRADLE_OPTS: -Dorg.gradle.daemon=false
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
       # Install dependencies
       - name: Install Go
         uses: actions/setup-go@v3
@@ -62,15 +112,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           gradle-version: 7.6
-      # Checkout code
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+
       # Test
-      - name: Run security tests (without Docker Scan)
-        run: go test -v github.com/jfrog/jfrog-cli-security --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
-        if: ${{ matrix.os != 'ubuntu' }}
-      - name: Run security tests (with Docker Scan, only on Ubuntu)
-        run: go test -v github.com/jfrog/jfrog-cli-security --timeout 0 --test.security --test.dockerScan --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
-        if: ${{ matrix.os == 'ubuntu' }}
+      - name: Run Tests
+        run: go test -v github.com/jfrog/jfrog-cli-security ${{ matrix.os == 'ubuntu' && matrix.suite.ubuntuTestFlags || matrix.suite.testFlags }} --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray -v -race --timeout 30m -cover
