@@ -17,13 +17,14 @@ import (
 )
 
 type AuditCommand struct {
-	watches                []string
-	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	Fail                   bool
-	PrintExtendedTable     bool
+	watches                 []string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	analyticsMetricsService *xrayutils.AnalyticsMetricsService
 	AuditParams
 }
 
@@ -66,6 +67,11 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xrayutils.AnalyticsMetricsService) *AuditCommand {
+	auditCmd.analyticsMetricsService = analyticsMetricsService
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphScanParams {
 	params := &services.XrayGraphScanParams{
 		RepoPath: auditCmd.targetRepoPath,
@@ -98,6 +104,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+
+	err = auditCmd.analyticsMetricsService.SendNewGeneralEventRequestToXsc()
+	if err != nil {
+		return
+	}
+
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
