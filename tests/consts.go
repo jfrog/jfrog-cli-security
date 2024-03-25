@@ -36,6 +36,7 @@ var (
 	DockerLocalRepo   = "cli-docker-local"
 	DockerRemoteRepo  = "cli-docker-remote"
 	NpmRemoteRepo     = "cli-npm-remote"
+	PnpmRemoteRepo    = "cli-pnpm-remote"
 	NugetRemoteRepo   = "cli-nuget-remote"
 	YarnRemoteRepo    = "cli-yarn-remote"
 	GradleRemoteRepo  = "cli-gradle-remote"
@@ -52,6 +53,7 @@ const (
 	DockerLocalRepositoryConfig   = "docker_local_repository_config.json"
 	DockerRemoteRepositoryConfig  = "docker_remote_repository_config.json"
 	NpmRemoteRepositoryConfig     = "npm_remote_repository_config.json"
+	PnpmRemoteRepositoryConfig    = "pnpm_remote_repository_config.json"
 	NugetRemoteRepositoryConfig   = "nuget_remote_repository_config.json"
 	YarnRemoteRepositoryConfig    = "yarn_remote_repository_config.json"
 	GradleRemoteRepositoryConfig  = "gradle_remote_repository_config.json"
@@ -73,6 +75,7 @@ var reposConfigMap = map[*string]string{
 	&DockerLocalRepo:   DockerLocalRepositoryConfig,
 	&DockerRemoteRepo:  DockerRemoteRepositoryConfig,
 	&NpmRemoteRepo:     NpmRemoteRepositoryConfig,
+	&PnpmRemoteRepo:    PnpmRemoteRepositoryConfig,
 	&NugetRemoteRepo:   NugetRemoteRepositoryConfig,
 	&YarnRemoteRepo:    YarnRemoteRepositoryConfig,
 	&GradleRemoteRepo:  GradleRemoteRepositoryConfig,
@@ -87,7 +90,7 @@ var reposConfigMap = map[*string]string{
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
 		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
-		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestSecurity:   {&NpmRemoteRepo, &PnpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -151,6 +154,7 @@ func AddTimestampToGlobalVars() {
 	GradleRemoteRepo += uniqueSuffix
 	MvnRemoteRepo += uniqueSuffix
 	NpmRemoteRepo += uniqueSuffix
+	PnpmRemoteRepo += uniqueSuffix
 	NugetRemoteRepo += uniqueSuffix
 	YarnRemoteRepo += uniqueSuffix
 	PypiRemoteRepo += uniqueSuffix
@@ -175,6 +179,7 @@ func GetSubstitutionMap() map[string]string {
 		"${GRADLE_REMOTE_REPO}": GradleRemoteRepo,
 		"${MAVEN_REMOTE_REPO}":  MvnRemoteRepo,
 		"${NPM_REMOTE_REPO}":    NpmRemoteRepo,
+		"${PNPM_REMOTE_REPO}":   PnpmRemoteRepo,
 		"${NUGET_REMOTE_REPO}":  NugetRemoteRepo,
 		"${PYPI_REMOTE_REPO}":   PypiRemoteRepo,
 		"${YARN_REMOTE_REPO}":   YarnRemoteRepo,
