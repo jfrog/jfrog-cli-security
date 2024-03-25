@@ -646,28 +646,33 @@ func (s *TableSeverity) printableTitle(isTable bool) string {
 
 var Severities = map[string]map[ApplicabilityStatus]*TableSeverity{
 	"Critical": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 15}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 14}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 20}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 19}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 18}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 5}, emoji: "💀", style: color.New(color.Gray)},
 	},
 	"High": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 13}, emoji: "🔥", style: color.New(color.Red)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 12}, emoji: "🔥", style: color.New(color.Red)},
+		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 17}, emoji: "🔥", style: color.New(color.Red)},
+		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 16}, emoji: "🔥", style: color.New(color.Red)},
+		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 15}, emoji: "🔥", style: color.New(color.Red)},
 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 4}, emoji: "🔥", style: color.New(color.Gray)},
 	},
 	"Medium": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 11}, emoji: "🎃", style: color.New(color.Yellow)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 10}, emoji: "🎃", style: color.New(color.Yellow)},
+		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 14}, emoji: "🎃", style: color.New(color.Yellow)},
+		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 13}, emoji: "🎃", style: color.New(color.Yellow)},
+		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 12}, emoji: "🎃", style: color.New(color.Yellow)},
 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 3}, emoji: "🎃", style: color.New(color.Gray)},
 	},
 	"Low": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9}, emoji: "👻"},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 8}, emoji: "👻"},
+		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11}, emoji: "👻"},
+		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10}, emoji: "👻"},
+		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9}, emoji: "👻"},
 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 2}, emoji: "👻", style: color.New(color.Gray)},
 	},
 	"Unknown": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 7}, emoji: "😐"},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 6}, emoji: "😐"},
+		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 8}, emoji: "😐"},
+		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 7}, emoji: "😐"},
+		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 6}, emoji: "😐"},
 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 1}, emoji: "😐", style: color.New(color.Gray)},
 	},
 }
@@ -699,8 +704,10 @@ func GetSeverity(severityTitle string, applicable ApplicabilityStatus) *TableSev
 		return Severities[severityTitle][NotApplicable]
 	case Applicable:
 		return Severities[severityTitle][Applicable]
-	default:
+	case ApplicabilityUndetermined:
 		return Severities[severityTitle][ApplicabilityUndetermined]
+	default:
+		return Severities[severityTitle][NotCovered]
 	}
 }
 
@@ -928,31 +935,20 @@ func convertCves(cves []services.Cve) []formats.CveRow {
 	return cveRows
 }
 
-// If at least one cve is applicable - final value is applicable
-// Else if at least one cve is undetermined - final value is undetermined
-// Else (case when all cves aren't applicable) -> final value is not applicable
 func getApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves []formats.CveRow) ApplicabilityStatus {
 	if !entitledForJas || len(applicabilityScanResults) == 0 {
 		return NotScanned
 	}
 	if len(cves) == 0 {
-		return ApplicabilityUndetermined
+		return NotCovered
 	}
-	foundUndetermined := false
+	var applicableStatuses []ApplicabilityStatus
 	for _, cve := range cves {
 		if cve.Applicability != nil {
-			if cve.Applicability.Status == string(Applicable) {
-				return Applicable
-			}
-			if cve.Applicability.Status == string(ApplicabilityUndetermined) {
-				foundUndetermined = true
-			}
+			applicableStatuses = append(applicableStatuses, ApplicabilityStatus(cve.Applicability.Status))
 		}
 	}
-	if foundUndetermined {
-		return ApplicabilityUndetermined
-	}
-	return NotApplicable
+	return getFinalApplicabilityStatus(applicableStatuses)
 }
 
 func getCveApplicabilityField(cve formats.CveRow, applicabilityScanResults []*sarif.Run, components map[string]services.Component) *formats.Applicability {
@@ -962,16 +958,20 @@ func getCveApplicabilityField(cve formats.CveRow, applicabilityScanResults []*sa
 
 	applicability := formats.Applicability{}
 	resultFound := false
+	var applicabilityStatuses []ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
+		if rule, _ := applicabilityRun.GetRuleById(CveToApplicabilityRuleId(cve.Id)); rule != nil {
+			applicability.ScannerDescription = GetRuleFullDescription(rule)
+			status := getApplicabilityStatusFromRule(rule)
+			if status != "" {
+				applicabilityStatuses = append(applicabilityStatuses, status)
+			}
+		}
 		result, _ := applicabilityRun.GetResultByRuleId(CveToApplicabilityRuleId(cve.Id))
 		if result == nil {
 			continue
 		}
 		resultFound = true
-		rule, _ := applicabilityRun.GetRuleById(CveToApplicabilityRuleId(cve.Id))
-		if rule != nil {
-			applicability.ScannerDescription = GetRuleFullDescription(rule)
-		}
 		// Add new evidences from locations
 		for _, location := range result.Locations {
 			fileName := GetRelativeLocationFileName(location, applicabilityRun.Invocations)
@@ -992,6 +992,8 @@ func getCveApplicabilityField(cve formats.CveRow, applicabilityScanResults []*sa
 		}
 	}
 	switch {
+	case len(applicabilityStatuses) > 0:
+		applicability.Status = string(getFinalApplicabilityStatus(applicabilityStatuses))
 	case !resultFound:
 		applicability.Status = string(ApplicabilityUndetermined)
 	case len(applicability.Evidence) == 0:
@@ -1047,4 +1049,55 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 	}
 	dependencyName = split[0]
 	return
+}
+
+func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) ApplicabilityStatus {
+	if rule.Properties["applicability"] != nil {
+		status, ok := rule.Properties["applicability"].(string)
+		if !ok {
+			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", rule.ID))
+		}
+		switch status {
+		case "not_covered":
+			return NotCovered
+		case "undetermined":
+			return ApplicabilityUndetermined
+		case "not_applicable":
+			return NotApplicable
+		case "applicable":
+			return Applicable
+		}
+	}
+	return ""
+}
+
+// If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
+// If at least one cve is applicable -> final value is applicable
+// Else if at least one cve is undetermined -> final value is undetermined
+// Else if all cves are not covered -> final value is not covered
+// Else (case when all cves aren't applicable) -> final value is not applicable
+func getFinalApplicabilityStatus(applicabilityStatuses []ApplicabilityStatus) ApplicabilityStatus {
+	if len(applicabilityStatuses) == 0 {
+		return NotScanned
+	}
+	foundUndetermined := false
+	foundNotCovered := false
+	for _, status := range applicabilityStatuses {
+		if status == Applicable {
+			return Applicable
+		}
+		if status == ApplicabilityUndetermined {
+			foundUndetermined = true
+		}
+		if status == NotCovered {
+			foundNotCovered = true
+		}
+	}
+	if foundUndetermined {
+		return ApplicabilityUndetermined
+	}
+	if foundNotCovered {
+		return NotCovered
+	}
+	return NotApplicable
 }

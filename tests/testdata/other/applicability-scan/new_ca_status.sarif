@@ -1,0 +1,187 @@
+{
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "JFrog Applicability Scanner",
+          "rules": [
+            {
+              "id": "applic_CVE-2020-14343",
+              "name": "CVE-2020-14343",
+              "properties": {
+                "conclusion": "negative",
+                "applicability": "applicable"
+              },
+              "fullDescription": {
+                "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class).",
+                "markdown": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class)."
+              },
+              "shortDescription": {
+                "text": "Scanner for CVE-2020-14343"
+              }
+            },
+            {
+              "id": "applic_CVE-2020-1751",
+              "name": "CVE-2020-1751",
+              "properties": {
+                "conclusion": "UNSEEN",
+                "applicability": "undetermined"
+              }
+            },
+            {
+              "id": "applic_CVE-2020-1750",
+              "name": "CVE-2020-1750",
+              "properties": {
+                "applicability": "not_covered"
+              },
+              "fullDescription": {
+                "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class).",
+                "markdown": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class)."
+              },
+              "shortDescription": {
+                "text": "Scanner for CVE-2020-1747"
+              }
+            },
+            {
+              "id": "applic_CVE-2020-7788",
+              "name": "CVE-2020-7788",
+              "properties": {
+                "conclusion": "positive",
+                "applicability": "not_applicable"
+              },
+              "fullDescription": {
+                "text": "The scanner checks whether the vulnerable function `ini.parse` is called.",
+                "markdown": "The scanner checks whether the vulnerable function `ini.parse` is called."
+              },
+              "shortDescription": {
+                "text": "Scanner for CVE-2020-7788"
+              }
+            }
+          ],
+          "version": "1.0",
+          "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security"
+        }
+      },
+      "invocations": [
+        {
+          "arguments": [
+            "/var/root/.jfrog/dependencies/analyzerManager/ca_scanner/applicability_scanner",
+            "scan",
+            "/tmp/jfrog.cli.temp.-1709245721-1151253638/config.yaml"
+          ],
+          "executionSuccessful": true,
+          "workingDirectory": {
+            "uri": "file:///private/var/root/.jfrog/dependencies/analyzerManager"
+          }
+        }
+      ],
+      "results": [
+        {
+          "message": {
+            "text": "The vulnerable function yaml.full_load/load is called"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "yaml.full_load(f)"
+                  },
+                  "endColumn": 28,
+                  "endLine": 4,
+                  "startColumn": 11,
+                  "startLine": 4
+                },
+                "artifactLocation": {
+                  "uri": "file:///tmp/tmpv7yob8g_/unpacked/filesystem/blobs/sha256/dcdf8bff5b7e55b7c546dfd6085997ac9e0cc5e3c2cfe3639999dac4bc3e678e/applicable/main.py"
+                }
+              }
+            }
+          ],
+          "ruleId": "applic_CVE-2020-14343"
+        },
+        {
+          "message": {
+            "text": "The vulnerable function yaml.full_load/load is called"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "yaml.load(f, Loader=yaml.FullLoader)"
+                  },
+                  "endColumn": 47,
+                  "endLine": 4,
+                  "startColumn": 11,
+                  "startLine": 4
+                },
+                "artifactLocation": {
+                  "uri": "file:///tmp/tmpv7yob8g_/unpacked/filesystem/blobs/sha256/dcdf8bff5b7e55b7c546dfd6085997ac9e0cc5e3c2cfe3639999dac4bc3e678e/applicable/main2.py"
+                }
+              }
+            }
+          ],
+          "ruleId": "applic_CVE-2020-14343"
+        },
+        {
+          "message": {
+            "text": "The vulnerable function yaml.full_load/load is called"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "yaml.full_load(f)"
+                  },
+                  "endColumn": 28,
+                  "endLine": 4,
+                  "startColumn": 11,
+                  "startLine": 4
+                },
+                "artifactLocation": {
+                  "uri": "file:///tmp/tmpv7yob8g_/unpacked/filesystem/blobs/sha256/dcdf8bff5b7e55b7c546dfd6085997ac9e0cc5e3c2cfe3639999dac4bc3e678e/applicable/main.py"
+                }
+              }
+            }
+          ],
+          "ruleId": "applic_CVE-2020-1747"
+        },
+        {
+          "message": {
+            "text": "The vulnerable function yaml.full_load/load is called"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "region": {
+                  "snippet": {
+                    "text": "yaml.load(f, Loader=yaml.FullLoader)"
+                  },
+                  "endColumn": 47,
+                  "endLine": 4,
+                  "startColumn": 11,
+                  "startLine": 4
+                },
+                "artifactLocation": {
+                  "uri": "file:///tmp/tmpv7yob8g_/unpacked/filesystem/blobs/sha256/dcdf8bff5b7e55b7c546dfd6085997ac9e0cc5e3c2cfe3639999dac4bc3e678e/applicable/main2.py"
+                }
+              }
+            }
+          ],
+          "ruleId": "applic_CVE-2020-1747"
+        },
+        {
+          "message": {
+            "text": "The scanner checks whether the vulnerable function `ini.parse` is called."
+          },
+          "kind": "pass",
+          "ruleId": "applic_CVE-2020-7788"
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0",
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+}
