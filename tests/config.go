@@ -5,11 +5,10 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	clientLog "github.com/jfrog/jfrog-client-go/utils/log"
-
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
 
 // Integration tests - global variables
@@ -46,8 +45,7 @@ var (
 	JfrogAccessToken   *string
 
 	ContainerRegistry *string
-
-	ciRunId *string
+	ciRunId           *string
 )
 
 func init() {
@@ -67,7 +65,6 @@ func init() {
 	JfrogAccessToken = flag.String("jfrog.adminToken", "", "JFrog platform admin token")
 
 	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8082", "Container registry")
-
 	ciRunId = flag.String("ci.runId", "", "A unique identifier used as a suffix to create repositories and builds in the tests")
 }
 
