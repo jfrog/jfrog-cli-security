@@ -98,10 +98,6 @@ github.com/jedib0t/go-pretty/v6 v6.5.5 h1:PpIU8lOjxvVYGGKule0QxxJfNysUSbC9lggQU2
 github.com/jedib0t/go-pretty/v6 v6.5.5/go.mod h1:5LQIxa52oJ/DlDSLv0HEkWOFMDGoWkJb9ss5KqPpJBg=
 github.com/jfrog/archiver/v3 v3.6.0 h1:OVZ50vudkIQmKMgA8mmFF9S0gA47lcag22N13iV3F1w=
 github.com/jfrog/archiver/v3 v3.6.0/go.mod h1:fCAof46C3rAXgZurS8kNRNdSVMKBbZs+bNNhPYxLldI=
-github.com/jfrog/build-info-go v1.8.9-0.20240225113943-096bf22ca54c h1:M1QiuCYGCYN1IiGyxogrLzfetYGkkhE2pgDh5K4Wo9A=
-github.com/jfrog/build-info-go v1.8.9-0.20240225113943-096bf22ca54c/go.mod h1:QHcKuesY4MrBVBuEwwBz4uIsX6mwYuMEDV09ng4AvAU=
-github.com/jfrog/gofrog v1.6.3 h1:F7He0+75HcgCe6SGTSHLFCBDxiE2Ja0tekvvcktW6wc=
-github.com/jfrog/gofrog v1.6.3/go.mod h1:SZ1EPJUruxrVGndOzHd+LTiwWYKMlHqhKD+eu+v5Hqg=
 github.com/jfrog/build-info-go v1.9.24 h1:MjT+4bYecbNQ+dbLczg0lkE5DoLAhdyrF0cRXtnEJqI=
 github.com/jfrog/build-info-go v1.9.24/go.mod h1:CaCKqcg3V2W9/ZysE4ZvXZMgsvunclhjrTTQQGp3CzM=
 github.com/jfrog/gofrog v1.6.3 h1:F7He0+75HcgCe6SGTSHLFCBDxiE2Ja0tekvvcktW6wc=
@@ -110,10 +106,6 @@ github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYL
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
 github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240321095315-72b008905aa2 h1:wJ9Tn8D+koRVNuVdX5f0+FBxuEmVuY6hgCQZsCIWV0U=
 github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240321095315-72b008905aa2/go.mod h1:XZP7fmNBBoieQTUE2p2mvA8h/CFO5z4PE7KW1s2cdNk=
-github.com/jfrog/jfrog-client-go v1.38.0 h1:0QP4/dSmJe0oYUrAqzoPDpGdJHcrOeq9mycnb0pSxqQ=
-github.com/jfrog/jfrog-client-go v1.38.0/go.mod h1:EHRLxpu0pIT7+ulYDNQ7IeieYBHMQeEPr8CoBHoJzQY=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240303093859-ebce750e0f45 h1:KeP2+7KcZHWZ24FPdW3yLfzXI/O6U9KdUzgvGi58PGo=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240303093859-ebce750e0f45/go.mod h1:aE5kYuqiZxu6hHkAQm34BvtGjLR8rk0/PUWpl4u5g0Q=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
 github.com/kevinburke/ssh_config v1.2.0/go.mod h1:CT57kijsi8u/K/BOFA39wgDQJ9CxiF4nAY/ojJ6r6mM=
 github.com/klauspost/compress v1.4.1/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
