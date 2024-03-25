@@ -100,6 +100,6 @@ require (
 
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240321095315-72b008905aa2
 
-// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
+replace github.com/jfrog/jfrog-client-go => github.com/asafambar/jfrog-client-go v0.0.0-20240325101348-61f7cbfcd6d9
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
