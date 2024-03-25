@@ -71,10 +71,15 @@ go test -v github.com/jfrog/jfrog-cli-security [test-types] [flags]
 
 ### The available test types are:
 
-| Type                 | Description        |
-| -------------------- | ------------------ |
-| `-test.security`     | [Default: true] Security commands integration tests  |
-| `-test.dockerScan`   | [Optional] Docker scan integration tests  |
+| Type                 | Description                                 |
+| -------------------- | ------------------------------------------- |
+| `-test.unit`         | [Default: true] Unit tests                  |
+| `-test.artifactory`  | [Optional] Artifactory integration tests    |
+| `-test.xray`         | [Optional] Xray commands integration tests  |
+| `-test.audit`        | [Optional] Audit command integration tests  |
+| `-test.scan`         | [Optional] Scan commands integration tests  |
+| `-test.dockerScan`   | [Optional] Docker scan integration tests    |
+| `-test.all`          | [Optional] Activate all available tests     |
 
 ### Docker Scan tests
 

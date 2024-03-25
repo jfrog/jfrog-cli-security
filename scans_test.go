@@ -74,13 +74,13 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 }
 
 func testXrayBinaryScan(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "scan", binariesPath, "--licenses", "--format="+format)
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
+	securityTestUtils.InitScanTest(t, scan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
@@ -131,11 +131,8 @@ func TestDockerScan(t *testing.T) {
 }
 
 func initNativeDockerWithXrayTest(t *testing.T) func() {
-	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
-		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
-	}
+	securityTestUtils.InitDockerScanTest(t, scan.DockerScanMinXrayVersion)
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
 	// Create server config to use with the command.
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	// Add docker scan mock command
@@ -236,7 +233,7 @@ func createTestWatch(t *testing.T) (string, func()) {
 // Curation tests
 
 func TestCurationAudit(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
+	securityTestUtils.InitScanTest(t, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm")

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -17,13 +16,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	setupIntegrationTests()
+	setupTests()
 	result := m.Run()
-	tearDownIntegrationTests()
+	tearDownTests()
 	os.Exit(result)
 }
 
-func setupIntegrationTests() {
+func setupTests() {
 	// Disable usage report.
 	if err := os.Setenv(coreutils.ReportUsage, "false"); err != nil {
 		clientLog.Error(fmt.Sprintf("Couldn't set env: %s. Error: %s", coreutils.ReportUsage, err.Error()))
@@ -35,15 +34,15 @@ func setupIntegrationTests() {
 		os.Exit(1)
 	}
 	// General
-	flag.Parse()
 	log.SetDefaultLogger()
-	// Init
+	configTests.InitTestFlags()
+	// Init Integration tests
 	utils.InitTestCliDetails()
 	utils.AuthenticateArtifactory()
 	utils.CreateRequiredRepositories()
 }
 
-func tearDownIntegrationTests() {
+func tearDownTests() {
 	// Important - Virtual repositories must be deleted first
 	utils.DeleteRepos(configTests.CreatedVirtualRepositories)
 	utils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
