@@ -64,7 +64,7 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) SendNewGeneralEventRequestToXsc() error {
+func (ams *AnalyticsMetricsService) AddGeneralEvent() error {
 	if !ams.ShouldReportEvents() {
 		log.Info("A general event request was not sent to XSC - analytics metrics are disabled.")
 		return nil
@@ -74,11 +74,11 @@ func (ams *AnalyticsMetricsService) SendNewGeneralEventRequestToXsc() error {
 		return err
 	}
 	splitOsAndArch := strings.Split(osAndArc, "-")
-	event := xscservices.XscGeneralEvent{
+	event := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventType:              1,
 		EventStatus:            "started",
 		Product:                "cli",
-		ProductVersion:         "",    // can't have it
+		ProductVersion:         "",    // can't have it for now
 		IsDefaultConfig:        false, // orz will implement it
 		JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
 		OsPlatform:             splitOsAndArch[0],
@@ -88,7 +88,7 @@ func (ams *AnalyticsMetricsService) SendNewGeneralEventRequestToXsc() error {
 		JpdVersion:             "", //TODO artifactory version,
 	}
 
-	msi, err := ams.xscManager.PostEvent(xscservices.XscAddGeneralEventRequest{XscGeneralEvent: event})
+	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(xscservices.XscAnalyticsGeneralEvent{XscAnalyticsBasicGeneralEvent: event})
 	if err != nil {
 		return err
 	}

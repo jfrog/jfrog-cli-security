@@ -39,11 +39,11 @@ func TestCalcShouldReportEvents(t *testing.T) {
 
 func TestSendNewGeneralEventRequestToXsc(t *testing.T) {
 	// TODO i need to work with a real env although its not full integration test
-	// TODO this is clients tests mocks
+	// TODO this are clients tests mocks
 	xsc.StartXscMockServer(t)
 	am, err := NewAnalyticsMetricsService(tests.XscDetails)
 	assert.NoError(t, err)
-	err = am.SendNewGeneralEventRequestToXsc()
+	err = am.AddGeneralEvent()
 	assert.NoError(t, err)
 	assert.NotEmpty(t, am.GetMsi())
 }

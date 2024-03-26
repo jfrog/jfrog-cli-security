@@ -105,7 +105,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	err = auditCmd.analyticsMetricsService.SendNewGeneralEventRequestToXsc()
+	err = auditCmd.analyticsMetricsService.AddGeneralEvent()
 	if err != nil {
 		return
 	}

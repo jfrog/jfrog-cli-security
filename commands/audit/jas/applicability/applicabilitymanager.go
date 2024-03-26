@@ -47,6 +47,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
+	// TODO: for now handled only CA, needs to do rest of scan types.
 	err = jas.SetAnalyticsMetricsDataForAnalyzerManager(scannedTechnologies)
 	if err != nil {
 		return
