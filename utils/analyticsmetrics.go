@@ -2,11 +2,13 @@ package utils
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
+	"strings"
 )
 
 // TODO VERIFY VERSION
@@ -67,21 +69,30 @@ func (ams *AnalyticsMetricsService) SendNewGeneralEventRequestToXsc() error {
 		log.Info("A general event request was not sent to XSC - analytics metrics are disabled.")
 		return nil
 	}
+	osAndArc, err := coreutils.GetOSAndArc()
+	if err != nil {
+		return err
+	}
+	splitOsAndArch := strings.Split(osAndArc, "-")
 	event := xscservices.XscGeneralEvent{
-		EventType:              0, // ?
+		EventType:              1,
 		EventStatus:            "started",
 		Product:                "cli",
-		ProductVersion:         "2.53.1", // add cli version call
-		IsDefaultConfig:        false,    // what is this?
-		JfrogUser:              "gail",   // add cli user
-		OsPlatform:             "mac",    // add
-		OsArchitecture:         "arm",    // add
-		MachineId:              "",       //?
-		AnalyzerManagerVersion: "1.1.1",  //add
-		JpdVersion:             "1.5",    //?,
+		ProductVersion:         "",    // can't have it
+		IsDefaultConfig:        false, // orz will implement it
+		JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
+		OsPlatform:             splitOsAndArch[0],
+		OsArchitecture:         splitOsAndArch[1],
+		MachineId:              "", // TODO add
+		AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
+		JpdVersion:             "", //TODO artifactory version,
 	}
 
-	msi, err := ams.xscManager.PostEvent(event)
+	msi, err := ams.xscManager.PostEvent(xscservices.XscAddGeneralEventRequest{XscGeneralEvent: event})
+	if err != nil {
+		return err
+	}
 	ams.SetMsi(msi)
-	return err
+	// Set environment variable for analyzer manager analytics.
+	return os.Setenv("JF_MSI", msi)
 }

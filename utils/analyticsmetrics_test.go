@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/jfrog/jfrog-cli-security/tests"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/utils/tests/xsc"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -37,7 +38,9 @@ func TestCalcShouldReportEvents(t *testing.T) {
 }
 
 func TestSendNewGeneralEventRequestToXsc(t *testing.T) {
-	// TODO i need to wirk with a real env although its not full integration test
+	// TODO i need to work with a real env although its not full integration test
+	// TODO this is clients tests mocks
+	xsc.StartXscMockServer(t)
 	am, err := NewAnalyticsMetricsService(tests.XscDetails)
 	assert.NoError(t, err)
 	err = am.SendNewGeneralEventRequestToXsc()
