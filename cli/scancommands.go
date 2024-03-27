@@ -349,6 +349,11 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
+	analytics, err := utils.NewAnalyticsMetricsService(serverDetails)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetAnalyticsMetricsService(analytics)
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
