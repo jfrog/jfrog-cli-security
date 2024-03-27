@@ -275,31 +275,21 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(packageManagers []coreutils.Technology) error {
+func SetAnalyticsMetricsDataForAnalyzerManager(technologies []coreutils.Technology) error {
 	// For now only one value is supported.
-	if len(packageManagers) != 1 {
+	if len(technologies) != 1 {
 		return nil
 	}
-	pm := packageManagers[0].String()
-	err := os.Setenv("AM_PACKAGE_MANAGER", pm)
+	technology := technologies[0]
+	err := os.Setenv("AM_PACKAGE_MANAGER", technology.String())
 	if err != nil {
 		return err
 	}
-	// Version is not supported yet.
-	err = os.Setenv("AM_PACKAGE_MANAGER_VERSION", "")
-	if err != nil {
-		return err
-	}
-	// TODO add language
-	return os.Setenv("AM_LANGUAGE", "")
+	return os.Setenv("AM_LANGUAGE", coreutils.TechnologyToLanguage(technology))
 }
 
-func ResetAnalyticsMetricsDataForAnalyzerManager(packageManager, packageManagerVersion, language string) error {
+func ResetAnalyticsMetricsDataForAnalyzerManager() error {
 	err := os.Setenv("AM_PACKAGE_MANAGER", "")
-	if err != nil {
-		return err
-	}
-	err = os.Setenv("AM_PACKAGE_MANAGER_VERSION", "")
 	if err != nil {
 		return err
 	}
