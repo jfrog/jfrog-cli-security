@@ -16,6 +16,7 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
+	CurationPipSupport   = "JFROG_CLI_CURATION_PIP"
 )
 
 func getJfrogCurationFolder() (string, error) {
@@ -55,4 +56,12 @@ func GetCurationMavenCacheFolder() (projectDir string, err error) {
 	}
 	projectDir = filepath.Join(curationFolder, "maven", hex.EncodeToString(hasher.Sum(nil)))
 	return
+}
+
+func GetCurationPipCacheFolder() (string, error) {
+	curationFolder, err := GetCurationCacheFolder()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(curationFolder, "pip"), nil
 }

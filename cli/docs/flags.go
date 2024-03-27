@@ -128,7 +128,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, CurationThreads,
+		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
