@@ -246,7 +246,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 	if !params.IsCurationCmd() {
 		return
 	}
-	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
 		return
 	}
 
@@ -262,7 +262,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 		}
 	}
 
-	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience."
 
 	return logMessage, curationCacheFolder, err
 }
