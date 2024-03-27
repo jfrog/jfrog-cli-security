@@ -3,6 +3,7 @@ package pnpm
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -46,10 +48,21 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 		return
 	}
 	// Build
-	if err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
+	var dirForDependenciesCalculation string
+	if dirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
 		return
 	}
-	return calculateDependencies(pnpmExecPath, currentDir, params)
+
+	if dirForDependenciesCalculation == "" {
+		// If we didn't execute 'install' dirForDependenciesCalculation contains an empty value and the dependencies calculation should be performed on the original cloned dir
+		dirForDependenciesCalculation = currentDir
+	} else {
+		// If tempDirForDependenciesCalculation contains a non-empty value, it means we created a temporary directory during the execution of 'install' command, and it needs to removed at the end
+		defer func() {
+			err = errors.Join(err, biutils.RemoveTempDir(dirForDependenciesCalculation))
+		}()
+	}
+	return calculateDependencies(pnpmExecPath, dirForDependenciesCalculation, params)
 }
 
 func getPnpmExecPath() (pnpmExecPath string, err error) {
@@ -76,8 +89,10 @@ func getPnpmCmd(pnpmExecPath, workingDir, cmd string, args ...string) *io.Comman
 	return command
 }
 
-// Install is required when "pnpm-lock.yaml" lock file or "node_modules/.pnpm" directory not exists.
-func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
+// Installation is necessary when either the "pnpm-lock.yaml" lock file or the "node_modules/.pnpm" directory does not exist.
+// If install is needed, we duplicate the project to a temporary directory and conduct the 'install' operation on the duplicate, to ensure that the original clone does not retain the node_modules directory if it didn't exist previously.
+// Upon 'install' the path to the duplicate directory will be returned.
+func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependenciesCalculation string, err error) {
 	lockFileExists, err := fileutils.IsFileExists(filepath.Join(workingDir, "pnpm-lock.yaml"), false)
 	if err != nil {
 		return
@@ -86,9 +101,26 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (err error) {
 	if err != nil || (lockFileExists && pnpmDirExists) {
 		return
 	}
-	// Install is needed
+	// Install is needed and will be performed on a copy of the cloned dir
 	log.Debug("Installing Pnpm project:", workingDir)
-	return getPnpmCmd(pnpmExecPath, workingDir, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	dirForDependenciesCalculation, err = fileutils.CreateTempDir()
+	if err != nil {
+		err = fmt.Errorf("failed to create a temporary dir: %w", err)
+		return
+	}
+	defer func() {
+		// If an error occurs for any reason, we proceed to delete the temporary directory.
+		if err != nil {
+			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
+		}
+	}()
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, nil)
+	if err != nil {
+		err = fmt.Errorf("failed copying project to temp dir: %w", err)
+		return
+	}
+	err = getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	return
 }
 
 // Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
