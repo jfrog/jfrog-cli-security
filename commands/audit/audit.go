@@ -2,16 +2,15 @@ package audit
 
 import (
 	"errors"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
-	"os"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"golang.org/x/sync/errgroup"
+	"os"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 )
@@ -105,12 +104,16 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	err = auditCmd.analyticsMetricsService.AddGeneralEvent()
+	err = auditCmd.analyticsMetricsService.AddGeneralEventAndSetMsi(auditParams.xrayGraphScanParams)
 	if err != nil {
 		return
 	}
-
 	auditResults, err := RunAudit(auditParams)
+	// TODO should report back?
+	if err != nil {
+		return
+	}
+	err = auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditResults)
 	if err != nil {
 		return
 	}
@@ -183,10 +186,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
 	}
 
-	if auditParams.xrayGraphScanParams.XscGitInfoContext != nil {
-		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
-			return nil, err
-		}
+	if auditParams.xrayGraphScanParams.MultiScanId != "" {
 		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
 	}
 
