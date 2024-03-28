@@ -37,11 +37,13 @@ type AuditPython struct {
 	IsCurationCmd       bool
 }
 
-func BuildDependencyTree(serverDetails *config.ServerDetails, tech coreutils.Technology, params xrayutils2.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	dependenciesGraph, directDependenciesList, err := getDependencies(serverDetails, tech, params)
-	if err != nil {
+func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(auditPython)
+	if errGetTree != nil {
+		err = errGetTree
 		return
 	}
+	downloadUrls = pipUrls
 	directDependencies := []*xrayUtils.GraphNode{}
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, rootDep := range directDependenciesList {
@@ -61,15 +63,7 @@ func BuildDependencyTree(serverDetails *config.ServerDetails, tech coreutils.Tec
 	return
 }
 
-func getDependencies(serverDetails *config.ServerDetails, tech coreutils.Technology,
-	params xrayutils2.AuditParams) (dependenciesGraph map[string][]string, directDependencies []string, err error) {
-	auditPython := &AuditPython{
-		Server:              serverDetails,
-		Tool:                pythonutils.PythonTool(tech),
-		RemotePypiRepo:      params.DepsRepo(),
-		PipRequirementsFile: params.PipRequirementsFile(),
-		IsCurationCmd:       params.IsCurationCmd(),
-	}
+func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -123,8 +117,6 @@ func getDependencies(serverDetails *config.ServerDetails, tech coreutils.Technol
 	if errProcessed != nil {
 		err = errProcessed
 
-	} else {
-		params.SetDownloadUrls(pipUrls)
 	}
 	return
 }

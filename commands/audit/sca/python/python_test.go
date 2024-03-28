@@ -2,8 +2,8 @@ package python
 
 import (
 	"errors"
+	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"strings"
@@ -19,7 +19,10 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pip, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Server: nil,
+		Tool:   pythonutils.PythonTool(coreutils.Pip),
+	})
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -43,9 +46,11 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	params := &xrayutils.AuditBasicParams{}
-	params.SetIsCurationCmd(true)
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pip, params)
+	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&AuditPython{
+		Server:        nil,
+		Tool:          pythonutils.PythonTool(coreutils.Pip),
+		IsCurationCmd: true,
+	})
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -59,7 +64,6 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 		// Test sub child module
 		tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 
-		downloadUrls := params.GetDownloadUrls()
 		assert.NotEmpty(t, downloadUrls)
 		url, exist := downloadUrls[PythonPackageTypeIdentifier+"ptyprocess:0.7.0"]
 		assert.True(t, exist)
@@ -76,7 +80,9 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pip, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Tool: pythonutils.PythonTool(coreutils.Pip),
+	})
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -95,9 +101,11 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	params := &xrayutils.AuditBasicParams{}
-	params.SetPipRequirementsFile("requirements.txt")
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pip, params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Server:              nil,
+		Tool:                pythonutils.PythonTool(coreutils.Pip),
+		PipRequirementsFile: "requirements.txt",
+	})
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -123,7 +131,10 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "ptyprocess:0.7.0",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Pipenv, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Server: nil,
+		Tool:   pythonutils.PythonTool(coreutils.Pipenv),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +169,11 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, err := BuildDependencyTree(nil, coreutils.Poetry, &xrayutils.AuditBasicParams{})
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Server:        nil,
+		Tool:          pythonutils.PythonTool(coreutils.Poetry),
+		IsCurationCmd: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,6 +196,8 @@ func TestGetPipInstallArgs(t *testing.T) {
 
 	assert.Equal(t, []string{"-m", "pip", "install", ".", "-i", "https://user@pass:remote.url/repo"}, getPipInstallArgs("", "https://user@pass:remote.url/repo", "", ""))
 	assert.Equal(t, []string{"-m", "pip", "install", "-r", "requirements.txt", "-i", "https://user@pass:remote.url/repo"}, getPipInstallArgs("requirements.txt", "https://user@pass:remote.url/repo", "", ""))
+	assert.Equal(t, []string{"-m", "pip", "install", ".", "--cache-dir", filepath.Join("test", "path"), "--ignore-installed", "--report", "report.json"}, getPipInstallArgs("", "", filepath.Join("test", "path"), "report.json"))
+
 }
 
 func Test_curationPassThroughError(t *testing.T) {
