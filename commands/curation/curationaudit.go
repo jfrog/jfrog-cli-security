@@ -4,24 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
@@ -30,6 +21,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
 )
 
 const (
@@ -62,14 +60,14 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	coreutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	coreutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Pip, MinArtiPassThroughSupport, MinXrayPassTHroughSupport, utils.CurationPipSupport)
+		return ca.checkSupportByVersionOrEnv(coreutils.Pip, utils.CurationPipSupport)
 	},
 	coreutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Maven, MinArtiPassThroughSupport, MinXrayPassTHroughSupport, utils.CurationMavenSupport)
+		return ca.checkSupportByVersionOrEnv(coreutils.Maven, utils.CurationMavenSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, minRtVersion, minXrayVersion, envName string) (bool, error) {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, envName string) (bool, error) {
 	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
 		return true, nil
 	} else if err != nil {
@@ -85,10 +83,9 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, minXrayVersion)
-	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, minRtVersion)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
+	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, MinArtiPassThroughSupport)
 	if xrayVersionErr != nil || rtVersionErr != nil {
-		// though artifactory or xray is not in the required version, the feature can be enabled with env variable.
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
 	}
 	return true, nil
@@ -292,7 +289,6 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) 
 }
 
 func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map[string][]*PackageStatus) error {
-	start := time.Now()
 	flattenGraph, fullDependenciesTrees, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
 	if err != nil {
 		return err
@@ -313,10 +309,12 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
 	if projectName == "" {
 		workPath, err := os.Getwd()
-		if err == nil {
-			projectName = filepath.Base(workPath)
+		if err != nil {
+			return err
 		}
+		projectName = filepath.Base(workPath)
 	}
+
 	if ca.Progress() != nil {
 		ca.Progress().SetHeadlineMsg(fmt.Sprintf("Fetch curation status for %s graph with %v nodes project name: %s:%s", tech.ToFormal(), len(flattenGraph.Nodes)-1, projectName, projectVersion))
 	}
@@ -353,7 +351,6 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
 	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = packagesStatus
-	log.Info(fmt.Sprintf("total time: %v", time.Since(start)))
 	return err
 }
 
@@ -646,11 +643,10 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	}
 	id = strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
 	allParts := strings.Split(id, ":")
-	if len(allParts) < 2 {
-		return
+	if len(allParts) >= 2 {
+		name = allParts[0]
+		version = allParts[1]
 	}
-	name = allParts[0]
-	version = allParts[1]
 	return
 }
 

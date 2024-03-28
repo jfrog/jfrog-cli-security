@@ -51,27 +51,23 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pip-example:1.2.3")
 	assert.Len(t, rootNode, 1)
-	if len(rootNode) > 0 {
-		assert.NotEmpty(t, rootNode[0].Nodes)
-		if rootNode[0].Nodes != nil {
-			// Test direct dependency
-			directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
-			// Test child module
-			childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
-			// Test sub child module
-			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
+	if assert.NotNil(t, rootNode[0].Nodes) && assert.NotEmpty(t, rootNode[0].Nodes) {
+		// Test direct dependency
+		directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
+		// Test child module
+		childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
+		// Test sub child module
+		tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 
-			downloadUrls := params.GetDownloadUrls()
-			assert.NotEmpty(t, downloadUrls)
-			url, exist := downloadUrls[PythonPackageTypeIdentifier+"ptyprocess:0.7.0"]
-			assert.True(t, exist)
-			assert.True(t, strings.HasSuffix(url, "packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl"))
+		downloadUrls := params.GetDownloadUrls()
+		assert.NotEmpty(t, downloadUrls)
+		url, exist := downloadUrls[PythonPackageTypeIdentifier+"ptyprocess:0.7.0"]
+		assert.True(t, exist)
+		assert.True(t, strings.HasSuffix(url, "packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl"))
 
-			url, exist = downloadUrls[PythonPackageTypeIdentifier+"pexpect:4.8.0"]
-			assert.True(t, exist)
-			assert.True(t, strings.HasSuffix(url, "packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl"))
-
-		}
+		url, exist = downloadUrls[PythonPackageTypeIdentifier+"pexpect:4.8.0"]
+		assert.True(t, exist)
+		assert.True(t, strings.HasSuffix(url, "packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl"))
 	}
 }
 

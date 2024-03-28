@@ -26,6 +26,7 @@ import (
 
 const (
 	PythonPackageTypeIdentifier = "pypi://"
+	pythonReportFile            = "report.json"
 )
 
 type AuditPython struct {
@@ -115,33 +116,22 @@ func getDependencies(serverDetails *config.ServerDetails, tech coreutils.Technol
 		sca.LogExecutableVersion("python")
 		sca.LogExecutableVersion(string(auditPython.Tool))
 	}
-	if auditPython.IsCurationCmd {
-		pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
-		if errProcessed != nil {
-			err = errProcessed
-			return
-		}
+	if !auditPython.IsCurationCmd {
+		return
+	}
+	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
+	if errProcessed != nil {
+		err = errProcessed
+
+	} else {
 		params.SetDownloadUrls(pipUrls)
 	}
 	return
 }
 
 func processPipDownloadsUrlsFromReportFile() (map[string]string, error) {
-	exist, err := fileutils.IsFileExists("report.json", false)
+	pipReport, err := readPipReportIfExists()
 	if err != nil {
-		return nil, err
-	}
-	if !exist {
-		err = errors.New("process failed, report file wasn't found, cant processed with curation command")
-		return nil, err
-	}
-	var reportBytes []byte
-	reportBytes, err = fileutils.ReadFile("report.json")
-	if err != nil {
-		return nil, err
-	}
-	pipReport := &pypiReport{}
-	if err = json.Unmarshal(reportBytes, pipReport); err != nil {
 		return nil, err
 	}
 	pipUrls := map[string]string{}
@@ -154,16 +144,36 @@ func processPipDownloadsUrlsFromReportFile() (map[string]string, error) {
 	return pipUrls, nil
 }
 
+func readPipReportIfExists() (pipReport *pypiReport, err error) {
+	if exist, existErr := fileutils.IsFileExists(pythonReportFile, false); existErr != nil {
+		err = existErr
+		return
+	} else if !exist {
+		err = errors.New("process failed, report file wasn't found, cant processed with curation command")
+		return
+	}
+
+	var reportBytes []byte
+	if reportBytes, err = fileutils.ReadFile(pythonReportFile); err != nil {
+		return
+	}
+	pipReport = &pypiReport{}
+	if err = json.Unmarshal(reportBytes, pipReport); err != nil {
+		return
+	}
+	return
+}
+
 type pypiReport struct {
 	Install []pypiReportInfo
 }
 
 type pypiReportInfo struct {
-	DownloadInfo pypiDwonloadInfo `json:"download_info"`
+	DownloadInfo pypiDownloadInfo `json:"download_info"`
 	MetaData     pypiMetaData     `json:"metadata"`
 }
 
-type pypiDwonloadInfo struct {
+type pypiDownloadInfo struct {
 	Url string `json:"url"`
 }
 
@@ -237,11 +247,10 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	var curationCachePip string
 	var reportFileName string
 	if auditPython.IsCurationCmd {
-		curationCachePip, err = xrayutils2.GetCurationPipCacheFolder()
-		if err != nil {
+		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
-		reportFileName = "report.json"
+		reportFileName = pythonReportFile
 	}
 
 	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName)
