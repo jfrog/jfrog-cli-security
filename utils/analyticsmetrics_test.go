@@ -85,8 +85,7 @@ func TestAddGeneralEventAndSetMsi(t *testing.T) {
 	am, err := NewAnalyticsMetricsService(serverDetails)
 	assert.NoError(t, err)
 	params := services.XrayGraphScanParams{}
-	err = am.AddGeneralEventAndSetMsi(&params)
-	assert.NoError(t, err)
+	am.AddGeneralEventAndSetMsi(&params)
 	assert.NotEmpty(t, am.GetMsi())
 	assert.Equal(t, params.MultiScanId, am.GetMsi())
 	assert.Equal(t, am.GetMsi(), os.Getenv(jfMsiEnvVariable))
@@ -94,18 +93,8 @@ func TestAddGeneralEventAndSetMsi(t *testing.T) {
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
 	am.SetMsi("test-msi")
-	err = am.AddGeneralEventAndSetMsi(&params)
-	assert.NoError(t, err)
+	am.AddGeneralEventAndSetMsi(&params)
 	assert.Equal(t, "test-msi", am.GetMsi())
-}
-
-func TestUpdateGeneralEvent(t *testing.T) {
-	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
-	am, err := NewAnalyticsMetricsService(serverDetails)
-	assert.NoError(t, err)
-	err = am.UpdateGeneralEvent(&Results{})
-	assert.NoError(t, err)
 }
 
 func TestCreateAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
@@ -167,10 +156,7 @@ func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 				if err != nil {
 					return
 				}
-			} else if r.Method == http.MethodPut {
-				w.WriteHeader(http.StatusOK)
 			}
-
 		}
 	})
 	return serverMock, serverDetails

@@ -275,23 +275,29 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(technologies []coreutils.Technology) error {
+func SetAnalyticsMetricsDataForAnalyzerManager(technologies []coreutils.Technology) {
 	// For now only one value is supported.
 	if len(technologies) != 1 {
-		return nil
+		return
 	}
 	technology := technologies[0]
 	err := os.Setenv("AM_PACKAGE_MANAGER", technology.String())
 	if err != nil {
-		return err
+		log.Debug(fmt.Sprintf("failed setting AM_PACKAGE_MANAGER as environment variable. Cause: %s", err.Error()))
 	}
-	return os.Setenv("AM_LANGUAGE", coreutils.TechnologyToLanguage(technology))
+	err = os.Setenv("AM_LANGUAGE", coreutils.TechnologyToLanguage(technology))
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed setting AM_LANGUAGE as environment variable. Cause: %s", err.Error()))
+	}
 }
 
-func ResetAnalyticsMetricsDataForAnalyzerManager() error {
+func ResetAnalyticsMetricsDataForAnalyzerManager() {
 	err := os.Setenv("AM_PACKAGE_MANAGER", "")
 	if err != nil {
-		return err
+		log.Debug(fmt.Sprintf("failed setting AM_PACKAGE_MANAGER as environment variable. Cause: %s", err.Error()))
 	}
-	return os.Setenv("AM_LANGUAGE", "")
+	err = os.Setenv("AM_LANGUAGE", "")
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed setting AM_LANGUAGE as environment variable. Cause: %s", err.Error()))
+	}
 }

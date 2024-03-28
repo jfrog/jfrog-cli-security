@@ -75,14 +75,15 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) AddGeneralEventAndSetMsi(params *services.XrayGraphScanParams) error {
+func (ams *AnalyticsMetricsService) AddGeneralEventAndSetMsi(params *services.XrayGraphScanParams) {
 	if !ams.ShouldReportEvents() {
-		log.Info("A general event request was not sent to XSC - analytics metrics are disabled.")
-		return nil
+		log.Debug("A general event request was not sent to XSC - analytics metrics are disabled.")
+		return
 	}
 	err := ams.AddGeneralEvent()
 	if err != nil {
-		return fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error())
+		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
+		return
 	}
 	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", ams.GetMsi()))
 
@@ -92,7 +93,6 @@ func (ams *AnalyticsMetricsService) AddGeneralEventAndSetMsi(params *services.Xr
 	}
 	// Before running the audit command, set the msi so the sca scan will be performed on the xsc rather than on the xray server.
 	params.MultiScanId = ams.GetMsi()
-	return nil
 }
 func (ams *AnalyticsMetricsService) AddGeneralEvent() error {
 	osAndArc, err := coreutils.GetOSAndArc()
@@ -121,16 +121,19 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent() error {
 	return nil
 }
 
-func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) error {
+func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
 	if !ams.ShouldReportEvents() {
-		log.Info("A general event update request was not sent to XSC - analytics metrics are disabled.")
-		return nil
+		log.Debug("A general event update request was not sent to XSC - analytics metrics are disabled.")
+		return
 	}
 	event := xscservices.XscAnalyticsGeneralEventFinalize{
 		MultiScanId:                   ams.msi,
 		XscAnalyticsBasicGeneralEvent: ams.createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults),
 	}
-	return ams.xscManager.UpdateAnalyticsGeneralEvent(event)
+	err := ams.xscManager.UpdateAnalyticsGeneralEvent(event)
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed updading general event request in XSC service for multi_scan_id %s, error: %s \"", ams.GetMsi(), err.Error()))
+	}
 }
 
 func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults *Results) xscservices.XscAnalyticsBasicGeneralEvent {

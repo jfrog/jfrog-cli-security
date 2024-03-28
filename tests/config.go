@@ -13,9 +13,8 @@ import (
 
 // Integration tests - global variables
 var (
-	XrDetails  *config.ServerDetails
-	XscDetails *config.ServerDetails
-	XrAuth     auth.ServiceDetails
+	XrDetails *config.ServerDetails
+	XrAuth    auth.ServiceDetails
 
 	RtDetails     *config.ServerDetails
 	RtAuth        auth.ServiceDetails
