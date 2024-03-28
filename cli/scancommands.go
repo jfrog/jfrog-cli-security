@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -350,12 +349,8 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	analytics, err := utils.NewAnalyticsMetricsService(serverDetails)
-	if err != nil {
-		log.Debug(fmt.Sprintf("Failed to create analytics metrics service. %s", err.Error()))
-	} else {
-		auditCmd.SetAnalyticsMetricsService(analytics)
-	}
+	auditCmd.SetAnalyticsMetricsService(utils.NewAnalyticsMetricsService(serverDetails))
+
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).

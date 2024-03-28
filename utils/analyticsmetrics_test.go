@@ -44,20 +44,19 @@ func TestCalcShouldReportEvents(t *testing.T) {
 	// Minimum Xsc version.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
-	am, err := NewAnalyticsMetricsService(serverDetails)
+	am := NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// Lower Xsc version.
 	mockServer, serverDetails = xscServer(t, lowerAnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
-	am, err = NewAnalyticsMetricsService(serverDetails)
-	assert.NoError(t, err)
+	am = NewAnalyticsMetricsService(serverDetails)
 	assert.False(t, am.calcShouldReportEvents())
 
 	// Higher Xsc version.
 	mockServer, serverDetails = xscServer(t, higherAnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
-	am, err = NewAnalyticsMetricsService(serverDetails)
+	am = NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// JF_MSI was already provided.
@@ -82,8 +81,7 @@ func TestAddGeneralEventAndSetMsi(t *testing.T) {
 	// Successful flow.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
-	am, err := NewAnalyticsMetricsService(serverDetails)
-	assert.NoError(t, err)
+	am := NewAnalyticsMetricsService(serverDetails)
 	params := services.XrayGraphScanParams{}
 	am.AddGeneralEventAndSetMsi(&params)
 	assert.NotEmpty(t, am.GetMsi())
@@ -100,8 +98,7 @@ func TestAddGeneralEventAndSetMsi(t *testing.T) {
 func TestCreateAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
-	am, err := NewAnalyticsMetricsService(serverDetails)
-	assert.NoError(t, err)
+	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()
 
 	// no audit results

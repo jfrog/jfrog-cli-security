@@ -24,15 +24,17 @@ type AnalyticsMetricsService struct {
 	startTime          time.Time
 }
 
-func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) (*AnalyticsMetricsService, error) {
+func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) *AnalyticsMetricsService {
 	ams := AnalyticsMetricsService{}
 	xscManager, err := CreateXscServiceManager(serviceDetails)
 	if err != nil {
-		return nil, err
+		// When an error occurs, shouldReportEvents will be false and no XscServiceManager commands will be executed.
+		log.Debug(fmt.Sprintf("Failed to create xsc manager for analytics metrics service. %s", err.Error()))
+		return &ams
 	}
 	ams.xscManager = xscManager
 	ams.shouldReportEvents = ams.calcShouldReportEvents()
-	return &ams, nil
+	return &ams
 }
 
 func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
