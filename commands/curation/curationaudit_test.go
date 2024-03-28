@@ -411,9 +411,9 @@ func TestDoCurationAudit(t *testing.T) {
 			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-			callbackMaven := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
+			callbackMaven := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationMavenSupport, "true")
 			defer callbackMaven()
-			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_PIP", "true")
+			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
 			defer callbackPip()
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
