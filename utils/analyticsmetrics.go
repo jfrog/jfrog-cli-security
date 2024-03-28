@@ -14,8 +14,7 @@ import (
 	"time"
 )
 
-// TODO VERIFY VERSION
-const AnalyticsMetricsMinXscVersion = "1.7.0"
+const AnalyticsMetricsMinXscVersion = "1.7.1"
 
 type AnalyticsMetricsService struct {
 	xscManager *xsc.XscServicesManager
@@ -38,11 +37,11 @@ func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) (*Analytic
 
 func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 	// A user who explicitly requests not to send reports will not receive XSC analytics metrics.
-	if os.Getenv("JFROG_CLI_REPORT_USAGE") == "false" {
+	if os.Getenv(coreutils.ReportUsage) == "false" {
 		return false
 	}
 	// There is no need to report the event and generate a new msi for the cli scan if the msi was provided.
-	if os.Getenv("JF_MSI") != "" {
+	if os.Getenv(jfMsiEnvVariable) != "" {
 		return false
 	}
 	// Verify xsc version.
@@ -87,7 +86,7 @@ func (ams *AnalyticsMetricsService) AddGeneralEventAndSetMsi(params *services.Xr
 	}
 	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", ams.GetMsi()))
 
-	if err = os.Setenv("JF_MSI", ams.GetMsi()); err != nil {
+	if err = os.Setenv(jfMsiEnvVariable, ams.GetMsi()); err != nil {
 		// Not a fatal error, if not set the scan will not be shown at the XSC UI, should not fail the scan.
 		log.Debug(fmt.Sprintf("failed setting MSI as environment variable. Cause: %s", err.Error()))
 	}
@@ -105,12 +104,9 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent() error {
 		EventType:              1,
 		EventStatus:            xscservices.Started,
 		Product:                "cli",
-		ProductVersion:         "",    // can't have it for now
-		IsDefaultConfig:        false, // orz will implement it
 		JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
 		OsPlatform:             splitOsAndArch[0],
 		OsArchitecture:         splitOsAndArch[1],
-		MachineId:              "", // TODO add
 		AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
 		JpdVersion:             "", //TODO artifactory version,
 	}
@@ -130,18 +126,26 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) er
 		log.Info("A general event update request was not sent to XSC - analytics metrics are disabled.")
 		return nil
 	}
+	event := xscservices.XscAnalyticsGeneralEventFinalize{
+		MultiScanId:                   ams.msi,
+		XscAnalyticsBasicGeneralEvent: ams.createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults),
+	}
+	return ams.xscManager.UpdateAnalyticsGeneralEvent(event)
+}
+
+func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults *Results) xscservices.XscAnalyticsBasicGeneralEvent {
 	totalDuration := time.Now().Sub(ams.GetStartTime())
-	totalFindings := len(auditResults.ScaResults) + len(auditResults.ExtendedScanResults.ApplicabilityScanResults) + len(auditResults.ExtendedScanResults.SecretsScanResults) + len(auditResults.ExtendedScanResults.IacScanResults) + len(auditResults.ExtendedScanResults.SastScanResults)
+	totalFindings := len(auditResults.ScaResults)
+	if auditResults.ExtendedScanResults != nil {
+		totalFindings += len(auditResults.ExtendedScanResults.ApplicabilityScanResults) + len(auditResults.ExtendedScanResults.SecretsScanResults) + len(auditResults.ExtendedScanResults.IacScanResults) + len(auditResults.ExtendedScanResults.SastScanResults)
+	}
 	eventStatus := xscservices.Completed
 	if auditResults.ScaError != nil || auditResults.JasError != nil {
 		eventStatus = xscservices.Failed
 	}
-	event := xscservices.XscAnalyticsGeneralEventFinalize{MultiScanId: ams.msi}
-	event.XscAnalyticsBasicGeneralEvent = xscservices.XscAnalyticsBasicGeneralEvent{
-		EventStatus:          eventStatus,
-		TotalFindings:        totalFindings,
-		TotalIgnoredFindings: 0,
-		TotalScanDuration:    totalDuration.String(),
+	return xscservices.XscAnalyticsBasicGeneralEvent{
+		EventStatus:       eventStatus,
+		TotalFindings:     totalFindings,
+		TotalScanDuration: totalDuration.String(),
 	}
-	return ams.xscManager.UpdateAnalyticsGeneralEvent(event)
 }

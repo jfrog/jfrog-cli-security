@@ -109,7 +109,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 	auditResults, err := RunAudit(auditParams)
-	// TODO should report back?
 	if err != nil {
 		return
 	}
