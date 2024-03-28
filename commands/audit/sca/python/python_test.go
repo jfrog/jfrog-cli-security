@@ -170,9 +170,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Server:        nil,
-		Tool:          pythonutils.PythonTool(coreutils.Poetry),
-		IsCurationCmd: true,
+		Tool: pythonutils.PythonTool(coreutils.Poetry),
 	})
 	if err != nil {
 		t.Fatal(err)
