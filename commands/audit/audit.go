@@ -104,19 +104,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	err = auditCmd.analyticsMetricsService.AddGeneralEventAndSetMsi(auditParams.xrayGraphScanParams)
-	if err != nil {
-		return
-	}
+	auditCmd.analyticsMetricsService.AddGeneralEventAndSetMsi(auditParams.xrayGraphScanParams)
 	auditResults, err := RunAudit(auditParams)
-	// TODO should report back?
 	if err != nil {
 		return
 	}
-	err = auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditResults)
-	if err != nil {
-		return
-	}
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditResults)
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
