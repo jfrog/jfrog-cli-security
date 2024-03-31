@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"strconv"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
@@ -60,10 +61,8 @@ func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditPar
 	}()
 	for _, scan := range scans {
 		// Run the scan
-		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
-		log.Debug("added 1 sca scan task")
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, wdScanErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, params, scan), auditParallelRunner.ErrorsQueue.AddError)
+		_, wdScanErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, params, scan), auditParallelRunner.AddErrorToChan)
 		if wdScanErr != nil {
 			err = fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, wdScanErr.Error())
 		}
@@ -116,8 +115,8 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 // This method will change the working directory to the scan's working directory.
 func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
 		defer func() {
-			log.Debug("remove 1 sca scan task")
 			auditParallelRunner.ScaScansWg.Done()
 		}()
 		// Get the dependency tree for the technology in the working directory.

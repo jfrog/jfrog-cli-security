@@ -9,6 +9,7 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 	"path/filepath"
+	"strconv"
 )
 
 const (
@@ -24,19 +25,19 @@ type SastScanManager struct {
 	resultsFileName    string
 }
 
-func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Sast)); err != nil {
 		return
 	}
 	sastScanManager := newSastScanManager(scanner, scannerTempDir)
-	log.Info("Running SAST scanning...")
+	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SAST scanning...", threadId)
 	if err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Sast, err)
 		return
 	}
 	if len(sastScanManager.sastScannerResults) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities", threadId)
 	}
 	results := sastScanManager.sastScannerResults
 	auditParallelRunner.Mu.Lock()

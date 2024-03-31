@@ -10,7 +10,7 @@ import (
 type Results struct {
 	ScaResults  []*ScaScanResult
 	XrayVersion string
-	ScaError    error
+	ScansErr    error
 
 	ExtendedScanResults *ExtendedScanResults
 	JasError            error

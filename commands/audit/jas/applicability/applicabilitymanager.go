@@ -4,6 +4,7 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
 	"path/filepath"
+	"strconv"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -42,16 +43,17 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string, scannedTechnologies []coreutils.Technology,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
 	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
-		log.Debug("The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
+		log.Debug("[thread_id: "+strconv.Itoa(threadId)+"] The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....", threadId)
 		return
 	}
+	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running applicability scanning...", threadId)
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
@@ -119,11 +121,6 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if len(asm.scanner.JFrogAppsConfig.Modules) > 1 {
-		log.Info("Running applicability scanning in the", module.SourceRoot, "directory...")
-	} else {
-		log.Info("Running applicability scanning...")
-	}
 	if err = asm.createConfigFile(module); err != nil {
 		return
 	}

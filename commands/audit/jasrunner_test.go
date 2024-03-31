@@ -38,7 +38,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
 
-	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded())
+	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: coreutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
 	err := RunJasScannersAndSetResults(&auditParallelRunnerForTest, scanResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, NewAuditParams())

@@ -111,7 +111,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
 	}
 	// Print Scan results on all cases except if errors accrued on SCA scan and no security/license issues found.
-	printScanResults := !(auditResults.ScaError != nil && !auditResults.IsScaIssuesFound())
+	printScanResults := !(auditResults.ScansErr != nil && !auditResults.IsScaIssuesFound())
 	if printScanResults {
 		if err = xrayutils.NewResultsWriter(auditResults).
 			SetIsMultipleRootProject(auditResults.IsMultipleProject()).
@@ -125,7 +125,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return
 		}
 	}
-	if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
+	if auditResults.ScansErr != nil {
 		return
 	}
 
@@ -174,11 +174,10 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
-		log.Debug("added 1 am task")
-		_, err = auditParallelRunner.Runner.AddTaskWithError(func(_ int) error {
+		_, err = auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
 			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, auditParams.DirectDependencies(), serverDetails,
-				auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams)
-		}, auditParallelRunner.ErrorsQueue.AddError)
+				auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams, threadId)
+		}, auditParallelRunner.AddErrorToChan)
 	}
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
@@ -188,15 +187,15 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}
 	go func() {
 		auditParallelRunner.JasWg.Wait()
-		log.Debug("finishing am and scanners")
 		auditParallelRunner.ScaScansWg.Wait()
-		log.Debug("finishing sca")
 		auditParallelRunner.Runner.Done()
-		log.Debug("done total run")
+	}()
+	go func() {
+		for e := range auditParallelRunner.ErrorsQueue {
+			results.ScansErr = errors.Join(err, e)
+		}
 	}()
 	auditParallelRunner.Runner.Run()
-	log.Debug("finish running")
-	// auditParallelRunner.ErrorsQueue.GetError()
 	return
 }
 
@@ -210,12 +209,11 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 }
 
 func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results, directDependencies []string,
-	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, auditParams *AuditParams) (err error) {
+	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, auditParams *AuditParams, threadId int) (err error) {
 	defer func() {
-		log.Debug("remove 1 am task")
 		auditParallelRunner.JasWg.Done()
 	}()
-	err = utils.DownloadAnalyzerManagerIfNeeded()
+	err = utils.DownloadAnalyzerManagerIfNeeded(threadId)
 	if err != nil {
 		return
 	}

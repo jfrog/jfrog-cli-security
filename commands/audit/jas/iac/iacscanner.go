@@ -2,6 +2,7 @@ package iac
 
 import (
 	"path/filepath"
+	"strconv"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
@@ -32,19 +33,19 @@ type IacScanManager struct {
 // []utils.SourceCodeScanResult: a list of the iac violations that were found.
 // bool: true if the user is entitled to iac scan, false otherwise.
 // error: An error object (if any).
-func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.IaC)); err != nil {
 		return
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
-	log.Info("Running IaC scanning...")
+	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running IaC scanning...", threadId)
 	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
 		return
 	}
 	if len(iacScanManager.iacScannerResults) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities", threadId)
 	}
 	results := iacScanManager.iacScannerResults
 	auditParallelRunner.Mu.Lock()

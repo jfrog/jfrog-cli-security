@@ -2,13 +2,12 @@ package utils
 
 import (
 	"github.com/jfrog/gofrog/parallel"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"sync"
 )
 
 type AuditParallelRunner struct {
 	Runner      parallel.Runner
-	ErrorsQueue clientutils.ErrorsQueue
+	ErrorsQueue chan error
 	Mu          sync.Mutex
 	ScaScansWg  sync.WaitGroup // verify that the sca scan routines are done before running contextual scan
 	ScannersWg  sync.WaitGroup // verify that all scanners routines are done before cleaning temp dir
@@ -17,11 +16,16 @@ type AuditParallelRunner struct {
 
 func NewAuditParallelRunner() AuditParallelRunner {
 	return AuditParallelRunner{
-		Runner: parallel.NewRunner(3, 20000, false),
+		Runner:      parallel.NewRunner(3, 20000, false),
+		ErrorsQueue: make(chan error, 100),
 	}
 }
 
 func CreateAuditParallelRunner() *AuditParallelRunner {
 	auditParallelRunner := NewAuditParallelRunner()
 	return &auditParallelRunner
+}
+
+func (apr *AuditParallelRunner) AddErrorToChan(err error) {
+	apr.ErrorsQueue <- err
 }

@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -31,20 +32,21 @@ type SecretScanManager struct {
 // Return values:
 // []utils.IacOrSecretResult: a list of the secrets that were found.
 // error: An error object (if any).
-func RunSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module) (err error) {
+func RunSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
+	module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Secrets)); err != nil {
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scannerTempDir)
-	log.Info("Running secrets scanning...")
+	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running secrets scanning...", threadId)
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
 		return
 	}
 	results := secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(results...), "secrets")
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(results...), "secrets", threadId)
 	}
 	auditParallelRunner.Mu.Lock()
 	extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)

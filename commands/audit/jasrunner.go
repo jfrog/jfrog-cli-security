@@ -27,7 +27,6 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	}
 	defer func() {
 		auditParallelRunner.ScannersWg.Wait()
-		log.Debug("doing temp dir cleanup")
 		cleanup := scanner.ScannerDirCleanupFunc
 		err = errors.Join(err, cleanup())
 	}()
@@ -36,19 +35,16 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			if !jas.ShouldSkipScanner(module, utils.Secrets) {
-				log.Debug("added secrets scanner task")
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSecretsScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.ErrorsQueue.AddError)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runSecretsScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
 			}
 			if !jas.ShouldSkipScanner(module, utils.IaC) {
-				log.Debug("added iac scanner task")
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runIacScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.ErrorsQueue.AddError)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runIacScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
 			}
 			if !jas.ShouldSkipScanner(module, utils.Sast) {
-				log.Debug("added sast scanner task")
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSastScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.ErrorsQueue.AddError)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runSastScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
 			}
 		}
 	}
@@ -57,9 +53,8 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	auditParallelRunner.ScaScansWg.Wait()
 	for _, module := range scanner.JFrogAppsConfig.Modules {
 		if !jas.ShouldSkipScanner(module, utils.Applicability) {
-			log.Debug("added contextual scanner task")
 			auditParallelRunner.ScannersWg.Add(1)
-			_, err = auditParallelRunner.Runner.AddTaskWithError(runContextualScan(auditParallelRunner, scanner, thirdPartyApplicabilityScan, progress, scanResults, directDependencies, module, auditParams), auditParallelRunner.ErrorsQueue.AddError)
+			_, err = auditParallelRunner.Runner.AddTaskWithError(runContextualScan(auditParallelRunner, scanner, thirdPartyApplicabilityScan, progress, scanResults, module, auditParams), auditParallelRunner.AddErrorToChan)
 		}
 	}
 	return err
@@ -68,13 +63,12 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 func runSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, progress io.ProgressMgr, scanResults *utils.Results, module jfrogappsconfig.Module) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
-			log.Debug("remove secrets scanner task")
 			auditParallelRunner.ScannersWg.Done()
 		}()
 		if progress != nil {
 			progress.SetHeadlineMsg("Running secrets scanning")
 		}
-		err = secrets.RunSecretsScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module)
+		err = secrets.RunSecretsScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }
@@ -82,13 +76,12 @@ func runSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas
 func runIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, progress io.ProgressMgr, scanResults *utils.Results, module jfrogappsconfig.Module) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
-			log.Debug("remove iac scanner task")
 			auditParallelRunner.ScannersWg.Done()
 		}()
 		if progress != nil {
 			progress.SetHeadlineMsg("Running IaC scanning")
 		}
-		err = iac.RunIacScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module)
+		err = iac.RunIacScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }
@@ -96,28 +89,26 @@ func runIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 func runSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, progress io.ProgressMgr, scanResults *utils.Results, module jfrogappsconfig.Module) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
-			log.Debug("remove sast scanner task")
 			auditParallelRunner.ScannersWg.Done()
 		}()
 		if progress != nil {
 			progress.SetHeadlineMsg("Running Sast scanning")
 		}
-		err = sast.RunSastScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module)
+		err = sast.RunSastScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }
 
 func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, thirdPartyApplicabilityScan bool, progress io.ProgressMgr,
-	scanResults *utils.Results, directDependencies []string, module jfrogappsconfig.Module, auditParams *AuditParams) parallel.TaskFunc {
+	scanResults *utils.Results, module jfrogappsconfig.Module, auditParams *AuditParams) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
-			log.Debug("remove contextual scanner task")
 			auditParallelRunner.ScannersWg.Done()
 		}()
 		if progress != nil {
 			progress.SetHeadlineMsg("Running applicability scanning")
 		}
-		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module)
+		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }
