@@ -1,6 +1,8 @@
 package pnpm
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"path/filepath"
 	"testing"
 
@@ -83,4 +85,27 @@ func TestBuildDependencyTree(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInstallProjectIfNeeded(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
+	defer cleanUp()
+
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+
+	pnpmExecPath, err := getPnpmExecPath()
+	assert.NoError(t, err)
+
+	dirForDependenciesCalculation, err := installProjectIfNeeded(pnpmExecPath, currentDir)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dirForDependenciesCalculation)
+
+	nodeModulesExist, err := fileutils.IsDirExists(filepath.Join(dirForDependenciesCalculation, "node_modules"), false)
+	assert.NoError(t, err)
+	assert.True(t, nodeModulesExist)
+
+	nodeModulesExist, err = fileutils.IsDirExists(filepath.Join(currentDir, "node_modules"), false)
+	assert.NoError(t, err)
+	assert.False(t, nodeModulesExist)
 }
