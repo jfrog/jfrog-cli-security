@@ -7,7 +7,7 @@ require (
 	github.com/jfrog/build-info-go v1.9.25
 	github.com/jfrog/gofrog v1.6.3
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.50.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.49.0
 	github.com/jfrog/jfrog-client-go v1.39.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
@@ -98,8 +98,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/gailazar300/jfrog-cli-core/v2 v2.0.0-20240331095546-a03b2d7f67da
 
-replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
+replace github.com/jfrog/jfrog-client-go => github.com/gailazar300/jfrog-client-go v0.18.1-0.20240331091256-e2e7cd419323
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
