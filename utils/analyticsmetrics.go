@@ -139,7 +139,7 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
 }
 
 func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults *Results) xscservices.XscAnalyticsBasicGeneralEvent {
-	totalDuration := time.Now().Sub(ams.GetStartTime())
+	totalDuration := time.Since(ams.GetStartTime())
 	totalFindings := len(auditResults.ScaResults)
 	if auditResults.ExtendedScanResults != nil {
 		totalFindings += len(auditResults.ExtendedScanResults.ApplicabilityScanResults) + len(auditResults.ExtendedScanResults.SecretsScanResults) + len(auditResults.ExtendedScanResults.IacScanResults) + len(auditResults.ExtendedScanResults.SastScanResults)

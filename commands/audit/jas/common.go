@@ -285,7 +285,7 @@ func SetAnalyticsMetricsDataForAnalyzerManager(technologies []coreutils.Technolo
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed setting AM_PACKAGE_MANAGER as environment variable. Cause: %s", err.Error()))
 	}
-	err = os.Setenv("AM_LANGUAGE", coreutils.TechnologyToLanguage(technology))
+	err = os.Setenv("AM_LANGUAGE", string(coreutils.TechnologyToLanguage(technology)))
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed setting AM_LANGUAGE as environment variable. Cause: %s", err.Error()))
 	}
