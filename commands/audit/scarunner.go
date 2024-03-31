@@ -277,7 +277,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 		}
 	}
 
-	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience."
+	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience"
 
 	return logMessage, curationCacheFolder, err
 }

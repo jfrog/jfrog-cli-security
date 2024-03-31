@@ -279,10 +279,6 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) 
 			SetNpmOverwritePackageLock(true)
 	case coreutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
-	case coreutils.Pip:
-		if ca.PipRequirementsFile() == "" {
-			ca.SetPipRequirementsFile("requirements.txt")
-		}
 	}
 
 	return ca.AuditParams

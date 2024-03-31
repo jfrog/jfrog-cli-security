@@ -258,20 +258,12 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 			err = nil
 		}
 	}
-	err = errors.Join(err, curationPassThroughError(auditPython, errors.Join(err, reqErr)))
+	if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		err = errors.Join(err, errors.New(msgToUser))
+	}
 	return
 }
 
-// If its curation command, we want to inform user that it can be resulted of pass-through disabled on curated repos.
-func curationPassThroughError(auditPython *AuditPython, errFromPip error) (err error) {
-	if !auditPython.IsCurationCmd {
-		return
-	}
-	if errFromPip != nil && strings.Contains(strings.ToLower(errFromPip.Error()), "http error 403") {
-		err = errors.New("Failed to get dependencies tree for python project, Please verify pass-through enabled on the curated repos")
-	}
-	return
-}
 func executeCommand(executable string, args ...string) error {
 	installCmd := exec.Command(executable, args...)
 	maskedCmdString := coreutils.GetMaskedCommandString(installCmd)
