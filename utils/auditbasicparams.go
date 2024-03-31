@@ -61,7 +61,6 @@ type AuditBasicParams struct {
 	dependenciesForApplicabilityScan []string
 	exclusions                       []string
 	isRecursiveScan                  bool
-	downloadUrls                     map[string]string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() []string {
