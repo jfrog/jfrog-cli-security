@@ -1,6 +1,8 @@
 package jas
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"os"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -86,5 +88,39 @@ func TestAddScoreToRunRules(t *testing.T) {
 	for _, test := range tests {
 		addScoreToRunRules(test.sarifRun)
 		assert.Equal(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
+	}
+}
+
+func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
+	type args struct {
+		msi          string
+		technologies []coreutils.Technology
+	}
+	tests := []struct {
+		name string
+		args args
+		want func()
+	}{
+		{name: "Valid 1 technology", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven}}, want: func() {
+			assert.Equal(t, string(coreutils.Maven), os.Getenv(jfPackageManagerEnvVariable))
+			assert.Equal(t, string(coreutils.Java), os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+		}},
+		{name: "multiple technologies", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven, coreutils.Npm}}, want: func() {
+			assert.Equal(t, "", os.Getenv(jfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callback := SetAnalyticsMetricsDataForAnalyzerManager(tt.args.msi, tt.args.technologies)
+			tt.want()
+			callback()
+			assert.Equal(t, "", os.Getenv(jfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfMsiEnvVariable))
+
+		})
 	}
 }

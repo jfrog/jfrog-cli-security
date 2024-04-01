@@ -6,7 +6,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
@@ -43,7 +42,7 @@ func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 		return false
 	}
 	// There is no need to report the event and generate a new msi for the cli scan if the msi was provided.
-	if os.Getenv(jfMsiEnvVariable) != "" {
+	if os.Getenv(JfMsiEnvVariable) != "" {
 		return false
 	}
 	// Verify xsc version.
@@ -77,50 +76,41 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) AddGeneralEventAndSetMsi(params *services.XrayGraphScanParams) {
+func (ams *AnalyticsMetricsService) AddGeneralEvent() {
 	if !ams.ShouldReportEvents() {
 		log.Debug("A general event request was not sent to XSC - analytics metrics are disabled.")
 		return
 	}
-	err := ams.AddGeneralEvent()
-	if err != nil {
-		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
-		return
-	}
-	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", ams.GetMsi()))
 
-	if err = os.Setenv(jfMsiEnvVariable, ams.GetMsi()); err != nil {
-		// Not a fatal error, if not set the scan will not be shown at the XSC UI, should not fail the scan.
-		log.Debug(fmt.Sprintf("failed setting MSI as environment variable. Cause: %s", err.Error()))
-	}
-	// Before running the audit command, set the msi so the sca scan will be performed on the xsc rather than on the xray server.
-	params.MultiScanId = ams.GetMsi()
-}
-func (ams *AnalyticsMetricsService) AddGeneralEvent() error {
 	osAndArc, err := coreutils.GetOSAndArc()
+	curOs, curArch := "", ""
 	if err != nil {
-		return err
+		log.Debug(fmt.Errorf("failed to get os and arcitucture for general event request to XSC service, error: %s ", err.Error()))
+	} else {
+		splitOsAndArch := strings.Split(osAndArc, "-")
+		curOs = splitOsAndArch[0]
+		curArch = splitOsAndArch[1]
 	}
-	splitOsAndArch := strings.Split(osAndArc, "-")
+
 	event := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventType:              1,
 		EventStatus:            xscservices.Started,
 		Product:                "cli",
 		JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
-		OsPlatform:             splitOsAndArch[0],
-		OsArchitecture:         splitOsAndArch[1],
+		OsPlatform:             curOs,
+		OsArchitecture:         curArch,
 		AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
-		JpdVersion:             "", //TODO artifactory version,
 	}
 
 	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(xscservices.XscAnalyticsGeneralEvent{XscAnalyticsBasicGeneralEvent: event})
 	if err != nil {
-		return err
+		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
+		return
 	}
+	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", ams.GetMsi()))
 	// Set event's analytics data.
 	ams.SetMsi(msi)
 	ams.SetStartTime()
-	return nil
 }
 
 func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {

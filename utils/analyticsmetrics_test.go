@@ -6,7 +6,7 @@ import (
 	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/jfrog/jfrog-client-go/utils/tests"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -25,21 +25,8 @@ const (
 
 func TestCalcShouldReportEvents(t *testing.T) {
 	// Save original environment information.
-	originalJfMsi := os.Getenv(jfMsiEnvVariable)
-	defer func() {
-		err := os.Setenv(jfMsiEnvVariable, originalJfMsi)
-		assert.NoError(t, err)
-	}()
-	originalReportUsage := os.Getenv(coreutils.ReportUsage)
-	defer func() {
-		err := os.Setenv(coreutils.ReportUsage, originalReportUsage)
-		assert.NoError(t, err)
-	}()
-
-	err := os.Setenv(coreutils.ReportUsage, "")
-	assert.NoError(t, err)
-	err = os.Setenv(jfMsiEnvVariable, "")
-	assert.NoError(t, err)
+	defer tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
+	defer tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
 
 	// Minimum Xsc version.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
@@ -49,63 +36,45 @@ func TestCalcShouldReportEvents(t *testing.T) {
 
 	// Lower Xsc version.
 	mockServer, serverDetails = xscServer(t, lowerAnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.False(t, am.calcShouldReportEvents())
 
 	// Higher Xsc version.
 	mockServer, serverDetails = xscServer(t, higherAnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// JF_MSI was already provided.
-	err = os.Setenv(jfMsiEnvVariable, "msi")
+	err := os.Setenv(JfMsiEnvVariable, "msi")
 	assert.NoError(t, err)
 	assert.False(t, am.calcShouldReportEvents())
 
 	// JFROG_CLI_REPORT_USAGE is false.
-	err = os.Setenv(jfMsiEnvVariable, "")
+	err = os.Setenv(JfMsiEnvVariable, "")
 	assert.NoError(t, err)
 	err = os.Setenv(coreutils.ReportUsage, "false")
 	assert.NoError(t, err)
 	assert.False(t, am.calcShouldReportEvents())
 }
 
-func TestAddGeneralEventAndSetMsi(t *testing.T) {
-	originalMsi := os.Getenv(jfMsiEnvVariable)
-	defer func() {
-		assert.NoError(t, os.Setenv(jfMsiEnvVariable, originalMsi))
-	}()
+func TestAddGeneralEvent(t *testing.T) {
+	defer tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
 
 	// Successful flow.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
-	params := services.XrayGraphScanParams{}
-	am.AddGeneralEventAndSetMsi(&params)
-	assert.NotEmpty(t, am.GetMsi())
-	assert.Equal(t, params.MultiScanId, am.GetMsi())
-	assert.Equal(t, am.GetMsi(), os.Getenv(jfMsiEnvVariable))
+	am.AddGeneralEvent()
+	assert.Equal(t, am.GetMsi(), testMsi)
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
 	am.SetMsi("test-msi")
-	am.AddGeneralEventAndSetMsi(&params)
+	am.AddGeneralEvent()
 	assert.Equal(t, "test-msi", am.GetMsi())
 }
 
-func TestCreateAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
-	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
-	am := NewAnalyticsMetricsService(serverDetails)
-	am.SetStartTime()
-
-	// no audit results
-	event := am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(&Results{})
-	assert.Equal(t, 0, event.TotalFindings)
-
-	// audit result, each scan has 2 result (total 10 scan results).
+func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
 	auditResults := Results{
 		ScaResults: []ScaScanResult{{}, {}},
 		ExtendedScanResults: &ExtendedScanResults{
@@ -115,27 +84,30 @@ func TestCreateAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
 			SastScanResults:          []*sarif.Run{{}, {}},
 		},
 	}
-	event = am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(&auditResults)
-
-	assert.Equal(t, 10, event.TotalFindings)
-	assert.Equal(t, xscservices.Completed, event.EventStatus)
-	totalDuration, err := time.ParseDuration(event.TotalScanDuration)
-	assert.NoError(t, err)
-	assert.True(t, totalDuration > 0)
-
-	// Scan failed because sca/jas errors.
-	auditResults.JasError = errors.New("jas error")
-	event = am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(&auditResults)
-	assert.Equal(t, 10, event.TotalFindings)
-	assert.Equal(t, xscservices.Failed, event.EventStatus)
-	totalDuration, err = time.ParseDuration(event.TotalScanDuration)
-	assert.NoError(t, err)
-	assert.True(t, totalDuration > 0)
-
-	auditResults.ScaError = errors.New("sca error")
-	auditResults.JasError = nil
-	event = am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(&auditResults)
-	assert.Equal(t, xscservices.Failed, event.EventStatus)
+	testStruct := []struct {
+		name         string
+		auditResults *Results
+		want         xscservices.XscAnalyticsBasicGeneralEvent
+	}{
+		{name: "No audit results", auditResults: &Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 10, EventStatus: xscservices.Completed}},
+		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: []ScaScanResult{{}, {}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 2, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because sca errors.", auditResults: &Results{JasError: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+	}
+	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
+	defer mockServer.Close()
+	am := NewAnalyticsMetricsService(serverDetails)
+	am.SetStartTime()
+	for _, tt := range testStruct {
+		t.Run(tt.name, func(t *testing.T) {
+			event := am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(tt.auditResults)
+			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
+			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
+			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
+			assert.NoError(t, err)
+			assert.True(t, totalDuration > 0)
+		})
+	}
 }
 
 func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
