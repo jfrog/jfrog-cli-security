@@ -3,6 +3,7 @@ package jas
 import (
 	"errors"
 	"fmt"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,9 @@ import (
 )
 
 const (
-	NodeModulesPattern = "**/*node_modules*/**"
+	NodeModulesPattern          = "**/*node_modules*/**"
+	jfPackageManagerEnvVariable = "AM_PACKAGE_MANAGER"
+	jfLanguageEnvVariable       = "AM_LANGUAGE"
 )
 
 var (
@@ -275,19 +278,19 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(technologies []coreutils.Technology) {
-	// For now only one value is supported.
+func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreutils.Technology) func() {
+	resetAnalyzerManageJfMsiVar := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
 	if len(technologies) != 1 {
-		return
+		// Only report analytics for one technology at a time.
+		return func() { resetAnalyzerManageJfMsiVar() }
 	}
 	technology := technologies[0]
-	err := os.Setenv("AM_PACKAGE_MANAGER", technology.String())
-	if err != nil {
-		log.Debug(fmt.Sprintf("failed setting AM_PACKAGE_MANAGER as environment variable. Cause: %s", err.Error()))
-	}
-	err = os.Setenv("AM_LANGUAGE", string(coreutils.TechnologyToLanguage(technology)))
-	if err != nil {
-		log.Debug(fmt.Sprintf("failed setting AM_LANGUAGE as environment variable. Cause: %s", err.Error()))
+	resetAnalyzerManagerPackageManagerVar := clientutils.SetEnvWithResetCallback(jfPackageManagerEnvVariable, technology.String())
+	resetAnalyzerManagerLanguageVar := clientutils.SetEnvWithResetCallback(jfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
+	return func() {
+		resetAnalyzerManagerPackageManagerVar()
+		resetAnalyzerManagerLanguageVar()
+		resetAnalyzerManageJfMsiVar()
 	}
 }
 

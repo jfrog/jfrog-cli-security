@@ -14,7 +14,7 @@ import (
 )
 
 func runJasScannersAndSetResults(scanResults *utils.Results, directDependencies []string,
-	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool) (err error) {
+	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, msi string) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -31,8 +31,7 @@ func runJasScannersAndSetResults(scanResults *utils.Results, directDependencies 
 		progress.SetHeadlineMsg("Running applicability scanning")
 	}
 	// Set environments variables for analytics in analyzers manager.
-	jas.SetAnalyticsMetricsDataForAnalyzerManager(scanResults.GetScaScannedTechnologies())
-	defer jas.ResetAnalyticsMetricsDataForAnalyzerManager()
+	defer jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
 	scanResults.ExtendedScanResults.ApplicabilityScanResults, err = applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), directDependencies, scanResults.GetScaScannedTechnologies(), scanner, thirdPartyApplicabilityScan)
 	if err != nil {
 		return

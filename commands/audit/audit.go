@@ -103,8 +103,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
-
-	auditCmd.analyticsMetricsService.AddGeneralEventAndSetMsi(auditParams.xrayGraphScanParams)
+	auditCmd.analyticsMetricsService.AddGeneralEvent()
+	auditParams.SetMultiScanId(auditCmd.analyticsMetricsService.GetMsi())
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
@@ -179,9 +179,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
 	}
 
-	if auditParams.xrayGraphScanParams.MultiScanId != "" {
-		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
-	}
+	results.MultiScanId = auditParams.MultiScanId()
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	results.ScaError = runScaScan(auditParams, results)
@@ -193,7 +191,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan)
+		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.MultiScanId())
 	}
 	return
 }

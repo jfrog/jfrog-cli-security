@@ -6,8 +6,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray"
 )
 
-func CreateXrayServiceManager(serviceDetails *config.ServerDetails) (*xray.XrayServicesManager, error) {
-	xrayDetails, err := serviceDetails.CreateXrayAuthConfig()
+func CreateXrayServiceManager(serverDetails *config.ServerDetails) (*xray.XrayServicesManager, error) {
+	xrayDetails, err := serverDetails.CreateXrayAuthConfig()
 	if err != nil {
 		return nil, err
 	}
