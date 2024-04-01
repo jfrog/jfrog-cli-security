@@ -253,15 +253,3 @@ func (mdt *MavenDepTreeManager) CreateTempDirWithSettingsXmlIfNeeded() (tempDirP
 	}
 	return
 }
-
-// In case mvn tree fails on 403 or 500 it can be related to packages blocked by curation.
-// For this use case to succeed, pass through should be enabled in the curated repos
-func (mdt *MavenDepTreeManager) suspectCurationBlockedError(isCurationCmd bool, cmdOutput string) (msgToUser string) {
-	if isCurationCmd {
-		return
-	}
-	if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(cmdOutput, "status code: 500") {
-		msgToUser = "Failed to get dependencies tree for maven project, Please verify pass-through enabled on the curated repos"
-	}
-	return msgToUser
-}

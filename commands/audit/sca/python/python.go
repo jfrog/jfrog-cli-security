@@ -258,8 +258,10 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 			err = nil
 		}
 	}
-	if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
-		err = errors.Join(err, errors.New(msgToUser))
+	if err != nil || reqErr != nil {
+		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+			err = errors.Join(err, errors.New(msgToUser))
+		}
 	}
 	return
 }
