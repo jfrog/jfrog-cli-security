@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
 
@@ -328,7 +330,21 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
-	return progressbar.ExecWithProgress(auditCmd)
+	err = progressbar.ExecWithProgress(auditCmd)
+
+	// Reporting error to Coralogix if Xsc service is enabled
+	if err != nil && usage.ShouldReportUsage() {
+		var serverDetails *coreConfig.ServerDetails
+		serverDetails, innerError := auditCmd.ServerDetails()
+		if innerError != nil {
+			log.Error(fmt.Sprintf("failed to get server details: %q", innerError))
+			return err
+		}
+		if coralogixReportError := utils.ReportToCoralogix(serverDetails, err, "cli"); coralogixReportError != nil {
+			log.Error("failed to send error log to Coralogix:" + coralogixReportError.Error())
+		}
+	}
+	return err
 }
 
 func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
@@ -398,7 +414,22 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	return progressbar.ExecWithProgress(auditCmd)
+	err = progressbar.ExecWithProgress(auditCmd)
+
+	// Reporting error to Coralogix if Xsc service is enabled
+	if err != nil && usage.ShouldReportUsage() {
+		var serverDetails *coreConfig.ServerDetails
+		serverDetails, innerError := auditCmd.ServerDetails()
+		if innerError != nil {
+			log.Error(fmt.Sprintf("failed to get server details: %q", innerError))
+			return err
+		}
+		if coralogixReportError := utils.ReportToCoralogix(serverDetails, err, "cli"); coralogixReportError != nil {
+			log.Error("failed to send error log to Coralogix:" + coralogixReportError.Error())
+		}
+	}
+
+	return err
 }
 
 func CurationCmd(c *components.Context) error {
