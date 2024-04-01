@@ -25,8 +25,10 @@ const (
 
 func TestCalcShouldReportEvents(t *testing.T) {
 	// Save original environment information.
-	defer tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
-	defer tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
+	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
+	defer msiCallback()
+	reportUsageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
+	defer reportUsageCallback()
 
 	// Minimum Xsc version.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
@@ -58,8 +60,8 @@ func TestCalcShouldReportEvents(t *testing.T) {
 }
 
 func TestAddGeneralEvent(t *testing.T) {
-	defer tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
-
+	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
+	defer msiCallback()
 	// Successful flow.
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
