@@ -9,27 +9,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-	"os"
 	"strings"
 	"time"
-)
-
-const (
-	AnalyticsMetricsMinXscVersion = "1.7.1"
-)
-
-type ProductName string
-
-const (
-	CliProduct     ProductName = "cli"
-	FrogbotProduct ProductName = "frogbot"
-)
-
-type EventType int
-
-const (
-	CliEventType EventType = 1
-	FrogbotType  EventType = 8
 )
 
 type AnalyticsMetricsService struct {
@@ -58,16 +39,12 @@ func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 	if !usage.ShouldReportUsage() {
 		return false
 	}
-	// There is no need to report the event and generate a new msi for the cli scan if the msi was provided.
-	if os.Getenv(JfMsiEnvVariable) != "" {
-		return false
-	}
 	// Verify xsc version.
 	xscVersion, err := ams.xscManager.GetVersion()
 	if err != nil {
 		return false
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, AnalyticsMetricsMinXscVersion); err != nil {
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, xscservices.AnalyticsMetricsMinXscVersion); err != nil {
 		return false
 	}
 	return true
@@ -93,7 +70,11 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) CreateGeneralEvent(product ProductName, eventType EventType) *xscservices.XscAnalyticsGeneralEvent {
+func (ams *AnalyticsMetricsService) SetShouldReportEvents(shouldReportEvents bool) {
+	ams.shouldReportEvents = shouldReportEvents
+}
+
+func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.ProductName, eventType xscservices.EventType) *xscservices.XscAnalyticsGeneralEvent {
 	osAndArc, err := coreutils.GetOSAndArc()
 	curOs, curArch := "", ""
 	if err != nil {
@@ -106,9 +87,9 @@ func (ams *AnalyticsMetricsService) CreateGeneralEvent(product ProductName, even
 
 	event := xscservices.XscAnalyticsGeneralEvent{
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
-			EventType:              int(eventType),
+			EventType:              eventType,
 			EventStatus:            xscservices.Started,
-			Product:                string(product),
+			Product:                product,
 			JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
 			OsPlatform:             curOs,
 			OsArchitecture:         curArch,
@@ -137,6 +118,10 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyt
 func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
 	if !ams.ShouldReportEvents() {
 		log.Debug("A general event update request was not sent to XSC - analytics metrics are disabled.")
+		return
+	}
+	if ams.msi == "" {
+		log.Debug("A general event update request was not sent to XSC - failed to add the starting event, and there is no valid multi-scan identifier provided.")
 		return
 	}
 	event := xscservices.XscAnalyticsGeneralEventFinalize{

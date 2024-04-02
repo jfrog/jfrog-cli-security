@@ -37,6 +37,8 @@ const (
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfMsiEnvVariable                          = "JF_MSI"
+	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
+	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 )
 
 type ApplicabilityStatus string
