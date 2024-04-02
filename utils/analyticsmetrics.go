@@ -14,7 +14,23 @@ import (
 	"time"
 )
 
-const AnalyticsMetricsMinXscVersion = "1.7.1"
+const (
+	AnalyticsMetricsMinXscVersion = "1.7.1"
+)
+
+type ProductName string
+
+const (
+	CliProduct     ProductName = "cli"
+	FrogbotProduct ProductName = "frogbot"
+)
+
+type EventType int
+
+const (
+	CliEventType EventType = 1
+	FrogbotType  EventType = 8
+)
 
 type AnalyticsMetricsService struct {
 	xscManager *xsc.XscServicesManager
@@ -77,12 +93,7 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) AddGeneralEvent() {
-	if !ams.ShouldReportEvents() {
-		log.Debug("A general event request was not sent to XSC - analytics metrics are disabled.")
-		return
-	}
-
+func (ams *AnalyticsMetricsService) CreateGeneralEvent(product ProductName, eventType EventType) *xscservices.XscAnalyticsGeneralEvent {
 	osAndArc, err := coreutils.GetOSAndArc()
 	curOs, curArch := "", ""
 	if err != nil {
@@ -93,17 +104,26 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent() {
 		curArch = splitOsAndArch[1]
 	}
 
-	event := xscservices.XscAnalyticsBasicGeneralEvent{
-		EventType:              1,
-		EventStatus:            xscservices.Started,
-		Product:                "cli",
-		JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
-		OsPlatform:             curOs,
-		OsArchitecture:         curArch,
-		AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
+	event := xscservices.XscAnalyticsGeneralEvent{
+		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
+			EventType:              int(eventType),
+			EventStatus:            xscservices.Started,
+			Product:                string(product),
+			JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
+			OsPlatform:             curOs,
+			OsArchitecture:         curArch,
+			AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
+		},
 	}
+	return &event
+}
 
-	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(xscservices.XscAnalyticsGeneralEvent{XscAnalyticsBasicGeneralEvent: event})
+func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyticsGeneralEvent) {
+	if !ams.ShouldReportEvents() {
+		log.Debug("A general event request was not sent to XSC - analytics metrics are disabled.")
+		return
+	}
+	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(*event)
 	if err != nil {
 		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
 		return

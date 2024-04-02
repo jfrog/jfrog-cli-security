@@ -103,7 +103,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
-	auditCmd.analyticsMetricsService.AddGeneralEvent()
+	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xrayutils.CliProduct, xrayutils.CliEventType))
 	auditParams.SetMultiScanId(auditCmd.analyticsMetricsService.GetMsi())
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
