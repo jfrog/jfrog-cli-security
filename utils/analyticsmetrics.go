@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -38,7 +39,7 @@ func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) *Analytics
 
 func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 	// A user who explicitly requests not to send reports will not receive XSC analytics metrics.
-	if os.Getenv(coreutils.ReportUsage) == "false" {
+	if !usage.ShouldReportUsage() {
 		return false
 	}
 	// There is no need to report the event and generate a new msi for the cli scan if the msi was provided.
@@ -107,7 +108,7 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent() {
 		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
 		return
 	}
-	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", ams.GetMsi()))
+	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", msi))
 	// Set event's analytics data.
 	ams.SetMsi(msi)
 	ams.SetStartTime()
@@ -126,6 +127,18 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed updading general event request in XSC service for multi_scan_id %s, error: %s \"", ams.GetMsi(), err.Error()))
 	}
+}
+
+func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.XscAnalyticsGeneralEvent, error) {
+	if !ams.ShouldReportEvents() {
+		log.Debug("Can't get general event from XSC - analytics metrics are disabled.")
+		return nil, nil
+	}
+	event, err := ams.xscManager.GetAnalyticsGeneralEvent(msi)
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed getting general event from XSC service for multi_scan_id %s, error: %s \"", msi, err.Error()))
+	}
+	return event, err
 }
 
 func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults *Results) xscservices.XscAnalyticsBasicGeneralEvent {

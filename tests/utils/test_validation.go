@@ -26,6 +26,18 @@ func ValidateXrayVersion(t *testing.T, minVersion string) {
 	}
 }
 
+func ValidateXscVersion(t *testing.T, minVersion string) {
+	xscVersion, err := getXscVersion()
+	if err != nil {
+		assert.NoError(t, err)
+		return
+	}
+	err = clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion.GetVersion(), minVersion)
+	if err != nil {
+		t.Skip(err)
+	}
+}
+
 func VerifyJsonScanResults(t *testing.T, content string, minViolations, minVulnerabilities, minLicenses int) {
 	var results []services.ScanResponse
 	err := json.Unmarshal([]byte(content), &results)
