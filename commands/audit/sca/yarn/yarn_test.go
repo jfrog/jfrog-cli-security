@@ -6,6 +6,7 @@ import (
 	utils2 "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
@@ -55,11 +56,16 @@ func TestParseYarnDependenciesList(t *testing.T) {
 func TestIsInstallRequired(t *testing.T) {
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	yarnProjectPath := filepath.Join("..", "..", "..", "testdata", "yarn-project")
+	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
 	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
 	installRequired, err := isInstallRequired(tempDirPath, []string{})
 	assert.NoError(t, err)
 	assert.True(t, installRequired)
+
+	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
+	assert.NoError(t, err)
+	assert.False(t, isTempDirEmpty)
+
 	executablePath, err := biutils.GetYarnExecutable()
 	assert.NoError(t, err)
 
@@ -85,8 +91,12 @@ func TestRunYarnInstallAccordingToVersion(t *testing.T) {
 func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, params []string) {
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	yarnProjectPath := filepath.Join("..", "..", "..", "testdata", "yarn-project")
+	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
 	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
+
+	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
+	assert.NoError(t, err)
+	assert.False(t, isTempDirEmpty)
 
 	executablePath, err := biutils.GetYarnExecutable()
 	assert.NoError(t, err)
