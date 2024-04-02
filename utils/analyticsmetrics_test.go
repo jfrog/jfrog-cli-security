@@ -31,7 +31,7 @@ func TestCalcShouldReportEvents(t *testing.T) {
 	defer reportUsageCallback()
 
 	// Minimum Xsc version.
-	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
@@ -65,16 +65,16 @@ func TestAddGeneralEvent(t *testing.T) {
 	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
 	defer msiCallback()
 	// Successful flow.
-	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
-	am.AddGeneralEvent(am.CreateGeneralEvent(CliProduct, CliEventType))
+	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	assert.Equal(t, am.GetMsi(), testMsi)
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
 	am.SetMsi("test-msi")
-	am.AddGeneralEvent(am.CreateGeneralEvent(CliProduct, CliEventType))
+	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	assert.Equal(t, "test-msi", am.GetMsi())
 }
 
@@ -98,7 +98,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: []ScaScanResult{{}, {}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 2, EventStatus: xscservices.Failed}},
 		{name: "Scan failed because sca errors.", auditResults: &Results{JasError: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
-	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()

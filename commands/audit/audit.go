@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"golang.org/x/sync/errgroup"
 	"os"
 
@@ -103,8 +104,15 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
-	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xrayutils.CliProduct, xrayutils.CliEventType))
-	auditParams.SetMultiScanId(auditCmd.analyticsMetricsService.GetMsi())
+
+	if auditParams.MultiScanId() == "" {
+		// There is no need to add/update the event and generate a new msi for the cli scan if the msi was already provided by FrogBot.
+		auditCmd.analyticsMetricsService.SetShouldReportEvents(false)
+	} else {
+		auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+		auditParams.SetMultiScanId(auditCmd.analyticsMetricsService.GetMsi())
+	}
+
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return

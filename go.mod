@@ -102,8 +102,9 @@ replace github.com/jfrog/jfrog-cli-core/v2 => github.com/gailazar300/jfrog-cli-c
 
 //replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
 
-replace github.com/jfrog/jfrog-client-go => github.com/gailazar300/jfrog-client-go v0.18.1-0.20240401141433-9b8da01b5758
+replace github.com/jfrog/jfrog-client-go => github.com/gailazar300/jfrog-client-go v0.18.1-0.20240402101728-8df71a319e37
 
 //replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
+
 //
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev

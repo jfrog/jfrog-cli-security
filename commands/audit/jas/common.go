@@ -25,9 +25,7 @@ import (
 )
 
 const (
-	NodeModulesPattern          = "**/*node_modules*/**"
-	jfPackageManagerEnvVariable = "AM_PACKAGE_MANAGER"
-	jfLanguageEnvVariable       = "AM_LANGUAGE"
+	NodeModulesPattern = "**/*node_modules*/**"
 )
 
 var (
@@ -285,22 +283,11 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 		return func() { resetAnalyzerManageJfMsiVar() }
 	}
 	technology := technologies[0]
-	resetAnalyzerManagerPackageManagerVar := clientutils.SetEnvWithResetCallback(jfPackageManagerEnvVariable, technology.String())
-	resetAnalyzerManagerLanguageVar := clientutils.SetEnvWithResetCallback(jfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerPackageManagerVar := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
+	resetAnalyzerManagerLanguageVar := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
 	return func() {
 		resetAnalyzerManagerPackageManagerVar()
 		resetAnalyzerManagerLanguageVar()
 		resetAnalyzerManageJfMsiVar()
-	}
-}
-
-func ResetAnalyticsMetricsDataForAnalyzerManager() {
-	err := os.Setenv("AM_PACKAGE_MANAGER", "")
-	if err != nil {
-		log.Debug(fmt.Sprintf("failed setting AM_PACKAGE_MANAGER as environment variable. Cause: %s", err.Error()))
-	}
-	err = os.Setenv("AM_LANGUAGE", "")
-	if err != nil {
-		log.Debug(fmt.Sprintf("failed setting AM_LANGUAGE as environment variable. Cause: %s", err.Error()))
 	}
 }

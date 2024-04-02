@@ -102,13 +102,13 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 		want func()
 	}{
 		{name: "Valid 1 technology", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven}}, want: func() {
-			assert.Equal(t, string(coreutils.Maven), os.Getenv(jfPackageManagerEnvVariable))
-			assert.Equal(t, string(coreutils.Java), os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, string(coreutils.Maven), os.Getenv(utils.JfPackageManagerEnvVariable))
+			assert.Equal(t, string(coreutils.Java), os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
 		{name: "multiple technologies", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven, coreutils.Npm}}, want: func() {
-			assert.Equal(t, "", os.Getenv(jfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
 	}
@@ -117,8 +117,8 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 			callback := SetAnalyticsMetricsDataForAnalyzerManager(tt.args.msi, tt.args.technologies)
 			tt.want()
 			callback()
-			assert.Equal(t, "", os.Getenv(jfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(jfLanguageEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "", os.Getenv(utils.JfMsiEnvVariable))
 
 		})

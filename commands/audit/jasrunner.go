@@ -31,7 +31,8 @@ func runJasScannersAndSetResults(scanResults *utils.Results, directDependencies 
 		progress.SetHeadlineMsg("Running applicability scanning")
 	}
 	// Set environments variables for analytics in analyzers manager.
-	defer jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
+	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
+	defer callback()
 	scanResults.ExtendedScanResults.ApplicabilityScanResults, err = applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), directDependencies, scanResults.GetScaScannedTechnologies(), scanner, thirdPartyApplicabilityScan)
 	if err != nil {
 		return
