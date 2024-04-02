@@ -68,13 +68,13 @@ func TestAddGeneralEvent(t *testing.T) {
 	mockServer, serverDetails := xscServer(t, AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
-	am.AddGeneralEvent()
+	am.AddGeneralEvent(am.CreateGeneralEvent(CliProduct, CliEventType))
 	assert.Equal(t, am.GetMsi(), testMsi)
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
 	am.SetMsi("test-msi")
-	am.AddGeneralEvent()
+	am.AddGeneralEvent(am.CreateGeneralEvent(CliProduct, CliEventType))
 	assert.Equal(t, "test-msi", am.GetMsi())
 }
 
