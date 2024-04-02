@@ -61,7 +61,6 @@ type AuditBasicParams struct {
 	dependenciesForApplicabilityScan []string
 	exclusions                       []string
 	isRecursiveScan                  bool
-	multiScanId                      string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() []string {
@@ -143,14 +142,6 @@ func (abp *AuditBasicParams) Progress() ioUtils.ProgressMgr {
 
 func (abp *AuditBasicParams) SetProgress(progress ioUtils.ProgressMgr) {
 	abp.progress = progress
-}
-
-func (abp *AuditBasicParams) MultiScanId() string {
-	return abp.multiScanId
-}
-
-func (abp *AuditBasicParams) SetMultiScanId(multiScanId string) {
-	abp.multiScanId = multiScanId
 }
 
 func (abp *AuditBasicParams) Args() []string {

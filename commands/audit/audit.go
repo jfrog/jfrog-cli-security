@@ -105,13 +105,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	if auditParams.MultiScanId() == "" {
-		// There is no need to add/update the event and generate a new msi for the cli scan if the msi was already provided by FrogBot.
-		auditCmd.analyticsMetricsService.SetShouldReportEvents(false)
-	} else {
-		auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-		auditParams.SetMultiScanId(auditCmd.analyticsMetricsService.GetMsi())
-	}
+	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+	auditParams.xrayGraphScanParams.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
 
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
@@ -187,7 +182,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
 	}
 
-	results.MultiScanId = auditParams.MultiScanId()
+	results.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	results.ScaError = runScaScan(auditParams, results)
@@ -199,7 +194,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.MultiScanId())
+		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId)
 	}
 	return
 }

@@ -70,10 +70,6 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
-func (ams *AnalyticsMetricsService) SetShouldReportEvents(shouldReportEvents bool) {
-	ams.shouldReportEvents = shouldReportEvents
-}
-
 func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.ProductName, eventType xscservices.EventType) *xscservices.XscAnalyticsGeneralEvent {
 	osAndArc, err := coreutils.GetOSAndArc()
 	curOs, curArch := "", ""
