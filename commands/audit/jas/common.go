@@ -228,9 +228,10 @@ var FakeBasicXrayResults = []services.ScanResponse{
 	},
 }
 
-func InitJasTest(t *testing.T) (*JasScanner, func()) {
+func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := NewJasScanner(&FakeServerDetails, nil)
+	jfrogAppsConfigForTest, _ := CreateJFrogAppsConfig(workingDirs)
+	scanner, err := NewJasScanner(&FakeServerDetails, jfrogAppsConfigForTest)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
