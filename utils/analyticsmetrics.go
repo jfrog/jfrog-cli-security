@@ -19,6 +19,8 @@ type AnalyticsMetricsService struct {
 	shouldReportEvents bool
 	msi                string
 	startTime          time.Time
+	// Finalize event combining all audit results.
+	finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize
 }
 
 func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) *AnalyticsMetricsService {
@@ -68,6 +70,14 @@ func (ams *AnalyticsMetricsService) GetStartTime() time.Time {
 
 func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
+}
+
+func (ams *AnalyticsMetricsService) FinalizeEvent() *xscservices.XscAnalyticsGeneralEventFinalize {
+	return ams.finalizeEvent
+}
+
+func (ams *AnalyticsMetricsService) SetFinalizeEvent(finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize) {
+	ams.finalizeEvent = finalizeEvent
 }
 
 func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.ProductName, eventType xscservices.EventType) *xscservices.XscAnalyticsGeneralEvent {
