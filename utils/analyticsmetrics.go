@@ -52,6 +52,10 @@ func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 	return true
 }
 
+func (ams *AnalyticsMetricsService) XscManager() *xsc.XscServicesManager {
+	return ams.xscManager
+}
+
 func (ams *AnalyticsMetricsService) SetMsi(msi string) {
 	ams.msi = msi
 }
