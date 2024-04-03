@@ -277,17 +277,37 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 }
 
 func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreutils.Technology) func() {
-	resetAnalyzerManageJfMsiVar := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
+	errMsg := "failed %s %s environment variable. Cause: %s"
+	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfMsiEnvVariable, err.Error()))
+	}
 	if len(technologies) != 1 {
 		// Only report analytics for one technology at a time.
-		return func() { resetAnalyzerManageJfMsiVar() }
+		return func() {
+			if resetAnalyzerManageJfMsiVar() != nil {
+				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+			}
+		}
 	}
 	technology := technologies[0]
-	resetAnalyzerManagerPackageManagerVar := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
-	resetAnalyzerManagerLanguageVar := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
+	}
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
+	}
 	return func() {
-		resetAnalyzerManagerPackageManagerVar()
-		resetAnalyzerManagerLanguageVar()
-		resetAnalyzerManageJfMsiVar()
+		if resetAnalyzerManageJfMsiVar() != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+		}
+		if resetAnalyzerManagerPackageManagerVar() != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfPackageManagerEnvVariable, err.Error()))
+		}
+		if resetAnalyzerManagerLanguageVar() != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
+		}
 	}
 }
