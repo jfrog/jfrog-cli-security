@@ -72,6 +72,14 @@ func (ams *AnalyticsMetricsService) ShouldReportEvents() bool {
 	return ams.shouldReportEvents
 }
 
+func (ams *AnalyticsMetricsService) FinalizeEvent() *xscservices.XscAnalyticsGeneralEventFinalize {
+	return ams.finalizeEvent
+}
+
+func (ams *AnalyticsMetricsService) SetFinalizeEvent(finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize) {
+	ams.finalizeEvent = finalizeEvent
+}
+
 func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.ProductName, eventType xscservices.EventType) *xscservices.XscAnalyticsGeneralEvent {
 	osAndArc, err := coreutils.GetOSAndArc()
 	curOs, curArch := "", ""
