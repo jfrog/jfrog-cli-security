@@ -202,3 +202,20 @@ func (ams *AnalyticsMetricsService) CountScanResultsFindings(scanResults *Result
 
 	return totalFindings
 }
+
+func (ams *AnalyticsMetricsService) UpdateXscAnalyticsGeneralEventFinalizeWithTotalScanDuration() {
+	totalDuration := time.Since(ams.GetStartTime())
+	ams.finalizeEvent.TotalScanDuration = totalDuration.String()
+}
+
+func (ams *AnalyticsMetricsService) UpdateXscAnalyticsGeneralEventFinalizeStatus(status xscservices.EventStatus) {
+	ams.finalizeEvent.EventStatus = status
+}
+
+func (ams *AnalyticsMetricsService) AddScanFindingsToXscAnalyticsGeneralEventFinalize(findingsAmount int) {
+	ams.finalizeEvent.TotalFindings += findingsAmount
+}
+
+func (ams *AnalyticsMetricsService) SetShouldReportEvents(shouldReportEvents bool) {
+	ams.shouldReportEvents = shouldReportEvents
+}
