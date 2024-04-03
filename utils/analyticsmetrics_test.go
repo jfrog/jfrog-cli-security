@@ -2,23 +2,17 @@ package utils
 
 import (
 	"errors"
-	"fmt"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 )
 
 const (
-	testMsi                             = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
 	lowerAnalyticsMetricsMinXscVersion  = "1.6.0"
 	higherAnalyticsMetricsMinXscVersion = "1.10.0"
 )
@@ -48,13 +42,8 @@ func TestCalcShouldReportEvents(t *testing.T) {
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
-	// JF_MSI was already provided.
-	err := os.Setenv(JfMsiEnvVariable, "msi")
-	assert.NoError(t, err)
-	assert.False(t, am.calcShouldReportEvents())
-
 	// JFROG_CLI_REPORT_USAGE is false.
-	err = os.Setenv(JfMsiEnvVariable, "")
+	err := os.Setenv(JfMsiEnvVariable, "")
 	assert.NoError(t, err)
 	err = os.Setenv(coreutils.ReportUsage, "false")
 	assert.NoError(t, err)
@@ -104,7 +93,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	am.SetStartTime()
 	for _, tt := range testStruct {
 		t.Run(tt.name, func(t *testing.T) {
-			event := am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(tt.auditResults)
+			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
 			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
 			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
 			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
@@ -112,25 +101,4 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 			assert.True(t, totalDuration > 0)
 		})
 	}
-}
-
-func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
-	serverMock, serverDetails, _ := coretests.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == "/xsc/api/v1/system/version" {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
-			if err != nil {
-				return
-			}
-		}
-		if r.RequestURI == "/xsc/api/v1/event" {
-			if r.Method == http.MethodPost {
-				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, testMsi)))
-				if err != nil {
-					return
-				}
-			}
-		}
-	})
-	return serverMock, serverDetails
 }

@@ -112,7 +112,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
-	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditResults)
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
