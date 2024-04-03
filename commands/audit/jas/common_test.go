@@ -101,12 +101,12 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 		args args
 		want func()
 	}{
-		{name: "Valid 1 technology", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven}}, want: func() {
+		{name: "One valid technology", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven}}, want: func() {
 			assert.Equal(t, string(coreutils.Maven), os.Getenv(utils.JfPackageManagerEnvVariable))
 			assert.Equal(t, string(utils.Java), os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
-		{name: "multiple technologies", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven, coreutils.Npm}}, want: func() {
+		{name: "Multiple technologies", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven, coreutils.Npm}}, want: func() {
 			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
 			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
