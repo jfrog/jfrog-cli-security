@@ -52,6 +52,10 @@ func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 	return true
 }
 
+func (ams *AnalyticsMetricsService) XscManager() *xsc.XscServicesManager {
+	return ams.xscManager
+}
+
 func (ams *AnalyticsMetricsService) SetMsi(msi string) {
 	ams.msi = msi
 }
@@ -150,10 +154,6 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 
 func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *Results) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
-	totalFindings := len(auditResults.ScaResults)
-	if auditResults.ExtendedScanResults != nil {
-		totalFindings += len(auditResults.ExtendedScanResults.ApplicabilityScanResults) + len(auditResults.ExtendedScanResults.SecretsScanResults) + len(auditResults.ExtendedScanResults.IacScanResults) + len(auditResults.ExtendedScanResults.SastScanResults)
-	}
 	eventStatus := xscservices.Completed
 	if auditResults.ScaError != nil || auditResults.JasError != nil {
 		eventStatus = xscservices.Failed
@@ -161,11 +161,44 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     totalFindings,
+		TotalFindings:     ams.CountScanResultsFindings(auditResults),
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{
 		MultiScanId:                   ams.msi,
 		XscAnalyticsBasicGeneralEvent: basicEvent,
 	}
+}
+
+// Counts the total amount of findings in the provided results and updates the AnalyticsMetricsService with the amount of the new added findings
+func (ams *AnalyticsMetricsService) CountScanResultsFindings(scanResults *Results) int {
+	findingsCountMap := make(map[string]int)
+	var totalFindings int
+
+	// Counting ScaResults
+	for _, scaResult := range scanResults.ScaResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
+			for _, vulnerability := range xrayResult.Vulnerabilities {
+				findingsCountMap[vulnerability.IssueId] += len(vulnerability.Components)
+			}
+
+			for _, violation := range xrayResult.Violations {
+				findingsCountMap[violation.IssueId] += len(violation.Components)
+			}
+		}
+	}
+
+	for _, issueIdCount := range findingsCountMap {
+		totalFindings += issueIdCount
+	}
+
+	// Counting ExtendedScanResults
+	if scanResults.ExtendedScanResults != nil {
+		totalFindings += len(scanResults.ExtendedScanResults.SastScanResults)
+		totalFindings += len(scanResults.ExtendedScanResults.IacScanResults)
+		totalFindings += len(scanResults.ExtendedScanResults.SecretsScanResults)
+	}
+
+	return totalFindings
 }

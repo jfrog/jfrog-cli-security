@@ -2,6 +2,7 @@ package audit
 
 import (
 	"errors"
+	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -85,6 +86,16 @@ func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphSca
 	}
 	params.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	params.IncludeLicenses = auditCmd.IncludeLicenses
+	params.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
+	xscManager := auditCmd.analyticsMetricsService.XscManager()
+	if xscManager != nil {
+		version, err := xscManager.GetVersion()
+		if err != nil {
+			log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
+		}
+		params.XscVersion = version
+	}
+
 	return params
 }
 
@@ -96,6 +107,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
+	// Should be called before creating the audit params, so the params will contain XSC information.
+	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	auditParams := NewAuditParams().
 		SetXrayGraphScanParams(auditCmd.CreateXrayGraphScanParams()).
 		SetWorkingDirs(workingDirs).
@@ -104,9 +117,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
-
-	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	auditParams.xrayGraphScanParams.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
 
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
