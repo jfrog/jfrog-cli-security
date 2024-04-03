@@ -31,13 +31,13 @@ func RunSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Ja
 		return
 	}
 	sastScanManager := newSastScanManager(scanner, scannerTempDir)
-	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SAST scanning...", threadId)
+	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running SAST scanning...")
 	if err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Sast, err)
 		return
 	}
 	if len(sastScanManager.sastScannerResults) > 0 {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities", threadId)
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
 	}
 	results := sastScanManager.sastScannerResults
 	auditParallelRunner.Mu.Lock()

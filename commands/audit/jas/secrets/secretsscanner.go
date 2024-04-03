@@ -39,14 +39,14 @@ func RunSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scannerTempDir)
-	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running secrets scanning...", threadId)
+	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running secrets scanning...")
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
 		return
 	}
 	results := secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(results...), "secrets", threadId)
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(results...), "secrets")
 	}
 	auditParallelRunner.Mu.Lock()
 	extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)

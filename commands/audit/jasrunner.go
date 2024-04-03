@@ -2,6 +2,7 @@ package audit
 
 import (
 	"errors"
+	"fmt"
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -15,13 +16,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results, directDependencies []string,
-	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, auditParams *AuditParams) (err error) {
+func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results, serverDetails *config.ServerDetails,
+	auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
 	}
-	scanner, err := jas.NewJasScanner(workingDirs, serverDetails)
+	scanner, err := jas.NewJasScanner(serverDetails, jfrogAppsConfig)
 	if err != nil {
 		return
 	}
@@ -32,19 +33,28 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	}()
 
 	// Don't execute other scanners when scanning third party dependencies.
-	if !thirdPartyApplicabilityScan {
+	if !auditParams.thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			if !jas.ShouldSkipScanner(module, utils.Secrets) {
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSecretsScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runSecretsScan(auditParallelRunner, scanner, auditParams.Progress(), scanResults, module), auditParallelRunner.AddErrorToChan)
+				if err != nil {
+					return fmt.Errorf("failed to create secrets scan task: %s", err.Error())
+				}
 			}
 			if !jas.ShouldSkipScanner(module, utils.IaC) {
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runIacScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runIacScan(auditParallelRunner, scanner, auditParams.Progress(), scanResults, module), auditParallelRunner.AddErrorToChan)
+				if err != nil {
+					return fmt.Errorf("failed to create iac scan task: %s", err.Error())
+				}
 			}
 			if !jas.ShouldSkipScanner(module, utils.Sast) {
 				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSastScan(auditParallelRunner, scanner, progress, scanResults, module), auditParallelRunner.AddErrorToChan)
+				_, err = auditParallelRunner.Runner.AddTaskWithError(runSastScan(auditParallelRunner, scanner, auditParams.Progress(), scanResults, module), auditParallelRunner.AddErrorToChan)
+				if err != nil {
+					return fmt.Errorf("failed to create sast scan task: %s", err.Error())
+				}
 			}
 		}
 	}
@@ -54,7 +64,10 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	for _, module := range scanner.JFrogAppsConfig.Modules {
 		if !jas.ShouldSkipScanner(module, utils.Applicability) {
 			auditParallelRunner.ScannersWg.Add(1)
-			_, err = auditParallelRunner.Runner.AddTaskWithError(runContextualScan(auditParallelRunner, scanner, thirdPartyApplicabilityScan, progress, scanResults, module, auditParams), auditParallelRunner.AddErrorToChan)
+			_, err = auditParallelRunner.Runner.AddTaskWithError(runContextualScan(auditParallelRunner, scanner, auditParams.Progress(), scanResults, module, auditParams), auditParallelRunner.AddErrorToChan)
+			if err != nil {
+				return fmt.Errorf("failed to create contextual scan task: %s", err.Error())
+			}
 		}
 	}
 	return err
@@ -99,7 +112,7 @@ func runSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Ja
 	}
 }
 
-func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, thirdPartyApplicabilityScan bool, progress io.ProgressMgr,
+func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, progress io.ProgressMgr,
 	scanResults *utils.Results, module jfrogappsconfig.Module, auditParams *AuditParams) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
@@ -108,7 +121,7 @@ func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *
 		if progress != nil {
 			progress.SetHeadlineMsg("Running applicability scanning")
 		}
-		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
+		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, auditParams.thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }

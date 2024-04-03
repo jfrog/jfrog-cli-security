@@ -162,7 +162,7 @@ func TestApplicabilityScanManager_ShouldRun_TechnologiesNotEligibleForScan(t *te
 	defer cleanUp()
 
 	var results utils.ExtendedScanResults
-	err := RunApplicabilityScan(&auditParallelRunnerForTest, jas.FakeBasicXrayResults, mockDirectDependencies, []coreutils.Technology{coreutils.Nuget, coreutils.Go}, scanner, false, &results, scanner.JFrogAppsConfig.Modules[0])
+	err := RunApplicabilityScan(&auditParallelRunnerForTest, jas.FakeBasicXrayResults, mockDirectDependencies, []coreutils.Technology{coreutils.Nuget, coreutils.Go}, scanner, false, &results, scanner.JFrogAppsConfig.Modules[0], 0)
 
 	// Assert
 	assert.Nil(t, results.ApplicabilityScanResults)

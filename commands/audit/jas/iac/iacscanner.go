@@ -39,13 +39,13 @@ func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 		return
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
-	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running IaC scanning...", threadId)
+	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running IaC scanning...")
 	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
 		return
 	}
 	if len(iacScanManager.iacScannerResults) > 0 {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities", threadId)
+		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
 	}
 	results := iacScanManager.iacScannerResults
 	auditParallelRunner.Mu.Lock()

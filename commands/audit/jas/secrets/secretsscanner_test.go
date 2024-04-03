@@ -114,7 +114,7 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 
 	var scanResults utils.ExtendedScanResults
-	err := RunSecretsScan(&auditParallelRunnerForTest, scanner, &scanResults, scanner.JFrogAppsConfig.Modules[0])
+	err := RunSecretsScan(&auditParallelRunnerForTest, scanner, &scanResults, scanner.JFrogAppsConfig.Modules[0], 0)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "failed to run Secrets scan")

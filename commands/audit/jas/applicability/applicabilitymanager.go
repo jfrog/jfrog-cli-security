@@ -50,10 +50,10 @@ func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayRe
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
 	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
-		log.Debug("[thread_id: "+strconv.Itoa(threadId)+"] The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....", threadId)
+		log.Debug("[thread_id: " + strconv.Itoa(threadId) + "] The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
-	log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running applicability scanning...", threadId)
+	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running applicability scanning...")
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return

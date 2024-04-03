@@ -2,6 +2,7 @@ package audit
 
 import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/jas/applicability"
 	"os"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 )
 
 func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
-	aduit := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
 	tmpDir, err := fileutils.CreateTempDir()
 	defer func() {
 		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
@@ -23,7 +24,11 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: coreutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err = RunJasScannersAndSetResults(&aduit, scanResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, NewAuditParams())
+
+	auditParamsForTest := NewAuditParams().SetThirdPartyApplicabilityScan(false)
+	auditParamsForTest.AuditBasicParams.AppendDependenciesForApplicabilityScan([]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"})
+
+	err = RunJasScannersAndSetResults(&auditParallelRunnerForTest, scanResults, &jas.FakeServerDetails, auditParamsForTest)
 	// Expect error:
 	assert.Error(t, err)
 }
@@ -31,7 +36,9 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: coreutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err := RunJasScannersAndSetResults(&auditParallelRunnerForTest, scanResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, nil, nil, false, NewAuditParams())
+	auditParamsForTest := NewAuditParams().SetThirdPartyApplicabilityScan(false)
+	auditParamsForTest.AuditBasicParams.AppendDependenciesForApplicabilityScan([]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"})
+	err := RunJasScannersAndSetResults(&auditParallelRunnerForTest, scanResults, nil, auditParamsForTest)
 	assert.NoError(t, err)
 }
 
@@ -40,8 +47,9 @@ func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 
-	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: coreutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err := RunJasScannersAndSetResults(&auditParallelRunnerForTest, scanResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, NewAuditParams())
+	scanner, _ := jas.NewJasScanner(nil, &jas.FakeServerDetails)
+	err := applicability.RunApplicabilityScan(&auditParallelRunnerForTest, jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
+		[]coreutils.Technology{coreutils.Yarn}, scanner, false, &utils.ExtendedScanResults{}, scanner.JFrogAppsConfig.Modules[0], 0)
 
 	// Expect error:
 	assert.ErrorContains(t, err, "failed to run Applicability scan")
