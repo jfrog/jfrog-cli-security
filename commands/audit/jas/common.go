@@ -295,7 +295,7 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
 	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(coreutils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(utils.TechnologyToLanguage(technology)))
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
 	}

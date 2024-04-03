@@ -3,9 +3,9 @@ package utils
 import (
 	"errors"
 	"fmt"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -104,7 +104,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	am.SetStartTime()
 	for _, tt := range testStruct {
 		t.Run(tt.name, func(t *testing.T) {
-			event := am.createAuditResultsFromXscAnalyticsBasicGeneralEvent(tt.auditResults)
+			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
 			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
 			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
 			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
@@ -115,7 +115,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 }
 
 func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
-	serverMock, serverDetails, _ := coretests.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails, _ := utils.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
 			if err != nil {

@@ -19,7 +19,7 @@ type AnalyticsMetricsService struct {
 	shouldReportEvents bool
 	msi                string
 	startTime          time.Time
-	// Finalize event combining all audit results.
+	// In the case of multiple scanning, aggregate all audit results into one finalize event.
 	finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize
 }
 
@@ -121,7 +121,7 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyt
 	ams.SetStartTime()
 }
 
-func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
+func (ams *AnalyticsMetricsService) UpdateGeneralEvent(event *xscservices.XscAnalyticsGeneralEventFinalize) {
 	if !ams.ShouldReportEvents() {
 		log.Debug("A general event update request was not sent to XSC - analytics metrics are disabled.")
 		return
@@ -130,11 +130,7 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(auditResults *Results) {
 		log.Debug("A general event update request was not sent to XSC - failed to add the starting event, and there is no valid multi-scan identifier provided.")
 		return
 	}
-	event := xscservices.XscAnalyticsGeneralEventFinalize{
-		MultiScanId:                   ams.msi,
-		XscAnalyticsBasicGeneralEvent: ams.createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults),
-	}
-	err := ams.xscManager.UpdateAnalyticsGeneralEvent(event)
+	err := ams.xscManager.UpdateAnalyticsGeneralEvent(*event)
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed updading general event request in XSC service for multi_scan_id %s, error: %s \"", ams.GetMsi(), err.Error()))
 	}
@@ -152,7 +148,7 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 	return event, err
 }
 
-func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGeneralEvent(auditResults *Results) xscservices.XscAnalyticsBasicGeneralEvent {
+func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *Results) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
 	totalFindings := len(auditResults.ScaResults)
 	if auditResults.ExtendedScanResults != nil {
@@ -162,9 +158,14 @@ func (ams *AnalyticsMetricsService) createAuditResultsFromXscAnalyticsBasicGener
 	if auditResults.ScaError != nil || auditResults.JasError != nil {
 		eventStatus = xscservices.Failed
 	}
-	return xscservices.XscAnalyticsBasicGeneralEvent{
+
+	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
 		TotalFindings:     totalFindings,
 		TotalScanDuration: totalDuration.String(),
+	}
+	return &xscservices.XscAnalyticsGeneralEventFinalize{
+		MultiScanId:                   ams.msi,
+		XscAnalyticsBasicGeneralEvent: basicEvent,
 	}
 }
