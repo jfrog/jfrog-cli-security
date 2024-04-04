@@ -25,6 +25,7 @@ type AuditCommand struct {
 	IncludeLicenses        bool
 	Fail                   bool
 	PrintExtendedTable     bool
+	ParallelScans          int
 	AuditParams
 }
 
@@ -67,6 +68,11 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetParallelScans(threads int) *AuditCommand {
+	auditCmd.ParallelScans = threads
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphScanParams {
 	params := &services.XrayGraphScanParams{
 		RepoPath: auditCmd.targetRepoPath,
@@ -97,7 +103,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
-		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
+		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
+		SetParallelScans(auditCmd.ParallelScans)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
@@ -169,7 +176,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
 	}
 
-	auditParallelRunner := utils.CreateAuditParallelRunner()
+	auditParallelRunner := utils.CreateAuditParallelRunner(auditParams.numOfParallelScans)
 	JFrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
@@ -177,11 +184,11 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
-		_, err = auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+		_, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
 			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, JFrogAppsConfig, threadId)
 		}, auditParallelRunner.AddErrorToChan)
-		if err != nil {
-			return results, fmt.Errorf("failed to creat AM and jas scanners task: %s", err.Error())
+		if jasErr != nil {
+			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to creat AM and jas scanners task: %s", err.Error()))
 		}
 	}
 
@@ -200,6 +207,9 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 			results.ScansErr = errors.Join(results.ScansErr, e)
 		}
 	}()
+	if auditParams.Progress() != nil {
+		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
+	}
 	auditParallelRunner.Runner.Run()
 	return
 }

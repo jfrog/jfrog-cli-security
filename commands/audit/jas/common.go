@@ -107,26 +107,6 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
-func deleteJasProcessFiles(configFile string, resultFile string) error {
-	exist, err := fileutils.IsFileExists(configFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		if err = os.Remove(configFile); err != nil {
-			return errorutils.CheckError(err)
-		}
-	}
-	exist, err = fileutils.IsFileExists(resultFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		err = os.Remove(resultFile)
-	}
-	return errorutils.CheckError(err)
-}
-
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = utils.ReadScanRunsFromFile(fileName); err != nil {
 		return

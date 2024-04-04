@@ -78,9 +78,6 @@ func runSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		if progress != nil {
-			progress.SetHeadlineMsg("Running secrets scanning")
-		}
 		err = secrets.RunSecretsScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
@@ -91,9 +88,6 @@ func runIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		if progress != nil {
-			progress.SetHeadlineMsg("Running IaC scanning")
-		}
 		err = iac.RunIacScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
@@ -104,9 +98,6 @@ func runSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Ja
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		if progress != nil {
-			progress.SetHeadlineMsg("Running Sast scanning")
-		}
 		err = sast.RunSastScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
@@ -118,9 +109,6 @@ func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		if progress != nil {
-			progress.SetHeadlineMsg("Running applicability scanning")
-		}
 		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, auditParams.thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}

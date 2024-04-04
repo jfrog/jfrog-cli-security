@@ -1,6 +1,7 @@
 package applicability
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/require"
 	"os"
@@ -157,7 +158,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 }
 
 func TestApplicabilityScanManager_ShouldRun_TechnologiesNotEligibleForScan(t *testing.T) {
-	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner(cliutils.Threads)
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 

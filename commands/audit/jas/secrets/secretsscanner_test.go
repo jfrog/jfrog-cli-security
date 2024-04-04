@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/require"
 	"os"
@@ -109,7 +110,7 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 }
 
 func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
-	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner(cliutils.Threads)
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 

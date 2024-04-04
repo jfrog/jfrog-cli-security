@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/commands"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,8 +49,6 @@ const (
 
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
 		"This package manager however isn't supported by this command."
-
-	TotalConcurrentRequests = 10
 
 	MinArtiMavenSupport = "7.82.0"
 	MinArtiXraySupport  = "3.92.0"
@@ -306,7 +305,7 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 		projectName = projectScope + "/" + projectName
 	}
 	if ca.parallelRequests == 0 {
-		ca.parallelRequests = TotalConcurrentRequests
+		ca.parallelRequests = commands.TotalConcurrentRequests
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{
@@ -661,13 +660,6 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
-}
-
-func DetectNumOfThreads(threadsCount int) (int, error) {
-	if threadsCount > TotalConcurrentRequests {
-		return 0, errorutils.CheckErrorf("number of threads crossed the maximum, the maximum threads allowed is %v", TotalConcurrentRequests)
-	}
-	return threadsCount, nil
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {

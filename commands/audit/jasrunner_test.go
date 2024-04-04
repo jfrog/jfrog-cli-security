@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas/applicability"
 	"os"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
-	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner(cliutils.Threads)
 	tmpDir, err := fileutils.CreateTempDir()
 	defer func() {
 		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
@@ -34,7 +35,7 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
-	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner(cliutils.Threads)
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: coreutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
 	auditParamsForTest := NewAuditParams().SetThirdPartyApplicabilityScan(false)
 	auditParamsForTest.AuditBasicParams.AppendDependenciesForApplicabilityScan([]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"})
@@ -43,7 +44,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 }
 
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
-	auditParallelRunnerForTest := utils.NewAuditParallelRunner()
+	auditParallelRunnerForTest := utils.NewAuditParallelRunner(cliutils.Threads)
 
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 

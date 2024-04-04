@@ -33,7 +33,7 @@ type IacScanManager struct {
 // []utils.SourceCodeScanResult: a list of the iac violations that were found.
 // bool: true if the user is entitled to iac scan, false otherwise.
 // error: An error object (if any).
-func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, ExtendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
+func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.IaC)); err != nil {
 		return
@@ -49,7 +49,7 @@ func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 	}
 	results := iacScanManager.iacScannerResults
 	auditParallelRunner.Mu.Lock()
-	ExtendedScanResults.IacScanResults = append(ExtendedScanResults.IacScanResults, results...)
+	extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
 	auditParallelRunner.Mu.Unlock()
 	return
 }

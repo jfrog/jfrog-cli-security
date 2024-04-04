@@ -196,11 +196,3 @@ func removeElementFromSlice(skipDirs []string, element string) []string {
 	}
 	return slices.Delete(skipDirs, deleteIndex, deleteIndex+1)
 }
-
-func convertDirectDependecies(directDependencies []*string) []string {
-	var stringsBack []string
-	for _, d := range directDependencies {
-		stringsBack = append(stringsBack, *d)
-	}
-	return stringsBack
-}

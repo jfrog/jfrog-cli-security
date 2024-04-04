@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/jfrog/jfrog-cli-security/commands"
 	"os"
 	"strings"
 
@@ -328,6 +329,15 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
+	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
+	if err != nil {
+		return err
+	}
+	threads, err := commands.DetectNumOfThreads(threadsFlag)
+	if err != nil {
+		return err
+	}
+	auditCmd.SetParallelScans(threads)
 	return progressbar.ExecWithProgress(auditCmd)
 }
 
@@ -404,7 +414,7 @@ func CurationCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	threads, err := curation.DetectNumOfThreads(threadsFlag)
+	threads, err := commands.DetectNumOfThreads(threadsFlag)
 	if err != nil {
 		return err
 	}

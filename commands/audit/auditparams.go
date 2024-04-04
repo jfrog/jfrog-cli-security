@@ -15,6 +15,7 @@ type AuditParams struct {
 	xrayVersion string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
+	numOfParallelScans          int
 }
 
 func NewAuditParams() *AuditParams {
@@ -85,5 +86,10 @@ func (params *AuditParams) SetThirdPartyApplicabilityScan(includeThirdPartyDeps 
 
 func (params *AuditParams) SetDepsRepo(depsRepo string) *AuditParams {
 	params.AuditBasicParams.SetDepsRepo(depsRepo)
+	return params
+}
+
+func (params *AuditParams) SetParallelScans(numOfParallelScans int) *AuditParams {
+	params.numOfParallelScans = numOfParallelScans
 	return params
 }
