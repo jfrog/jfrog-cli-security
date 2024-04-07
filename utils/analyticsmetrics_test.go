@@ -53,12 +53,14 @@ func TestCalcShouldReportEvents(t *testing.T) {
 func TestAddGeneralEvent(t *testing.T) {
 	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
 	defer msiCallback()
+	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer usageCallback()
 	// Successful flow.
 	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, am.GetMsi(), testMsi)
+	assert.Equal(t, testMsi, am.GetMsi())
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
@@ -68,6 +70,8 @@ func TestAddGeneralEvent(t *testing.T) {
 }
 
 func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
+	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer usageCallback()
 	auditResults := Results{
 		ScaResults: []ScaScanResult{{}, {}},
 		ExtendedScanResults: &ExtendedScanResults{
