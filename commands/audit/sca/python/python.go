@@ -123,7 +123,7 @@ func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 		return nil
 	}
 	if auditPython.RemotePypiRepo != "" {
-		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo)
+		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo, false)
 		if err != nil {
 			return restoreEnv, err
 		}
@@ -162,7 +162,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 
 	remoteUrl := ""
 	if auditPython.RemotePypiRepo != "" {
-		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo)
+		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo, false)
 		if err != nil {
 			return
 		}
@@ -210,7 +210,7 @@ func getPipInstallArgs(requirementsFile, remoteUrl string) []string {
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string) (err error) {
-	rtUrl, err := utils.GetPypiRepoUrl(server, depsRepoName)
+	rtUrl, err := utils.GetPypiRepoUrl(server, depsRepoName, false)
 	if err != nil {
 		return err
 	}
