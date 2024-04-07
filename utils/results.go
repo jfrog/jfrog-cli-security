@@ -69,6 +69,39 @@ func (r *Results) IsIssuesFound() bool {
 	return false
 }
 
+// Counts the total amount of findings in the provided results and updates the AnalyticsMetricsService with the amount of the new added findings
+func (r *Results) CountScanResultsFindings() int {
+	findingsCountMap := make(map[string]int)
+	var totalFindings int
+
+	// Counting ScaResults
+	for _, scaResult := range r.ScaResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
+			for _, vulnerability := range xrayResult.Vulnerabilities {
+				findingsCountMap[vulnerability.IssueId] += len(vulnerability.Components)
+			}
+
+			for _, violation := range xrayResult.Violations {
+				findingsCountMap[violation.IssueId] += len(violation.Components)
+			}
+		}
+	}
+
+	for _, issueIdCount := range findingsCountMap {
+		totalFindings += issueIdCount
+	}
+
+	// Counting ExtendedScanResults
+	if r.ExtendedScanResults != nil {
+		totalFindings += len(r.ExtendedScanResults.SastScanResults)
+		totalFindings += len(r.ExtendedScanResults.IacScanResults)
+		totalFindings += len(r.ExtendedScanResults.SecretsScanResults)
+	}
+
+	return totalFindings
+}
+
 type ScaScanResult struct {
 	Technology            coreutils.Technology    `json:"Technology"`
 	WorkingDirectory      string                  `json:"WorkingDirectory"`

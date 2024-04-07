@@ -16,6 +16,7 @@ const (
 
 const (
 	XrayEndpoint        = "xray/"
+	XscEndpoint         = "xsc/"
 	ArtifactoryEndpoint = "artifactory/"
 	AccessEndpoint      = "access/"
 	RepoDetailsEndpoint = "api/repositories/"
