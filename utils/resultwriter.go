@@ -365,6 +365,7 @@ func ConvertXrayScanToSimpleJson(results *Results, isMultipleRoots, includeLicen
 		jsonTable.LicensesViolations = licViolationsJsonTable
 		jsonTable.OperationalRiskViolations = opRiskViolationsJsonTable
 	}
+	jsonTable.MultiScanId = results.MultiScanId
 	return jsonTable, nil
 }
 

@@ -3,6 +3,7 @@ package jas
 import (
 	"errors"
 	"fmt"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -273,4 +274,44 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 		return DefaultExcludePatterns
 	}
 	return excludePatterns
+}
+
+func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreutils.Technology) func() {
+	errMsg := "failed %s %s environment variable. Cause: %s"
+	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfMsiEnvVariable, err.Error()))
+	}
+	if len(technologies) != 1 {
+		// Only report analytics for one technology at a time.
+		return func() {
+			err = resetAnalyzerManageJfMsiVar()
+			if err != nil {
+				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+			}
+		}
+	}
+	technology := technologies[0]
+	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
+	}
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(utils.TechnologyToLanguage(technology)))
+	if err != nil {
+		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
+	}
+	return func() {
+		err = resetAnalyzerManageJfMsiVar()
+		if err != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+		}
+		err = resetAnalyzerManagerPackageManagerVar()
+		if err != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfPackageManagerEnvVariable, err.Error()))
+		}
+		err = resetAnalyzerManagerLanguageVar()
+		if err != nil {
+			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
+		}
+	}
 }
