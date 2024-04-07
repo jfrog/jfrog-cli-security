@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -518,7 +519,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, xscservices.AnalyticsMetricsMinXscVersion)
 	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer reportUsageCallBack()
 	// Scan npm project and verify that analytics general event were sent to XSC.
