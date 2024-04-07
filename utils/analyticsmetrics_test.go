@@ -98,7 +98,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()
-	time.Sleep(1)
+	time.Sleep(time.Millisecond)
 	for _, tt := range testStruct {
 		t.Run(tt.name, func(t *testing.T) {
 			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
