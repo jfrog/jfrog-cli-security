@@ -543,8 +543,8 @@ func validateAnalyticsBasicEvent(t *testing.T, output string) {
 	// Event creation and addition information.
 	assert.Equal(t, "cli", event.Product)
 	assert.Equal(t, 1, event.EventType)
-	assert.NotEmpty(t, event.EventStatus)
 	assert.NotEmpty(t, event.AnalyzerManagerVersion)
+	assert.NotEmpty(t, event.EventStatus)
 	// The information that was added after updating the event with the scan's results.
 	assert.NotEmpty(t, event.TotalScanDuration)
 	assert.True(t, event.TotalFindings > 0)
