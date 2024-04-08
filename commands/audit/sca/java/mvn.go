@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"net/url"
 	"os"
 	"os/exec"
@@ -174,7 +176,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 		if len(cmdOutput) > 0 {
 			log.Info(stringOutput)
 		}
-		if msg := mdt.suspectCurationBlockedError(stringOutput); msg != "" {
+		if msg := sca.SuspectCurationBlockedError(mdt.isCurationCmd, coreutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)
 		} else {
 			err = fmt.Errorf("failed running command 'mvn %s': %s", strings.Join(goals, " "), err.Error())
@@ -250,16 +252,4 @@ func (mdt *MavenDepTreeManager) CreateTempDirWithSettingsXmlIfNeeded() (tempDirP
 		clearMavenDepTreeRun = nil
 	}
 	return
-}
-
-// In case mvn tree fails on 403 or 500 it can be related to packages blocked by curation.
-// For this use case to succeed, pass through should be enabled in the curated repos
-func (mdt *MavenDepTreeManager) suspectCurationBlockedError(cmdOutput string) (msgToUser string) {
-	if !mdt.isCurationCmd {
-		return
-	}
-	if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(cmdOutput, "status code: 500") {
-		msgToUser = "Failed to get dependencies tree for maven project, Please verify pass-through enabled on the curated repos"
-	}
-	return msgToUser
 }

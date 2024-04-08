@@ -285,7 +285,8 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 	if len(technologies) != 1 {
 		// Only report analytics for one technology at a time.
 		return func() {
-			if resetAnalyzerManageJfMsiVar() != nil {
+			err = resetAnalyzerManageJfMsiVar()
+			if err != nil {
 				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
 			}
 		}
@@ -300,13 +301,16 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
 	}
 	return func() {
-		if resetAnalyzerManageJfMsiVar() != nil {
+		err = resetAnalyzerManageJfMsiVar()
+		if err != nil {
 			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
 		}
-		if resetAnalyzerManagerPackageManagerVar() != nil {
+		err = resetAnalyzerManagerPackageManagerVar()
+		if err != nil {
 			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfPackageManagerEnvVariable, err.Error()))
 		}
-		if resetAnalyzerManagerLanguageVar() != nil {
+		err = resetAnalyzerManagerLanguageVar()
+		if err != nil {
 			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
 		}
 	}

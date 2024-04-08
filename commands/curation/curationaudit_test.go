@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -410,9 +411,11 @@ func TestDoCurationAudit(t *testing.T) {
 			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-			callback2 := clienttestutils.SetEnvWithCallbackAndAssert(t, "JFROG_CLI_CURATION_MAVEN", "true")
-			defer callback2()
-			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError)
+			callbackMaven := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationMavenSupport, "true")
+			defer callbackMaven()
+			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
+			defer callbackPip()
+			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
 			defer func() {
@@ -428,8 +431,8 @@ func TestDoCurationAudit(t *testing.T) {
 			require.NoError(t, err)
 			if tt.preTestExec != "" {
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
-				_, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
-				assert.NoError(t, err)
+				output, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
+				assert.NoErrorf(t, err, string(output))
 				callbackPreTest()
 			}
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
@@ -478,6 +481,7 @@ type testCase struct {
 	pathToTest             string
 	pathToPreTest          string
 	preTestExec            string
+	serveResources         map[string]string
 	funcToGetGoals         func(t *testing.T) []string
 	shouldIgnoreConfigFile bool
 	expectedBuildRequest   map[string]bool
@@ -491,6 +495,41 @@ type testCase struct {
 
 func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
+		{
+			name:       "python tree - one blocked package",
+			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
+			serveResources: map[string]string{
+				"pip":                                   filepath.Join("resources", "pip-resp"),
+				"pexpect":                               filepath.Join("resources", "pexpect-resp"),
+				"ptyprocess":                            filepath.Join("resources", "ptyprocess-resp"),
+				"pexpect-4.8.0-py2.py3-none-any.whl":    filepath.Join("resources", "pexpect-4.8.0-py2.py3-none-any.whl"),
+				"ptyprocess-0.7.0-py2.py3-none-any.whl": filepath.Join("resources", "ptyprocess-0.7.0-py2.py3-none-any.whl"),
+			},
+			requestToFail: map[string]bool{
+				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
+			},
+			expectedResp: map[string][]*PackageStatus{
+				"pip-curation": {
+					{
+						Action:            "blocked",
+						ParentVersion:     "4.8.0",
+						ParentName:        "pexpect",
+						BlockedPackageUrl: "/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl",
+						PackageName:       "pexpect",
+						PackageVersion:    "4.8.0",
+						BlockingReason:    "Policy violations",
+						PkgType:           "pip",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name:          "maven tree - one blocked package",
 			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
@@ -616,7 +655,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 	return tests
 }
 
-func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool) (*httptest.Server, *config.ServerDetails) {
+func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool, resourceToServe map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
 	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
@@ -633,12 +672,20 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 			}
 		}
 		if r.Method == http.MethodGet {
-			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
-				expectedBuildRequest[r.RequestURI] = true
+			if resourceToServe != nil {
+				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
+					f, err := fileutils.ReadFile(pathToRes)
+					require.NoError(t, err)
+					w.Header().Add("content-type", "text/html")
+					_, err = w.Write(f)
+					require.NoError(t, err)
+					return
+				}
 			}
 			if _, exist := expectedBuildRequest[r.RequestURI]; exist {
 				expectedBuildRequest[r.RequestURI] = true
 			}
+
 			if _, exist := requestToFail[r.RequestURI]; exist {
 				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte("{\n    \"errors\": [\n        {\n            \"status\": 403,\n            " +

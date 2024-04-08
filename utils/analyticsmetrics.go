@@ -111,7 +111,7 @@ func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.Produ
 
 func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyticsGeneralEvent) {
 	if !ams.ShouldReportEvents() {
-		log.Debug("A general event request was not sent to XSC - analytics metrics are disabled.")
+		log.Debug("Analytics metrics are disabled, skipping sending event request to XSC")
 		return
 	}
 	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(*event)
@@ -127,16 +127,18 @@ func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyt
 
 func (ams *AnalyticsMetricsService) UpdateGeneralEvent(event *xscservices.XscAnalyticsGeneralEventFinalize) {
 	if !ams.ShouldReportEvents() {
-		log.Debug("A general event update request was not sent to XSC - analytics metrics are disabled.")
+		log.Debug("Analytics metrics are disabled, skipping sending update event request to XSC")
 		return
 	}
 	if ams.msi == "" {
-		log.Debug("A general event update request was not sent to XSC - failed to add the starting event, and there is no valid multi-scan identifier provided.")
+		log.Debug("MultiScanId is empty, skipping update general event.")
 		return
 	}
 	err := ams.xscManager.UpdateAnalyticsGeneralEvent(*event)
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed updading general event request in XSC service for multi_scan_id %s, error: %s \"", ams.GetMsi(), err.Error()))
+	} else {
+		log.Debug(fmt.Sprintf("General event updated\n%v", *event))
 	}
 }
 
@@ -161,7 +163,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     ams.CountScanResultsFindings(auditResults),
+		TotalFindings:     auditResults.CountScanResultsFindings(),
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{

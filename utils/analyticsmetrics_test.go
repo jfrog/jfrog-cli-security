@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -53,12 +54,14 @@ func TestCalcShouldReportEvents(t *testing.T) {
 func TestAddGeneralEvent(t *testing.T) {
 	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
 	defer msiCallback()
+	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer usageCallback()
 	// Successful flow.
 	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, am.GetMsi(), testMsi)
+	assert.Equal(t, testMsi, am.GetMsi())
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
@@ -68,8 +71,12 @@ func TestAddGeneralEvent(t *testing.T) {
 }
 
 func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
+	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer usageCallback()
+	vulnerabilities := []services.Vulnerability{{IssueId: "CVE-123", Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
+	scaResults := []ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
 	auditResults := Results{
-		ScaResults: []ScaScanResult{{}, {}},
+		ScaResults: scaResults,
 		ExtendedScanResults: &ExtendedScanResults{
 			ApplicabilityScanResults: []*sarif.Run{{}, {}},
 			SecretsScanResults:       []*sarif.Run{{}, {}},
@@ -83,14 +90,15 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 		want         xscservices.XscAnalyticsBasicGeneralEvent
 	}{
 		{name: "No audit results", auditResults: &Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
-		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 10, EventStatus: xscservices.Completed}},
-		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: []ScaScanResult{{}, {}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 2, EventStatus: xscservices.Failed}},
+		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
+		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
 		{name: "Scan failed because sca errors.", auditResults: &Results{JasError: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
 	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()
+	time.Sleep(time.Millisecond)
 	for _, tt := range testStruct {
 		t.Run(tt.name, func(t *testing.T) {
 			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
