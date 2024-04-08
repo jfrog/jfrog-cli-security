@@ -3,16 +3,9 @@ package utils
 import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-client-go/auth"
-	"github.com/jfrog/jfrog-client-go/http/jfroghttpclient"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
-
-type ReportService struct {
-	client     *jfroghttpclient.JfrogHttpClient
-	xscDetails auth.ServiceDetails
-}
 
 // Sends an error report to Coralogix when the Xsc service is enabled.
 // Errors returned by this function typically do not disrupt the flow, as reporting to Coralogix is optional.
