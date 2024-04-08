@@ -172,39 +172,6 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	}
 }
 
-// Counts the total amount of findings in the provided results and updates the AnalyticsMetricsService with the amount of the new added findings
-func (ams *AnalyticsMetricsService) CountScanResultsFindings(scanResults *Results) int {
-	findingsCountMap := make(map[string]int)
-	var totalFindings int
-
-	// Counting ScaResults
-	for _, scaResult := range scanResults.ScaResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				findingsCountMap[vulnerability.IssueId] += len(vulnerability.Components)
-			}
-
-			for _, violation := range xrayResult.Violations {
-				findingsCountMap[violation.IssueId] += len(violation.Components)
-			}
-		}
-	}
-
-	for _, issueIdCount := range findingsCountMap {
-		totalFindings += issueIdCount
-	}
-
-	// Counting ExtendedScanResults
-	if scanResults.ExtendedScanResults != nil {
-		totalFindings += len(scanResults.ExtendedScanResults.SastScanResults)
-		totalFindings += len(scanResults.ExtendedScanResults.IacScanResults)
-		totalFindings += len(scanResults.ExtendedScanResults.SecretsScanResults)
-	}
-
-	return totalFindings
-}
-
 func (ams *AnalyticsMetricsService) UpdateXscAnalyticsGeneralEventFinalizeWithTotalScanDuration() {
 	totalDuration := time.Since(ams.GetStartTime())
 	ams.finalizeEvent.TotalScanDuration = totalDuration.String()
