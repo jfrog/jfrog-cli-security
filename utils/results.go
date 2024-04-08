@@ -92,13 +92,13 @@ func getScaResultsUniqueFindingsAmount(scaScanResults *[]ScaScanResult) int {
 		for _, xrayResult := range scaResult.XrayResults {
 			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
 			for _, vulnerability := range xrayResult.Vulnerabilities {
-				for compId, _ := range vulnerability.Components {
+				for compId := range vulnerability.Components {
 					uniqueXrayFindings.Add(vulnerability.IssueId + compId)
 				}
 			}
 
 			for _, violation := range xrayResult.Violations {
-				for compId, _ := range violation.Components {
+				for compId := range violation.Components {
 					uniqueXrayFindings.Add(violation.IssueId + compId)
 				}
 			}
