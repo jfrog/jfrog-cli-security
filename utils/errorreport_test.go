@@ -2,7 +2,6 @@ package utils
 
 import (
 	"errors"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/tests"
@@ -50,7 +49,7 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Checking for negative response when an error is returned
-	serverMock1, serverDetails, _ := coretests.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock1, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
 			w.WriteHeader(http.StatusNotFound)
 			_, innerError := w.Write([]byte("Xsc service is not enabled"))
