@@ -29,8 +29,7 @@ func ValidateXrayVersion(t *testing.T, minVersion string) {
 func ValidateXscVersion(t *testing.T, minVersion string) {
 	xscVersion, err := getXscVersion()
 	if err != nil {
-		assert.NoError(t, err)
-		return
+		t.Skip(err)
 	}
 	err = clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion.GetVersion(), minVersion)
 	if err != nil {

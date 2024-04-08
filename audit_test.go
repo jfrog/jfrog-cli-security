@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -513,4 +516,36 @@ func TestXrayRecursiveScan(t *testing.T) {
 	assert.NoError(t, err)
 	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
 	assert.Len(t, results, 2)
+}
+
+func TestXscAnalyticsForAudit(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, xscservices.AnalyticsMetricsMinXscVersion)
+	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer reportUsageCallBack()
+	// Scan npm project and verify that analytics general event were sent to XSC.
+	output := testXrayAuditNpm(t, string(format.SimpleJson))
+	validateAnalyticsBasicEvent(t, output)
+}
+
+func validateAnalyticsBasicEvent(t *testing.T, output string) {
+	// Get MSI.
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err)
+
+	// Verify analytics metrics.
+	am := utils.NewAnalyticsMetricsService(securityTests.XscDetails)
+	assert.NotNil(t, am)
+	assert.NotEmpty(t, results.MultiScanId)
+	event, err := am.GetGeneralEvent(results.MultiScanId)
+	assert.NoError(t, err)
+
+	// Event creation and addition information.
+	assert.Equal(t, "cli", event.Product)
+	assert.Equal(t, 1, event.EventType)
+	assert.NotEmpty(t, event.AnalyzerManagerVersion)
+	assert.NotEmpty(t, event.EventStatus)
+	// The information that was added after updating the event with the scan's results.
+	assert.NotEmpty(t, event.TotalScanDuration)
+	assert.True(t, event.TotalFindings > 0)
 }

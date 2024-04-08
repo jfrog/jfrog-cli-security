@@ -1,6 +1,7 @@
 package python
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -10,10 +11,12 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	utils "github.com/jfrog/jfrog-cli-core/v2/utils/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +25,8 @@ import (
 )
 
 const (
-	pythonPackageTypeIdentifier = "pypi://"
+	PythonPackageTypeIdentifier = "pypi://"
+	pythonReportFile            = "report.json"
 )
 
 type AuditPython struct {
@@ -30,18 +34,21 @@ type AuditPython struct {
 	Tool                pythonutils.PythonTool
 	RemotePypiRepo      string
 	PipRequirementsFile string
+	IsCurationCmd       bool
 }
 
-func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	dependenciesGraph, directDependenciesList, err := getDependencies(auditPython)
-	if err != nil {
+func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(auditPython)
+	if errGetTree != nil {
+		err = errGetTree
 		return
 	}
+	downloadUrls = pipUrls
 	directDependencies := []*xrayUtils.GraphNode{}
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, rootDep := range directDependenciesList {
 		directDependency := &xrayUtils.GraphNode{
-			Id:    pythonPackageTypeIdentifier + rootDep,
+			Id:    PythonPackageTypeIdentifier + rootDep,
 			Nodes: []*xrayUtils.GraphNode{},
 		}
 		populatePythonDependencyTree(directDependency, dependenciesGraph, uniqueDepsSet)
@@ -56,7 +63,7 @@ func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.
 	return
 }
 
-func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]string, directDependencies []string, err error) {
+func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -103,7 +110,68 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 		sca.LogExecutableVersion("python")
 		sca.LogExecutableVersion(string(auditPython.Tool))
 	}
+	if !auditPython.IsCurationCmd {
+		return
+	}
+	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
+	if errProcessed != nil {
+		err = errProcessed
+
+	}
 	return
+}
+
+func processPipDownloadsUrlsFromReportFile() (map[string]string, error) {
+	pipReport, err := readPipReportIfExists()
+	if err != nil {
+		return nil, err
+	}
+	pipUrls := map[string]string{}
+	for _, dep := range pipReport.Install {
+		if dep.MetaData.Name != "" {
+			compId := PythonPackageTypeIdentifier + strings.ToLower(dep.MetaData.Name) + ":" + dep.MetaData.Version
+			pipUrls[compId] = strings.Replace(dep.DownloadInfo.Url, "api/curation/audit/", "", 1)
+		}
+	}
+	return pipUrls, nil
+}
+
+func readPipReportIfExists() (pipReport *pypiReport, err error) {
+	if exist, existErr := fileutils.IsFileExists(pythonReportFile, false); existErr != nil {
+		err = existErr
+		return
+	} else if !exist {
+		err = errors.New("process failed, report file wasn't found, cant processed with curation command")
+		return
+	}
+
+	var reportBytes []byte
+	if reportBytes, err = fileutils.ReadFile(pythonReportFile); err != nil {
+		return
+	}
+	pipReport = &pypiReport{}
+	if err = json.Unmarshal(reportBytes, pipReport); err != nil {
+		return
+	}
+	return
+}
+
+type pypiReport struct {
+	Install []pypiReportInfo
+}
+
+type pypiReportInfo struct {
+	DownloadInfo pypiDownloadInfo `json:"download_info"`
+	MetaData     pypiMetaData     `json:"metadata"`
+}
+
+type pypiDownloadInfo struct {
+	Url string `json:"url"`
+}
+
+type pypiMetaData struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 func runPythonInstall(auditPython *AuditPython) (restoreEnv func() error, err error) {
@@ -123,7 +191,7 @@ func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 		return nil
 	}
 	if auditPython.RemotePypiRepo != "" {
-		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo)
+		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo, false)
 		if err != nil {
 			return restoreEnv, err
 		}
@@ -162,21 +230,37 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 
 	remoteUrl := ""
 	if auditPython.RemotePypiRepo != "" {
-		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo)
+		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo, auditPython.IsCurationCmd)
 		if err != nil {
 			return
 		}
 	}
-	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl)
+
+	var curationCachePip string
+	var reportFileName string
+	if auditPython.IsCurationCmd {
+		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
+			return
+		}
+		reportFileName = pythonReportFile
+	}
+
+	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName)
+	var reqErr error
 	err = executeCommand("python", pipInstallArgs...)
 	if err != nil && auditPython.PipRequirementsFile == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl)
-		reqErr := executeCommand("python", pipInstallArgs...)
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName)
+		reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
 			log.Debug(reqErr.Error())
 		} else {
 			err = nil
+		}
+	}
+	if err != nil || reqErr != nil {
+		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}
 	return
@@ -194,7 +278,7 @@ func executeCommand(executable string, args ...string) error {
 	return nil
 }
 
-func getPipInstallArgs(requirementsFile, remoteUrl string) []string {
+func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder string, reportFileName string) []string {
 	args := []string{"-m", "pip", "install"}
 	if requirementsFile == "" {
 		// Run 'pip install .'
@@ -206,11 +290,20 @@ func getPipInstallArgs(requirementsFile, remoteUrl string) []string {
 	if remoteUrl != "" {
 		args = append(args, utils.GetPypiRemoteRegistryFlag(pythonutils.Pip), remoteUrl)
 	}
+	if cacheFolder != "" {
+		args = append(args, "--cache-dir", cacheFolder)
+	}
+	if reportFileName != "" {
+		// For report to include download urls, pip should ignore installed packages.
+		args = append(args, "--ignore-installed")
+		args = append(args, "--report", reportFileName)
+
+	}
 	return args
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string) (err error) {
-	rtUrl, err := utils.GetPypiRepoUrl(server, depsRepoName)
+	rtUrl, err := utils.GetPypiRepoUrl(server, depsRepoName, false)
 	if err != nil {
 		return err
 	}
@@ -268,11 +361,11 @@ func populatePythonDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGra
 		return
 	}
 	uniqueDepsSet.Add(currNode.Id)
-	currDepChildren := dependenciesGraph[strings.TrimPrefix(currNode.Id, pythonPackageTypeIdentifier)]
+	currDepChildren := dependenciesGraph[strings.TrimPrefix(currNode.Id, PythonPackageTypeIdentifier)]
 	// Recursively create & append all node's dependencies.
 	for _, dependency := range currDepChildren {
 		childNode := &xrayUtils.GraphNode{
-			Id:     pythonPackageTypeIdentifier + dependency,
+			Id:     PythonPackageTypeIdentifier + dependency,
 			Nodes:  []*xrayUtils.GraphNode{},
 			Parent: currNode,
 		}

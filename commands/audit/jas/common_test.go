@@ -111,6 +111,11 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
+		{name: "Zero technologies", args: args{msi: "msi", technologies: []coreutils.Technology{}}, want: func() {
+			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
