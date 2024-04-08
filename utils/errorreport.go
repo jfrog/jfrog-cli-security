@@ -14,8 +14,8 @@ type ReportService struct {
 	xscDetails auth.ServiceDetails
 }
 
-// Sends an error report to Coralogix if Xsc service is enabled.
-// Errors that are returned by this function usually should not fail the flow since reporting to Coralogix is not mandatory.
+// Sends an error report to Coralogix when the Xsc service is enabled.
+// Errors returned by this function typically do not disrupt the flow, as reporting to Coralogix is optional.
 func ReportToCoralogix(serverDetails *config.ServerDetails, errorToReport error, source string) error {
 	log.Info("Sending an error report to Coralogix if Xsc service is enabled...")
 	xscManager, err := CreateXscServiceManager(serverDetails)

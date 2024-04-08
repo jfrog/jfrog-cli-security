@@ -13,7 +13,7 @@ import (
 
 const (
 	unsupportedXscVersionForErrorLogs = "1.6.0"
-	supportedXscVersionForErrorLogs   = "1.7.5"
+	supportedXscVersionForErrorLogs   = "1.7.1"
 )
 
 func TestReportToCoralogix(t *testing.T) {
@@ -25,7 +25,7 @@ func TestReportToCoralogix(t *testing.T) {
 		ServerId:       tests.ServerId,
 	}
 
-	// Before initiating the test we check if Xsc is enabled for the customer. If not - the test is skipped
+	// Prior to initiating the test, we verify whether Xsc is enabled for the customer. If not, the test is skipped.
 	xscManager, err := CreateXscServiceManager(serverDetails)
 	assert.NoError(t, err)
 
@@ -38,7 +38,6 @@ func TestReportToCoralogix(t *testing.T) {
 }
 
 func TestReportLogErrorEventPossible(t *testing.T) {
-	// Save original environment variable value
 	originalReportUsage := os.Getenv(coreutils.ReportUsage)
 	defer func() {
 		err := os.Setenv(coreutils.ReportUsage, originalReportUsage)
@@ -48,7 +47,7 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 	err := os.Setenv(coreutils.ReportUsage, "")
 	assert.NoError(t, err)
 
-	// Checking for negative response when an error is returned
+	// Verifying for a negative response when an error is returned
 	serverMock1, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
 			w.WriteHeader(http.StatusNotFound)
@@ -63,21 +62,21 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, reportLogErrorEventPossible(xscManager))
 
-	// Checking for negative response when an empty version is returned
+	// Verifying for a negative response when an empty version is returned
 	mockServer2, serverDetails := xscServer(t, "")
 	defer mockServer2.Close()
 	xscManager, err = CreateXscServiceManager(serverDetails)
 	assert.NoError(t, err)
 	assert.False(t, reportLogErrorEventPossible(xscManager))
 
-	// Checking for negative response when Xsc version is below minXscVersionForErrorReport (1.7.0)
+	// Verifying for a negative response when the Xsc version is below minXscVersionForErrorReport (1.7.0)
 	mockServer3, serverDetails := xscServer(t, unsupportedXscVersionForErrorLogs)
 	defer mockServer3.Close()
 	xscManager, err = CreateXscServiceManager(serverDetails)
 	assert.NoError(t, err)
 	assert.False(t, reportLogErrorEventPossible(xscManager))
 
-	//Checking for a positive response when Xsc is enabled and with version above 1.7.0
+	// Verifying for a positive response when Xsc is enabled and has a version above 1.7.0
 	mockServer4, serverDetails := xscServer(t, supportedXscVersionForErrorLogs)
 	defer mockServer4.Close()
 	xscManager, err = CreateXscServiceManager(serverDetails)

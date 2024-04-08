@@ -38,8 +38,8 @@ func SendXscLogMessageIfEnabled(errorLog *services.ExternalErrorLog, xscManager 
 	return err
 }
 
-// Checks if reporting to Coralogix is possible.
-// We cannot report to Coralogix in the following scenarios: if we cannot address Xsc server / Xsc server is not enabled / Xsc version's is below minimal version
+// / Determines if reporting to Coralogix is feasible.
+// Reporting to Coralogix is not feasible under the following conditions: inability to reach the Xsc server, Xsc server is disabled, or Xsc version is below the minimum required version.
 func reportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
 	xscVersion, err := xscManager.GetVersion()
 	if err != nil {
