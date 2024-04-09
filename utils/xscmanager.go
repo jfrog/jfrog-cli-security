@@ -28,14 +28,14 @@ func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServ
 }
 
 func SendXscLogMessageIfEnabled(errorLog *services.ExternalErrorLog, xscManager *xsc.XscServicesManager) error {
-	if !isReportLogErrorEventPossible(xscManager) {
+	if !IsReportLogErrorEventPossible(xscManager) {
 		return nil
 	}
 	return xscManager.SendXscLogErrorRequest(errorLog)
 }
 
 // Determines if reporting the error is feasible.
-func isReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
+func IsReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
 	xscVersion, err := xscManager.GetVersion()
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to check availability of Xsc service:%s\nReporting to JFrog analytics is skipped...", err.Error()))

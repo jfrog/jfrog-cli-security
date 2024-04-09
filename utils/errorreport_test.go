@@ -1,10 +1,8 @@
 package utils
 
 import (
-	"errors"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/tests"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 	"net/http"
@@ -16,27 +14,6 @@ const (
 	unsupportedXscVersionForErrorLogs = "1.6.0"
 	supportedXscVersionForErrorLogs   = minXscVersionForErrorReport
 )
-
-func TestReportError(t *testing.T) {
-	serverDetails := &config.ServerDetails{
-		Url:            *tests.JfrogUrl,
-		ArtifactoryUrl: *tests.JfrogUrl + tests.ArtifactoryEndpoint,
-		XrayUrl:        *tests.JfrogUrl + tests.XrayEndpoint,
-		AccessToken:    *tests.JfrogAccessToken,
-		ServerId:       tests.ServerId,
-	}
-
-	// Prior to initiating the test, we verify whether Xsc is enabled for the customer. If not, the test is skipped.
-	xscManager, err := CreateXscServiceManager(serverDetails)
-	assert.NoError(t, err)
-
-	if !isReportLogErrorEventPossible(xscManager) {
-		t.Skip("Skipping test since Xsc server is not enabled or below minimal required version")
-	}
-
-	errorToReport := errors.New("THIS IS NOT A REAL ERROR! This Error is posted as part of TestReportError test")
-	assert.NoError(t, ReportError(serverDetails, errorToReport, "cli"))
-}
 
 func TestReportLogErrorEventPossible(t *testing.T) {
 	restoreEnvVarFunc := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
@@ -81,7 +58,7 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 		mockServer, serverDetails := testcase.serverCreationFunc()
 		xscManager, err := CreateXscServiceManager(serverDetails)
 		assert.NoError(t, err)
-		reportPossible := isReportLogErrorEventPossible(xscManager)
+		reportPossible := IsReportLogErrorEventPossible(xscManager)
 		if testcase.expectedResponse {
 			assert.True(t, reportPossible)
 		} else {
