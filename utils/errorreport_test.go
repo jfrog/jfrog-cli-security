@@ -14,7 +14,7 @@ import (
 
 const (
 	unsupportedXscVersionForErrorLogs = "1.6.0"
-	supportedXscVersionForErrorLogs   = "1.7.1"
+	supportedXscVersionForErrorLogs   = minXscVersionForErrorReport
 )
 
 func TestReportError(t *testing.T) {
