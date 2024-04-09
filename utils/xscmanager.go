@@ -11,7 +11,7 @@ import (
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
 )
 
-const minXscVersionForErrorReport = "1.7.0"
+const minXscVersionForErrorReport = "1.7.7"
 
 func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServicesManager, error) {
 	xscDetails, err := serviceDetails.CreateXscAuthConfig()
@@ -28,30 +28,25 @@ func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServ
 }
 
 func SendXscLogMessageIfEnabled(errorLog *services.ExternalErrorLog, xscManager *xsc.XscServicesManager) error {
-	if !reportLogErrorEventPossible(xscManager) {
+	if !isReportLogErrorEventPossible(xscManager) {
 		return nil
 	}
-	err := xscManager.SendXscLogErrorRequest(errorLog)
-	if err == nil {
-		log.Info("Error successfully reported to Coralogix")
-	}
-	return err
+	return xscManager.SendXscLogErrorRequest(errorLog)
 }
 
-// / Determines if reporting to Coralogix is feasible.
-// Reporting to Coralogix is not feasible under the following conditions: inability to reach the Xsc server, Xsc server is disabled, or Xsc version is below the minimum required version.
-func reportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
+// Determines if reporting the error is feasible.
+func isReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
 	xscVersion, err := xscManager.GetVersion()
 	if err != nil {
-		log.Warn(fmt.Sprintf("failed to check availability of Xsc service:%s\nReporting to Coralogix is skipped...", err.Error()))
+		log.Debug(fmt.Sprintf("failed to check availability of Xsc service:%s\nReporting to JFrog analytics is skipped...", err.Error()))
 		return false
 	}
 	if xscVersion == "" {
-		log.Warn("Xsc service is not available. Reporting to Coralogix is skipped...")
+		log.Debug("Xsc service is not available. Reporting to JFrog analytics is skipped...")
 		return false
 	}
 	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, minXscVersionForErrorReport); err != nil {
-		log.Warn("Xsc version must be 1.7.0 or above in order to use Coralogix report service. Reporting to Coralogix is skipped...")
+		log.Debug(err.Error())
 		return false
 	}
 	return true

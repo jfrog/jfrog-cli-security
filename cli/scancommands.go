@@ -332,19 +332,24 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetTechnologies(technologies)
 	err = progressbar.ExecWithProgress(auditCmd)
 
-	// Reporting error to Coralogix if Xsc service is enabled
-	if err != nil && usage.ShouldReportUsage() {
-		var serverDetails *coreConfig.ServerDetails
-		serverDetails, innerError := auditCmd.ServerDetails()
-		if innerError != nil {
-			log.Error(fmt.Sprintf("failed to get server details: %q", innerError))
-			return err
-		}
-		if coralogixReportError := utils.ReportToCoralogix(serverDetails, err, "cli"); coralogixReportError != nil {
-			log.Error("failed to send error log to Coralogix:" + coralogixReportError.Error())
-		}
-	}
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
 	return err
+}
+
+func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
+	if err == nil || !usage.ShouldReportUsage() {
+		return
+	}
+	var serverDetails *coreConfig.ServerDetails
+	serverDetails, innerError := auditCmd.ServerDetails()
+	if innerError != nil {
+		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
+		return
+	}
+	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+		log.Debug("failed to report error log:" + reportError.Error())
+	}
 }
 
 func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
@@ -416,19 +421,8 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 	auditCmd.SetTechnologies(technologies)
 	err = progressbar.ExecWithProgress(auditCmd)
 
-	// Reporting error to Coralogix if Xsc service is enabled
-	if err != nil && usage.ShouldReportUsage() {
-		var serverDetails *coreConfig.ServerDetails
-		serverDetails, innerError := auditCmd.ServerDetails()
-		if innerError != nil {
-			log.Error(fmt.Sprintf("failed to get server details: %q", innerError))
-			return err
-		}
-		if coralogixReportError := utils.ReportToCoralogix(serverDetails, err, "cli"); coralogixReportError != nil {
-			log.Error("failed to send error log to Coralogix:" + coralogixReportError.Error())
-		}
-	}
-
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
 	return err
 }
 
