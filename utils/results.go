@@ -69,9 +69,8 @@ func (r *Results) IsIssuesFound() bool {
 	return false
 }
 
-// Counts the total of unique findings in the provided Results.
-// A unique finding is a unique pair of vulnerability's/violation's issueId along with component id
-// A unique finding is any entry in ExtendedScanResults.SastScanResults / ExtendedScanResults.IacScanResults / ExtendedScanResults.SecretsScanResults
+// Counts the total number of unique findings in the provided results.
+// A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
 func (r *Results) CountScanResultsFindings() int {
 	var totalFindings int
 	totalFindings += getScaResultsUniqueFindingsAmount(&r.ScaResults)
