@@ -173,7 +173,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 }
 
 func (ams *AnalyticsMetricsService) UpdateAndSendXscAnalyticsGeneralEventFinalize(err error) {
-	if ams.ShouldReportEvents() {
+	if !ams.ShouldReportEvents() {
 		return
 	}
 	if err != nil {
