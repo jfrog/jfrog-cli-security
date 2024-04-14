@@ -16,7 +16,7 @@ import (
 )
 
 func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results, serverDetails *config.ServerDetails,
-	auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig) (err error) {
+	auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, msi string) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -30,6 +30,10 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 		cleanup := scanner.ScannerDirCleanupFunc
 		err = errors.Join(err, cleanup())
 	}()
+
+	// Set environments variables for analytics in analyzers manager.
+	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
+	defer callback()
 
 	// Don't execute other scanners when scanning third party dependencies.
 	if !auditParams.thirdPartyApplicabilityScan {

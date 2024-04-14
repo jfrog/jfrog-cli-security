@@ -22,7 +22,7 @@ const (
 	EntitlementsMinVersion                    = "3.66.5"
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.6.3"
+	defaultAnalyzerManagerVersion             = "[RELEASE]"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -37,7 +37,9 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
-	jfMsiEnvVariable                          = "JF_MSI"
+	JfMsiEnvVariable                          = "JF_MSI"
+	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
+	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 )
 
 type ApplicabilityStatus string
@@ -93,7 +95,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		return
 	}
 	var cmd *exec.Cmd
-	multiScanId := os.Getenv(jfMsiEnvVariable)
+	multiScanId := os.Getenv(JfMsiEnvVariable)
 	if len(outputFile) > 0 {
 		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
 		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)

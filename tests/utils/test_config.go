@@ -78,6 +78,28 @@ func authenticateXray() string {
 	return cred
 }
 
+func AuthenticateXsc() string {
+	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
+	configTests.XscDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint, XscUrl: *configTests.JfrogUrl + configTests.XscEndpoint}
+	cred := fmt.Sprintf("--url=%s", configTests.XscDetails.XrayUrl)
+	if *configTests.JfrogAccessToken != "" {
+
+		configTests.XscDetails.AccessToken = *configTests.JfrogAccessToken
+		cred += fmt.Sprintf(" --access-token=%s", configTests.XscDetails.AccessToken)
+	} else {
+		configTests.XscDetails.User = *configTests.JfrogUser
+		configTests.XscDetails.Password = *configTests.JfrogPassword
+		cred += fmt.Sprintf(" --user=%s --password=%s", configTests.XscDetails.User, configTests.XscDetails.Password)
+	}
+
+	var err error
+	if configTests.XscAuth, err = configTests.XscDetails.CreateXscAuthConfig(); err != nil {
+		coreutils.ExitOnErr(errors.New("Failed while attempting to authenticate with Xsc: " + err.Error()))
+	}
+	configTests.XscDetails.XscUrl = configTests.XscAuth.GetUrl()
+	return cred
+}
+
 func AuthenticateArtifactory() string {
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
 	configTests.RtDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, SshKeyPath: *configTests.JfrogSshKeyPath, SshPassphrase: *configTests.JfrogSshPassphrase}

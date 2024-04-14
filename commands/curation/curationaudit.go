@@ -21,6 +21,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
@@ -50,20 +51,27 @@ const (
 	errorTemplateUnsupportedTech = "It looks like this project uses '%s' to download its dependencies. " +
 		"This package manager however isn't supported by this command."
 
-	MinArtiMavenSupport = "7.82.0"
-	MinArtiXraySupport  = "3.92.0"
+	TotalConcurrentRequests = 10
+
+	MinArtiPassThroughSupport = "7.82.0"
+	MinXrayPassTHroughSupport = "3.92.0"
+	MinArtiMavenSupport       = "7.82.0"
+	MinArtiXraySupport        = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
 var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	coreutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	coreutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(coreutils.Pip, utils.CurationPipSupport)
+	},
 	coreutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Maven, MinArtiMavenSupport, MinArtiXraySupport, utils.CurationMavenSupport)
+		return ca.checkSupportByVersionOrEnv(coreutils.Maven, utils.CurationMavenSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, minRtVersion, minXrayVersion, envName string) (bool, error) {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, envName string) (bool, error) {
 	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
 		return true, nil
 	} else if err != nil {
@@ -79,10 +87,9 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, minXrayVersion)
-	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, minRtVersion)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
+	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, MinArtiPassThroughSupport)
 	if xrayVersionErr != nil || rtVersionErr != nil {
-		// though artifactory or xray is not in the required version, the feature can be enabled with env variable.
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
 	}
 	return true, nil
@@ -151,6 +158,7 @@ type treeAnalyzer struct {
 	repo                 string
 	tech                 coreutils.Technology
 	parallelRequests     int
+	downloadUrls         map[string]string
 }
 
 type CurationAuditCommand struct {
@@ -276,16 +284,17 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) 
 	case coreutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
 	}
+
 	return ca.AuditParams
 }
 
 func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map[string][]*PackageStatus) error {
-	flattenGraph, fullDependenciesTrees, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
+	depTreeResult, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
 	if err != nil {
 		return err
 	}
 	// Validate the graph isn't empty.
-	if len(fullDependenciesTrees) == 0 {
+	if len(depTreeResult.FullDepTrees) == 0 {
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
 	}
 	rtManager, serverDetails, err := ca.getRtManagerAndAuth(tech)
@@ -296,10 +305,18 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 	if err != nil {
 		return err
 	}
-	rootNode := fullDependenciesTrees[0]
-	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, "", "")
+	rootNode := depTreeResult.FullDepTrees[0]
+	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
+	if projectName == "" {
+		workPath, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		projectName = filepath.Base(workPath)
+	}
+
 	if ca.Progress() != nil {
-		ca.Progress().SetHeadlineMsg(fmt.Sprintf("Fetch curation status for %s graph with %v nodes project name: %s:%s", tech.ToFormal(), len(flattenGraph.Nodes)-1, projectName, projectVersion))
+		ca.Progress().SetHeadlineMsg(fmt.Sprintf("Fetch curation status for %s graph with %v nodes project name: %s:%s", tech.ToFormal(), len(depTreeResult.FlatTree.Nodes)-1, projectName, projectVersion))
 	}
 	if projectScope != "" {
 		projectName = projectScope + "/" + projectName
@@ -317,22 +334,23 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 		repo:                 ca.PackageManagerConfig.TargetRepo(),
 		tech:                 tech,
 		parallelRequests:     ca.parallelRequests,
+		downloadUrls:         depTreeResult.DownloadUrls,
 	}
 
 	rootNodes := map[string]struct{}{}
-	for _, tree := range fullDependenciesTrees {
+	for _, tree := range depTreeResult.FullDepTrees {
 		rootNodes[tree.Id] = struct{}{}
 	}
 	// Fetch status for each node from a flatten graph which, has no duplicate nodes.
 	packagesStatusMap := sync.Map{}
 	// if error returned we still want to produce a report, so we don't fail the next step
-	err = analyzer.fetchNodesStatus(flattenGraph, &packagesStatusMap, rootNodes)
-	analyzer.GraphsRelations(fullDependenciesTrees, &packagesStatusMap,
+	err = analyzer.fetchNodesStatus(depTreeResult.FlatTree, &packagesStatusMap, rootNodes)
+	analyzer.GraphsRelations(depTreeResult.FullDepTrees, &packagesStatusMap,
 		&packagesStatus)
 	sort.Slice(packagesStatus, func(i, j int) bool {
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
-	results[fmt.Sprintf("%s:%s", projectName, projectVersion)] = packagesStatus
+	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = packagesStatus
 	return err
 }
 
@@ -433,7 +451,7 @@ func (nc *treeAnalyzer) GraphsRelations(fullDependenciesTrees []*xrayUtils.Graph
 func (nc *treeAnalyzer) fillGraphRelations(node *xrayUtils.GraphNode, preProcessMap *sync.Map,
 	packagesStatus *[]*PackageStatus, parent, parentVersion string, visited *datastructures.Set[string], isRoot bool) {
 	for _, child := range node.Nodes {
-		packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, child, nc.url, nc.repo)
+		packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, child, nc.downloadUrls, nc.url, nc.repo)
 		if isRoot {
 			parent = name
 			parentVersion = version
@@ -494,7 +512,7 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 }
 
 func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) error {
-	packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, &node, nc.url, nc.repo)
+	packageUrls, name, scope, version := getUrlNameAndVersionByTech(nc.tech, &node, nc.downloadUrls, nc.url, nc.repo)
 	if len(packageUrls) == 0 {
 		return nil
 	}
@@ -600,12 +618,34 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 	return explanation, recommendation
 }
 
-func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.GraphNode, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
+func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
 	case coreutils.Npm:
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, coreutils.Npm.String())
 	case coreutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node.Types)
+
+	case coreutils.Pip:
+		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
+		return
+
+	}
+	return
+}
+
+func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloadUrls []string, name, version string) {
+	if downloadUrlsMap != nil {
+		if dl, ok := downloadUrlsMap[id]; ok {
+			downloadUrls = []string{dl}
+		} else {
+			log.Warn(fmt.Sprintf("couldn't find download url for node id %s", id))
+		}
+	}
+	id = strings.TrimPrefix(id, python.PythonPackageTypeIdentifier)
+	allParts := strings.Split(id, ":")
+	if len(allParts) >= 2 {
+		name = allParts[0]
+		version = allParts[1]
 	}
 	return
 }

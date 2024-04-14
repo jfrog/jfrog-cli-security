@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"strconv"
 
-	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -61,14 +61,14 @@ func runScaScan(auditParallelRunner *utils.AuditParallelRunner, auditParams *Aud
 	}()
 	for _, scan := range scans {
 		// Get the dependency tree for the technology in the working directory.
-		flattenTree, fullDependencyTrees, bdtErr := buildDependencyTree(scan, auditParams)
+		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
 			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, bdtErr.Error()))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, *flattenTree, fullDependencyTrees), func(err error) {
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, *treeResult.FlatTree, treeResult.FullDepTrees), func(err error) {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, err.Error()))
 		})
 		if taskErr != nil {
@@ -119,7 +119,7 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 
 // Preform the SCA scan for the given scan information.
 func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
-	scan *xrayutils.ScaScanResult, flattenTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) parallel.TaskFunc {
+	scan *xrayutils.ScaScanResult, flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
 		defer func() {
@@ -127,12 +127,12 @@ func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetail
 		}()
 		// Scan the dependency tree.
 		xrayGraphScanParams := createXrayGraphScanParams(auditParams)
-		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, xrayGraphScanParams, serverDetails, flattenTree, fullDependencyTrees)
+		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, xrayGraphScanParams, serverDetails, flatTree, fullDependencyTrees)
 		if xrayErr != nil {
 			return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
 		}
 		scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
-		addThirdPartyDependenciesToParams(auditParams, scan.Technology, &flattenTree, fullDependencyTrees)
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, &flatTree, fullDependencyTrees)
 		auditParallelRunner.Mu.Lock()
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.Mu.Unlock()
@@ -192,7 +192,13 @@ func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
 	return "", nil
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
+type DependencyTreeResult struct {
+	FlatTree     *xrayCmdUtils.GraphNode
+	FullDepTrees []*xrayCmdUtils.GraphNode
+	DownloadUrls map[string]string
+}
+
+func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -219,7 +225,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		fullDependencyTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
+		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
@@ -228,21 +234,24 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
 	case coreutils.Npm:
-		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case coreutils.Pnpm:
-		fullDependencyTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
 	case coreutils.Yarn:
-		fullDependencyTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case coreutils.Go:
-		fullDependencyTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
 	case coreutils.Pipenv, coreutils.Pip, coreutils.Poetry:
-		fullDependencyTrees, uniqueDeps, err = python.BuildDependencyTree(&python.AuditPython{
+		depTreeResult.FullDepTrees, uniqueDeps,
+			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
 			Server:              serverDetails,
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
-			PipRequirementsFile: params.PipRequirementsFile()})
+			PipRequirementsFile: params.PipRequirementsFile(),
+			IsCurationCmd:       params.IsCurationCmd(),
+		})
 	case coreutils.Nuget:
-		fullDependencyTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
@@ -251,10 +260,10 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
 	if len(uniqDepsWithTypes) > 0 {
-		flatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
+		depTreeResult.FlatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
-	flatTree, err = createFlatTree(uniqueDeps)
+	depTreeResult.FlatTree, err = createFlatTree(uniqueDeps)
 	return
 }
 
@@ -262,7 +271,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 	if !params.IsCurationCmd() {
 		return
 	}
-	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
 		return
 	}
 
@@ -278,7 +287,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 		}
 	}
 
-	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience"
 
 	return logMessage, curationCacheFolder, err
 }
@@ -384,32 +393,29 @@ func logDeps(uniqueDeps any) (err error) {
 }
 
 // This method will change the working directory to the scan's working directory.
-func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*xrayCmdUtils.GraphNode, []*xrayCmdUtils.GraphNode, error) {
+func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
 	if err := os.Chdir(scan.WorkingDirectory); err != nil {
-		return nil, nil, errorutils.CheckError(err)
+		return nil, errorutils.CheckError(err)
 	}
-	flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
 	if techErr != nil {
-		return nil, nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
+		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
-	if flattenTree == nil || len(flattenTree.Nodes) == 0 {
-		return nil, nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
+	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
-	return flattenTree, fullDependencyTrees, nil
+	return &treeResult, nil
 }
 
 func createXrayGraphScanParams(auditParams *AuditParams) *services.XrayGraphScanParams {
-	params := &services.XrayGraphScanParams{
-		RepoPath: auditParams.commonCommandParams.targetRepoPath,
-		Watches:  auditParams.commonCommandParams.watches,
-		ScanType: services.Dependency,
+	return &services.XrayGraphScanParams{
+		RepoPath:               auditParams.commonGraphScanParams.repoPath,
+		Watches:                auditParams.commonGraphScanParams.watches,
+		ScanType:               auditParams.commonGraphScanParams.scanType,
+		ProjectKey:             auditParams.commonGraphScanParams.projectKey,
+		IncludeVulnerabilities: auditParams.commonGraphScanParams.includeVulnerabilities,
+		IncludeLicenses:        auditParams.commonGraphScanParams.includeLicenses,
+		XscVersion:             auditParams.commonGraphScanParams.xscVersion,
+		MultiScanId:            auditParams.commonGraphScanParams.multiScanId,
 	}
-	if auditParams.commonCommandParams.projectKey == "" {
-		params.ProjectKey = os.Getenv(coreutils.Project)
-	} else {
-		params.ProjectKey = auditParams.commonCommandParams.projectKey
-	}
-	params.IncludeVulnerabilities = auditParams.commonCommandParams.IncludeVulnerabilities
-	params.IncludeLicenses = auditParams.commonCommandParams.IncludeLicenses
-	return params
 }

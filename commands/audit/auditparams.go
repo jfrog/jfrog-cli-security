@@ -7,11 +7,12 @@ import (
 
 type AuditParams struct {
 	xrayGraphScanParams *services.XrayGraphScanParams
-	commonCommandParams *CommonCommandParams
-	workingDirs         []string
-	installFunc         func(tech string) error
-	fixableOnly         bool
-	minSeverityFilter   string
+	// common params to all scan routines
+	commonGraphScanParams *CommonGraphScanParams
+	workingDirs           []string
+	installFunc           func(tech string) error
+	fixableOnly           bool
+	minSeverityFilter     string
 	*xrayutils.AuditBasicParams
 	xrayVersion string
 	// Include third party dependencies source code in the applicability scan.
@@ -90,7 +91,7 @@ func (params *AuditParams) SetParallelScans(numOfParallelScans int) *AuditParams
 	return params
 }
 
-func (params *AuditParams) SetCommonCommandParams(commonCommandParams *CommonCommandParams) *AuditParams {
-	params.commonCommandParams = commonCommandParams
+func (params *AuditParams) SetCommonGraphScanParams(commonParams *CommonGraphScanParams) *AuditParams {
+	params.commonGraphScanParams = commonParams
 	return params
 }

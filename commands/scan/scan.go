@@ -349,11 +349,6 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFil
 				if err != nil {
 					return err
 				}
-				if params.XscGitInfoContext != nil {
-					if err = utils.SendXscGitInfoRequestIfEnabled(scanGraphParams.XrayGraphScanParams(), xrayManager); err != nil {
-						return err
-					}
-				}
 				scanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
 					log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))

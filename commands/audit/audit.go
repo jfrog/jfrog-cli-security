@@ -14,26 +14,32 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	"os"
 )
 
 type AuditCommand struct {
-	watches                []string
-	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	Fail                   bool
-	PrintExtendedTable     bool
-	ParallelScans          int
+	watches                 []string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	analyticsMetricsService *xrayutils.AnalyticsMetricsService
+	ParallelScans           int
 	AuditParams
 }
 
-type CommonCommandParams struct {
-	watches                []string
+type CommonGraphScanParams struct {
+	repoPath               string
 	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
+	watches                []string
+	scanType               services.ScanType
+	includeVulnerabilities bool
+	includeLicenses        bool
+	xscVersion             string
+	multiScanId            string
 }
 
 func NewGenericAuditCommand() *AuditCommand {
@@ -75,18 +81,39 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xrayutils.AnalyticsMetricsService) *AuditCommand {
+	auditCmd.analyticsMetricsService = analyticsMetricsService
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) SetParallelScans(threads int) *AuditCommand {
 	auditCmd.ParallelScans = threads
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) CreateCommonCommandParams() *CommonCommandParams {
-	commonParams := &CommonCommandParams{
-		watches:                auditCmd.watches,
-		projectKey:             auditCmd.projectKey,
-		targetRepoPath:         auditCmd.targetRepoPath,
-		IncludeVulnerabilities: auditCmd.IncludeVulnerabilities,
-		IncludeLicenses:        auditCmd.IncludeLicenses,
+func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *CommonGraphScanParams {
+	commonParams := &CommonGraphScanParams{
+		repoPath: auditCmd.targetRepoPath,
+		watches:  auditCmd.watches,
+		scanType: services.Dependency,
+	}
+	if auditCmd.projectKey == "" {
+		commonParams.projectKey = os.Getenv(coreutils.Project)
+	} else {
+		commonParams.projectKey = auditCmd.projectKey
+	}
+	commonParams.includeVulnerabilities = auditCmd.IncludeVulnerabilities
+	commonParams.includeLicenses = auditCmd.IncludeLicenses
+	commonParams.multiScanId = auditCmd.analyticsMetricsService.GetMsi()
+	if commonParams.multiScanId != "" {
+		xscManager := auditCmd.analyticsMetricsService.XscManager()
+		if xscManager != nil {
+			version, err := xscManager.GetVersion()
+			if err != nil {
+				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
+			}
+			commonParams.xscVersion = version
+		}
 	}
 	return commonParams
 }
@@ -99,19 +126,23 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
+	// Should be called before creating the audit params, so the params will contain XSC information.
+	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	auditParams := NewAuditParams().
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
-		SetCommonCommandParams(auditCmd.CreateCommonCommandParams()).
+		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetParallelScans(auditCmd.ParallelScans)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
 	}
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
@@ -171,12 +202,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		return
 	}
 
-	if auditParams.xrayGraphScanParams.XscGitInfoContext != nil {
-		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
-			return nil, err
-		}
-		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
-	}
+	results.MultiScanId = auditParams.commonGraphScanParams.multiScanId
 
 	auditParallelRunner := utils.CreateAuditParallelRunner(auditParams.numOfParallelScans)
 	JFrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
@@ -190,7 +216,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, JFrogAppsConfig, threadId)
 		}, auditParallelRunner.AddErrorToChan)
 		if jasErr != nil {
-			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to creat AM and jas scanners task: %s", err.Error()))
+			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to creat AM and jas scanners task: %s", jasErr.Error()))
 		}
 	}
 
@@ -234,6 +260,6 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.AuditParal
 	if err != nil {
 		return
 	}
-	err = RunJasScannersAndSetResults(auditParallelRunner, scanResults, serverDetails, auditParams, jfrogAppsConfig)
+	err = RunJasScannersAndSetResults(auditParallelRunner, scanResults, serverDetails, auditParams, jfrogAppsConfig, scanResults.MultiScanId)
 	return
 }

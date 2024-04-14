@@ -40,6 +40,7 @@ func setupIntegrationTests() {
 	// Init
 	utils.InitTestCliDetails()
 	utils.AuthenticateArtifactory()
+	utils.AuthenticateXsc()
 	utils.CreateRequiredRepositories()
 }
 

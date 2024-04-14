@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"github.com/jfrog/jfrog-cli-security/commands"
 	"os"
 	"strings"
@@ -329,6 +331,10 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
+	err = progressbar.ExecWithProgress(auditCmd)
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
+
 	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
 	if err != nil {
 		return err
@@ -338,7 +344,22 @@ func AuditCmd(c *components.Context) error {
 		return err
 	}
 	auditCmd.SetParallelScans(threads)
-	return progressbar.ExecWithProgress(auditCmd)
+	return err
+}
+
+func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
+	if err == nil || !usage.ShouldReportUsage() {
+		return
+	}
+	var serverDetails *coreConfig.ServerDetails
+	serverDetails, innerError := auditCmd.ServerDetails()
+	if innerError != nil {
+		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
+		return
+	}
+	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+		log.Debug("failed to report error log:" + reportError.Error())
+	}
 }
 
 func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
@@ -359,6 +380,8 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
+	auditCmd.SetAnalyticsMetricsService(utils.NewAnalyticsMetricsService(serverDetails))
+
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
@@ -406,7 +429,11 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	return progressbar.ExecWithProgress(auditCmd)
+	err = progressbar.ExecWithProgress(auditCmd)
+
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
+	return err
 }
 
 func CurationCmd(c *components.Context) error {

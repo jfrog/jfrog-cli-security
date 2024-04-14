@@ -129,7 +129,7 @@ var commandFlags = map[string][]string{
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, CurationThreads,
+		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {

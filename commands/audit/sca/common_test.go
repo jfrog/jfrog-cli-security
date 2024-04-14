@@ -1,6 +1,8 @@
 package sca
 
 import (
+	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"reflect"
 	"testing"
 
@@ -271,4 +273,63 @@ func TestBuildImpactPaths(t *testing.T) {
 	reflect.DeepEqual(expectedImpactPaths, scanResult[0].Violations[0].Components["dep2"].ImpactPaths)
 	expectedImpactPaths = [][]services.ImpactPathNode{{{ComponentId: "dep1"}, {ComponentId: "dep2"}, {ComponentId: "dep3"}}}
 	reflect.DeepEqual(expectedImpactPaths, scanResult[0].Licenses[0].Components["dep3"].ImpactPaths)
+}
+
+func TestSuspectCurationBlockedError(t *testing.T) {
+	mvnOutput1 := "status code: 403, reason phrase: Forbidden (403)"
+	mvnOutput2 := "status code: 500, reason phrase: Server Error (500)"
+	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
+
+	tests := []struct {
+		name          string
+		isCurationCmd bool
+		tech          coreutils.Technology
+		output        string
+		expect        string
+	}{
+		{
+			name:          "mvn 403 error",
+			isCurationCmd: true,
+			tech:          coreutils.Maven,
+			output:        mvnOutput1,
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+		},
+		{
+			name:          "mvn 500 error",
+			isCurationCmd: true,
+			tech:          coreutils.Maven,
+			output:        mvnOutput2,
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+		},
+		{
+			name:          "pip 403 error",
+			isCurationCmd: true,
+			tech:          coreutils.Maven,
+			output:        pipOutput,
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip),
+		},
+		{
+			name:          "pip not pass through error",
+			isCurationCmd: true,
+			tech:          coreutils.Pip,
+			output:        "http error 401",
+		},
+		{
+			name:          "maven not pass through error",
+			isCurationCmd: true,
+			tech:          coreutils.Maven,
+			output:        "http error 401",
+		},
+		{
+			name:          "nota supported tech",
+			isCurationCmd: true,
+			tech:          coreutils.CI,
+			output:        pipOutput,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output)
+		})
+	}
 }
