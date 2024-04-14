@@ -7,6 +7,7 @@ import (
 
 type AuditParams struct {
 	xrayGraphScanParams *services.XrayGraphScanParams
+	commonCommandParams *CommonCommandParams
 	workingDirs         []string
 	installFunc         func(tech string) error
 	fixableOnly         bool
@@ -39,11 +40,6 @@ func (params *AuditParams) WorkingDirs() []string {
 
 func (params *AuditParams) XrayVersion() string {
 	return params.xrayVersion
-}
-
-func (params *AuditParams) SetXrayGraphScanParams(xrayGraphScanParams *services.XrayGraphScanParams) *AuditParams {
-	params.xrayGraphScanParams = xrayGraphScanParams
-	return params
 }
 
 func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
@@ -91,5 +87,10 @@ func (params *AuditParams) SetDepsRepo(depsRepo string) *AuditParams {
 
 func (params *AuditParams) SetParallelScans(numOfParallelScans int) *AuditParams {
 	params.numOfParallelScans = numOfParallelScans
+	return params
+}
+
+func (params *AuditParams) SetCommonCommandParams(commonCommandParams *CommonCommandParams) *AuditParams {
+	params.commonCommandParams = commonCommandParams
 	return params
 }

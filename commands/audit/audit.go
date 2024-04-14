@@ -14,7 +14,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"os"
 )
 
 type AuditCommand struct {
@@ -27,6 +26,14 @@ type AuditCommand struct {
 	PrintExtendedTable     bool
 	ParallelScans          int
 	AuditParams
+}
+
+type CommonCommandParams struct {
+	watches                []string
+	projectKey             string
+	targetRepoPath         string
+	IncludeVulnerabilities bool
+	IncludeLicenses        bool
 }
 
 func NewGenericAuditCommand() *AuditCommand {
@@ -73,20 +80,15 @@ func (auditCmd *AuditCommand) SetParallelScans(threads int) *AuditCommand {
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphScanParams {
-	params := &services.XrayGraphScanParams{
-		RepoPath: auditCmd.targetRepoPath,
-		Watches:  auditCmd.watches,
-		ScanType: services.Dependency,
+func (auditCmd *AuditCommand) CreateCommonCommandParams() *CommonCommandParams {
+	commonParams := &CommonCommandParams{
+		watches:                auditCmd.watches,
+		projectKey:             auditCmd.projectKey,
+		targetRepoPath:         auditCmd.targetRepoPath,
+		IncludeVulnerabilities: auditCmd.IncludeVulnerabilities,
+		IncludeLicenses:        auditCmd.IncludeLicenses,
 	}
-	if auditCmd.projectKey == "" {
-		params.ProjectKey = os.Getenv(coreutils.Project)
-	} else {
-		params.ProjectKey = auditCmd.projectKey
-	}
-	params.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
-	params.IncludeLicenses = auditCmd.IncludeLicenses
-	return params
+	return commonParams
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
@@ -98,11 +100,11 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 
 	auditParams := NewAuditParams().
-		SetXrayGraphScanParams(auditCmd.CreateXrayGraphScanParams()).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
+		SetCommonCommandParams(auditCmd.CreateCommonCommandParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetParallelScans(auditCmd.ParallelScans)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())

@@ -33,18 +33,18 @@ import (
 	"time"
 )
 
-func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditParams, results *xrayutils.Results) (err error) {
+func runScaScan(auditParallelRunner *utils.AuditParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
-	serverDetails, err := params.ServerDetails()
+	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
 	}
 
-	scans := getScaScansToPreform(params)
+	scans := getScaScansToPreform(auditParams)
 	if len(scans) == 0 {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 		return
@@ -61,23 +61,21 @@ func runScaScan(auditParallelRunner *utils.AuditParallelRunner, params *AuditPar
 	}()
 	for _, scan := range scans {
 		// Get the dependency tree for the technology in the working directory.
-		flattenTree, fullDependencyTrees, bdtErr := buildDependencyTree(scan, params)
+		flattenTree, fullDependencyTrees, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
 			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, bdtErr.Error()))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, params, scan, *flattenTree, fullDependencyTrees), func(err error) {
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, *flattenTree, fullDependencyTrees), func(err error) {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, err.Error()))
 		})
 		if taskErr != nil {
 			return fmt.Errorf("failed to creat sca scan task: %s", taskErr.Error())
 		}
 		// Add the scan to the results
-		auditParallelRunner.Mu.Lock()
 		results.ScaResults = append(results.ScaResults, scan)
-		auditParallelRunner.Mu.Unlock()
 	}
 	return
 }
@@ -120,7 +118,7 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 }
 
 // Preform the SCA scan for the given scan information.
-func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, params *AuditParams,
+func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
 	scan *xrayutils.ScaScanResult, flattenTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
@@ -128,12 +126,13 @@ func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetail
 			auditParallelRunner.ScaScansWg.Done()
 		}()
 		// Scan the dependency tree.
-		scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, flattenTree, fullDependencyTrees)
+		xrayGraphScanParams := createXrayGraphScanParams(auditParams)
+		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, xrayGraphScanParams, serverDetails, flattenTree, fullDependencyTrees)
 		if xrayErr != nil {
 			return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
 		}
 		scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
-		addThirdPartyDependenciesToParams(params, scan.Technology, &flattenTree, fullDependencyTrees)
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, &flattenTree, fullDependencyTrees)
 		auditParallelRunner.Mu.Lock()
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.Mu.Unlock()
@@ -141,10 +140,11 @@ func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetail
 	}
 }
 
-func runScaWithTech(tech coreutils.Technology, params *AuditParams, serverDetails *config.ServerDetails, flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+func runScaWithTech(tech coreutils.Technology, params *AuditParams, xrayGraphScanParams *services.XrayGraphScanParams, serverDetails *config.ServerDetails,
+	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(params.xrayGraphScanParams).
+		SetXrayGraphScanParams(xrayGraphScanParams).
 		SetXrayVersion(params.xrayVersion).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter)
@@ -396,4 +396,20 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*xrayC
 		return nil, nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return flattenTree, fullDependencyTrees, nil
+}
+
+func createXrayGraphScanParams(auditParams *AuditParams) *services.XrayGraphScanParams {
+	params := &services.XrayGraphScanParams{
+		RepoPath: auditParams.commonCommandParams.targetRepoPath,
+		Watches:  auditParams.commonCommandParams.watches,
+		ScanType: services.Dependency,
+	}
+	if auditParams.commonCommandParams.projectKey == "" {
+		params.ProjectKey = os.Getenv(coreutils.Project)
+	} else {
+		params.ProjectKey = auditParams.commonCommandParams.projectKey
+	}
+	params.IncludeVulnerabilities = auditParams.commonCommandParams.IncludeVulnerabilities
+	params.IncludeLicenses = auditParams.commonCommandParams.IncludeLicenses
+	return params
 }
