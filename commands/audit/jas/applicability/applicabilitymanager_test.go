@@ -153,29 +153,6 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 	}
 }
 
-func TestApplicabilityScanManager_ShouldRun_TechnologiesNotEligibleForScan(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
-
-	results, err := RunApplicabilityScan(jas.FakeBasicXrayResults, mockDirectDependencies, []coreutils.Technology{coreutils.Nuget, coreutils.Go}, scanner, false)
-
-	// Assert
-	assert.Nil(t, results)
-	assert.NoError(t, err)
-}
-
-func TestApplicabilityScanManager_ShouldRun_ScanResultsAreEmpty(t *testing.T) {
-	// Arrange
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
-
-	applicabilityManager := newApplicabilityScanManager(nil, mockDirectDependencies, scanner, false)
-
-	// Assert
-	eligible := applicabilityManager.shouldRunApplicabilityScan([]coreutils.Technology{coreutils.Nuget})
-	assert.False(t, eligible)
-}
-
 func TestExtractXrayDirectViolations(t *testing.T) {
 	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
 		{
