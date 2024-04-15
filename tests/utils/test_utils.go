@@ -16,12 +16,11 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
-func InitSecurityTest(t *testing.T, xrayMinVersion, xscMinVersion string) {
+func InitSecurityTest(t *testing.T, xrayMinVersion string) {
 	if !*configTests.TestSecurity {
 		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
 	}
 	ValidateXrayVersion(t, xrayMinVersion)
-	ValidateXscVersion(t, xscMinVersion)
 }
 
 func GetTestResourcesPath() string {
