@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +38,7 @@ func TestXrayAuditNpmSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditNpm(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm")
@@ -61,7 +64,7 @@ func TestXrayAuditPnpmSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPnpm(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
@@ -117,7 +120,7 @@ func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 }
 
 func testXrayAuditYarn(t *testing.T, projectDirName string, yarnCmd func()) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	yarnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName)
@@ -232,7 +235,7 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	projectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
@@ -261,7 +264,7 @@ func TestXrayAuditGradleSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditGradle(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	gradleProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle")
@@ -285,7 +288,7 @@ func TestXrayAuditMavenSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditMaven(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
@@ -299,7 +302,7 @@ func testXrayAuditMaven(t *testing.T, format string) string {
 }
 
 func TestXrayAuditNoTech(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -310,7 +313,7 @@ func TestXrayAuditNoTech(t *testing.T) {
 }
 
 func TestXrayAuditMultiProjects(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects")
@@ -350,7 +353,7 @@ func TestXrayAuditPipSimpleJsonWithRequirementsFile(t *testing.T) {
 }
 
 func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	pipProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project")
@@ -379,7 +382,7 @@ func TestXrayAuditPipenvSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPipenv(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	pipenvProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project")
@@ -403,7 +406,7 @@ func TestXrayAuditPoetrySimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPoetry(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	poetryProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project")
@@ -445,7 +448,7 @@ func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditJas(t *testing.T, format string, project string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", project))
@@ -462,7 +465,7 @@ func testXrayAuditJas(t *testing.T, format string, project string) string {
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
@@ -480,7 +483,7 @@ func TestXrayAuditDetectTech(t *testing.T) {
 }
 
 func TestXrayRecursiveScan(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers")
@@ -513,4 +516,36 @@ func TestXrayRecursiveScan(t *testing.T) {
 	assert.NoError(t, err)
 	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
 	assert.Len(t, results, 2)
+}
+
+func TestXscAnalyticsForAudit(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, xscservices.AnalyticsMetricsMinXscVersion)
+	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer reportUsageCallBack()
+	// Scan npm project and verify that analytics general event were sent to XSC.
+	output := testXrayAuditNpm(t, string(format.SimpleJson))
+	validateAnalyticsBasicEvent(t, output)
+}
+
+func validateAnalyticsBasicEvent(t *testing.T, output string) {
+	// Get MSI.
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err)
+
+	// Verify analytics metrics.
+	am := utils.NewAnalyticsMetricsService(securityTests.XscDetails)
+	assert.NotNil(t, am)
+	assert.NotEmpty(t, results.MultiScanId)
+	event, err := am.GetGeneralEvent(results.MultiScanId)
+	assert.NoError(t, err)
+
+	// Event creation and addition information.
+	assert.Equal(t, "cli", event.Product)
+	assert.Equal(t, 1, event.EventType)
+	assert.NotEmpty(t, event.AnalyzerManagerVersion)
+	assert.NotEmpty(t, event.EventStatus)
+	// The information that was added after updating the event with the scan's results.
+	assert.NotEmpty(t, event.TotalScanDuration)
+	assert.True(t, event.TotalFindings > 0)
 }

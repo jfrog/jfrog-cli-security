@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"os"
 	"time"
 
-	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -113,20 +113,20 @@ func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, sc
 	if err = os.Chdir(scan.WorkingDirectory); err != nil {
 		return errorutils.CheckError(err)
 	}
-	flattenTree, fullDependencyTrees, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
 	if techErr != nil {
 		return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
-	if flattenTree == nil || len(flattenTree.Nodes) == 0 {
+	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	// Scan the dependency tree.
-	scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, flattenTree, fullDependencyTrees)
+	scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, treeResult.FlatTree, treeResult.FullDepTrees)
 	if xrayErr != nil {
 		return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
 	}
-	scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
-	addThirdPartyDependenciesToParams(params, scan.Technology, flattenTree, fullDependencyTrees)
+	scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+	addThirdPartyDependenciesToParams(params, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 	scan.XrayResults = append(scan.XrayResults, scanResults...)
 	return
 }
@@ -182,7 +182,13 @@ func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
 	return "", nil
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode, err error) {
+type DependencyTreeResult struct {
+	FlatTree     *xrayCmdUtils.GraphNode
+	FullDepTrees []*xrayCmdUtils.GraphNode
+	DownloadUrls map[string]string
+}
+
+func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -209,7 +215,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 
 	switch tech {
 	case coreutils.Maven, coreutils.Gradle:
-		fullDependencyTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
+		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
@@ -218,21 +224,24 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
 	case coreutils.Npm:
-		fullDependencyTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case coreutils.Pnpm:
-		fullDependencyTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
 	case coreutils.Yarn:
-		fullDependencyTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case coreutils.Go:
-		fullDependencyTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
 	case coreutils.Pipenv, coreutils.Pip, coreutils.Poetry:
-		fullDependencyTrees, uniqueDeps, err = python.BuildDependencyTree(&python.AuditPython{
+		depTreeResult.FullDepTrees, uniqueDeps,
+			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
 			Server:              serverDetails,
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
-			PipRequirementsFile: params.PipRequirementsFile()})
+			PipRequirementsFile: params.PipRequirementsFile(),
+			IsCurationCmd:       params.IsCurationCmd(),
+		})
 	case coreutils.Nuget:
-		fullDependencyTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
@@ -241,10 +250,10 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
 	if len(uniqDepsWithTypes) > 0 {
-		flatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
+		depTreeResult.FlatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
-	flatTree, err = createFlatTree(uniqueDeps)
+	depTreeResult.FlatTree, err = createFlatTree(uniqueDeps)
 	return
 }
 
@@ -252,7 +261,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 	if !params.IsCurationCmd() {
 		return
 	}
-	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil {
+	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
 		return
 	}
 
@@ -268,7 +277,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutil
 		}
 	}
 
-	logMessage = ". Project's cache is currently empty, so this run may take longer to complete"
+	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience"
 
 	return logMessage, curationCacheFolder, err
 }

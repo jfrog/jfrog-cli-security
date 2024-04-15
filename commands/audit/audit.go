@@ -2,28 +2,30 @@ package audit
 
 import (
 	"errors"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
-	"os"
-
+	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"golang.org/x/sync/errgroup"
+	"os"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 )
 
 type AuditCommand struct {
-	watches                []string
-	projectKey             string
-	targetRepoPath         string
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	Fail                   bool
-	PrintExtendedTable     bool
+	watches                 []string
+	projectKey              string
+	targetRepoPath          string
+	IncludeVulnerabilities  bool
+	IncludeLicenses         bool
+	Fail                    bool
+	PrintExtendedTable      bool
+	analyticsMetricsService *xrayutils.AnalyticsMetricsService
 	AuditParams
 }
 
@@ -66,6 +68,11 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xrayutils.AnalyticsMetricsService) *AuditCommand {
+	auditCmd.analyticsMetricsService = analyticsMetricsService
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphScanParams {
 	params := &services.XrayGraphScanParams{
 		RepoPath: auditCmd.targetRepoPath,
@@ -79,6 +86,17 @@ func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphSca
 	}
 	params.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	params.IncludeLicenses = auditCmd.IncludeLicenses
+	params.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
+	if params.MultiScanId != "" {
+		xscManager := auditCmd.analyticsMetricsService.XscManager()
+		if xscManager != nil {
+			version, err := xscManager.GetVersion()
+			if err != nil {
+				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
+			}
+			params.XscVersion = version
+		}
+	}
 	return params
 }
 
@@ -90,6 +108,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
+	// Should be called before creating the audit params, so the params will contain XSC information.
+	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	auditParams := NewAuditParams().
 		SetXrayGraphScanParams(auditCmd.CreateXrayGraphScanParams()).
 		SetWorkingDirs(workingDirs).
@@ -98,10 +118,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
 	}
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
@@ -171,12 +193,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		errGroup.Go(utils.DownloadAnalyzerManagerIfNeeded)
 	}
 
-	if auditParams.xrayGraphScanParams.XscGitInfoContext != nil {
-		if err = xrayutils.SendXscGitInfoRequestIfEnabled(auditParams.xrayGraphScanParams, xrayManager); err != nil {
-			return nil, err
-		}
-		results.MultiScanId = auditParams.xrayGraphScanParams.MultiScanId
-	}
+	results.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	results.ScaError = runScaScan(auditParams, results)
@@ -188,7 +205,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan)
+		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId)
 	}
 	return
 }
