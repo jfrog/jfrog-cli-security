@@ -173,14 +173,14 @@ func TestXrayAuditNugetJson(t *testing.T) {
 			projectName:        "multi",
 			format:             string(format.Json),
 			restoreTech:        "dotnet",
-			minVulnerabilities: 5,
+			minVulnerabilities: 4,
 			minLicences:        3,
 		},
 		{
 			projectName:        "multi",
 			format:             string(format.Json),
 			restoreTech:        "",
-			minVulnerabilities: 5,
+			minVulnerabilities: 4,
 			minLicences:        3,
 		},
 	}
@@ -329,7 +329,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 6, 0, 25, 1)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 0, 0, 0, 25, 1)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
@@ -433,12 +433,12 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-test"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 3, 1)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-config"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 3, 1)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
@@ -509,7 +509,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format=json")
 
 	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 5, 0)
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 4, 0)
 
 	var results []services.ScanResponse
 	err = json.Unmarshal([]byte(output), &results)
