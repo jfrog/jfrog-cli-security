@@ -25,15 +25,14 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	if err != nil {
 		return
 	}
+	// Set environments variables for analytics in analyzers manager.
+	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
 	defer func() {
 		auditParallelRunner.ScannersWg.Wait()
+		callback()
 		cleanup := scanner.ScannerDirCleanupFunc
 		err = errors.Join(err, cleanup())
 	}()
-
-	// Set environments variables for analytics in analyzers manager.
-	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, scanResults.GetScaScannedTechnologies())
-	defer callback()
 
 	// Don't execute other scanners when scanning third party dependencies.
 	if !auditParams.thirdPartyApplicabilityScan {
