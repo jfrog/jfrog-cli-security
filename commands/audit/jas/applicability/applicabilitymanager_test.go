@@ -260,54 +260,58 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	assert.True(t, len(fileContent) > 0)
 }
 
-func TestParseResults_EmptyResults_AllCvesShouldGetUnknown(t *testing.T) {
-	// Arrange
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
+func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
+	testCases := []struct {
+		name                          string
+		fileName                      string
+		expectedResults               int
+		expectedApplicabilityStatuses []string
+	}{
+		{
+			name:            "empty results - all cves should get unknown",
+			fileName:        "empty-results.sarif",
+			expectedResults: 0,
+		},
+		{
+			name:            "applicable cve exist",
+			fileName:        "applicable-cve-results.sarif",
+			expectedResults: 2,
+		},
+		{
+			name:            "all cves not applicable",
+			fileName:        "no-applicable-cves-results.sarif",
+			expectedResults: 5,
+		},
 
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
-	applicabilityManager.scanner.ResultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", "empty-results.sarif")
-
-	// Act
-	var err error
-	applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.scanner.ResultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
-
-	if assert.NoError(t, err) {
-		assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
-		assert.Empty(t, applicabilityManager.applicabilityScanResults[0].Results)
+		{
+			name:                          "new applicability statuses",
+			fileName:                      "new_ca_status.sarif",
+			expectedResults:               5,
+			expectedApplicabilityStatuses: []string{"applicable", "undetermined", "not_covered", "not_applicable"},
+		},
 	}
-}
 
-func TestParseResults_ApplicableCveExist(t *testing.T) {
 	// Arrange
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
-	applicabilityManager.scanner.ResultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", "applicable-cve-results.sarif")
 
 	// Act
-	var err error
-	applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.scanner.ResultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
-
-	if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
-		assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
-		assert.NotEmpty(t, applicabilityManager.applicabilityScanResults[0].Results)
-	}
-}
-
-func TestParseResults_AllCvesNotApplicable(t *testing.T) {
-	// Arrange
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
-	applicabilityManager.scanner.ResultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", "no-applicable-cves-results.sarif")
-
-	// Act
-	var err error
-	applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.scanner.ResultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
-
-	if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
-		assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
-		assert.NotEmpty(t, applicabilityManager.applicabilityScanResults[0].Results)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			applicabilityManager.scanner.ResultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", tc.fileName)
+			var err error
+			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.scanner.ResultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
+			if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
+				assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
+				assert.Len(t, applicabilityManager.applicabilityScanResults[0].Results, tc.expectedResults)
+				if tc.name == "new applicability statuses" {
+					assert.Len(t, applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules, len(tc.expectedApplicabilityStatuses))
+					for i, value := range tc.expectedApplicabilityStatuses {
+						assert.Equal(t, value, applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[i].Properties["applicability"])
+					}
+				}
+			}
+		})
 	}
 }
