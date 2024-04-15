@@ -22,6 +22,9 @@ import (
 
 var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
+var curationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
+	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
+
 func GetExcludePattern(params utils.AuditParams) string {
 	exclusions := params.Exclusions()
 	if len(exclusions) == 0 {
@@ -167,4 +170,21 @@ func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map
 	for _, depChild := range dependency.Nodes {
 		setPathsForIssues(depChild, issuesImpactPathsMap, pathFromRoot)
 	}
+}
+
+func SuspectCurationBlockedError(isCurationCmd bool, tech coreutils.Technology, cmdOutput string) (msgToUser string) {
+	if !isCurationCmd {
+		return
+	}
+	switch tech {
+	case coreutils.Maven:
+		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(cmdOutput, "status code: 500") {
+			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven)
+		}
+	case coreutils.Pip:
+		if strings.Contains(strings.ToLower(cmdOutput), "http error 403") {
+			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip)
+		}
+	}
+	return
 }
