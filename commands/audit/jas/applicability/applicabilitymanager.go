@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -42,15 +41,15 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string, scannedTechnologies []coreutils.Technology,
+func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
-	if !applicabilityScanManager.shouldRunApplicabilityScan(scannedTechnologies) {
-		log.Debug("[thread_id: " + strconv.Itoa(threadId) + "] The technologies that have been scanned are currently not supported for contextual analysis scanning, or we couldn't find any vulnerable dependencies. Skipping....")
+	if !applicabilityScanManager.cvesExists() {
+		log.Debug("[thread_id: " + strconv.Itoa(threadId) + "] We couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
 	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running applicability scanning...")
@@ -133,10 +132,6 @@ func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err err
 	}
 	asm.applicabilityScanResults = append(asm.applicabilityScanResults, workingDirResults...)
 	return
-}
-
-func (asm *ApplicabilityScanManager) shouldRunApplicabilityScan(technologies []coreutils.Technology) bool {
-	return asm.cvesExists() && coreutils.ContainsApplicabilityScannableTech(technologies)
 }
 
 func (asm *ApplicabilityScanManager) cvesExists() bool {

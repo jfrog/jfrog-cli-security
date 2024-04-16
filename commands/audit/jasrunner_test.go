@@ -51,7 +51,7 @@ func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner, _ := jas.NewJasScanner(&jas.FakeServerDetails, nil)
 	err := applicability.RunApplicabilityScan(&auditParallelRunnerForTest, jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
-		[]coreutils.Technology{coreutils.Yarn}, scanner, false, &utils.ExtendedScanResults{}, jfrogAppsConfigForTest.Modules[0], 0)
+		scanner, false, &utils.ExtendedScanResults{}, jfrogAppsConfigForTest.Modules[0], 0)
 
 	// Expect error:
 	assert.ErrorContains(t, err, "failed to run Applicability scan")

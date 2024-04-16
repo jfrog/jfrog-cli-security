@@ -114,7 +114,7 @@ func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanResults.GetScaScannedTechnologies(), scanner, auditParams.thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
+		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanner, auditParams.thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
 		return
 	}
 }
