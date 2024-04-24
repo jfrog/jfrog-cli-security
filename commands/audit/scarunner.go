@@ -72,6 +72,10 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 // Calculate the scans to preform
 func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
 	for _, requestedDirectory := range params.workingDirs {
+		if !fileutils.IsPathExists(requestedDirectory, false) {
+			log.Warn("The requested directory", requestedDirectory, "doesn't exist. SCA scan is skipped for this directory.")
+			continue
+		}
 		// Detect descriptors and technologies in the requested directory.
 		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
 		if err != nil {
