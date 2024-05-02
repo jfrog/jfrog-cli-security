@@ -69,30 +69,12 @@ func (r *Results) IsIssuesFound() bool {
 	return false
 }
 
-// Counts the total amount of findings in the provided results and updates the AnalyticsMetricsService with the amount of the new added findings
+// Counts the total number of unique findings in the provided results.
+// A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
 func (r *Results) CountScanResultsFindings() int {
-	findingsCountMap := make(map[string]int)
 	var totalFindings int
+	totalFindings += getScaResultsUniqueFindingsAmount(&r.ScaResults)
 
-	// Counting ScaResults
-	for _, scaResult := range r.ScaResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				findingsCountMap[vulnerability.IssueId] += len(vulnerability.Components)
-			}
-
-			for _, violation := range xrayResult.Violations {
-				findingsCountMap[violation.IssueId] += len(violation.Components)
-			}
-		}
-	}
-
-	for _, issueIdCount := range findingsCountMap {
-		totalFindings += issueIdCount
-	}
-
-	// Counting ExtendedScanResults
 	if r.ExtendedScanResults != nil {
 		totalFindings += len(r.ExtendedScanResults.SastScanResults)
 		totalFindings += len(r.ExtendedScanResults.IacScanResults)
@@ -100,6 +82,28 @@ func (r *Results) CountScanResultsFindings() int {
 	}
 
 	return totalFindings
+}
+
+func getScaResultsUniqueFindingsAmount(scaScanResults *[]ScaScanResult) int {
+	uniqueXrayFindings := datastructures.MakeSet[string]()
+
+	for _, scaResult := range *scaScanResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
+			for _, vulnerability := range xrayResult.Vulnerabilities {
+				for compId := range vulnerability.Components {
+					uniqueXrayFindings.Add(vulnerability.IssueId + compId)
+				}
+			}
+
+			for _, violation := range xrayResult.Violations {
+				for compId := range violation.Components {
+					uniqueXrayFindings.Add(violation.IssueId + compId)
+				}
+			}
+		}
+	}
+	return uniqueXrayFindings.Size()
 }
 
 type ScaScanResult struct {

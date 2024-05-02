@@ -427,16 +427,19 @@ func TestGetSeveritiesFormat(t *testing.T) {
 
 func TestGetApplicableCveValue(t *testing.T) {
 	testCases := []struct {
+		name           string
 		scanResults    *ExtendedScanResults
 		cves           []services.Cve
 		expectedResult ApplicabilityStatus
 		expectedCves   []formats.CveRow
 	}{
 		{
+			name:           "not entitled for jas",
 			scanResults:    &ExtendedScanResults{EntitledForJas: false},
 			expectedResult: NotScanned,
 		},
 		{
+			name: "no cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(
@@ -447,10 +450,11 @@ func TestGetApplicableCveValue(t *testing.T) {
 				EntitledForJas: true,
 			},
 			cves:           nil,
-			expectedResult: ApplicabilityUndetermined,
+			expectedResult: NotCovered,
 			expectedCves:   nil,
 		},
 		{
+			name: "applicable cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(
@@ -465,6 +469,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(Applicable)}}},
 		},
 		{
+			name: "undetermined cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(
@@ -479,6 +484,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve3"}},
 		},
 		{
+			name: "not applicable cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(
@@ -493,6 +499,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}}},
 		},
 		{
+			name: "applicable and not applicable cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(
@@ -507,6 +514,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(Applicable)}}},
 		},
 		{
+			name: "undetermined and not applicable cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
 					CreateRunWithDummyResults(CreateDummyPassingResult("applic_testCve1")),
@@ -515,6 +523,50 @@ func TestGetApplicableCveValue(t *testing.T) {
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: ApplicabilityUndetermined,
 			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2"}},
+		},
+		{
+			name: "new scan statuses - applicable wins all statuses",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve3")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+			expectedResult: Applicable,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(Applicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+			},
+		},
+		{
+			name: "new scan statuses - not covered wins not applicable",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: NotCovered,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
+			},
+		},
+		{
+			name: "new scan statuses - undetermined wins not covered",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
+					CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", CreateDummyPassingResult("applic_testCve2")),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: ApplicabilityUndetermined,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(ApplicabilityUndetermined)}},
+			},
 		},
 	}
 
@@ -750,7 +802,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 13,
+						SeverityNumValue: 17,
 					},
 					Finding: "other iac finding",
 					Location: formats.Location{
@@ -765,7 +817,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -780,7 +832,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -847,7 +899,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 9,
+						SeverityNumValue: 11,
 					},
 					Finding: "other secret finding",
 					Location: formats.Location{
@@ -862,7 +914,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -877,7 +929,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -953,7 +1005,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 13,
+						SeverityNumValue: 17,
 					},
 					Finding: "other sast finding",
 					Location: formats.Location{
@@ -968,7 +1020,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{
@@ -1021,7 +1073,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 11,
+						SeverityNumValue: 14,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{
@@ -1040,6 +1092,45 @@ func TestPrepareSast(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedOutput, prepareSast(tc.input, false))
+		})
+	}
+}
+
+func TestGetFinalApplicabilityStatus(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          []ApplicabilityStatus
+		expectedOutput ApplicabilityStatus
+	}{
+		{
+			name:           "applicable wins all statuses",
+			input:          []ApplicabilityStatus{ApplicabilityUndetermined, Applicable, NotCovered, NotApplicable},
+			expectedOutput: Applicable,
+		},
+		{
+			name:           "undetermined wins not covered",
+			input:          []ApplicabilityStatus{NotCovered, ApplicabilityUndetermined, NotCovered, NotApplicable},
+			expectedOutput: ApplicabilityUndetermined,
+		},
+		{
+			name:           "not covered wins not applicable",
+			input:          []ApplicabilityStatus{NotApplicable, NotCovered, NotApplicable},
+			expectedOutput: NotCovered,
+		},
+		{
+			name:           "all statuses are not applicable",
+			input:          []ApplicabilityStatus{NotApplicable, NotApplicable, NotApplicable},
+			expectedOutput: NotApplicable,
+		},
+		{
+			name:           "no statuses",
+			input:          []ApplicabilityStatus{},
+			expectedOutput: NotScanned,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedOutput, getFinalApplicabilityStatus(tc.input))
 		})
 	}
 }

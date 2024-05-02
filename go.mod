@@ -7,7 +7,7 @@ require (
 	github.com/jfrog/build-info-go v1.9.26
 	github.com/jfrog/gofrog v1.7.1
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.49.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.51.0
 	github.com/jfrog/jfrog-client-go v1.40.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0

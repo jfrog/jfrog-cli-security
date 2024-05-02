@@ -171,3 +171,33 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 		XscAnalyticsBasicGeneralEvent: basicEvent,
 	}
 }
+
+func (ams *AnalyticsMetricsService) UpdateAndSendXscAnalyticsGeneralEventFinalize(err error) {
+	if !ams.ShouldReportEvents() {
+		return
+	}
+	if err != nil {
+		ams.UpdateXscAnalyticsGeneralEventFinalizeStatus(xscservices.Failed)
+	} else {
+		ams.UpdateXscAnalyticsGeneralEventFinalizeWithTotalScanDuration()
+		ams.UpdateXscAnalyticsGeneralEventFinalizeStatus(xscservices.Completed)
+	}
+	ams.UpdateGeneralEvent(ams.FinalizeEvent())
+}
+
+func (ams *AnalyticsMetricsService) UpdateXscAnalyticsGeneralEventFinalizeWithTotalScanDuration() {
+	totalDuration := time.Since(ams.GetStartTime())
+	ams.finalizeEvent.TotalScanDuration = totalDuration.String()
+}
+
+func (ams *AnalyticsMetricsService) UpdateXscAnalyticsGeneralEventFinalizeStatus(status xscservices.EventStatus) {
+	ams.finalizeEvent.EventStatus = status
+}
+
+func (ams *AnalyticsMetricsService) AddScanFindingsToXscAnalyticsGeneralEventFinalize(findingsAmount int) {
+	ams.finalizeEvent.TotalFindings += findingsAmount
+}
+
+func (ams *AnalyticsMetricsService) SetShouldReportEvents(shouldReportEvents bool) {
+	ams.shouldReportEvents = shouldReportEvents
+}

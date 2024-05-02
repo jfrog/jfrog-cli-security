@@ -74,13 +74,13 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 }
 
 func testXrayBinaryScan(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion, "")
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "scan", binariesPath, "--licenses", "--format="+format)
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion, "")
+	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
@@ -236,7 +236,7 @@ func createTestWatch(t *testing.T) (string, func()) {
 // Curation tests
 
 func TestCurationAudit(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "", "")
+	securityTestUtils.InitSecurityTest(t, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm")
