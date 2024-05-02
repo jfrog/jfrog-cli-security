@@ -619,7 +619,7 @@ func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.Graph
 	case coreutils.Npm:
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, coreutils.Npm.String())
 	case coreutils.Maven:
-		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node.Types)
+		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
 
 	case coreutils.Pip:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
@@ -648,18 +648,22 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 
 // input- id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33
 // input - repo: libs-release
-// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
-func getMavenNameScopeAndVersion(id, artiUrl, repo string, types *[]string) (downloadUrls []string, name, scope, version string) {
+// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33-jdk15.jar
+func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.GraphNode) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, "gav://")
 	allParts := strings.Split(id, ":")
 	if len(allParts) < 3 {
 		return
 	}
 	nameVersion := allParts[1] + "-" + allParts[2]
+	versionDir := allParts[2]
+	if node.Classifier != nil && *node.Classifier != "" {
+		versionDir = strings.TrimSuffix(versionDir, "-"+*node.Classifier)
+	}
 	packagePath := strings.Join(strings.Split(allParts[0], "."), "/") + "/" +
-		allParts[1] + "/" + allParts[2] + "/" + nameVersion
-	if types != nil {
-		for _, fileType := range *types {
+		allParts[1] + "/" + versionDir + "/" + nameVersion
+	if node.Types != nil {
+		for _, fileType := range *node.Types {
 			// curation service supports maven only for jar and war file types.
 			if fileType == "jar" || fileType == "war" {
 				downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/"+repo+"/"+packagePath+"."+fileType)

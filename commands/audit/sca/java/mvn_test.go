@@ -198,7 +198,8 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 	// dependency of pom type
 	depWithPomType := uniqueDeps["gav://org.webjars:lodash:4.17.21"]
 	assert.NotEmpty(t, depWithPomType)
-	assert.Equal(t, depWithPomType[0], "pom")
+	types := *depWithPomType.Types
+	assert.Equal(t, types[0], "pom")
 	existInTreePom := false
 	for _, node := range tree[0].Nodes {
 		if node.Id == "gav://org.webjars:lodash:4.17.21" {
@@ -212,7 +213,8 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 	// dependency of jar type
 	depWithJarType := uniqueDeps["gav://junit:junit:4.11"]
 	assert.NotEmpty(t, depWithJarType)
-	assert.Equal(t, depWithJarType[0], "jar")
+	types = *depWithJarType.Types
+	assert.Equal(t, types[0], "jar")
 	existInTreeJar := false
 	for _, node := range tree[0].Nodes {
 		if node.Id == "gav://junit:junit:4.11" {

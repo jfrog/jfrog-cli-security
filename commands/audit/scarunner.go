@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"os"
 	"time"
@@ -210,7 +211,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 		return
 	}
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string][]string
+	var uniqDepsWithTypes map[string]*xray.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -345,14 +346,18 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string][]string) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}
 	var uniqueNodes []*xrayCmdUtils.GraphNode
-	for uniqueDep, types := range uniqueDeps {
-		p := types
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep, Types: &p})
+	for uniqueDep, nodeAttr := range uniqueDeps {
+		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
+		if nodeAttr != nil {
+			node.Types = nodeAttr.Types
+			node.Classifier = nodeAttr.Classifier
+		}
+		uniqueNodes = append(uniqueNodes, node)
 	}
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
 }

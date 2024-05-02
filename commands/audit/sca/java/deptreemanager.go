@@ -16,7 +16,7 @@ const (
 	GavPackageTypeIdentifier = "gav://"
 )
 
-func BuildDependencyTree(depTreeParams DepTreeParams, tech coreutils.Technology) ([]*xrayUtils.GraphNode, map[string][]string, error) {
+func BuildDependencyTree(depTreeParams DepTreeParams, tech coreutils.Technology) ([]*xrayUtils.GraphNode, map[string]*xray.DepTreeNode, error) {
 	if tech == coreutils.Maven {
 		return buildMavenDependencyTree(&depTreeParams)
 	}
@@ -50,12 +50,12 @@ type moduleDepTree struct {
 
 // Reads the output files of the gradle-dep-tree and maven-dep-tree plugins and returns them as a slice of GraphNodes.
 // It takes the output of the plugin's run (which is a byte representation of a list of paths of the output files, separated by newlines) as input.
-func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNode, uniqueDepsMap map[string][]string, err error) {
+func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNode, uniqueDepsMap map[string]*xray.DepTreeNode, err error) {
 	modules, err := parseDepTreeFiles(outputFilePaths)
 	if err != nil {
 		return
 	}
-	uniqueDepsMap = map[string][]string{}
+	uniqueDepsMap = map[string]*xray.DepTreeNode{}
 	for _, module := range modules {
 		moduleTree, moduleUniqueDeps := GetModuleTreeAndDependencies(module)
 		depsGraph = append(depsGraph, moduleTree)
@@ -67,7 +67,7 @@ func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNo
 }
 
 // Returns a dependency tree and a flat list of the module's dependencies for the given module
-func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, map[string][]string) {
+func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, map[string]*xray.DepTreeNode) {
 	moduleTreeMap := make(map[string]xray.DepTreeNode)
 	moduleDeps := module.Nodes
 	for depName, dependency := range moduleDeps {
@@ -78,8 +78,9 @@ func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, 
 			childrenList = append(childrenList, childId)
 		}
 		moduleTreeMap[dependencyId] = xray.DepTreeNode{
-			Types:    dependency.Types,
-			Children: childrenList,
+			Classifier: dependency.Classifier,
+			Types:      dependency.Types,
+			Children:   childrenList,
 		}
 	}
 	return xray.BuildXrayDependencyTree(moduleTreeMap, GavPackageTypeIdentifier+module.Root)

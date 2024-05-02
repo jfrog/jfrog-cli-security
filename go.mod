@@ -4,11 +4,11 @@ go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.25
-	github.com/jfrog/gofrog v1.6.3
+	github.com/jfrog/build-info-go v1.9.26
+	github.com/jfrog/gofrog v1.7.1
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-core/v2 v2.49.0
-	github.com/jfrog/jfrog-client-go v1.39.0
+	github.com/jfrog/jfrog-client-go v1.40.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -90,7 +90,7 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/mod v0.16.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
@@ -98,8 +98,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240404075604-3df49e9a9d64
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240501184348-14c3547dc110
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240403100335-8292671b7cc4
+replace github.com/jfrog/jfrog-client-go => github.com/asafambar/jfrog-client-go v0.0.0-20240501183638-2d6d4ea1f9f9
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
