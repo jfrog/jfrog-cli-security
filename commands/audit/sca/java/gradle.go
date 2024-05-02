@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,7 +57,7 @@ type gradleDepTreeManager struct {
 	DepTreeManager
 }
 
-func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
+func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*utils.DepTreeNode, err error) {
 	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
