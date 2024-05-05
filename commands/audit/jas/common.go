@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"golang.org/x/exp/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -211,7 +211,8 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
-	jfrogAppsConfigForTest, _ := CreateJFrogAppsConfig(workingDirs)
+	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
+	assert.NoError(t, err)
 	scanner, err := NewJasScanner(&FakeServerDetails, jfrogAppsConfigForTest)
 	assert.NoError(t, err)
 	return scanner, func() {
@@ -302,13 +303,7 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, e
 	if scanner.TempDir == "" {
 		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
 	}
-	rand.Seed(uint64(time.Now().UnixNano()))
-	randomString := ""
-	for i := 0; i < 4; i++ {
-		randomDigit := rand.Intn(10)
-		randomString += fmt.Sprintf("%d", randomDigit)
-	}
-	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + randomString
+	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + strconv.FormatInt(time.Now().Unix(), 10)
 	err := os.MkdirAll(scannerTempDir, 0777)
 	if err != nil {
 		return "", err

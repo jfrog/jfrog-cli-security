@@ -37,26 +37,14 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	// Don't execute other scanners when scanning third party dependencies.
 	if !auditParams.thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
-			if !jas.ShouldSkipScanner(module, utils.Secrets) {
-				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSecretsScan(auditParallelRunner, scanner, scanResults, module), auditParallelRunner.AddErrorToChan)
-				if err != nil {
-					return fmt.Errorf("failed to create secrets scan task: %s", err.Error())
-				}
+			if err = addModuleJasScanTask(module, utils.Secrets, auditParallelRunner, runSecretsScan(auditParallelRunner, scanner, scanResults, module)); err != nil {
+				return
 			}
-			if !jas.ShouldSkipScanner(module, utils.IaC) {
-				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runIacScan(auditParallelRunner, scanner, scanResults, module), auditParallelRunner.AddErrorToChan)
-				if err != nil {
-					return fmt.Errorf("failed to create iac scan task: %s", err.Error())
-				}
+			if err = addModuleJasScanTask(module, utils.IaC, auditParallelRunner, runIacScan(auditParallelRunner, scanner, scanResults, module)); err != nil {
+				return
 			}
-			if !jas.ShouldSkipScanner(module, utils.Sast) {
-				auditParallelRunner.ScannersWg.Add(1)
-				_, err = auditParallelRunner.Runner.AddTaskWithError(runSastScan(auditParallelRunner, scanner, scanResults, module), auditParallelRunner.AddErrorToChan)
-				if err != nil {
-					return fmt.Errorf("failed to create sast scan task: %s", err.Error())
-				}
+			if err = addModuleJasScanTask(module, utils.Sast, auditParallelRunner, runSastScan(auditParallelRunner, scanner, scanResults, module)); err != nil {
+				return
 			}
 		}
 	}
@@ -64,15 +52,22 @@ func RunJasScannersAndSetResults(auditParallelRunner *utils.AuditParallelRunner,
 	// Wait for sca scan to complete
 	auditParallelRunner.ScaScansWg.Wait()
 	for _, module := range scanner.JFrogAppsConfig.Modules {
-		if !jas.ShouldSkipScanner(module, utils.Applicability) {
-			auditParallelRunner.ScannersWg.Add(1)
-			_, err = auditParallelRunner.Runner.AddTaskWithError(runContextualScan(auditParallelRunner, scanner, scanResults, module, auditParams), auditParallelRunner.AddErrorToChan)
-			if err != nil {
-				return fmt.Errorf("failed to create contextual scan task: %s", err.Error())
-			}
+		if err = addModuleJasScanTask(module, utils.Applicability, auditParallelRunner, runContextualScan(auditParallelRunner, scanner, scanResults, module, auditParams)); err != nil {
+			return
 		}
 	}
 	return err
+}
+
+func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanType, auditParallelRunner *utils.AuditParallelRunner, task parallel.TaskFunc) (err error) {
+	if jas.ShouldSkipScanner(module, scanType) {
+		return
+	}
+	auditParallelRunner.ScannersWg.Add(1)
+	if _, err = auditParallelRunner.Runner.AddTaskWithError(task, auditParallelRunner.AddErrorToChan); err != nil {
+		err = fmt.Errorf("failed to create %s scan task: %s", scanType, err.Error())
+	}
+	return
 }
 
 func runSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results,

@@ -2,7 +2,6 @@ package docs
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/commands"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -105,8 +104,7 @@ const (
 	WorkingDirs                  = "working-dirs"
 
 	// Unique curation flags
-	CurationOutput  = "curation-format"
-	CurationThreads = "curation-threads"
+	CurationOutput = "curation-format"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -129,7 +127,7 @@ var commandFlags = map[string][]string{
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -220,7 +218,6 @@ var flagsMap = map[string]components.Flag{
 		components.SetHiddenBoolFlag(),
 	),
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
-	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(commands.TotalConcurrentRequests)),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 }
 

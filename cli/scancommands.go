@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
-	"github.com/jfrog/jfrog-cli-security/commands"
 	"os"
 	"strings"
 
@@ -331,15 +330,11 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
-	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
+	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
-	threads, err := commands.DetectNumOfThreads(threadsFlag)
-	if err != nil {
-		return err
-	}
-	auditCmd.SetParallelScans(threads)
+	auditCmd.SetThreads(threads)
 	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
@@ -436,11 +431,7 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
-	if err != nil {
-		return err
-	}
-	threads, err := commands.DetectNumOfThreads(threadsFlag)
+	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}

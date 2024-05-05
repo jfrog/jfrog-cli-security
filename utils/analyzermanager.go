@@ -3,11 +3,11 @@ package utils
 import (
 	"errors"
 	"fmt"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -257,7 +257,7 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 		}
 	}
 	// Download & unzip the analyzer manager files
-	log.Debug("[thread_id: " + strconv.Itoa(threadId) + "] The 'Analyzer Manager' app is not cached locally. Downloading it now...")
+	log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
 	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
 		return err
 	}

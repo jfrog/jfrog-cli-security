@@ -8,7 +8,7 @@ import (
 type AuditParallelRunner struct {
 	Runner      parallel.Runner
 	ErrorsQueue chan error
-	Mu          sync.Mutex
+	ResultsMu   sync.Mutex
 	ScaScansWg  sync.WaitGroup // verify that the sca scan routines are done before running contextual scan
 	ScannersWg  sync.WaitGroup // verify that all scanners routines are done before cleaning temp dir
 	JasWg       sync.WaitGroup // verify that downloading analyzer manager and running all scanners are done

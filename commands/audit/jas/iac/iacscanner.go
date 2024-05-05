@@ -1,11 +1,10 @@
 package iac
 
 import (
-	"path/filepath"
-	"strconv"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"path/filepath"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -39,18 +38,18 @@ func RunIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 		return
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
-	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running IaC scanning...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
 	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
 		return
 	}
 	if len(iacScanManager.iacScannerResults) > 0 {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
 	}
 	results := iacScanManager.iacScannerResults
-	auditParallelRunner.Mu.Lock()
+	auditParallelRunner.ResultsMu.Lock()
 	extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
-	auditParallelRunner.Mu.Unlock()
+	auditParallelRunner.ResultsMu.Unlock()
 	return
 }
 

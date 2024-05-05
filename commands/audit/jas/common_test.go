@@ -131,8 +131,7 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 }
 
 func TestCreateScannerTempDirectory(t *testing.T) {
-	scanner, cleanUp := InitJasTest(t)
-	defer cleanUp()
+	scanner := &JasScanner{TempDir: "path"}
 	tempDir, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
 	assert.NoError(t, err)
 	assert.NotEmpty(t, tempDir)
@@ -143,10 +142,7 @@ func TestCreateScannerTempDirectory(t *testing.T) {
 }
 
 func TestCreateScannerTempDirectory_baseDirIsEmpty(t *testing.T) {
-	scanner, cleanUp := InitJasTest(t)
-	defer cleanUp()
-
-	scanner.TempDir = ""
+	scanner := &JasScanner{TempDir: ""}
 	_, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
 	assert.Error(t, err)
 }

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -55,8 +55,6 @@ const (
 
 	MinArtiPassThroughSupport = "7.82.0"
 	MinXrayPassTHroughSupport = "3.92.0"
-	MinArtiMavenSupport       = "7.82.0"
-	MinArtiXraySupport        = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -322,7 +320,7 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 		projectName = projectScope + "/" + projectName
 	}
 	if ca.parallelRequests == 0 {
-		ca.parallelRequests = commands.TotalConcurrentRequests
+		ca.parallelRequests = cliutils.Threads
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{

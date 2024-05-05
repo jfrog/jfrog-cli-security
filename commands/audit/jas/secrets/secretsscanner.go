@@ -1,8 +1,8 @@
 package secrets
 
 import (
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -39,18 +39,18 @@ func RunSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scannerTempDir)
-	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running secrets scanning...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scanning...")
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
 		return
 	}
 	results := secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Found", utils.GetResultsLocationCount(results...), "secrets")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(results...), "secrets")
 	}
-	auditParallelRunner.Mu.Lock()
+	auditParallelRunner.ResultsMu.Lock()
 	extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-	auditParallelRunner.Mu.Unlock()
+	auditParallelRunner.ResultsMu.Unlock()
 	return
 }
 

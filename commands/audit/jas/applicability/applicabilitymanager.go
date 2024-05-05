@@ -1,18 +1,17 @@
 package applicability
 
 import (
+	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
-	"path/filepath"
-	"strconv"
-
-	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+	"path/filepath"
 )
 
 const (
@@ -49,17 +48,17 @@ func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayRe
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
-		log.Debug("[thread_id: " + strconv.Itoa(threadId) + "] We couldn't find any vulnerable dependencies. Skipping....")
+		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
-	log.Info("[thread_id: " + strconv.Itoa(threadId) + "] Running applicability scanning...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false), "Running applicability scanning...")
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
 	}
-	auditParallelRunner.Mu.Lock()
+	auditParallelRunner.ResultsMu.Lock()
 	extendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
-	auditParallelRunner.Mu.Unlock()
+	auditParallelRunner.ResultsMu.Unlock()
 	return
 }
 

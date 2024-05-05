@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"strconv"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -68,11 +67,11 @@ func runScaScan(auditParallelRunner *utils.AuditParallelRunner, auditParams *Aud
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, *treeResult.FlatTree, treeResult.FullDepTrees), func(err error) {
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, err.Error()))
 		})
 		if taskErr != nil {
-			return fmt.Errorf("failed to creat sca scan task: %s", taskErr.Error())
+			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.WorkingDirectory, taskErr.Error())
 		}
 		// Add the scan to the results
 		results.ScaResults = append(results.ScaResults, scan)
@@ -119,32 +118,31 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 
 // Preform the SCA scan for the given scan information.
 func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
-	scan *xrayutils.ScaScanResult, flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) parallel.TaskFunc {
+	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
-		log.Info("[thread_id: "+strconv.Itoa(threadId)+"] Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
 		defer func() {
 			auditParallelRunner.ScaScansWg.Done()
 		}()
 		// Scan the dependency tree.
-		xrayGraphScanParams := createXrayGraphScanParams(auditParams)
-		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, xrayGraphScanParams, serverDetails, flatTree, fullDependencyTrees)
+		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
 		if xrayErr != nil {
 			return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
 		}
-		scan.IsMultipleRootProject = clientutils.Pointer(len(fullDependencyTrees) > 1)
-		addThirdPartyDependenciesToParams(auditParams, scan.Technology, &flatTree, fullDependencyTrees)
-		auditParallelRunner.Mu.Lock()
+		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
+		auditParallelRunner.ResultsMu.Lock()
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
-		auditParallelRunner.Mu.Unlock()
+		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
 
-func runScaWithTech(tech coreutils.Technology, params *AuditParams, xrayGraphScanParams *services.XrayGraphScanParams, serverDetails *config.ServerDetails,
+func runScaWithTech(tech coreutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
 	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(xrayGraphScanParams).
+		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
 		SetXrayVersion(params.xrayVersion).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter)
@@ -405,17 +403,4 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*Depen
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return &treeResult, nil
-}
-
-func createXrayGraphScanParams(auditParams *AuditParams) *services.XrayGraphScanParams {
-	return &services.XrayGraphScanParams{
-		RepoPath:               auditParams.commonGraphScanParams.repoPath,
-		Watches:                auditParams.commonGraphScanParams.watches,
-		ScanType:               auditParams.commonGraphScanParams.scanType,
-		ProjectKey:             auditParams.commonGraphScanParams.projectKey,
-		IncludeVulnerabilities: auditParams.commonGraphScanParams.includeVulnerabilities,
-		IncludeLicenses:        auditParams.commonGraphScanParams.includeLicenses,
-		XscVersion:             auditParams.commonGraphScanParams.xscVersion,
-		MultiScanId:            auditParams.commonGraphScanParams.multiScanId,
-	}
 }
