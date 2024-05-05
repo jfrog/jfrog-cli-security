@@ -181,7 +181,7 @@ var flagsMap = map[string]components.Flag{
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
 		components.WithStrDefaultValue("table"),
 	),
-	Fail:                components.NewBoolFlag(Fail, "Set to false if you do not wish the command to return exit code 3, even if the 'Fail Build' rule is matched by Xray.", components.WithBoolDefaultValue(true)),
+	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
 	ExtendedTable:       components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
 	BypassArchiveLimits: components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
 	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
