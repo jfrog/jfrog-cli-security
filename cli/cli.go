@@ -14,6 +14,7 @@ func GetJfrogCliSecurityApp() components.App {
 		Name:        string(cliutils.Xr),
 		Description: "Xray commands.",
 		Commands:    getXrayNameSpaceCommands(),
+		Category:    "Command Namespaces",
 	})
 	return app
 }
