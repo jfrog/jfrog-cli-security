@@ -2,6 +2,7 @@ package scan
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -130,7 +131,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	scanResults := xrutils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{XrayResults: scanResponse}}
+	scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
 	resultsPrinter := xrutils.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
@@ -159,6 +160,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 				return false, err
 			}
 		}
+	}
+
+	if err = utils.RecordSecurityCommandOutput(utils.SecurityCommandsGitHubSummary(), utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build}); err != nil {
+		return false, err
 	}
 	return
 }

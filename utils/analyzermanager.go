@@ -55,6 +55,21 @@ func (as ApplicabilityStatus) String() string {
 	return string(as)
 }
 
+func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
+	switch status {
+	case Applicable.String():
+		return Applicable
+	case NotApplicable.String():
+		return NotApplicable
+	case ApplicabilityUndetermined.String():
+		return ApplicabilityUndetermined
+	case NotCovered.String():
+		return NotCovered
+	default:
+		return NotScanned
+	}
+}
+
 type JasScanType string
 
 const (

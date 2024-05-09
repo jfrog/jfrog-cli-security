@@ -96,6 +96,7 @@ func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 func (rw *ResultsWriter) PrintScanResults() error {
 	switch rw.format {
 	case format.Table:
+		rw.PrintSummary()
 		return rw.printScanResultsTables()
 	case format.SimpleJson:
 		jsonTable, err := rw.convertScanToSimpleJson()
@@ -107,9 +108,18 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return PrintJson(rw.results.GetScaScansXrayResults())
 	case format.Sarif:
 		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses)
+	// case format.Summary:
+	// 	rw.PrintSummary()
+	// 	return nil
 	}
 	return nil
 }
+
+func (rw*ResultsWriter) PrintSummary() error {
+	PrintSummary(rw.results)
+	return nil
+}
+
 func (rw *ResultsWriter) printScanResultsTables() (err error) {
 	printMessages(rw.messages)
 	violations, vulnerabilities, licenses := SplitScanResults(rw.results.ScaResults)
@@ -545,6 +555,11 @@ func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
 	}
 	log.Output(sarifFile)
 	return nil
+}
+
+func PrintSummary(results *Results) {
+	log.Output(GetSummaryString(results.GetSummary()))
+	return
 }
 
 func CheckIfFailBuild(results []services.ScanResponse) bool {

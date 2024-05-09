@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"fmt"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -59,6 +62,16 @@ func (r *Results) IsScaIssuesFound() bool {
 	return false
 }
 
+func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
+	for _, scan := range r.ScaResults {
+		if scan.Target == target {
+			return &scan
+		}
+	}
+	return nil
+
+}
+
 func (r *Results) IsIssuesFound() bool {
 	if r.IsScaIssuesFound() {
 		return true
@@ -71,44 +84,47 @@ func (r *Results) IsIssuesFound() bool {
 
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
-func (r *Results) CountScanResultsFindings() int {
-	var totalFindings int
-	totalFindings += getScaResultsUniqueFindingsAmount(&r.ScaResults)
-
-	if r.ExtendedScanResults != nil {
-		totalFindings += len(r.ExtendedScanResults.SastScanResults)
-		totalFindings += len(r.ExtendedScanResults.IacScanResults)
-		totalFindings += len(r.ExtendedScanResults.SecretsScanResults)
-	}
-
-	return totalFindings
+func (r *Results) CountScanResultsFindings() (total int) {
+	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
 
-func getScaResultsUniqueFindingsAmount(scaScanResults *[]ScaScanResult) int {
-	uniqueXrayFindings := datastructures.MakeSet[string]()
-
-	for _, scaResult := range *scaScanResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				for compId := range vulnerability.Components {
-					uniqueXrayFindings.Add(vulnerability.IssueId + compId)
-				}
-			}
-
-			for _, violation := range xrayResult.Violations {
-				for compId := range violation.Components {
-					uniqueXrayFindings.Add(violation.IssueId + compId)
-				}
-			}
-		}
+func (r *Results) GetSummary() (summary formats.SummaryResults) {
+	if len(r.ScaResults) <= 1 {
+		summary.Scans = r.getScanSummaryByTargets()
+		return
 	}
-	return uniqueXrayFindings.Size()
+	for _, scaScan := range r.ScaResults {
+		summary.Scans = append(summary.Scans, r.getScanSummaryByTargets(scaScan.Target)...)
+	}
+	return
+}
+
+func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
+	if len(targets) == 0 {
+		// No filter, one scan summary for all targets
+		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))
+		return
+	}
+	for _, target := range targets {
+		// Get target sca results
+		targetScaResults := []ScaScanResult{}
+		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
+			targetScaResults = append(targetScaResults, *targetScaResult)
+		}
+		// Get target extended results
+		targetExtendedResults := r.ExtendedScanResults
+		if targetExtendedResults != nil {
+			targetExtendedResults = targetExtendedResults.GetResultsForTarget(target)
+		}
+		summaries = append(summaries, getScanSummary(targetExtendedResults, targetScaResults...))
+	}
+	return
 }
 
 type ScaScanResult struct {
-	Technology            coreutils.Technology    `json:"Technology"`
-	WorkingDirectory      string                  `json:"WorkingDirectory"`
+	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
+	Target                string                  `json:"Target"`
+	Technology            coreutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`
 	IsMultipleRootProject *bool                   `json:"IsMultipleRootProject,omitempty"`
@@ -136,4 +152,191 @@ func (e *ExtendedScanResults) IsIssuesFound() bool {
 		GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
 		GetResultsLocationCount(e.IacScanResults...) > 0 ||
 		GetResultsLocationCount(e.SastScanResults...) > 0
+}
+
+func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *ExtendedScanResults) {
+	return &ExtendedScanResults{
+		ApplicabilityScanResults: GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
+		SecretsScanResults:       GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
+		IacScanResults:           GetRunsByWorkingDirectory(target, e.IacScanResults...),
+		SastScanResults:          GetRunsByWorkingDirectory(target, e.SastScanResults...),
+	}
+}
+
+
+
+
+// Move to result writer
+func ConvertSummarySectionToString(results ...formats.SummaryResults) string {
+    issueCount := 0
+
+    for _, result := range results {
+        for _, scan := range result.Scans {
+            hasIssues := scan.HasIssues()
+            scanSummary := "✅"
+            if hasIssues {
+                scanSummary = "❌" // fmt.Sprintf("❌ (%d)", scan.GetTotalIssueCount())
+            } else if issueCount == 1 {
+                // only one issue at the section and no issues
+                return "✅ No vulnerabilities were found"
+            }
+            if scan.Name != "" {
+                scanSummary += fmt.Sprintf(" %s", scan.Name)
+            }
+            if hasIssues {
+                scanSummary += ":"
+            }
+        }
+    }
+    return ""
+}
+
+func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
+	parsed := 0
+	singleScan := isSingleScan(summaries...)
+	for _, summary := range summaries {
+		for _, scan := range summary.Scans {
+			if parsed > 0 {
+				str += "\n"
+			}
+			str += GetScanSummaryString(scan, singleScan)
+			parsed++
+		}
+    }
+	return
+}
+
+func isSingleScan(summaries ...formats.SummaryResults) bool {
+	if len(summaries) > 0 {
+		return false
+	}
+	if len(summaries[0].Scans) > 1 {
+		return false
+	}
+	return true
+}
+
+func GetScanSummaryString(scan formats.ScanSummaryResult, singleScan bool) (content string) {
+	if !scan.HasIssues() {
+		if singleScan {
+			return "✅ No vulnerabilities were found"
+		}
+		return fmt.Sprintf("✅ %s", scan.Name)
+	}
+	// Has issues
+	content = "❌"
+	if !singleScan {
+		content += fmt.Sprintf(" %s:", scan.Name)
+	}
+	content += " Found "
+	content += fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
+	return
+
+	// if scan.GetSubScansCountWith() == 1 {
+	// 	// only one sub scan with issues
+	// 	content += fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
+	// 	return fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
+	// }
+	// // multiple sub scans with issues
+	// return
+}
+
+
+func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
+	if len(scaResults) == 1 {
+		summary.Name = scaResults[0].Target
+	}
+	if extendedScanResults == nil {
+		summary.ScaScanResults = getScaSummaryResults(&scaResults)
+		return
+	}
+	summary.ScaScanResults = getScaSummaryResults(&scaResults, extendedScanResults.ApplicabilityScanResults...)
+	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
+	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
+	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)	
+	return
+}
+
+type SeverityWithApplicable struct {
+	SeverityInfo *TableSeverity
+	ApplicabilityStatus ApplicabilityStatus
+}
+
+func getCveId(cve services.Cve, defaultIssueId string) string {
+	if cve.Id == "" {
+		return defaultIssueId
+	}
+	return cve.Id
+}
+
+func getUniqueVulnerabilitiesInfo(cves []services.Cve, issueId, severity string, components map[string]services.Component, applicableRuns ...*sarif.Run) (uniqueFindings map[string]SeverityWithApplicable) {
+	uniqueFindings = map[string]SeverityWithApplicable{}
+	for _, cve := range cves {
+		cveId := getCveId(cve, issueId)
+		for compId := range components {
+			applicableStatus := NotScanned
+			if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
+				applicableStatus = ConvertToApplicabilityStatus(applicableInfo.Status)
+			}
+			uniqueFindings[cveId + compId] = SeverityWithApplicable{SeverityInfo: GetSeverity(severity, applicableStatus), ApplicabilityStatus: applicableStatus}
+		}
+	}
+	return
+}
+
+func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) (summary *formats.ScaScanResult) {
+	uniqueFindings := map[string]SeverityWithApplicable{}
+	hasApplicableRuns := len(applicableRuns) > 0
+	if len(*scaScanResults) == 0 {
+		return
+	}
+
+	for _, scaResult := range *scaScanResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			for _, vulnerability := range xrayResult.Vulnerabilities {
+				vulUniqueFindings := getUniqueVulnerabilitiesInfo(vulnerability.Cves, vulnerability.IssueId, vulnerability.Severity, vulnerability.Components, applicableRuns...)
+				for key, value := range vulUniqueFindings {
+					uniqueFindings[key] = value
+				}
+			}
+
+			for _, violation := range xrayResult.Violations {
+				vioUniqueFindings := getUniqueVulnerabilitiesInfo(violation.Cves, violation.IssueId, violation.Severity, violation.Components, applicableRuns...)
+				for key, value := range vioUniqueFindings {
+					uniqueFindings[key] = value
+				}
+			}
+		}
+	}
+	summary = &formats.ScaScanResult{BySeverity: formats.SummaryCount{}, ByContextualAnalysis: map[string]formats.SummaryCount{}}
+	for _, severityWithApplicable := range uniqueFindings {
+		summary.BySeverity[severityWithApplicable.SeverityInfo.Severity]++
+		if hasApplicableRuns {
+			status := severityWithApplicable.ApplicabilityStatus.String()
+			if status == NotScanned.String() {
+				status = "Not Scanned"
+			}
+			summary.ByContextualAnalysis[status][severityWithApplicable.SeverityInfo.Severity]++
+		}
+	}
+	return
+}
+
+func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
+	if len(runs) == 0 {
+		return nil
+	}
+	count := formats.SummaryCount{}
+	issueToSeverity := map[string]string{}
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				issueToSeverity[GetLocationId(location)] = GetResultSeverity(result)
+			}
+		}
+	}
+	for _, severity := range issueToSeverity {
+		count[severity]++
+	}
+	return &count
 }
