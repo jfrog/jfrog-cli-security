@@ -23,18 +23,18 @@ type ScanCommandSummaryResult struct {
 }
 
 type SecurityCommandsSummary struct {
-	buildScanCommands []formats.SummaryResults
-	scanCommands      []formats.SummaryResults
-	auditCommands     []formats.SummaryResults
+	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands,omitempty"`
+	ScanCommands      []formats.SummaryResults `json:"scanCommands,omitempty"`
+	AuditCommands     []formats.SummaryResults `json:"auditCommands,omitempty"`
 }
 
 type B []ScanCommandSummaryResult
 
 func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
 	return githubsummaries.NewGitHubActionSummaryImpl(&SecurityCommandsSummary{
-        buildScanCommands: []formats.SummaryResults{},
-        scanCommands: []formats.SummaryResults{},
-        auditCommands: []formats.SummaryResults{},
+        BuildScanCommands: []formats.SummaryResults{},
+        ScanCommands: []formats.SummaryResults{},
+        AuditCommands: []formats.SummaryResults{},
     }) 
 }
 
@@ -59,11 +59,11 @@ func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previ
 	data := output.(ScanCommandSummaryResult)
 	switch data.Section {
 	case Build:
-		aggregated.buildScanCommands = append(aggregated.buildScanCommands, data.Results)
+		aggregated.BuildScanCommands = append(aggregated.BuildScanCommands, data.Results)
 	case Binary:
-		aggregated.scanCommands = append(aggregated.scanCommands, data.Results)
+		aggregated.ScanCommands = append(aggregated.ScanCommands, data.Results)
 	case Modules:
-		aggregated.auditCommands = append(aggregated.auditCommands, data.Results)
+		aggregated.AuditCommands = append(aggregated.AuditCommands, data.Results)
 	}
 	return json.Marshal(aggregated)
 }
@@ -79,13 +79,13 @@ func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (mar
 }
 
 func (scs *SecurityCommandsSummary) GetSectionCount() (count int) {
-	if len(scs.buildScanCommands) > 0 {
+	if len(scs.BuildScanCommands) > 0 {
 		count++
 	}
-	if len(scs.scanCommands) > 0 {
+	if len(scs.ScanCommands) > 0 {
 		count++
 	}
-	if len(scs.auditCommands) > 0 {
+	if len(scs.AuditCommands) > 0 {
 		count++
 	}
 	return
@@ -95,11 +95,11 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string) {
 	addSectionTitle := results.GetSectionCount() > 1
 
 	// Build-Scan Section
-	summary += convertScanSectionToString(addSectionTitle, Build, results.buildScanCommands...)
+	summary += convertScanSectionToString(addSectionTitle, Build, results.BuildScanCommands...)
 	// Binary-Scan Section
-	summary += convertScanSectionToString(addSectionTitle, Binary, results.scanCommands...)
+	summary += convertScanSectionToString(addSectionTitle, Binary, results.ScanCommands...)
 	// Audit Section
-	summary += convertScanSectionToString(addSectionTitle, Binary, results.auditCommands...)
+	summary += convertScanSectionToString(addSectionTitle, Binary, results.AuditCommands...)
 
 	return
 }
