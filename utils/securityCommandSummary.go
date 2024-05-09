@@ -34,12 +34,12 @@ func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
 	return &githubsummaries.GitHubActionSummaryImpl{}
 }
 
-// func NewGitHubActionSummaryImpl(userImpl *githubsummaries.GithubSummaryInterface) *githubsummaries.GitHubActionSummaryImpl {
-	// return &githubsummaries.GitHubActionSummaryImpl{userMethods: userImpl}
-// }
-
 func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImpl, content ScanCommandSummaryResult) error {
-	return githubsummaries.GithubSummaryRecordResult(content, githubsummaries.SecuritySection)
+	return manager.RecordResult(content, githubsummaries.SecuritySection)
+}
+
+func (scs *SecurityCommandsSummary) GetSectionTitle() string {
+	return "Security"
 }
 
 func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) ([]byte, error) {
