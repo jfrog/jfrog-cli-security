@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jfrog/jfrog-cli-core/v2/githubsummaries"
+	"github.com/jfrog/jfrog-cli-core/v2/jobsummaries"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
@@ -30,16 +30,16 @@ type SecurityCommandsSummary struct {
 
 type B []ScanCommandSummaryResult
 
-func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
-	return githubsummaries.NewGitHubActionSummaryImpl(&SecurityCommandsSummary{
+func SecurityCommandsJobSummary() *jobsummaries.JobSummary {
+	return jobsummaries.NewJobSummaryImpl(&SecurityCommandsSummary{
 		BuildScanCommands: []formats.SummaryResults{},
 		ScanCommands:      []formats.SummaryResults{},
 		AuditCommands:     []formats.SummaryResults{},
 	})
 }
 
-func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImpl, content ScanCommandSummaryResult) error {
-	return manager.RecordResult(content, githubsummaries.SecuritySection)
+func RecordSecurityCommandOutput(manager *jobsummaries.JobSummary, content ScanCommandSummaryResult) error {
+	return manager.RecordResult(content, jobsummaries.SecuritySection)
 }
 
 func (scs *SecurityCommandsSummary) GetSectionTitle() string {

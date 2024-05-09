@@ -162,7 +162,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		}
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.SecurityCommandsGitHubSummary(), utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build}); err != nil {
+	if err = utils.RecordSecurityCommandOutput(utils.SecurityCommandsJobSummary(), utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build}); err != nil {
 		return false, err
 	}
 	return

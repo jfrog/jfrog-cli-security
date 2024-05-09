@@ -190,7 +190,7 @@ func ConvertSummarySectionToString(results ...formats.SummaryResults) string {
 
 func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
 	parsed := 0
-	singleScan := isSingleScan(summaries...)
+	singleScan := isSingleCommandAndScan(summaries...)
 	for _, summary := range summaries {
 		for _, scan := range summary.Scans {
 			if parsed > 0 {
@@ -203,26 +203,27 @@ func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
 	return
 }
 
-func isSingleScan(summaries ...formats.SummaryResults) bool {
-	if len(summaries) > 0 {
+func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
+	if len(summaries) != 1 {
 		return false
 	}
-	if len(summaries[0].Scans) > 1 {
+	if len(summaries[0].Scans) != 1 {
 		return false
 	}
+	// One command and one scan
 	return true
 }
 
-func GetScanSummaryString(scan formats.ScanSummaryResult, singleScan bool) (content string) {
+func GetScanSummaryString(scan formats.ScanSummaryResult, singleData bool) (content string) {
 	if !scan.HasIssues() {
-		if singleScan {
+		if singleData {
 			return "✅ No vulnerabilities were found"
 		}
 		return fmt.Sprintf("✅ %s", scan.Name)
 	}
 	// Has issues
 	content = "❌"
-	if !singleScan {
+	if !singleData {
 		content += fmt.Sprintf(" %s:", scan.Name)
 	}
 	content += " Found "
