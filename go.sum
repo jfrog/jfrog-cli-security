@@ -4,8 +4,8 @@ github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/CycloneDX/cyclonedx-go v0.8.0 h1:FyWVj6x6hoJrui5uRQdYZcSievw3Z32Z88uYzG/0D6M=
 github.com/CycloneDX/cyclonedx-go v0.8.0/go.mod h1:K2bA+324+Og0X84fA8HhN2X066K7Bxz4rpMQ4ZhjtSk=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240509115241-1a1dcb2a5484 h1:jDtL7iCmTu4NyRtgowvSe7cnYy1yuL53mG42CdWnxKQ=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240509115241-1a1dcb2a5484/go.mod h1:2tdqY2OG3Cv5xQX4LhKM6VsJLp+TLK3Dq7DXHcqFVkg=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240509123010-5c7fb163e2d6 h1:IUci/6ByHf0sPs6vZJZYAXtHmFsSa779cdErjiGu9rM=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240509123010-5c7fb163e2d6/go.mod h1:2tdqY2OG3Cv5xQX4LhKM6VsJLp+TLK3Dq7DXHcqFVkg=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
