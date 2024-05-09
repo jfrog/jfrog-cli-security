@@ -12,11 +12,11 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 }
 
 type ScanSummaryResult struct {
-	Name string `json:"name,omitempty"`
-	ScaScanResults *ScaScanResult `json:"sca,omitempty"`
-	IacScanResults *SummaryCount `json:"iac,omitempty"`
-	SecretsScanResults *SummaryCount `json:"secrets,omitempty"`
-	SastScanResults *SummaryCount `json:"sast,omitempty"`
+	Name               string         `json:"name,omitempty"`
+	ScaScanResults     *ScaScanResult `json:"sca,omitempty"`
+	IacScanResults     *SummaryCount  `json:"iac,omitempty"`
+	SecretsScanResults *SummaryCount  `json:"secrets,omitempty"`
+	SastScanResults    *SummaryCount  `json:"sast,omitempty"`
 }
 
 type SummaryCount map[string]int
@@ -59,14 +59,14 @@ func (s *ScanSummaryResult) GetSubScansCountWithIssues() (count int) {
 	if s.SecretsScanResults != nil && s.SecretsScanResults.GetTotal() > 0 {
 		count++
 	}
-	if s.SastScanResults != nil && s.SastScanResults.GetTotal() > 0{
+	if s.SastScanResults != nil && s.SastScanResults.GetTotal() > 0 {
 		count++
 	}
 	return
 }
 
 type ScaScanResult struct {
-	BySeverity SummaryCount `json:"summaryBySeverity"`
+	BySeverity           SummaryCount            `json:"summaryBySeverity"`
 	ByContextualAnalysis map[string]SummaryCount `json:"summaryByContextualAnalysis,omitempty"`
 }
 

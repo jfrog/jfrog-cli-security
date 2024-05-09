@@ -108,14 +108,14 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return PrintJson(rw.results.GetScaScansXrayResults())
 	case format.Sarif:
 		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses)
-	// case format.Summary:
-	// 	rw.PrintSummary()
-	// 	return nil
+		// case format.Summary:
+		// 	rw.PrintSummary()
+		// 	return nil
 	}
 	return nil
 }
 
-func (rw*ResultsWriter) PrintSummary() error {
+func (rw *ResultsWriter) PrintSummary() error {
 	PrintSummary(rw.results)
 	return nil
 }

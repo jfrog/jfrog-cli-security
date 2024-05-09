@@ -101,9 +101,9 @@ func isSameLocation(location *sarif.Location, other *sarif.Location) bool {
 }
 
 func GetLocationId(location *sarif.Location) string {
-	return fmt.Sprintf("%s:%s:%d:%d:%d:%d", 
-		GetLocationFileName(location), 
-		GetLocationSnippet(location), 
+	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
+		GetLocationFileName(location),
+		GetLocationSnippet(location),
 		GetLocationStartLine(location),
 		GetLocationStartColumn(location),
 		GetLocationEndLine(location),

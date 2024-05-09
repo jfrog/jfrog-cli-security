@@ -163,32 +163,29 @@ func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *Extend
 	}
 }
 
-
-
-
 // Move to result writer
 func ConvertSummarySectionToString(results ...formats.SummaryResults) string {
-    issueCount := 0
+	issueCount := 0
 
-    for _, result := range results {
-        for _, scan := range result.Scans {
-            hasIssues := scan.HasIssues()
-            scanSummary := "✅"
-            if hasIssues {
-                scanSummary = "❌" // fmt.Sprintf("❌ (%d)", scan.GetTotalIssueCount())
-            } else if issueCount == 1 {
-                // only one issue at the section and no issues
-                return "✅ No vulnerabilities were found"
-            }
-            if scan.Name != "" {
-                scanSummary += fmt.Sprintf(" %s", scan.Name)
-            }
-            if hasIssues {
-                scanSummary += ":"
-            }
-        }
-    }
-    return ""
+	for _, result := range results {
+		for _, scan := range result.Scans {
+			hasIssues := scan.HasIssues()
+			scanSummary := "✅"
+			if hasIssues {
+				scanSummary = "❌" // fmt.Sprintf("❌ (%d)", scan.GetTotalIssueCount())
+			} else if issueCount == 1 {
+				// only one issue at the section and no issues
+				return "✅ No vulnerabilities were found"
+			}
+			if scan.Name != "" {
+				scanSummary += fmt.Sprintf(" %s", scan.Name)
+			}
+			if hasIssues {
+				scanSummary += ":"
+			}
+		}
+	}
+	return ""
 }
 
 func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
@@ -202,7 +199,7 @@ func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
 			str += GetScanSummaryString(scan, singleScan)
 			parsed++
 		}
-    }
+	}
 	return
 }
 
@@ -241,7 +238,6 @@ func GetScanSummaryString(scan formats.ScanSummaryResult, singleScan bool) (cont
 	// return
 }
 
-
 func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
 	if len(scaResults) == 1 {
 		summary.Name = scaResults[0].Target
@@ -253,12 +249,12 @@ func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaS
 	summary.ScaScanResults = getScaSummaryResults(&scaResults, extendedScanResults.ApplicabilityScanResults...)
 	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
 	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
-	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)	
+	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)
 	return
 }
 
 type SeverityWithApplicable struct {
-	SeverityInfo *TableSeverity
+	SeverityInfo        *TableSeverity
 	ApplicabilityStatus ApplicabilityStatus
 }
 
@@ -278,7 +274,7 @@ func getUniqueVulnerabilitiesInfo(cves []services.Cve, issueId, severity string,
 			if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
 				applicableStatus = ConvertToApplicabilityStatus(applicableInfo.Status)
 			}
-			uniqueFindings[cveId + compId] = SeverityWithApplicable{SeverityInfo: GetSeverity(severity, applicableStatus), ApplicabilityStatus: applicableStatus}
+			uniqueFindings[cveId+compId] = SeverityWithApplicable{SeverityInfo: GetSeverity(severity, applicableStatus), ApplicabilityStatus: applicableStatus}
 		}
 	}
 	return
