@@ -29,7 +29,7 @@ type SecurityCommandsSummary struct {
 
 type B []ScanCommandSummaryResult
 
-func SecurityCommandsJobSummary() *jobsummaries.JobSummary {
+func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
 	return jobsummaries.NewJobSummaryImpl(&SecurityCommandsSummary{
 		BuildScanCommands: []formats.SummaryResults{},
 		ScanCommands:      []formats.SummaryResults{},
@@ -37,7 +37,11 @@ func SecurityCommandsJobSummary() *jobsummaries.JobSummary {
 	})
 }
 
-func RecordSecurityCommandOutput(manager *jobsummaries.JobSummary, content ScanCommandSummaryResult) error {
+func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
+	manager, err := SecurityCommandsJobSummary()
+	if err != nil || manager == nil{
+		return
+	}
 	return manager.RecordResult(content, jobsummaries.SecuritySection)
 }
 
