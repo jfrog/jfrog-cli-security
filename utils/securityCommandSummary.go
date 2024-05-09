@@ -31,7 +31,11 @@ type SecurityCommandsSummary struct {
 type B []ScanCommandSummaryResult
 
 func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
-	return &githubsummaries.GitHubActionSummaryImpl{}
+	return githubsummaries.NewGitHubActionSummaryImpl(&SecurityCommandsSummary{
+        buildScanCommands: []formats.SummaryResults{},
+        scanCommands: []formats.SummaryResults{},
+        auditCommands: []formats.SummaryResults{},
+    }) 
 }
 
 func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImpl, content ScanCommandSummaryResult) error {
