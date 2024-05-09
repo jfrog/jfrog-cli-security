@@ -123,7 +123,8 @@ func GetResultsLocationCount(runs ...*sarif.Run) (count int) {
 func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (filteredRuns []*sarif.Run) {
 	for _, run := range runs {
 		for _, invocation := range run.Invocations {
-			if GetInvocationWorkingDirectory(invocation) == workingDirectory {
+			runWorkingDir := GetInvocationWorkingDirectory(invocation)
+			if runWorkingDir == workingDirectory {
 				filteredRuns = append(filteredRuns, run)
 				break
 			}

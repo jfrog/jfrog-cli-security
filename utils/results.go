@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
+	"golang.org/x/exp/maps"
 )
 
 type Results struct {
@@ -164,29 +165,6 @@ func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *Extend
 }
 
 // Move to result writer
-func ConvertSummarySectionToString(results ...formats.SummaryResults) string {
-	issueCount := 0
-
-	for _, result := range results {
-		for _, scan := range result.Scans {
-			hasIssues := scan.HasIssues()
-			scanSummary := "✅"
-			if hasIssues {
-				scanSummary = "❌" // fmt.Sprintf("❌ (%d)", scan.GetTotalIssueCount())
-			} else if issueCount == 1 {
-				// only one issue at the section and no issues
-				return "✅ No vulnerabilities were found"
-			}
-			if scan.Name != "" {
-				scanSummary += fmt.Sprintf(" %s", scan.Name)
-			}
-			if hasIssues {
-				scanSummary += ":"
-			}
-		}
-	}
-	return ""
-}
 
 func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
 	parsed := 0
@@ -214,29 +192,161 @@ func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
 	return true
 }
 
-func GetScanSummaryString(scan formats.ScanSummaryResult, singleData bool) (content string) {
-	if !scan.HasIssues() {
+func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (content string) {
+	if !summary.HasIssues() {
 		if singleData {
 			return "✅ No vulnerabilities were found"
 		}
-		return fmt.Sprintf("✅ %s", scan.Name)
+		return fmt.Sprintf("✅ %s", summary.Name)
 	}
-	// Has issues
+	// Handle display of issues
 	content = "❌"
 	if !singleData {
-		content += fmt.Sprintf(" %s:", scan.Name)
+		content += fmt.Sprintf(" %s:", summary.Name)
 	}
 	content += " Found "
-	content += fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
+	subScansWithIssues := summary.GetSubScansWithIssues()
+	if len(subScansWithIssues) == 1 {
+		content += getSubScanSummaryString(summary, subScansWithIssues[0])
+		return
+	}
+	// Multiple sub scans with issues
+	content += fmt.Sprintf("%d vulnerabilities\n", summary.GetTotalIssueCount())
+	content += getSubScanSummaryString(summary, subScansWithIssues...)
 	return
+}
 
-	// if scan.GetSubScansCountWith() == 1 {
-	// 	// only one sub scan with issues
-	// 	content += fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
-	// 	return fmt.Sprintf("%d vulnerabilities", scan.GetTotalIssueCount())
-	// }
-	// // multiple sub scans with issues
-	// return
+func getSummaryListItemPrefix(index, total, subListLevel int) (content string) {
+	for i := 0; i < subListLevel; i++ {
+		content += "    "
+	}
+	if total < 2 {
+		return
+	}
+	if index == total-1 {
+		content += "└──"
+		return
+	}
+	content += "├──"
+	return
+}
+
+func getSubScanSummaryCountsString(summary formats.ScanSummaryResult, subScanType formats.SummarySubScanType) (content string) {
+	switch subScanType {
+	case formats.ScaScan:
+		content += GetScaSummaryCountString(*summary.ScaScanResults)
+	case formats.IacScan:
+		content += GetSummaryCountString(*summary.IacScanResults)
+	case formats.SecretsScan:
+		content += GetSummaryCountString(*summary.SecretsScanResults)
+	case formats.SastScan:
+		content += GetSummaryCountString(*summary.SastScanResults)
+	}
+	return
+}
+
+func hasApplicableData(summary formats.ScaSummaryCount) bool {
+	for _, statuses := range summary {
+		sorted := getSortedKeysToDisplay(maps.Keys(statuses)...)
+		for _, status := range sorted {
+			if _, ok := statuses[status]; ok && statuses[status] > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func GetScaSummaryCountString(summary formats.ScaSummaryCount) (content string) {
+	severityCount := len(summary)
+	if severityCount == 0 {
+		return
+	}
+	if !hasApplicableData(summary) {
+		return GetSummaryCountString(summary.GetSeverityCountsWithoutStatus())
+	}
+	// Display contextual-analysis details
+	keys := getSortedKeysToDisplay(maps.Keys(summary)...)
+	for i, severity := range keys {
+		statusCounts := summary[severity]
+		content += fmt.Sprintf("\n%s %d %s%s",
+			getSummaryListItemPrefix(i, severityCount, 1),
+			statusCounts.GetTotal(),
+			severity,
+			GetSummaryCountString(statusCounts),
+		)
+	}
+	return
+}
+
+func getSortedKeysToDisplay(keys ...string) (sorted []string) {
+	unique := datastructures.MakeSet[string]()
+	for _, key := range keys {
+		unique.Add(key)
+	}
+	if unique.Exists("Critical") {
+		sorted = append(sorted, "Critical")
+	}
+	if unique.Exists("High") {
+		sorted = append(sorted, "High")
+	}
+	if unique.Exists("Medium") {
+		sorted = append(sorted, "Medium")
+	}
+	if unique.Exists("Low") {
+		sorted = append(sorted, "Low")
+	}
+	if unique.Exists("Unknown") {
+		sorted = append(sorted, "Unknown")
+	}
+	if unique.Exists(string(Applicable)) {
+		sorted = append(sorted, string(Applicable))
+	}
+	if unique.Exists(string(NotApplicable)) {
+		sorted = append(sorted, string(NotApplicable))
+	}
+	return
+}
+
+func GetSummaryCountString(summary formats.SummaryCount) (content string) {
+	if len(summary) == 0 {
+		return
+	}
+	// sort and filter
+	keys := getSortedKeysToDisplay(maps.Keys(summary)...)
+	if len(keys) == 0 {
+		return
+	}
+	for i, key := range keys {
+		if i > 0 {
+			content += ", "
+		}
+		content += fmt.Sprintf("%d %s", summary[key], key)
+	}
+	return fmt.Sprintf(" (%s)", content)
+}
+
+func getSubScanSummaryString(summary formats.ScanSummaryResult, subScanTypes ...formats.SummarySubScanType) (content string) {
+	totalSubScans := len(subScanTypes)
+	for i, subScanType := range subScanTypes {
+		// Prefix
+		if i > 0 {
+			content += "\n"
+		}
+		content += fmt.Sprintf("%s %d ", getSummaryListItemPrefix(i, totalSubScans, 0), summary.GetSubScanTotalIssueCount(subScanType))
+		switch subScanType {
+		case formats.ScaScan:
+			content += "SCA vulnerabilities"
+		case formats.IacScan:
+			content += "IAC vulnerabilities"
+		case formats.SecretsScan:
+			content += "Secrets"
+		case formats.SastScan:
+			content += "SAST vulnerabilities"
+		}
+		content += getSubScanSummaryCountsString(summary, subScanType)
+	}
+	return
 }
 
 func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
@@ -281,13 +391,13 @@ func getUniqueVulnerabilitiesInfo(cves []services.Cve, issueId, severity string,
 	return
 }
 
-func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) (summary *formats.ScaScanResult) {
+func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScaSummaryCount {
 	uniqueFindings := map[string]SeverityWithApplicable{}
-	hasApplicableRuns := len(applicableRuns) > 0
+	// hasApplicableRuns := len(applicableRuns) > 0
 	if len(*scaScanResults) == 0 {
-		return
+		return nil
 	}
-
+	// Aggregate unique findings
 	for _, scaResult := range *scaScanResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, vulnerability := range xrayResult.Vulnerabilities {
@@ -296,7 +406,6 @@ func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sa
 					uniqueFindings[key] = value
 				}
 			}
-
 			for _, violation := range xrayResult.Violations {
 				vioUniqueFindings := getUniqueVulnerabilitiesInfo(violation.Cves, violation.IssueId, violation.Severity, violation.Components, applicableRuns...)
 				for key, value := range vioUniqueFindings {
@@ -305,18 +414,20 @@ func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sa
 			}
 		}
 	}
-	summary = &formats.ScaScanResult{BySeverity: formats.SummaryCount{}, ByContextualAnalysis: map[string]formats.SummaryCount{}}
+	// Create summary
+	summary := formats.ScaSummaryCount{}
 	for _, severityWithApplicable := range uniqueFindings {
-		summary.BySeverity[severityWithApplicable.SeverityInfo.Severity]++
-		if hasApplicableRuns {
-			status := severityWithApplicable.ApplicabilityStatus.String()
-			if status == NotScanned.String() {
-				status = "Not Scanned"
-			}
-			summary.ByContextualAnalysis[status][severityWithApplicable.SeverityInfo.Severity]++
+		severity := severityWithApplicable.SeverityInfo.Severity
+		status := severityWithApplicable.ApplicabilityStatus.String()
+		// if status == NotScanned.String() {
+		// 	status = "Not Scanned"
+		// }
+		if _, ok := summary[severity]; !ok {
+			summary[severity] = formats.SummaryCount{}
 		}
+		summary[severity][status]++
 	}
-	return
+	return &summary
 }
 
 func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {

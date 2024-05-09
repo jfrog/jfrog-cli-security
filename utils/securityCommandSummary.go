@@ -6,7 +6,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/jobsummaries"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 const (
@@ -43,7 +42,7 @@ func RecordSecurityCommandOutput(manager *jobsummaries.JobSummary, content ScanC
 }
 
 func (scs *SecurityCommandsSummary) GetSectionTitle() string {
-	return "🛡️Security scans preformed by this job"
+	return "🛡️ Security scans preformed by this job"
 }
 
 func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) ([]byte, error) {
@@ -56,7 +55,10 @@ func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previ
 		}
 	}
 	// Append the new data
-	data := output.(ScanCommandSummaryResult)
+	data, ok := output.(ScanCommandSummaryResult)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast output to ScanCommandSummaryResult")
+	}
 	switch data.Section {
 	case Build:
 		aggregated.BuildScanCommands = append(aggregated.BuildScanCommands, data.Results)
@@ -71,8 +73,7 @@ func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previ
 func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (markdown string, err error) {
 	// Unmarshal the data into an array of build info objects
 	if err = json.Unmarshal(content, &scs); err != nil {
-		log.Error("Failed to unmarshal data: ", err)
-		return
+		return "", fmt.Errorf("failed while creating security markdown: %w", err)
 	}
 	markdown = ConvertSummaryToString(*scs)
 	return

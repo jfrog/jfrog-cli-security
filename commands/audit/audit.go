@@ -148,6 +148,11 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return
 		}
 	}
+
+	if err = utils.RecordSecurityCommandOutput(utils.SecurityCommandsJobSummary(), utils.ScanCommandSummaryResult{Results: auditResults.GetSummary(), Section: utils.Modules}); err != nil {
+		return err
+	}
+
 	if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
 		return
 	}
