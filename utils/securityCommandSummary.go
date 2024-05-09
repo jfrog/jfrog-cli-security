@@ -34,9 +34,9 @@ func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
 	return &githubsummaries.GitHubActionSummaryImpl{}
 }
 
-func NewGitHubActionSummaryImpl(userImpl *githubsummaries.GithubSummaryInterface) *githubsummaries.GitHubActionSummaryImpl {
-	return &githubsummaries.GitHubActionSummaryImpl{userMethods: userImpl}
-}
+// func NewGitHubActionSummaryImpl(userImpl *githubsummaries.GithubSummaryInterface) *githubsummaries.GitHubActionSummaryImpl {
+	// return &githubsummaries.GitHubActionSummaryImpl{userMethods: userImpl}
+// }
 
 func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImpl, content ScanCommandSummaryResult) error {
 	return githubsummaries.GithubSummaryRecordResult(content, githubsummaries.SecuritySection)
