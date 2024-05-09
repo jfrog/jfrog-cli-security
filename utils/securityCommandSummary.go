@@ -32,10 +32,10 @@ type B []ScanCommandSummaryResult
 
 func SecurityCommandsGitHubSummary() *githubsummaries.GitHubActionSummaryImpl {
 	return githubsummaries.NewGitHubActionSummaryImpl(&SecurityCommandsSummary{
-        BuildScanCommands: []formats.SummaryResults{},
-        ScanCommands: []formats.SummaryResults{},
-        AuditCommands: []formats.SummaryResults{},
-    }) 
+		BuildScanCommands: []formats.SummaryResults{},
+		ScanCommands:      []formats.SummaryResults{},
+		AuditCommands:     []formats.SummaryResults{},
+	})
 }
 
 func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImpl, content ScanCommandSummaryResult) error {
@@ -43,7 +43,7 @@ func RecordSecurityCommandOutput(manager *githubsummaries.GitHubActionSummaryImp
 }
 
 func (scs *SecurityCommandsSummary) GetSectionTitle() string {
-	return "Security"
+	return "🛡️Security scans preformed by this job"
 }
 
 func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) ([]byte, error) {
@@ -109,7 +109,7 @@ func convertScanSectionToString(addSectionTitle bool, title SecuritySummarySecti
 		return
 	}
 	if addSectionTitle {
-		summary += fmt.Sprintf("### %s\n", title)
+		summary += fmt.Sprintf("\n### %s\n", title)
 	}
 	summary += fmt.Sprintf("```\n%s\n```", GetSummaryString(results...))
 	return
