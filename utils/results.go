@@ -335,7 +335,6 @@ func updateSummaryNameToRelativePath(summary *formats.SummaryResults, wd string)
 		}
 		summary.Scans[i].Name = strings.TrimPrefix(scan.Name, wd)
 	}
-	return
 }
 
 func getSubScanSummaryString(summary formats.ScanSummaryResult, subScanTypes ...formats.SummarySubScanType) (content string) {
