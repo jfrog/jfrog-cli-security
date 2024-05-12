@@ -241,16 +241,6 @@ func getSummaryListItemPrefix(index, total, subListLevel int) (content string) {
 	return
 }
 
-func getListItemPrefix(index, total int) string {
-	if total == 0 {
-		return ""
-	}
-	if index == total-1 {
-		return "└──"
-	}
-	return "├──"
-}
-
 func getSubScanSummaryCountsString(summary formats.ScanSummaryResult, subScanType formats.SummarySubScanType) (content string) {
 	switch subScanType {
 	case formats.ScaScan:

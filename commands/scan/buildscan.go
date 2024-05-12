@@ -144,7 +144,9 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	if bsc.outputFormat != outputFormat.Table {
 		// Print the violations and/or vulnerabilities as part of one JSON.
-		err = resultsPrinter.PrintScanResults()
+		if err = resultsPrinter.PrintScanResults(); err != nil {
+			return
+		}
 	} else {
 		// Print two different tables for violations and vulnerabilities (if needed)
 
@@ -161,10 +163,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build}); err != nil {
-		return false, err
-	}
+	err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build})
 	return
 }
 
