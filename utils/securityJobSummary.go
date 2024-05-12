@@ -27,8 +27,7 @@ type SecurityCommandsSummary struct {
 	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
 }
 
-type B []ScanCommandSummaryResult
-
+// Manage the job summary for security commands
 func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
 	return jobsummaries.NewJobSummaryImpl(&SecurityCommandsSummary{
 		BuildScanCommands: []formats.SummaryResults{},
@@ -37,6 +36,7 @@ func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
 	})
 }
 
+// Record the security command output
 func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	manager, err := SecurityCommandsJobSummary()
 	if err != nil || manager == nil {

@@ -55,7 +55,7 @@ func (as ApplicabilityStatus) String() string {
 	return string(as)
 }
 
-func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
+func convertToApplicabilityStatus(status string) ApplicabilityStatus {
 	switch status {
 	case Applicable.String():
 		return Applicable
