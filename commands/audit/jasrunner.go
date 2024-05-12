@@ -76,7 +76,13 @@ func runSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		err = secrets.RunSecretsScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
+		results, err := secrets.RunSecretsScan(scanner, module, threadId)
+		if err != nil {
+			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+		}
+		auditParallelRunner.ResultsMu.Lock()
+		scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, results...)
+		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -87,7 +93,13 @@ func runIacScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Jas
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		err = iac.RunIacScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
+		results, err := iac.RunIacScan(scanner, module, threadId)
+		if err != nil {
+			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+		}
+		auditParallelRunner.ResultsMu.Lock()
+		scanResults.ExtendedScanResults.IacScanResults = append(scanResults.ExtendedScanResults.IacScanResults, results...)
+		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -98,7 +110,13 @@ func runSastScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.Ja
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		err = sast.RunSastScan(auditParallelRunner, scanner, scanResults.ExtendedScanResults, module, threadId)
+		results, err := sast.RunSastScan(scanner, module, threadId)
+		if err != nil {
+			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+		}
+		auditParallelRunner.ResultsMu.Lock()
+		scanResults.ExtendedScanResults.SastScanResults = append(scanResults.ExtendedScanResults.SastScanResults, results...)
+		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -109,7 +127,13 @@ func runContextualScan(auditParallelRunner *utils.AuditParallelRunner, scanner *
 		defer func() {
 			auditParallelRunner.ScannersWg.Done()
 		}()
-		err = applicability.RunApplicabilityScan(auditParallelRunner, scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanner, auditParams.thirdPartyApplicabilityScan, scanResults.ExtendedScanResults, module, threadId)
+		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), scanner, auditParams.thirdPartyApplicabilityScan, module, threadId)
+		if err != nil {
+			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+		}
+		auditParallelRunner.ResultsMu.Lock()
+		scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, results...)
+		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }

@@ -240,12 +240,15 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 }
 
 func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results,
-	serverDetails *config.ServerDetails, auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, threadId int) (err error) {
+	serverDetails *config.ServerDetails, auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, threadId int) error {
 	defer func() {
 		auditParallelRunner.JasWg.Done()
 	}()
-	if err = utils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-		return
+	if err := utils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
 	}
-	return RunJasScannersAndSetResults(auditParallelRunner, scanResults, serverDetails, auditParams, jfrogAppsConfig, scanResults.MultiScanId)
+	if err := RunJasScannersAndSetResults(auditParallelRunner, scanResults, serverDetails, auditParams, jfrogAppsConfig, scanResults.MultiScanId); err != nil {
+		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+	}
+	return nil
 }

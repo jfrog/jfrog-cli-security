@@ -265,3 +265,14 @@ func GetInvocationWorkingDirectory(invocation *sarif.Invocation) string {
 	}
 	return ""
 }
+
+func GetApplicableResultCountFromRule(runs ...*sarif.Run) (count int) {
+	for _, run := range runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			if rule.Properties["applicability"] != nil && rule.Properties["applicability"] == "applicable" {
+				count += 1
+			}
+		}
+	}
+	return
+}

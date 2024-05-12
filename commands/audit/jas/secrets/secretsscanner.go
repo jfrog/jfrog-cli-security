@@ -32,25 +32,21 @@ type SecretScanManager struct {
 // Return values:
 // []utils.IacOrSecretResult: a list of the secrets that were found.
 // error: An error object (if any).
-func RunSecretsScan(auditParallelRunner *utils.AuditParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
-	module jfrogappsconfig.Module, threadId int) (err error) {
+func RunSecretsScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Secrets)); err != nil {
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scannerTempDir)
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scanning...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
 		return
 	}
-	results := secretScanManager.secretsScannerResults
+	results = secretScanManager.secretsScannerResults
 	if len(results) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(results...), "secrets")
 	}
-	auditParallelRunner.ResultsMu.Lock()
-	extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-	auditParallelRunner.ResultsMu.Unlock()
 	return
 }
 

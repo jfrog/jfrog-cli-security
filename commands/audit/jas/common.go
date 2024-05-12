@@ -75,6 +75,7 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 	} else if jfrogAppsConfig != nil {
 		// jfrog-apps-config.yml exist in the workspace
 		for _, module := range jfrogAppsConfig.Modules {
+			// converting to absolute path before starting the scan flow
 			module.SourceRoot, err = filepath.Abs(module.SourceRoot)
 			if err != nil {
 				return nil, errorutils.CheckError(err)

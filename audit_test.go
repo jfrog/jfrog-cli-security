@@ -550,3 +550,21 @@ func validateAnalyticsBasicEvent(t *testing.T, output string) {
 	assert.NotEmpty(t, event.TotalScanDuration)
 	assert.True(t, event.TotalFindings > 0)
 }
+
+func TestAuditOnEmptyProject(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps"))
+	// Copy the multi project from the testdata to a temp dir
+	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
+	// Configure a new server named "default"
+	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+	baseWd, err := os.Getwd()
+	assert.NoError(t, err)
+	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
+	defer chdirCallback()
+	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.Json))
+	assert.Equal(t, "null\n", output)
+}

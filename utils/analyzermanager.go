@@ -257,7 +257,7 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 		}
 	}
 	// Download & unzip the analyzer manager files
-	log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
 	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
 		return err
 	}

@@ -40,8 +40,8 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayResults []services.ScanResponse, directDependencies []string,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, extendedScanResults *utils.ExtendedScanResults, module jfrogappsconfig.Module, threadId int) (err error) {
+func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner,
+	thirdPartyContextualAnalysis bool, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
@@ -51,14 +51,15 @@ func RunApplicabilityScan(auditParallelRunner *utils.AuditParallelRunner, xrayRe
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false), "Running applicability scanning...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
 		return
 	}
-	auditParallelRunner.ResultsMu.Lock()
-	extendedScanResults.ApplicabilityScanResults = applicabilityScanManager.applicabilityScanResults
-	auditParallelRunner.ResultsMu.Unlock()
+	results = applicabilityScanManager.applicabilityScanResults
+	if len(results) > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetApplicableResultCountFromRule(results...), "applicable cves")
+	}
 	return
 }
 
