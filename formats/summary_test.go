@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/maps"
 )
 
 func TestSummaryCount(t *testing.T) {
@@ -94,8 +93,8 @@ func TestScanSummaryResult(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			assert.Equal(t, testCase.expectedTotalIssueCount > 0, testCase.result.HasIssues())
 			assert.Equal(t, testCase.expectedTotalIssueCount, testCase.result.GetTotalIssueCount())
-			if assert.Equal(t, maps.Keys(testCase.expectedSubScansWithIssues), testCase.result.GetSubScansWithIssues()) {
-				for subScan, expectedCount := range testCase.expectedSubScansWithIssues {
+			if assert.Equal(t, testCase.expectedSubScansWithIssues, testCase.result.GetSubScansWithIssues()) {
+				for subScan, expectedCount := range testCase.expectedSubScansIssuesCount {
 					assert.Equal(t, expectedCount, testCase.result.GetSubScanTotalIssueCount(subScan))
 				}
 			}
