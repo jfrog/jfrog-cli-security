@@ -81,45 +81,52 @@ func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (mar
 	return ConvertSummaryToString(*scs)
 }
 
-func (scs *SecurityCommandsSummary) GetSectionCount() (count int) {
+func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
 	if len(scs.BuildScanCommands) > 0 {
-		count++
+		sections = append(sections, Build)
 	}
 	if len(scs.ScanCommands) > 0 {
-		count++
+		sections = append(sections, Binary)
 	}
 	if len(scs.AuditCommands) > 0 {
-		count++
+		sections = append(sections, Modules)
+	}
+	return
+
+}
+
+func (scs *SecurityCommandsSummary) GetSectionSummaries(section SecuritySummarySection) (summaries []formats.SummaryResults) {
+	switch section {
+	case Build:
+		summaries = scs.BuildScanCommands
+	case Binary:
+		summaries = scs.ScanCommands
+	case Modules:
+		summaries = scs.AuditCommands
 	}
 	return
 }
 
 func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, err error) {
-	addSectionTitle := results.GetSectionCount() > 1
-
-	// Build-Scan Section
-	buildSummary, err := convertScanSectionToString(addSectionTitle, Build, results.BuildScanCommands...)
-	if err != nil {
-		return
+	sectionsWithContent := results.GetOrderedSectionsWithContent()
+	addSectionTitle := len(sectionsWithContent) > 1
+	var sectionSummary string
+	for i, section := range sectionsWithContent {
+		if sectionSummary, err = convertScanSectionToString(results.GetSectionSummaries(section)...); err != nil {
+			return
+		}
+		if addSectionTitle {
+			if i > 0 {
+				summary += "\n"
+			}
+			summary += fmt.Sprintf("#### %s\n", section)
+		}
+		summary += sectionSummary
 	}
-	summary += buildSummary
-	// Binary-Scan Section
-	binarySummary, err := convertScanSectionToString(addSectionTitle, Binary, results.ScanCommands...)
-	if err != nil {
-		return
-	}
-	summary += binarySummary
-	// Audit Section
-	modulesSummary, err := convertScanSectionToString(addSectionTitle, Modules, results.AuditCommands...)
-	if err != nil {
-		return
-	}
-	summary += modulesSummary
-
 	return
 }
 
-func convertScanSectionToString(addSectionTitle bool, title SecuritySummarySection, results ...formats.SummaryResults) (summary string, err error) {
+func convertScanSectionToString(results ...formats.SummaryResults) (summary string, err error) {
 	if len(results) == 0 {
 		return
 	}
@@ -127,9 +134,6 @@ func convertScanSectionToString(addSectionTitle bool, title SecuritySummarySecti
 	if err != nil {
 		return
 	}
-	if addSectionTitle {
-		summary += fmt.Sprintf("\n#### %s\n", title)
-	}
-	summary += fmt.Sprintf("```\n%s\n```", content)
+	summary = fmt.Sprintf("```\n%s\n```", content)
 	return
 }

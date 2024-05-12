@@ -15,7 +15,9 @@ var (
 )
 
 func TestConvertSummaryToString(t *testing.T) {
-	// TestConvertSummaryToString
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+	
 	testCases := []struct {
 		name     string
 		summary  SecurityCommandsSummary
@@ -26,7 +28,7 @@ func TestConvertSummaryToString(t *testing.T) {
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
 					Section: Binary,
-					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: filepath.Join(wd, "binary-name")}}},
 				},
 			),
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "single_no_issue.md"),
@@ -49,6 +51,10 @@ func TestConvertSummaryToString(t *testing.T) {
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
 					Section: Build,
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
+				},
+				ScanCommandSummaryResult{
+					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target: "build-name (build-number)",
 						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
@@ -56,17 +62,41 @@ func TestConvertSummaryToString(t *testing.T) {
 				},
 				ScanCommandSummaryResult{
 					Section: Binary,
-					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target: "build-name (build-number)",
-						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
-					}}},
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
+						{
+							Target: filepath.Join(wd, "binary-name"),
+							ScaScanResults: &formats.ScaSummaryCount{},
+							SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
+						},
+						{
+							Target: filepath.Join("other-root", "dir", "binary-name2"),
+							ScaScanResults: &formats.ScaSummaryCount{},
+						},
+					}},
 				},
 				ScanCommandSummaryResult{
 					Section: Modules,
-					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target: "build-name (build-number)",
-						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
-					}}},
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
+						{
+							Target: filepath.Join(wd, "application1"),
+							SastScanResults: &formats.SummaryCount{"Low": 1},
+							IacScanResults: &formats.SummaryCount{"Medium": 5},
+							ScaScanResults: &formats.ScaSummaryCount{
+								"Critical": formats.SummaryCount{"Undetermined": 1, "Not Applicable": 2},
+								"High": formats.SummaryCount{"Applicable": 1,"Not Applicable": 1, "Not Covered": 2},
+								"Low": formats.SummaryCount{"Undetermined": 1},
+							},
+						},
+						{
+							Target: filepath.Join(wd, "application2"),
+							ScaScanResults: &formats.ScaSummaryCount{
+								"High": formats.SummaryCount{"Not Applicable": 1},
+							},
+						},
+						{
+							Target: filepath.Join(wd, "dir", "application3"),
+						},
+					}},
 				},
 			),
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "multi_command_job.md"),
