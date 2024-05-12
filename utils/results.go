@@ -175,11 +175,11 @@ func GetSummaryString(summaries ...formats.SummaryResults) (str string, err erro
 	if err != nil {
 		return
 	}
-	for _, summary := range summaries {
+	for i := range summaries {
 		if !singleScan {
-			updateSummaryNameToRelativePath(&summary, wd)
+			updateSummaryNameToRelativePath(&summaries[i], wd)
 		}
-		for _, scan := range summary.Scans {
+		for _, scan := range summaries[i].Scans {
 			if parsed > 0 {
 				str += "\n"
 			}
