@@ -92,7 +92,7 @@ func TestScanSummaryResult(t *testing.T) {
 			assert.Equal(t, testCase.expectedTotalIssueCount, testCase.result.GetTotalIssueCount())
 			if assert.Equal(t, maps.Keys(testCase.expectedSubScansWithIssues), testCase.result.GetSubScansWithIssues()) {
 				for subScan, expectedCount := range testCase.expectedSubScansWithIssues {
-					assert.Equal(t, expectedCount, testCase.result.GetSubScanTotalIssueCount(SummarySubScanType(subScan)))
+					assert.Equal(t, expectedCount, testCase.result.GetSubScanTotalIssueCount(subScan))
 				}
 			}
 		})
