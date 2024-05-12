@@ -48,7 +48,7 @@ func (sc ScaSummaryCount) GetTotal() (total int) {
 }
 
 func (sc ScaSummaryCount) GetSeverityCountsWithoutStatus() (severityCounts SummaryCount) {
-	severityCounts = make(SummaryCount)
+	severityCounts = SummaryCount{}
 	for severity, statusCounts := range sc {
 		for _, count := range statusCounts {
 			severityCounts[severity] += count

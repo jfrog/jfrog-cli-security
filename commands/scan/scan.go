@@ -365,7 +365,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFil
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
 				}
-				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filepath.Base(filePath), Result: scanResults})
+				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults})
 				return
 			}
 

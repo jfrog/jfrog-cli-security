@@ -39,7 +39,7 @@ func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
 
 func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	manager, err := SecurityCommandsJobSummary()
-	if err != nil || manager == nil{
+	if err != nil || manager == nil {
 		return
 	}
 	return manager.RecordResult(content, jobsummaries.SecuritySection)
@@ -49,19 +49,19 @@ func (scs *SecurityCommandsSummary) GetSectionTitle() string {
 	return "🛡️ Security scans preformed by this job"
 }
 
-func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) ([]byte, error) {
+func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
 	// Unmarshal the aggregated data
 	var aggregated SecurityCommandsSummary
 	if len(previousObjects) > 0 {
-		err := json.Unmarshal(previousObjects, &aggregated)
-		if err != nil {
-			return nil, err
+		if err = json.Unmarshal(previousObjects, &aggregated); err != nil {
+			return
 		}
 	}
 	// Append the new data
 	data, ok := output.(ScanCommandSummaryResult)
 	if !ok {
-		return nil, fmt.Errorf("failed to cast output to ScanCommandSummaryResult")
+		err = fmt.Errorf("failed to cast output to ScanCommandSummaryResult")
+		return
 	}
 	switch data.Section {
 	case Build:
@@ -79,8 +79,7 @@ func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (mar
 	if err = json.Unmarshal(content, &scs); err != nil {
 		return "", fmt.Errorf("failed while creating security markdown: %w", err)
 	}
-	markdown = ConvertSummaryToString(*scs)
-	return
+	return ConvertSummaryToString(*scs)
 }
 
 func (scs *SecurityCommandsSummary) GetSectionCount() (count int) {
@@ -96,26 +95,42 @@ func (scs *SecurityCommandsSummary) GetSectionCount() (count int) {
 	return
 }
 
-func ConvertSummaryToString(results SecurityCommandsSummary) (summary string) {
+func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, err error) {
 	addSectionTitle := results.GetSectionCount() > 1
 
 	// Build-Scan Section
-	summary += convertScanSectionToString(addSectionTitle, Build, results.BuildScanCommands...)
+	buildSummary, err := convertScanSectionToString(addSectionTitle, Build, results.BuildScanCommands...)
+	if err != nil {
+		return
+	}
+	summary += buildSummary
 	// Binary-Scan Section
-	summary += convertScanSectionToString(addSectionTitle, Binary, results.ScanCommands...)
+	binarySummary, err := convertScanSectionToString(addSectionTitle, Binary, results.ScanCommands...)
+	if err != nil {
+		return
+	}
+	summary += binarySummary
 	// Audit Section
-	summary += convertScanSectionToString(addSectionTitle, Binary, results.AuditCommands...)
+	modulesSummary, err := convertScanSectionToString(addSectionTitle, Modules, results.AuditCommands...)
+	if err != nil {
+		return
+	}
+	summary += modulesSummary
 
 	return
 }
 
-func convertScanSectionToString(addSectionTitle bool, title SecuritySummarySection, results ...formats.SummaryResults) (summary string) {
+func convertScanSectionToString(addSectionTitle bool, title SecuritySummarySection, results ...formats.SummaryResults) (summary string, err error) {
 	if len(results) == 0 {
 		return
 	}
-	if addSectionTitle {
-		summary += fmt.Sprintf("\n### %s\n", title)
+	content, err := GetSummaryString(results...)
+	if err != nil {
+		return
 	}
-	summary += fmt.Sprintf("```\n%s\n```", GetSummaryString(results...))
+	if addSectionTitle {
+		summary += fmt.Sprintf("\n#### %s\n", title)
+	}
+	summary += fmt.Sprintf("```\n%s\n```", content)
 	return
 }

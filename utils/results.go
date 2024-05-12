@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -166,10 +168,17 @@ func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *Extend
 
 // Move to result writer
 
-func GetSummaryString(summaries ...formats.SummaryResults) (str string) {
+func GetSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
+	wd, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return
+	}
 	for _, summary := range summaries {
+		if !singleScan {
+			updateSummaryNameToRelativePath(&summary, wd)
+		}
 		for _, scan := range summary.Scans {
 			if parsed > 0 {
 				str += "\n"
@@ -204,14 +213,14 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 	if !singleData {
 		content += fmt.Sprintf(" %s:", summary.Name)
 	}
-	content += " Found "
+	content += " Found"
 	subScansWithIssues := summary.GetSubScansWithIssues()
 	if len(subScansWithIssues) == 1 {
 		content += getSubScanSummaryString(summary, subScansWithIssues[0])
 		return
 	}
 	// Multiple sub scans with issues
-	content += fmt.Sprintf("%d vulnerabilities\n", summary.GetTotalIssueCount())
+	content += fmt.Sprintf(" %d vulnerabilities\n", summary.GetTotalIssueCount())
 	content += getSubScanSummaryString(summary, subScansWithIssues...)
 	return
 }
@@ -220,15 +229,26 @@ func getSummaryListItemPrefix(index, total, subListLevel int) (content string) {
 	for i := 0; i < subListLevel; i++ {
 		content += "    "
 	}
-	if total < 2 {
-		return
+	if subListLevel == 0 && total < 2 {
+		return " "
 	}
 	if index == total-1 {
-		content += "└──"
+		// TODO: should get this for severity (only one) with applicable data (at least one)
+		content += "└── "
 		return
 	}
-	content += "├──"
+	content += "├── "
 	return
+}
+
+func getListItemPrefix(index, total int) string {
+	if total == 0 {
+		return ""
+	}
+	if index == total-1 {
+		return "└──"
+	}
+	return "├──"
 }
 
 func getSubScanSummaryCountsString(summary formats.ScanSummaryResult, subScanType formats.SummarySubScanType) (content string) {
@@ -269,7 +289,7 @@ func GetScaSummaryCountString(summary formats.ScaSummaryCount) (content string) 
 	keys := getSortedKeysToDisplay(maps.Keys(summary)...)
 	for i, severity := range keys {
 		statusCounts := summary[severity]
-		content += fmt.Sprintf("\n%s %d %s%s",
+		content += fmt.Sprintf("\n%s%d %s%s",
 			getSummaryListItemPrefix(i, severityCount, 1),
 			statusCounts.GetTotal(),
 			severity,
@@ -280,43 +300,29 @@ func GetScaSummaryCountString(summary formats.ScaSummaryCount) (content string) 
 }
 
 func getSortedKeysToDisplay(keys ...string) (sorted []string) {
-	unique := datastructures.MakeSet[string]()
-	for _, key := range keys {
-		unique.Add(key)
+	if len(keys) == 0 {
+		return
 	}
-	if unique.Exists("Critical") {
-		sorted = append(sorted, "Critical")
-	}
-	if unique.Exists("High") {
-		sorted = append(sorted, "High")
-	}
-	if unique.Exists("Medium") {
-		sorted = append(sorted, "Medium")
-	}
-	if unique.Exists("Low") {
-		sorted = append(sorted, "Low")
-	}
-	if unique.Exists("Unknown") {
-		sorted = append(sorted, "Unknown")
-	}
-	if unique.Exists(string(Applicable)) {
-		sorted = append(sorted, string(Applicable))
-	}
-	if unique.Exists(string(NotApplicable)) {
-		sorted = append(sorted, string(NotApplicable))
+	keysSet := datastructures.MakeSetFromElements(keys...)
+	allowedSorted := []string{"Critical", "High", "Medium", "Low", "Unknown", string(Applicable), string(NotApplicable)}
+	for _, key := range allowedSorted {
+		if keysSet.Exists(key) {
+			sorted = append(sorted, key)
+		}
 	}
 	return
 }
 
-func GetSummaryCountString(summary formats.SummaryCount) (content string) {
+func GetSummaryCountString(summary formats.SummaryCount) string {
 	if len(summary) == 0 {
-		return
+		return ""
 	}
 	// sort and filter
 	keys := getSortedKeysToDisplay(maps.Keys(summary)...)
 	if len(keys) == 0 {
-		return
+		return ""
 	}
+	content := ""
 	for i, key := range keys {
 		if i > 0 {
 			content += ", "
@@ -326,6 +332,22 @@ func GetSummaryCountString(summary formats.SummaryCount) (content string) {
 	return fmt.Sprintf(" (%s)", content)
 }
 
+func updateSummaryNameToRelativePath(summary *formats.SummaryResults, wd string) {
+	for i, scan := range summary.Scans {
+		if scan.Name == "" {
+			continue
+		}
+		if !strings.HasPrefix(scan.Name, wd) {
+			continue
+		}
+		if scan.Name == wd {
+			summary.Scans[i].Name = filepath.Base(wd)
+		}
+		summary.Scans[i].Name = strings.TrimPrefix(scan.Name, wd)
+	}
+	return
+}
+
 func getSubScanSummaryString(summary formats.ScanSummaryResult, subScanTypes ...formats.SummarySubScanType) (content string) {
 	totalSubScans := len(subScanTypes)
 	for i, subScanType := range subScanTypes {
@@ -333,7 +355,7 @@ func getSubScanSummaryString(summary formats.ScanSummaryResult, subScanTypes ...
 		if i > 0 {
 			content += "\n"
 		}
-		content += fmt.Sprintf("%s %d ", getSummaryListItemPrefix(i, totalSubScans, 0), summary.GetSubScanTotalIssueCount(subScanType))
+		content += fmt.Sprintf("%s%d ", getSummaryListItemPrefix(i, totalSubScans, 0), summary.GetSubScanTotalIssueCount(subScanType))
 		switch subScanType {
 		case formats.ScaScan:
 			content += "SCA vulnerabilities"
