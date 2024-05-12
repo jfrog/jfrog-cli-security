@@ -22,12 +22,13 @@ type ScanSummaryResult struct {
 type SummarySubScanType string
 
 const (
-	ScaScan     SummarySubScanType = "SCA vulnerabilities"
-	IacScan     SummarySubScanType = "IAC vulnerabilities"
+	ScaScan     SummarySubScanType = "SCA"
+	IacScan     SummarySubScanType = "IAC"
 	SecretsScan SummarySubScanType = "Secrets"
-	SastScan    SummarySubScanType = "SAST vulnerabilities"
+	SastScan    SummarySubScanType = "SAST"
 )
 
+// Severity -> Count
 type SummaryCount map[string]int
 
 func (sc SummaryCount) GetTotal() int {
@@ -38,6 +39,7 @@ func (sc SummaryCount) GetTotal() int {
 	return total
 }
 
+// Severity -> Applicable status -> Count
 type ScaSummaryCount map[string]SummaryCount
 
 func (sc ScaSummaryCount) GetTotal() (total int) {
@@ -77,7 +79,8 @@ func (s *ScanSummaryResult) GetTotalIssueCount() (total int) {
 	return
 }
 
-func (s *ScanSummaryResult) GetSubScansWithIssues() (subScans []SummarySubScanType) {
+func (s *ScanSummaryResult) GetSubScansWithIssues() ([]SummarySubScanType) {
+	subScans := []SummarySubScanType{}
 	if s.SecretsScanResults != nil && s.SecretsScanResults.GetTotal() > 0 {
 		subScans = append(subScans, SecretsScan)
 	}
@@ -87,11 +90,11 @@ func (s *ScanSummaryResult) GetSubScansWithIssues() (subScans []SummarySubScanTy
 	if s.IacScanResults != nil && s.IacScanResults.GetTotal() > 0 {
 		subScans = append(subScans, IacScan)
 	}
-	// Must be last for GUI to display contexual-analysis details as well
+	// Must be last for element to also display contextual-analysis details
 	if s.ScaScanResults != nil && s.ScaScanResults.GetTotal() > 0 {
 		subScans = append(subScans, ScaScan)
 	}
-	return
+	return subScans
 }
 
 func (s *ScanSummaryResult) GetSubScanTotalIssueCount(subScanType SummarySubScanType) (count int) {
@@ -107,12 +110,3 @@ func (s *ScanSummaryResult) GetSubScanTotalIssueCount(subScanType SummarySubScan
 	}
 	return
 }
-
-// type ScaScanResult struct {
-// 	BySeverity           SummaryCount            `json:"summaryBySeverity"`
-// 	ByContextualAnalysis map[string]SummaryCount `json:"summaryByContextualAnalysis,omitempty"`
-// }
-
-// func (s *ScaScanResult) GetTotalIssueCount() (total int) {
-// 	return s.BySeverity.GetTotal()
-// }

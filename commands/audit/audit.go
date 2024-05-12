@@ -148,7 +148,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return
 		}
 	}
-
 	if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
 		return
 	}
