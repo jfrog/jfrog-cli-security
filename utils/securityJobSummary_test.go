@@ -116,7 +116,7 @@ func TestConvertSummaryToString(t *testing.T) {
 func getOutputFromFile(t *testing.T, filePath string) string {
 	content, err := os.ReadFile(filePath)
 	assert.NoError(t, err)
-	return strings.ReplaceAll(string(content), "\r\n", "\n")
+	return strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "\\", "/")
 }
 
 func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) SecurityCommandsSummary {

@@ -57,15 +57,17 @@ func TestScaSummaryCount(t *testing.T) {
 
 func TestScanSummaryResult(t *testing.T) {
 	testCases := []struct {
-		name                       string
-		result                     *ScanSummaryResult
-		expectedTotalIssueCount    int
-		expectedSubScansWithIssues map[SummarySubScanType]int
+		name                        string
+		result                      *ScanSummaryResult
+		expectedTotalIssueCount     int
+		expectedSubScansWithIssues  []SummarySubScanType
+		expectedSubScansIssuesCount map[SummarySubScanType]int
 	}{
 		{
 			"Empty",
 			&ScanSummaryResult{},
 			0,
+			[]SummarySubScanType{},
 			map[SummarySubScanType]int{},
 		},
 		{
@@ -74,6 +76,7 @@ func TestScanSummaryResult(t *testing.T) {
 				ScaScanResults: &ScaSummaryCount{"High": SummaryCount{"Applicable": 1}},
 			},
 			1,
+			[]SummarySubScanType{ScaScan},
 			map[SummarySubScanType]int{ScaScan: 1},
 		},
 		{
@@ -83,6 +86,7 @@ func TestScanSummaryResult(t *testing.T) {
 				SastScanResults: &SummaryCount{"High": 1},
 			},
 			2,
+			[]SummarySubScanType{SastScan, ScaScan},
 			map[SummarySubScanType]int{SastScan: 1, ScaScan: 1},
 		},
 	}
