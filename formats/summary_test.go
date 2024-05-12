@@ -35,15 +35,15 @@ func TestScaSummaryCount(t *testing.T) {
 		{"Single-NoStatus", ScaSummaryCount{"High": SummaryCount{"": 1}}, 1, SummaryCount{"High": 1}},
 		{"Single-Status", ScaSummaryCount{"High": SummaryCount{"Applicable": 1}}, 1, SummaryCount{"High": 1}},
 		{
-			"Multiple-NoStatus", 
-			ScaSummaryCount{"High": SummaryCount{"": 1}, "Medium": SummaryCount{"": 2}, "Low": SummaryCount{"": 3}}, 
-			6, 
+			"Multiple-NoStatus",
+			ScaSummaryCount{"High": SummaryCount{"": 1}, "Medium": SummaryCount{"": 2}, "Low": SummaryCount{"": 3}},
+			6,
 			SummaryCount{"High": 1, "Medium": 2, "Low": 3},
 		},
 		{
 			"Multiple-Status",
 			ScaSummaryCount{"High": SummaryCount{"Applicable": 1}, "Medium": SummaryCount{"": 2}, "Low": SummaryCount{"Applicable": 3, "Not Applicable": 3}},
-			9, 
+			9,
 			SummaryCount{"High": 1, "Medium": 2, "Low": 6},
 		},
 	}
@@ -57,9 +57,9 @@ func TestScaSummaryCount(t *testing.T) {
 
 func TestScanSummaryResult(t *testing.T) {
 	testCases := []struct {
-		name     string
-		result   *ScanSummaryResult
-		expectedTotalIssueCount int
+		name                       string
+		result                     *ScanSummaryResult
+		expectedTotalIssueCount    int
 		expectedSubScansWithIssues map[SummarySubScanType]int
 	}{
 		{
@@ -79,7 +79,7 @@ func TestScanSummaryResult(t *testing.T) {
 		{
 			"Multiple",
 			&ScanSummaryResult{
-				ScaScanResults: &ScaSummaryCount{"High": SummaryCount{"Applicable": 1}},
+				ScaScanResults:  &ScaSummaryCount{"High": SummaryCount{"Applicable": 1}},
 				SastScanResults: &SummaryCount{"High": 1},
 			},
 			2,

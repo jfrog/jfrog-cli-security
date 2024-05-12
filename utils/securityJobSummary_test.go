@@ -17,10 +17,10 @@ var (
 func TestConvertSummaryToString(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
-	
+
 	testCases := []struct {
-		name     string
-		summary  SecurityCommandsSummary
+		name                string
+		summary             SecurityCommandsSummary
 		expectedContentPath string
 	}{
 		{
@@ -39,7 +39,7 @@ func TestConvertSummaryToString(t *testing.T) {
 				ScanCommandSummaryResult{
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target: "build-name (build-number)",
+						Target:             "build-name (build-number)",
 						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
 					}}},
 				},
@@ -56,7 +56,7 @@ func TestConvertSummaryToString(t *testing.T) {
 				ScanCommandSummaryResult{
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target: "build-name (build-number)",
+						Target:         "build-name (build-number)",
 						ScaScanResults: &formats.ScaSummaryCount{"Low": formats.SummaryCount{"": 1}, "High": formats.SummaryCount{"": 2}},
 					}}},
 				},
@@ -64,12 +64,12 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Binary,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
-							Target: filepath.Join(wd, "binary-name"),
-							ScaScanResults: &formats.ScaSummaryCount{},
+							Target:             filepath.Join(wd, "binary-name"),
+							ScaScanResults:     &formats.ScaSummaryCount{},
 							SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
 						},
 						{
-							Target: filepath.Join("other-root", "dir", "binary-name2"),
+							Target:         filepath.Join("other-root", "dir", "binary-name2"),
 							ScaScanResults: &formats.ScaSummaryCount{},
 						},
 					}},
@@ -78,13 +78,13 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Modules,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
-							Target: filepath.Join(wd, "application1"),
+							Target:          filepath.Join(wd, "application1"),
 							SastScanResults: &formats.SummaryCount{"Low": 1},
-							IacScanResults: &formats.SummaryCount{"Medium": 5},
+							IacScanResults:  &formats.SummaryCount{"Medium": 5},
 							ScaScanResults: &formats.ScaSummaryCount{
 								"Critical": formats.SummaryCount{"Undetermined": 1, "Not Applicable": 2},
-								"High": formats.SummaryCount{"Applicable": 1,"Not Applicable": 1, "Not Covered": 2},
-								"Low": formats.SummaryCount{"Undetermined": 1},
+								"High":     formats.SummaryCount{"Applicable": 1, "Not Applicable": 1, "Not Covered": 2},
+								"Low":      formats.SummaryCount{"Undetermined": 1},
 							},
 						},
 						{

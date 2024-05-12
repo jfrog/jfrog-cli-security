@@ -26,7 +26,7 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 					*target2,
 				},
 			},
-			target: "target1",
+			target:   "target1",
 			expected: target1,
 		},
 		{
@@ -37,7 +37,7 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 					*target2,
 				},
 			},
-			target: "target3",
+			target:   "target3",
 			expected: nil,
 		},
 	}
@@ -51,47 +51,47 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 
 func TestGetSummary(t *testing.T) {
 	dummyScaVulnerabilities := []services.Vulnerability{
-		{IssueId: "XRAY-1", Severity: "Critical", Cves:[]services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-		{IssueId: "XRAY-2", Severity: "High", Cves:[]services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-	} 
+		{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		{IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+	}
 	dummyExtendedScanResults := &ExtendedScanResults{
 		ApplicabilityScanResults: []*sarif.Run{
 			CreateRunWithDummyResults(CreateDummyPassingResult("applic_CVE-2")).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
-			}),	
+			}),
 		},
 		SecretsScanResults: []*sarif.Run{
-			CreateRunWithDummyResults(CreateResultWithLocations("","","note",CreateLocation("target1/file",0,0,0,0,"snippet"))).WithInvocations([]*sarif.Invocation{
+			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target1/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
 			}),
-			CreateRunWithDummyResults(CreateResultWithLocations("","","note",CreateLocation("target2/file",0,0,0,0,"snippet"))).WithInvocations([]*sarif.Invocation{
+			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target2/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target2")),
 			}),
 		},
 		SastScanResults: []*sarif.Run{
-			CreateRunWithDummyResults(CreateResultWithLocations("","","note",CreateLocation("target1/file2",0,0,0,0,"snippet"))).WithInvocations([]*sarif.Invocation{
+			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target1/file2", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
 			}),
 		},
 	}
 
 	testCases := []struct {
-		name     string
-		results  Results
-		expected formats.SummaryResults
+		name         string
+		results      Results
+		expected     formats.SummaryResults
 		findingCount int
 	}{
 		{
-			name: "Empty results",
-			results: Results{ScaResults: []ScaScanResult{}},
-			expected: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
+			name:         "Empty results",
+			results:      Results{ScaResults: []ScaScanResult{}},
+			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 		},
 		{
 			name: "One module result",
 			results: Results{
 				ScaResults: []ScaScanResult{{
-					Target: "target1",
+					Target:      "target1",
 					XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
 				}},
 				ExtendedScanResults: dummyExtendedScanResults,
@@ -102,10 +102,10 @@ func TestGetSummary(t *testing.T) {
 						Target: "target1",
 						ScaScanResults: &formats.ScaSummaryCount{
 							"Critical": formats.SummaryCount{"Undetermined": 1},
-							"High": formats.SummaryCount{"Not Applicable": 1},
+							"High":     formats.SummaryCount{"Not Applicable": 1},
 						},
 						SecretsScanResults: &formats.SummaryCount{"Low": 2},
-						SastScanResults: &formats.SummaryCount{"Low": 1},
+						SastScanResults:    &formats.SummaryCount{"Low": 1},
 					},
 				},
 			},
@@ -116,11 +116,11 @@ func TestGetSummary(t *testing.T) {
 			results: Results{
 				ScaResults: []ScaScanResult{
 					{
-						Target: "target1",
+						Target:      "target1",
 						XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
 					},
 					{
-						Target: "target2",
+						Target:      "target2",
 						XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
 					},
 				},
@@ -132,16 +132,16 @@ func TestGetSummary(t *testing.T) {
 						Target: "target1",
 						ScaScanResults: &formats.ScaSummaryCount{
 							"Critical": formats.SummaryCount{"Undetermined": 1},
-							"High": formats.SummaryCount{"Not Applicable": 1},
+							"High":     formats.SummaryCount{"Not Applicable": 1},
 						},
 						SecretsScanResults: &formats.SummaryCount{"Low": 1},
-						SastScanResults: &formats.SummaryCount{"Low": 1},
+						SastScanResults:    &formats.SummaryCount{"Low": 1},
 					},
 					{
 						Target: "target2",
 						ScaScanResults: &formats.ScaSummaryCount{
 							"Critical": formats.SummaryCount{"": 1},
-							"High": formats.SummaryCount{"": 1},
+							"High":     formats.SummaryCount{"": 1},
 						},
 						SecretsScanResults: &formats.SummaryCount{"Low": 1},
 					},
@@ -149,7 +149,6 @@ func TestGetSummary(t *testing.T) {
 			},
 			findingCount: 5,
 		},
-
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
