@@ -57,7 +57,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target: "build-name (build-number)",
-						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
+						ScaScanResults: &formats.ScaSummaryCount{"Low": formats.SummaryCount{"": 1}, "High": formats.SummaryCount{"": 2}},
 					}}},
 				},
 				ScanCommandSummaryResult{

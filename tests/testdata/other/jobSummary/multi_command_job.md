@@ -1,7 +1,7 @@
 #### Builds
 ```
 ✅ build-name (build-number)
-❌ build-name (build-number): Found 3 Secrets (2 High, 1 Low)
+❌ build-name (build-number): Found 3 SCA vulnerabilities (2 High, 1 Low)
 ```
 #### Binaries
 ```
