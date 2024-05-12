@@ -177,7 +177,7 @@ func GetSummaryString(summaries ...formats.SummaryResults) (str string, err erro
 	}
 	for i := range summaries {
 		if !singleScan {
-			updateSummaryNameToRelativePath(&summaries[i], wd)
+			updateSummaryNamesToRelativePath(&summaries[i], wd)
 		}
 		for _, scan := range summaries[i].Scans {
 			if parsed > 0 {
@@ -322,7 +322,7 @@ func GetSummaryCountString(summary formats.SummaryCount) string {
 	return fmt.Sprintf(" (%s)", content)
 }
 
-func updateSummaryNameToRelativePath(summary *formats.SummaryResults, wd string) {
+func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
 	for i, scan := range summary.Scans {
 		if scan.Name == "" {
 			continue
