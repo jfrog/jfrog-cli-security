@@ -22,9 +22,9 @@ type ScanCommandSummaryResult struct {
 }
 
 type SecurityCommandsSummary struct {
-	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands,omitempty"`
-	ScanCommands      []formats.SummaryResults `json:"scanCommands,omitempty"`
-	AuditCommands     []formats.SummaryResults `json:"auditCommands,omitempty"`
+	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands"`
+	ScanCommands      []formats.SummaryResults `json:"scanCommands"`
+	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
 }
 
 type B []ScanCommandSummaryResult
@@ -51,9 +51,8 @@ func (scs *SecurityCommandsSummary) GetSectionTitle() string {
 
 func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
 	// Unmarshal the aggregated data
-	var aggregated SecurityCommandsSummary
 	if len(previousObjects) > 0 {
-		if err = json.Unmarshal(previousObjects, &aggregated); err != nil {
+		if err = json.Unmarshal(previousObjects, &scs); err != nil {
 			return
 		}
 	}
@@ -65,13 +64,13 @@ func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previ
 	}
 	switch data.Section {
 	case Build:
-		aggregated.BuildScanCommands = append(aggregated.BuildScanCommands, data.Results)
+		scs.BuildScanCommands = append(scs.BuildScanCommands, data.Results)
 	case Binary:
-		aggregated.ScanCommands = append(aggregated.ScanCommands, data.Results)
+		scs.ScanCommands = append(scs.ScanCommands, data.Results)
 	case Modules:
-		aggregated.AuditCommands = append(aggregated.AuditCommands, data.Results)
+		scs.AuditCommands = append(scs.AuditCommands, data.Results)
 	}
-	return json.Marshal(aggregated)
+	return json.Marshal(scs)
 }
 
 func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (markdown string, err error) {
