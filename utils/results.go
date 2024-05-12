@@ -1,7 +1,6 @@
 package utils
 
 import (
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -68,7 +67,6 @@ func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
 		}
 	}
 	return nil
-
 }
 
 func (r *Results) IsIssuesFound() bool {
@@ -84,21 +82,21 @@ func (r *Results) IsIssuesFound() bool {
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
 func (r *Results) CountScanResultsFindings() (total int) {
-	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
+	return formats.SummaryResults{Scans: r.getScanSummaryFilterByTargets()}.GetTotalIssueCount()
 }
 
 func (r *Results) GetSummary() (summary formats.SummaryResults) {
 	if len(r.ScaResults) <= 1 {
-		summary.Scans = r.getScanSummaryByTargets()
+		summary.Scans = r.getScanSummaryFilterByTargets()
 		return
 	}
 	for _, scaScan := range r.ScaResults {
-		summary.Scans = append(summary.Scans, r.getScanSummaryByTargets(scaScan.Target)...)
+		summary.Scans = append(summary.Scans, r.getScanSummaryFilterByTargets(scaScan.Target)...)
 	}
 	return
 }
 
-func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
+func (r *Results) getScanSummaryFilterByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
 	if len(targets) == 0 {
 		// No filter, one scan summary for all targets
 		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))

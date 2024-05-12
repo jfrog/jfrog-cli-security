@@ -12,7 +12,7 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 }
 
 type ScanSummaryResult struct {
-	Name               string           `json:"name,omitempty"`
+	Target             string           `json:"target,omitempty"`
 	ScaScanResults     *ScaSummaryCount `json:"sca,omitempty"`
 	IacScanResults     *SummaryCount    `json:"iac,omitempty"`
 	SecretsScanResults *SummaryCount    `json:"secrets,omitempty"`
@@ -79,7 +79,7 @@ func (s *ScanSummaryResult) GetTotalIssueCount() (total int) {
 	return
 }
 
-func (s *ScanSummaryResult) GetSubScansWithIssues() ([]SummarySubScanType) {
+func (s *ScanSummaryResult) GetSubScansWithIssues() []SummarySubScanType {
 	subScans := []SummarySubScanType{}
 	if s.SecretsScanResults != nil && s.SecretsScanResults.GetTotal() > 0 {
 		subScans = append(subScans, SecretsScan)

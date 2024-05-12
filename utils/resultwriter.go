@@ -566,12 +566,12 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 		if singleData {
 			return "✅ No vulnerabilities were found"
 		}
-		return fmt.Sprintf("✅ %s", summary.Name)
+		return fmt.Sprintf("✅ %s", summary.Target)
 	}
 	// Handle display of issues
 	content = "❌"
 	if !singleData {
-		content += fmt.Sprintf(" %s:", summary.Name)
+		content += fmt.Sprintf(" %s:", summary.Target)
 	}
 	content += " Found"
 	subScansWithIssues := summary.GetSubScansWithIssues()
@@ -654,7 +654,7 @@ func getSummarySortedKeysToDisplay(keys ...string) (sorted []string) {
 	}
 	keysSet := datastructures.MakeSetFromElements(keys...)
 	allowedSorted := []string{
-		"Critical", "High", "Medium", "Low", "Unknown", 
+		"Critical", "High", "Medium", "Low", "Unknown",
 		string(Applicable), string(NotApplicable),
 	}
 	for _, key := range allowedSorted {
@@ -686,16 +686,16 @@ func GetSummaryCountString(summary formats.SummaryCount) string {
 
 func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
 	for i, scan := range summary.Scans {
-		if scan.Name == "" {
+		if scan.Target == "" {
 			continue
 		}
-		if !strings.HasPrefix(scan.Name, wd) {
+		if !strings.HasPrefix(scan.Target, wd) {
 			continue
 		}
-		if scan.Name == wd {
-			summary.Scans[i].Name = filepath.Base(wd)
+		if scan.Target == wd {
+			summary.Scans[i].Target = filepath.Base(wd)
 		}
-		summary.Scans[i].Name = strings.TrimPrefix(scan.Name, wd)
+		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
 	}
 }
 
@@ -724,7 +724,7 @@ func getSubScanSummaryString(summary formats.ScanSummaryResult, subScanTypes ...
 
 func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
 	if len(scaResults) == 1 {
-		summary.Name = scaResults[0].Target
+		summary.Target = scaResults[0].Target
 	}
 	if extendedScanResults == nil {
 		summary.ScaScanResults = getScaSummaryResults(&scaResults)
