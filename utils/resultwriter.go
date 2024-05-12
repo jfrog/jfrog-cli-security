@@ -96,7 +96,6 @@ func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 func (rw *ResultsWriter) PrintScanResults() error {
 	switch rw.format {
 	case format.Table:
-		rw.PrintSummary()
 		return rw.printScanResultsTables()
 	case format.SimpleJson:
 		jsonTable, err := rw.convertScanToSimpleJson()
@@ -109,14 +108,8 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Sarif:
 		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses)
 		// case format.Summary:
-		// 	rw.PrintSummary()
-		// 	return nil
+		// 	return rw.PrintSummary()
 	}
-	return nil
-}
-
-func (rw *ResultsWriter) PrintSummary() error {
-	PrintSummary(rw.results)
 	return nil
 }
 
@@ -557,8 +550,12 @@ func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
 	return nil
 }
 
-func PrintSummary(results *Results) {
-	log.Output(GetSummaryString(results.GetSummary()))
+func PrintSummary(results *Results) (err error) {
+	summary, err := GetSummaryString(results.GetSummary())
+	if err != nil {
+		return
+	}
+	log.Output(summary)
 	return
 }
 
