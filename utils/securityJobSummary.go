@@ -42,11 +42,11 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil || manager == nil {
 		return
 	}
-	return manager.RecordResult(content, jobsummaries.SecuritySection)
+	return manager.CreateSummaryMarkdown(content, jobsummaries.SecuritySection)
 }
 
-func (scs *SecurityCommandsSummary) GetSectionTitle() string {
-	return "🛡️ Security scans preformed by this job"
+func (scs *SecurityCommandsSummary) CreateSummaryMarkdown(content any, section jobsummaries.MarkdownSection) error {
+	return jobsummaries.CreatSummaryMarkdownBaseImpl(content, section, scs.AppendResultObject, scs.RenderContentToMarkdown)
 }
 
 func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
