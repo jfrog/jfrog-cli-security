@@ -3,9 +3,11 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
-	"github.com/jfrog/jfrog-cli-core/v2/jobsummaries"
+	"github.com/jfrog/jfrog-cli-core/v2/commandsummary"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
 const (
@@ -17,8 +19,8 @@ const (
 type SecuritySummarySection string
 
 type ScanCommandSummaryResult struct {
-	Section SecuritySummarySection
-	Results formats.SummaryResults
+	Section SecuritySummarySection `json:"section"`
+	Results formats.SummaryResults `json:"results"`
 }
 
 type SecurityCommandsSummary struct {
@@ -28,8 +30,8 @@ type SecurityCommandsSummary struct {
 }
 
 // Manage the job summary for security commands
-func SecurityCommandsJobSummary() (js *jobsummaries.JobSummary, err error) {
-	return jobsummaries.NewJobSummaryImpl(&SecurityCommandsSummary{
+func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error) {
+	return commandsummary.NewCommandSummary(&SecurityCommandsSummary{
 		BuildScanCommands: []formats.SummaryResults{},
 		ScanCommands:      []formats.SummaryResults{},
 		AuditCommands:     []formats.SummaryResults{},
@@ -42,43 +44,43 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil || manager == nil {
 		return
 	}
-	return manager.CreateSummaryMarkdown(content, jobsummaries.SecuritySection)
+	return manager.CreateMarkdown(content)
 }
 
-func (scs *SecurityCommandsSummary) CreateSummaryMarkdown(content any, section jobsummaries.MarkdownSection) error {
-	return jobsummaries.CreatSummaryMarkdownBaseImpl(content, section, scs.AppendResultObject, scs.RenderContentToMarkdown)
+func (scs *SecurityCommandsSummary) CreateMarkdown(content any) error {
+	return commandsummary.CreateMarkdown(content, "security", scs.RenderContentToMarkdown)
 }
 
-func (scs *SecurityCommandsSummary) AppendResultObject(output interface{}, previousObjects []byte) (result []byte, err error) {
-	// Unmarshal the aggregated data
-	if len(previousObjects) > 0 {
-		if err = json.Unmarshal(previousObjects, &scs); err != nil {
-			return
-		}
-	}
-	// Append the new data
-	data, ok := output.(ScanCommandSummaryResult)
-	if !ok {
-		err = fmt.Errorf("failed to cast output to ScanCommandSummaryResult")
-		return
-	}
-	switch data.Section {
-	case Build:
-		scs.BuildScanCommands = append(scs.BuildScanCommands, data.Results)
-	case Binary:
-		scs.ScanCommands = append(scs.ScanCommands, data.Results)
-	case Modules:
-		scs.AuditCommands = append(scs.AuditCommands, data.Results)
-	}
-	return json.Marshal(scs)
-}
-
-func (scs *SecurityCommandsSummary) RenderContentToMarkdown(content []byte) (markdown string, err error) {
+func (scs *SecurityCommandsSummary) RenderContentToMarkdown(dataFilePaths []string) (markdown string, err error) {
 	// Unmarshal the data into an array of build info objects
-	if err = json.Unmarshal(content, &scs); err != nil {
+	if err = loadContentFromFiles(dataFilePaths, scs); err != nil {
 		return "", fmt.Errorf("failed while creating security markdown: %w", err)
 	}
 	return ConvertSummaryToString(*scs)
+}
+
+func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) (err error) {
+	for _, dataFilePath := range dataFilePaths {
+		// Load file content
+		var content []byte
+		if content, err = os.ReadFile(dataFilePath); errorutils.CheckError(err) != nil {
+			return fmt.Errorf("failed while reading '%s': %w", dataFilePath, err)
+		}
+		var cmdResults ScanCommandSummaryResult
+		if err = errorutils.CheckError(json.Unmarshal(content, &cmdResults)); err != nil {
+			return fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
+		}
+		// Append the new data
+		switch cmdResults.Section {
+		case Build:
+			scs.BuildScanCommands = append(scs.BuildScanCommands, cmdResults.Results)
+		case Binary:
+			scs.ScanCommands = append(scs.ScanCommands, cmdResults.Results)
+		case Modules:
+			scs.AuditCommands = append(scs.AuditCommands, cmdResults.Results)
+		}
+	}
+	return
 }
 
 func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
