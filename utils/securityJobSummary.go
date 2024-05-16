@@ -1,13 +1,10 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/commandsummary"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
 const (
@@ -62,12 +59,8 @@ func (scs *SecurityCommandsSummary) RenderContentToMarkdown(dataFilePaths []stri
 func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) (err error) {
 	for _, dataFilePath := range dataFilePaths {
 		// Load file content
-		var content []byte
-		if content, err = os.ReadFile(dataFilePath); errorutils.CheckError(err) != nil {
-			return fmt.Errorf("failed while reading '%s': %w", dataFilePath, err)
-		}
 		var cmdResults ScanCommandSummaryResult
-		if err = errorutils.CheckError(json.Unmarshal(content, &cmdResults)); err != nil {
+		if err = commandsummary.UnmarshalFromFilePath(dataFilePath, &cmdResults); err != nil {
 			return fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
 		}
 		// Append the new data
