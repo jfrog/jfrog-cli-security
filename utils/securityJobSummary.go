@@ -176,7 +176,7 @@ func getDetailsString(summary formats.ScanSummaryResult) (content string) {
 	// Display sub scans with issues
 	subScansWithIssues := summary.GetSubScansWithIssues()
 	for i, subScanType := range subScansWithIssues {
-		content += fmt.Sprintf("<br>%s", getListItemPrefix(i, len(subScansWithIssues))) 
+		content += fmt.Sprintf("<br>%s", getListItemPrefix(i, len(subScansWithIssues)))
 		subScanPrefix := fmt.Sprintf("%d ", summary.GetSubScanTotalIssueCount(subScanType))
 		switch subScanType {
 		case formats.ScaScan:
@@ -257,12 +257,12 @@ func GetScaSummaryCountString(summary formats.ScaSummaryCount, padding int) (con
 }
 
 var summaryContentToFormatString = map[string]string{
-	"Critical": `❗️ <span style="color:red">%d Critical</span>`,
-	"High":     `🔴 <span style="color:red">%d High</span>`,
-	"Medium":   `🟠 <span style="color:orange">%d Medium</span>`,
-	"Low":      `🟡 <span style="color:yellow">%d Low</span>`,
-	"Unknown":  `⚪️ <span style="color:white">%d Unknown</span>`,
-	string(Applicable): "%d " + string(Applicable),
+	"Critical":            `❗️ <span style="color:red">%d Critical</span>`,
+	"High":                `🔴 <span style="color:red">%d High</span>`,
+	"Medium":              `🟠 <span style="color:orange">%d Medium</span>`,
+	"Low":                 `🟡 <span style="color:yellow">%d Low</span>`,
+	"Unknown":             `⚪️ <span style="color:white">%d Unknown</span>`,
+	string(Applicable):    "%d " + string(Applicable),
 	string(NotApplicable): "%d " + string(NotApplicable),
 }
 
@@ -284,7 +284,7 @@ func getSummarySortedKeysToDisplay(keys ...string) (sorted []string) {
 }
 
 func GetSeveritySummaryCountString(summary formats.SummaryCount, padding int) (content string) {
-	return GetSummaryContentString(summary, "<br>" + strings.Repeat(" ", padding), false)
+	return GetSummaryContentString(summary, "<br>"+strings.Repeat(" ", padding), false)
 }
 
 func GetSummaryContentString(summary formats.SummaryCount, delimiter string, wrap bool) (content string) {
@@ -319,7 +319,6 @@ func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string
 		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
 	}
 }
-
 
 func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
 	if len(scaResults) == 1 {
