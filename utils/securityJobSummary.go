@@ -49,7 +49,6 @@ func (scs *SecurityCommandsSummary) CreateMarkdown(content any) error {
 }
 
 func (scs *SecurityCommandsSummary) RenderContentToMarkdown(dataFilePaths []string) (markdown string, err error) {
-	// Unmarshal the data into an array of build info objects
 	if err = loadContentFromFiles(dataFilePaths, scs); err != nil {
 		return "", fmt.Errorf("failed while creating security markdown: %w", err)
 	}
