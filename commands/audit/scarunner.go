@@ -51,14 +51,7 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 		return
 	}
 	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
-	if params.IsRecursiveScan() && len(scans) > 1 {
-		// Update params working directories to include all the detected working directories.
-		detected := datastructures.MakeSet[string]()
-		for _, scan := range scans {
-			detected.Add(scan.WorkingDirectory)
-		}
-		params.workingDirs = detected.ToSlice()
-	}
+	
 	defer func() {
 		// Make sure to return to the original working directory, executeScaScan may change it
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
