@@ -1,23 +1,16 @@
 #### Builds
-```
-✅ build-name (build-number)
-❌ build-name (build-number): Found 3 SCA vulnerabilities (2 High, 1 Low)
-```
-#### Binaries
-```
-❌ /binary-name: Found 3 Secrets (2 High, 1 Low)
-✅ other-root/dir/binary-name2
-```
+| Status | Id | Details |
+|--------|----|---------|
+| ✅ | build-name (build-number) |  |
+| ❌ | build-name (build-number) | <pre>Vulnerabilities found 3<br>└── 3 SCA 🔴 <span style="color:red">2 High</span><br>          🟡 <span style="color:yellow">1 Low</span></pre> |
+#### Artifacts
+| Status | Id | Details |
+|--------|----|---------|
+| ❌ | /binary-name | <pre>Vulnerabilities found 3<br>└── 3 Secrets 🔴 <span style="color:red">2 High</span><br>              🟡 <span style="color:yellow">1 Low</span></pre> |
+| ✅ | other-root/dir/binary-name2 |  |
 #### Modules
-```
-❌ /application1: Found 14 vulnerabilities
-├── 1 SAST vulnerabilities (1 Low)
-├── 5 IAC vulnerabilities (5 Medium)
-└── 8 SCA vulnerabilities
-    ├── 3 Critical (2 Not Applicable)
-    ├── 4 High (1 Applicable, 1 Not Applicable)
-    └── 1 Low
-❌ /application2: Found 1 SCA vulnerabilities
-    └── 1 High (1 Not Applicable)
-✅ /dir/application3
-```
+| Status | Id | Details |
+|--------|----|---------|
+| ❌ | /application1 | <pre>Vulnerabilities found 14<br>├── 1 SAST 🟡 <span style="color:yellow">1 Low</span><br>├── 5 IAC 🟠 <span style="color:orange">5 Medium</span><br>└── 8 SCA ❗️ <span style="color:red">3 Critical</span> (2 Not Applicable)<br>          🔴 <span style="color:red">4 High</span> (1 Applicable, 1 Not Applicable)<br>          🟡 <span style="color:yellow">1 Low</span></pre> |
+| ❌ | /application2 | <pre>Vulnerabilities found 1<br>└── 1 SCA 🔴 <span style="color:red">1 High</span> (1 Not Applicable)</pre> |
+| ✅ | /dir/application3 |  |

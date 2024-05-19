@@ -90,7 +90,6 @@ func (s *ScanSummaryResult) GetSubScansWithIssues() []SummarySubScanType {
 	if s.IacScanResults != nil && s.IacScanResults.GetTotal() > 0 {
 		subScans = append(subScans, IacScan)
 	}
-	// Must be last for element to also display contextual-analysis details
 	if s.ScaScanResults != nil && s.ScaScanResults.GetTotal() > 0 {
 		subScans = append(subScans, ScaScan)
 	}
