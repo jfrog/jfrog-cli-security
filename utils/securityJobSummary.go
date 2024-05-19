@@ -9,7 +9,7 @@ import (
 
 const (
 	Build   SecuritySummarySection = "Builds"
-	Binary  SecuritySummarySection = "Binaries"
+	Binary  SecuritySummarySection = "Artifacts"
 	Modules SecuritySummarySection = "Modules"
 )
 
