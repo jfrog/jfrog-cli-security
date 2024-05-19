@@ -28,11 +28,7 @@ type SecurityCommandsSummary struct {
 
 // Manage the job summary for security commands
 func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error) {
-	return commandsummary.NewCommandSummary(&SecurityCommandsSummary{
-		BuildScanCommands: []formats.SummaryResults{},
-		ScanCommands:      []formats.SummaryResults{},
-		AuditCommands:     []formats.SummaryResults{},
-	})
+	return commandsummary.New(&SecurityCommandsSummary{}, "security")
 }
 
 // Record the security command output
@@ -44,11 +40,7 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	return manager.CreateMarkdown(content)
 }
 
-func (scs *SecurityCommandsSummary) CreateMarkdown(content any) error {
-	return commandsummary.CreateMarkdown(content, "security", scs.RenderContentToMarkdown)
-}
-
-func (scs *SecurityCommandsSummary) RenderContentToMarkdown(dataFilePaths []string) (markdown string, err error) {
+func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
 	if err = loadContentFromFiles(dataFilePaths, scs); err != nil {
 		return "", fmt.Errorf("failed while creating security markdown: %w", err)
 	}
