@@ -40,11 +40,14 @@ func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error)
 
 // Record the security command output
 func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
+	if !commandsummary.ShouldRecordSummary() {
+		return
+	}
 	manager, err := SecurityCommandsJobSummary()
 	if err != nil || manager == nil {
 		return
 	}
-	return manager.CreateMarkdown(content)
+	return manager.Record(content)
 }
 
 func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
