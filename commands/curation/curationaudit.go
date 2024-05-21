@@ -657,7 +657,7 @@ func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.Graph
 	}
 	nameVersion := allParts[1] + "-" + allParts[2]
 	versionDir := allParts[2]
-	if node.Classifier != nil && *node.Classifier != "" {
+	if node != nil && node.Classifier != nil && *node.Classifier != "" {
 		versionDir = strings.TrimSuffix(versionDir, "-"+*node.Classifier)
 	}
 	packagePath := strings.Join(strings.Split(allParts[0], "."), "/") + "/" +
