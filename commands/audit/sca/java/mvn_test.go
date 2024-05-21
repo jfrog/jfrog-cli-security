@@ -223,6 +223,12 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 			existInTreeJar = true
 		}
 	}
+	// dependency with classifier
+	depWithJarClassifier1 := uniqueDeps["gav://commons-io:commons-io:1.2-flavor1"]
+	assert.NotEmpty(t, depWithJarClassifier1)
+	depWithJarClassifier2 := uniqueDeps["gav://commons-io:commons-io:1.2-flavor2"]
+	assert.NotEmpty(t, depWithJarClassifier2)
+
 	assert.True(t, existInTreeJar)
 }
 
