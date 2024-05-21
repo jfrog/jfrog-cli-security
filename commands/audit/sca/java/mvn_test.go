@@ -105,7 +105,7 @@ func TestMavenTreesMultiModule(t *testing.T) {
 
 	expectedUniqueDeps := []string{
 		GavPackageTypeIdentifier + "javax.mail:mail:1.4",
-		GavPackageTypeIdentifier + "org.testng:testng:5.9",
+		GavPackageTypeIdentifier + "org.testng:testng:5.9-jdk15",
 		GavPackageTypeIdentifier + "javax.servlet:servlet-api:2.5",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi:3.7-SNAPSHOT",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi3:3.7-SNAPSHOT",
@@ -157,7 +157,7 @@ func TestMavenWrapperTrees(t *testing.T) {
 		GavPackageTypeIdentifier + "org.springframework:spring-core:2.5.6",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi:3.7-SNAPSHOT",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi2:3.7-SNAPSHOT",
-		GavPackageTypeIdentifier + "org.testng:testng:5.9",
+		GavPackageTypeIdentifier + "org.testng:testng:5.9-jdk15",
 		GavPackageTypeIdentifier + "hsqldb:hsqldb:1.8.0.10",
 		GavPackageTypeIdentifier + "junit:junit:3.8.1",
 		GavPackageTypeIdentifier + "javax.activation:activation:1.1",
