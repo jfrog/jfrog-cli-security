@@ -211,7 +211,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 		return
 	}
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string][]string
+	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -346,14 +346,18 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string][]string) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}
 	var uniqueNodes []*xrayCmdUtils.GraphNode
-	for uniqueDep, types := range uniqueDeps {
-		p := types
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep, Types: &p})
+	for uniqueDep, nodeAttr := range uniqueDeps {
+		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
+		if nodeAttr != nil {
+			node.Types = nodeAttr.Types
+			node.Classifier = nodeAttr.Classifier
+		}
+		uniqueNodes = append(uniqueNodes, node)
 	}
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
 }
