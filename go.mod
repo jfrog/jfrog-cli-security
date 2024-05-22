@@ -4,10 +4,10 @@ go 1.21
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.26
+	github.com/jfrog/build-info-go v1.9.27
 	github.com/jfrog/gofrog v1.7.1
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.51.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.53.0
 	github.com/jfrog/jfrog-client-go v1.40.2
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
@@ -98,8 +98,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240522101456-44e989e0a442
+// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240509124610-4b9c587c0377
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
