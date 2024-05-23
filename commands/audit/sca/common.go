@@ -178,7 +178,8 @@ func SuspectCurationBlockedError(isCurationCmd bool, tech coreutils.Technology, 
 	}
 	switch tech {
 	case coreutils.Maven:
-		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(cmdOutput, "status code: 500") {
+		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
+			strings.Contains(cmdOutput, "status code: 500") {
 			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven)
 		}
 	case coreutils.Pip:

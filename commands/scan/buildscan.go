@@ -2,6 +2,7 @@ package scan
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -130,7 +131,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	scanResults := xrutils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{XrayResults: scanResponse}}
+	scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
 	resultsPrinter := xrutils.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
@@ -143,7 +144,9 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	if bsc.outputFormat != outputFormat.Table {
 		// Print the violations and/or vulnerabilities as part of one JSON.
-		err = resultsPrinter.PrintScanResults()
+		if err = resultsPrinter.PrintScanResults(); err != nil {
+			return
+		}
 	} else {
 		// Print two different tables for violations and vulnerabilities (if needed)
 
@@ -160,6 +163,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
+	err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build})
 	return
 }
 

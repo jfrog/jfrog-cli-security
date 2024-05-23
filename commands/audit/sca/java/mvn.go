@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,7 +25,7 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.0"
+	mavenDepTreeVersion = "1.1.1"
 	settingsXmlFile     = "settings.xml"
 )
 
@@ -68,7 +69,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 	}
 }
 
-func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string][]string, err error) {
+func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*utils.DepTreeNode, err error) {
 	manager := NewMavenDepTreeManager(params, Tree)
 	outputFilePaths, clearMavenDepTreeRun, err := manager.RunMavenDepTree()
 	if err != nil {

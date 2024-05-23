@@ -34,6 +34,11 @@ import (
 type FileContext func(string) parallel.TaskFunc
 type indexFileHandlerFunc func(file string)
 
+type ScanInfo struct {
+	Target string
+	Result *services.ScanResponse
+}
+
 const (
 	BypassArchiveLimitsMinXrayVersion = "3.59.0"
 	indexingCommand                   = "graph"
@@ -213,7 +218,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	}
 
 	// resultsArr is a two-dimensional array. Each array in it contains a list of ScanResponses that were requested and collected by a specific thread.
-	resultsArr := make([][]*services.ScanResponse, threads)
+	resultsArr := make([][]*ScanInfo, threads)
 	fileProducerConsumer := parallel.NewRunner(scanCmd.threads, 20000, false)
 	fileProducerErrors := make([][]formats.SimpleJsonError, threads)
 	indexedFileProducerConsumer := parallel.NewRunner(scanCmd.threads, 20000, false)
@@ -225,10 +230,10 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
 	// Handle results
-	flatResults := []services.ScanResponse{}
+	flatResults := []xrutils.ScaScanResult{}
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, *res)
+			flatResults = append(flatResults, xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
 		}
 	}
 	if scanCmd.progress != nil {
@@ -248,7 +253,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 
 	scanResults := xrutils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{XrayResults: flatResults}}
+	scanResults.ScaResults = flatResults
 
 	if err = xrutils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
@@ -264,10 +269,15 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	if err != nil {
 		return err
 	}
+
+	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
+		return err
+	}
+
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
 	if scanCmd.fail && !scanCmd.includeVulnerabilities {
-		if xrutils.CheckIfFailBuild(flatResults) {
+		if xrutils.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
 			return xrutils.NewFailBuildError()
 		}
 	}
@@ -286,7 +296,7 @@ func (scanCmd *ScanCommand) CommandName() string {
 	return "xr_scan"
 }
 
-func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*services.ScanResponse, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
+func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
 	go func() {
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
@@ -305,7 +315,7 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 	}()
 }
 
-func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFileProducer parallel.Runner, resultsArr [][]*services.ScanResponse, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			logMsgPrefix := clientutils.GetLogMsgPrefix(threadId, false)
@@ -355,7 +365,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFil
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
 				}
-				resultsArr[threadId] = append(resultsArr[threadId], scanResults)
+				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults})
 				return
 			}
 

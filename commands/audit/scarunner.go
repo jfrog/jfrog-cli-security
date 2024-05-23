@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/build-info-go/utils/pythonutils"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"os"
 	"time"
+
+	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -58,9 +59,9 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 	}()
 	for _, scan := range scans {
 		// Run the scan
-		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.WorkingDirectory, "directory...")
+		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.Target, "directory...")
 		if wdScanErr := executeScaScan(serverDetails, params, scan); wdScanErr != nil {
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.WorkingDirectory, wdScanErr.Error()))
+			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, wdScanErr.Error()))
 			continue
 		}
 		// Add the scan to the results
@@ -87,11 +88,11 @@ func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaS
 			}
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{WorkingDirectory: requestedDirectory, Technology: tech})
+				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{WorkingDirectory: workingDir, Technology: tech, Descriptors: descriptors})
+				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
 			}
 		}
 	}
@@ -110,7 +111,7 @@ func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]str
 // This method will change the working directory to the scan's working directory.
 func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) (err error) {
 	// Get the dependency tree for the technology in the working directory.
-	if err = os.Chdir(scan.WorkingDirectory); err != nil {
+	if err = os.Chdir(scan.Target); err != nil {
 		return errorutils.CheckError(err)
 	}
 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
@@ -210,7 +211,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 		return
 	}
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string][]string
+	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -345,14 +346,18 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech coreutils.Tech
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string][]string) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}
 	var uniqueNodes []*xrayCmdUtils.GraphNode
-	for uniqueDep, types := range uniqueDeps {
-		p := types
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep, Types: &p})
+	for uniqueDep, nodeAttr := range uniqueDeps {
+		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
+		if nodeAttr != nil {
+			node.Types = nodeAttr.Types
+			node.Classifier = nodeAttr.Classifier
+		}
+		uniqueNodes = append(uniqueNodes, node)
 	}
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
 }
