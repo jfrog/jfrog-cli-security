@@ -1,12 +1,14 @@
 package _go
 
 import (
+	"errors"
 	"fmt"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	goartifactoryutils "github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/golang"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	goutils "github.com/jfrog/jfrog-cli-core/v2/utils/golang"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"strings"
@@ -31,9 +33,18 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	remoteGoRepo := params.DepsRepo()
 	if remoteGoRepo != "" {
-		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo); err != nil {
+		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo, params.IsCurationCmd()); err != nil {
 			return
 		}
+	}
+	// in case of curation command, we set an alternative cache folder when building go dep tree
+	if params.IsCurationCmd() {
+		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(coreutils.Go)
+		if errCacheFolder != nil {
+			err = errCacheFolder
+			return
+		}
+		goartifactoryutils.SetGoModCache(projCacheDir)
 	}
 	// Calculate go dependencies graph
 	dependenciesGraph, err := goutils.GetDependenciesGraph(currentDir)
@@ -41,7 +52,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return
 	}
 	// Calculate go dependencies list
-	dependenciesList, err := goutils.GetDependenciesList(currentDir)
+	dependenciesList, err := goutils.GetDependenciesList(currentDir, handleCurationGoError)
 	if err != nil {
 		return
 	}
@@ -58,16 +69,37 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
 
-	goVersionDependency, err := getGoVersionAsDependency()
-	if err != nil {
-		return
+	// In case of curation command, go version is not relevant as it can't be resolved from go repo
+	if !params.IsCurationCmd() {
+		if gotErr := addGoVersionToTree(rootNode, uniqueDepsSet); gotErr != nil {
+			err = gotErr
+			return
+		}
 	}
-	rootNode.Nodes = append(rootNode.Nodes, goVersionDependency)
-	uniqueDepsSet.Add(goVersionDependency.Id)
 
 	dependencyTree = []*xrayUtils.GraphNode{rootNode}
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return
+}
+
+func addGoVersionToTree(rootNode *xrayUtils.GraphNode, uniqueDepsSet *datastructures.Set[string]) error {
+	goVersionDependency, err := getGoVersionAsDependency()
+	if err != nil {
+		return err
+	}
+	rootNode.Nodes = append(rootNode.Nodes, goVersionDependency)
+	uniqueDepsSet.Add(goVersionDependency.Id)
+	return err
+}
+
+func handleCurationGoError(err error) (bool, error) {
+	if err == nil {
+		return false, nil
+	}
+	if msgToUser := sca.SuspectCurationBlockedError(true, coreutils.Go, err.Error()); msgToUser != "" {
+		return true, errors.New(msgToUser)
+	}
+	return false, nil
 }
 
 func populateGoDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, dependenciesList map[string]bool, uniqueDepsSet *datastructures.Set[string]) {

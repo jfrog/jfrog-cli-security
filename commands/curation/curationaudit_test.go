@@ -416,8 +416,9 @@ func TestDoCurationAudit(t *testing.T) {
 			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
 			defer callbackPip()
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
+
 			defer mockServer.Close()
-			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
+			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
@@ -437,9 +438,6 @@ func TestDoCurationAudit(t *testing.T) {
 			}
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
 			defer func() {
-				cacheFolder, err := utils.GetCurationCacheFolder()
-				require.NoError(t, err)
-				assert.NoError(t, fileutils.RemoveTempDir(cacheFolder))
 				callback3()
 			}()
 			results := map[string][]*PackageStatus{}
@@ -477,24 +475,81 @@ func TestDoCurationAudit(t *testing.T) {
 }
 
 type testCase struct {
-	name                   string
-	pathToTest             string
-	pathToPreTest          string
-	preTestExec            string
-	serveResources         map[string]string
-	funcToGetGoals         func(t *testing.T) []string
-	shouldIgnoreConfigFile bool
-	expectedBuildRequest   map[string]bool
-	expectedRequest        map[string]bool
-	requestToFail          map[string]bool
-	expectedResp           map[string][]*PackageStatus
-	requestToError         map[string]bool
-	expectedError          string
-	cleanDependencies      func() error
+	name                     string
+	pathToTest               string
+	pathToPreTest            string
+	preTestExec              string
+	serveResources           map[string]string
+	funcToGetGoals           func(t *testing.T) []string
+	shouldIgnoreConfigFile   bool
+	expectedBuildRequest     map[string]bool
+	expectedRequest          map[string]bool
+	requestToFail            map[string]bool
+	expectedResp             map[string][]*PackageStatus
+	requestToError           map[string]bool
+	expectedError            string
+	cleanDependencies        func() error
+	createServerWithoutCreds bool
 }
 
 func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
+		{
+			name:                     "go tree - one blocked package",
+			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "simple-project", ".jfrog"),
+			createServerWithoutCreds: true,
+			serveResources: map[string]string{
+				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
+			},
+			requestToFail: map[string]bool{
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+			},
+			expectedResp: map[string][]*PackageStatus{
+				"github.com/you/hello": {{
+					Action:            "blocked",
+					ParentName:        "rsc.io/quote",
+					ParentVersion:     "v1.5.2",
+					BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "indirect",
+					PkgType:           "go",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+					{
+						Action:            "blocked",
+						ParentName:        "rsc.io/sampler",
+						ParentVersion:     "v1.3.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "direct",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name:       "python tree - one blocked package",
 			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
@@ -539,7 +594,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				assert.NoError(t, err)
 				// set the cache to test project dir, in order to fill its cache with dependencies
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationMavenCacheFolder()
+				curationCache, err := utils.GetCurationCacheFolderByTech(coreutils.Maven)
 				callbackPreTest()
 				require.NoError(t, err)
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
@@ -698,13 +753,18 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 	return serverMock, config
 }
 
-func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string) string {
+func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
+	var username, password string
+	if !withoutCreds {
+		username = "admin"
+		password = "password"
+	}
 	serverDetails := config.ConfigV5{
 		Servers: []*config.ServerDetails{
 			{
-				User:           "admin",
-				Password:       "password",
 				ServerId:       "test",
+				User:           username,
+				Password:       password,
 				Url:            url,
 				ArtifactoryUrl: url,
 			},
@@ -717,4 +777,34 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
 	return confFilePath
+}
+
+func Test_getGoNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name         string
+		compId       string
+		rtUrl        string
+		downloadUrls []string
+		repo         string
+		compName     string
+		version      string
+	}{
+		{
+			name:         "valid go component id",
+			compId:       "go://github.com/kennygrant/sanitize:v1.2.4",
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
+			compName:     "github.com/kennygrant/sanitize",
+			version:      "v1.2.4",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, _, gotVersion := getGoNameScopeAndVersion(tt.compId, tt.rtUrl, tt.repo)
+			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
+			assert.Equal(t, tt.compName, gotName)
+			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
 }

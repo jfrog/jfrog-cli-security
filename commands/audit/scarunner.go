@@ -181,8 +181,8 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 }
 
 func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
-	if tech == coreutils.Maven {
-		return xrayutils.GetCurationMavenCacheFolder()
+	if tech == coreutils.Maven || tech == coreutils.Go {
+		return xrayutils.GetCurationCacheFolderByTech(tech)
 	}
 	return "", nil
 }

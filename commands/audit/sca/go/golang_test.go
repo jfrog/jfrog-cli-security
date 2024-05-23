@@ -1,6 +1,9 @@
 package _go
 
 import (
+	"errors"
+	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,4 +79,33 @@ func TestBuildGoDependencyList(t *testing.T) {
 func removeTxtSuffix(txtFileName string) error {
 	// go.sum.txt  >> go.sum
 	return fileutils.MoveFile(txtFileName, strings.TrimSuffix(txtFileName, ".txt"))
+}
+
+func Test_handleCurationGoError(t *testing.T) {
+
+	tests := []struct {
+		name          string
+		err           error
+		expectedError error
+	}{
+		{
+			name:          "curation error 403",
+			err:           errors.New("package download failed due to 403 forbidden test failure"),
+			expectedError: errors.New(fmt.Sprintf(sca.CurationErrorMsgToUserTemplate, coreutils.Go)),
+		},
+		{
+			name: "not curation error 500",
+			err:  errors.New("package download failed due to 500 internal server error test failure"),
+		},
+		{
+			name: "no error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := handleCurationGoError(tt.err)
+			assert.Equal(t, tt.expectedError, err)
+			assert.Equal(t, tt.expectedError != nil, got)
+		})
+	}
 }
