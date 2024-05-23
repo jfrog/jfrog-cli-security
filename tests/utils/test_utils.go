@@ -53,7 +53,7 @@ func InitDockerScanTest(t *testing.T, minVersion string) {
 	if !*configTests.TestDockerScan || !*configTests.TestScan {
 		t.Skip("Skipping Docker scan test. To run Xray Docker tests, add the '-test.dockerScan=true' and '-test.scan=true' options.")
 	}
-	ValidateXrayVersion(t, minVersion)
+	ValidateXrayVersion(t, xrayMinVersion)
 }
 
 func GetTestResourcesPath() string {
@@ -88,6 +88,11 @@ func removeDirs(dirs ...string) {
 func getXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
+}
+
+func getXscVersion() (version.Version, error) {
+	xscVersion, err := configTests.XscAuth.GetVersion()
+	return *version.NewVersion(xscVersion), err
 }
 
 func ChangeWD(t *testing.T, newPath string) string {

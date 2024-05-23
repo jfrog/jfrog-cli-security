@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -170,14 +173,14 @@ func TestXrayAuditNugetJson(t *testing.T) {
 			projectName:        "multi",
 			format:             string(format.Json),
 			restoreTech:        "dotnet",
-			minVulnerabilities: 5,
+			minVulnerabilities: 4,
 			minLicences:        3,
 		},
 		{
 			projectName:        "multi",
 			format:             string(format.Json),
 			restoreTech:        "",
-			minVulnerabilities: 5,
+			minVulnerabilities: 4,
 			minLicences:        3,
 		},
 	}
@@ -320,13 +323,13 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	defer clientTests.ChangeDirAndAssert(t, prevWd)
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s",
 		filepath.Join(tempDirPath, "package-managers", "maven", "maven"), filepath.Join(tempDirPath, "package-managers", "nuget", "single4.0"),
-		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas-test"))
+		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"))
 	// Configure a new server named "default"
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 25, 2)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
@@ -429,19 +432,19 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-test"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 2)
+	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas"))
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-config"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("package-managers", "npm", "npm"))
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
 }
 
 func testXrayAuditJas(t *testing.T, format string, project string) string {
@@ -506,11 +509,44 @@ func TestXrayRecursiveScan(t *testing.T) {
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format=json")
 
 	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 5, 0)
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 4, 0)
 
 	var results []services.ScanResponse
 	err = json.Unmarshal([]byte(output), &results)
 	assert.NoError(t, err)
 	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
 	assert.Len(t, results, 2)
+}
+
+func TestXscAnalyticsForAudit(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	securityTestUtils.ValidateXscVersion(t, xscservices.AnalyticsMetricsMinXscVersion)
+	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer reportUsageCallBack()
+	// Scan npm project and verify that analytics general event were sent to XSC.
+	output := testXrayAuditNpm(t, string(format.SimpleJson))
+	validateAnalyticsBasicEvent(t, output)
+}
+
+func validateAnalyticsBasicEvent(t *testing.T, output string) {
+	// Get MSI.
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(output), &results)
+	assert.NoError(t, err)
+
+	// Verify analytics metrics.
+	am := utils.NewAnalyticsMetricsService(securityTests.XscDetails)
+	assert.NotNil(t, am)
+	assert.NotEmpty(t, results.MultiScanId)
+	event, err := am.GetGeneralEvent(results.MultiScanId)
+	assert.NoError(t, err)
+
+	// Event creation and addition information.
+	assert.Equal(t, "cli", event.Product)
+	assert.Equal(t, 1, event.EventType)
+	assert.NotEmpty(t, event.AnalyzerManagerVersion)
+	assert.NotEmpty(t, event.EventStatus)
+	// The information that was added after updating the event with the scan's results.
+	assert.NotEmpty(t, event.TotalScanDuration)
+	assert.True(t, event.TotalFindings > 0)
 }

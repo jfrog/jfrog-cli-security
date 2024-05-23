@@ -16,6 +16,9 @@ var (
 	XrDetails *config.ServerDetails
 	XrAuth    auth.ServiceDetails
 
+	XscDetails *config.ServerDetails
+	XscAuth    auth.ServiceDetails
+
 	RtDetails     *config.ServerDetails
 	RtAuth        auth.ServiceDetails
 	RtHttpDetails httputils.HttpClientDetails

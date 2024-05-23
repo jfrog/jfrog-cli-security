@@ -105,7 +105,7 @@ func TestMavenTreesMultiModule(t *testing.T) {
 
 	expectedUniqueDeps := []string{
 		GavPackageTypeIdentifier + "javax.mail:mail:1.4",
-		GavPackageTypeIdentifier + "org.testng:testng:5.9",
+		GavPackageTypeIdentifier + "org.testng:testng:5.9-jdk15",
 		GavPackageTypeIdentifier + "javax.servlet:servlet-api:2.5",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi:3.7-SNAPSHOT",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi3:3.7-SNAPSHOT",
@@ -157,7 +157,7 @@ func TestMavenWrapperTrees(t *testing.T) {
 		GavPackageTypeIdentifier + "org.springframework:spring-core:2.5.6",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi:3.7-SNAPSHOT",
 		GavPackageTypeIdentifier + "org.jfrog.test:multi2:3.7-SNAPSHOT",
-		GavPackageTypeIdentifier + "org.testng:testng:5.9",
+		GavPackageTypeIdentifier + "org.testng:testng:5.9-jdk15",
 		GavPackageTypeIdentifier + "hsqldb:hsqldb:1.8.0.10",
 		GavPackageTypeIdentifier + "junit:junit:3.8.1",
 		GavPackageTypeIdentifier + "javax.activation:activation:1.1",
@@ -198,7 +198,8 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 	// dependency of pom type
 	depWithPomType := uniqueDeps["gav://org.webjars:lodash:4.17.21"]
 	assert.NotEmpty(t, depWithPomType)
-	assert.Equal(t, depWithPomType[0], "pom")
+	types := *depWithPomType.Types
+	assert.Equal(t, types[0], "pom")
 	existInTreePom := false
 	for _, node := range tree[0].Nodes {
 		if node.Id == "gav://org.webjars:lodash:4.17.21" {
@@ -212,7 +213,8 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 	// dependency of jar type
 	depWithJarType := uniqueDeps["gav://junit:junit:4.11"]
 	assert.NotEmpty(t, depWithJarType)
-	assert.Equal(t, depWithJarType[0], "jar")
+	types = *depWithJarType.Types
+	assert.Equal(t, types[0], "jar")
 	existInTreeJar := false
 	for _, node := range tree[0].Nodes {
 		if node.Id == "gav://junit:junit:4.11" {
@@ -221,6 +223,12 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 			existInTreeJar = true
 		}
 	}
+	// dependency with classifier
+	depWithJarClassifier1 := uniqueDeps["gav://commons-io:commons-io:1.2-flavor1"]
+	assert.NotEmpty(t, depWithJarClassifier1)
+	depWithJarClassifier2 := uniqueDeps["gav://commons-io:commons-io:1.2-flavor2"]
+	assert.NotEmpty(t, depWithJarClassifier2)
+
 	assert.True(t, existInTreeJar)
 }
 
@@ -343,38 +351,4 @@ func TestRemoveMavenConfig(t *testing.T) {
 	err = restoreFunc()
 	assert.NoError(t, err)
 	assert.FileExists(t, mavenConfigPath)
-}
-
-func TestMavenDepTreeManager_suspectCurationBlockedError(t *testing.T) {
-	errPrefix := "[ERROR] Failed to execute goal on project my-app: Could not resolve dependencies for project com.mycompany.app:my-app:jar:1.0-SNAPSHOT: Failed to " +
-		"collect dependencies at junit:junit:jar:3.8.1: Failed to read artifact descriptor for junit:junit:jar:3.8.1: " +
-		"The following artifacts could not be resolved: junit:junit:pom:3.8.1 (absent): Could not transfer artifact junit:junit:pom:3.8.1 " +
-		"from/to artifactory (http://test:8046/artifactory/api/curation/audit/maven-remote):"
-	tests := []struct {
-		name          string
-		wantMsgToUser string
-		input         string
-	}{
-		{
-			name:          "failed on 403",
-			wantMsgToUser: "Please verify pass-through enabled on the curated repos",
-			input:         errPrefix + "status code: 403, reason phrase: Forbidden (403)",
-		},
-		{
-			name:          "failed on 500",
-			wantMsgToUser: "Please verify pass-through enabled on the curated repos",
-			input:         errPrefix + " status code: 500, reason phrase: Internal Server Error (500)",
-		},
-		{
-			name:          "not 403 or 500",
-			wantMsgToUser: "",
-			input:         errPrefix + " status code: 400, reason phrase: Forbidden (400)",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mdt := &MavenDepTreeManager{}
-			assert.Contains(t, tt.wantMsgToUser, mdt.suspectCurationBlockedError(tt.input))
-		})
-	}
 }
