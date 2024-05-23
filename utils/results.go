@@ -3,6 +3,7 @@ package utils
 import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -59,6 +60,15 @@ func (r *Results) IsScaIssuesFound() bool {
 	return false
 }
 
+func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
+	for _, scan := range r.ScaResults {
+		if scan.Target == target {
+			return &scan
+		}
+	}
+	return nil
+}
+
 func (r *Results) IsIssuesFound() bool {
 	if r.IsScaIssuesFound() {
 		return true
@@ -71,44 +81,48 @@ func (r *Results) IsIssuesFound() bool {
 
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
-func (r *Results) CountScanResultsFindings() int {
-	var totalFindings int
-	totalFindings += getScaResultsUniqueFindingsAmount(&r.ScaResults)
-
-	if r.ExtendedScanResults != nil {
-		totalFindings += len(r.ExtendedScanResults.SastScanResults)
-		totalFindings += len(r.ExtendedScanResults.IacScanResults)
-		totalFindings += len(r.ExtendedScanResults.SecretsScanResults)
-	}
-
-	return totalFindings
+func (r *Results) CountScanResultsFindings() (total int) {
+	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
 
-func getScaResultsUniqueFindingsAmount(scaScanResults *[]ScaScanResult) int {
-	uniqueXrayFindings := datastructures.MakeSet[string]()
-
-	for _, scaResult := range *scaScanResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			// XrayResults may contain Vulnerabilities OR Violations, but not both. Therefore, only one of them will be counted
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				for compId := range vulnerability.Components {
-					uniqueXrayFindings.Add(vulnerability.IssueId + compId)
-				}
-			}
-
-			for _, violation := range xrayResult.Violations {
-				for compId := range violation.Components {
-					uniqueXrayFindings.Add(violation.IssueId + compId)
-				}
-			}
-		}
+func (r *Results) GetSummary() (summary formats.SummaryResults) {
+	if len(r.ScaResults) <= 1 {
+		summary.Scans = r.getScanSummaryByTargets()
+		return
 	}
-	return uniqueXrayFindings.Size()
+	for _, scaScan := range r.ScaResults {
+		summary.Scans = append(summary.Scans, r.getScanSummaryByTargets(scaScan.Target)...)
+	}
+	return
+}
+
+// Returns a summary for the provided targets. If no targets are provided, a summary for all targets is returned.
+func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
+	if len(targets) == 0 {
+		// No filter, one scan summary for all targets
+		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))
+		return
+	}
+	for _, target := range targets {
+		// Get target sca results
+		targetScaResults := []ScaScanResult{}
+		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
+			targetScaResults = append(targetScaResults, *targetScaResult)
+		}
+		// Get target extended results
+		targetExtendedResults := r.ExtendedScanResults
+		if targetExtendedResults != nil {
+			targetExtendedResults = targetExtendedResults.GetResultsForTarget(target)
+		}
+		summaries = append(summaries, getScanSummary(targetExtendedResults, targetScaResults...))
+	}
+	return
 }
 
 type ScaScanResult struct {
-	Technology            coreutils.Technology    `json:"Technology"`
-	WorkingDirectory      string                  `json:"WorkingDirectory"`
+	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
+	Target                string                  `json:"Target"`
+	Technology            coreutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`
 	IsMultipleRootProject *bool                   `json:"IsMultipleRootProject,omitempty"`
@@ -136,4 +150,13 @@ func (e *ExtendedScanResults) IsIssuesFound() bool {
 		GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
 		GetResultsLocationCount(e.IacScanResults...) > 0 ||
 		GetResultsLocationCount(e.SastScanResults...) > 0
+}
+
+func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *ExtendedScanResults) {
+	return &ExtendedScanResults{
+		ApplicabilityScanResults: GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
+		SecretsScanResults:       GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
+		IacScanResults:           GetRunsByWorkingDirectory(target, e.IacScanResults...),
+		SastScanResults:          GetRunsByWorkingDirectory(target, e.SastScanResults...),
+	}
 }

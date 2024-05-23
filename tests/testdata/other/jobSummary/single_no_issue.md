@@ -1,0 +1,3 @@
+```
+✅ No vulnerabilities were found
+```
