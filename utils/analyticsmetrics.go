@@ -23,6 +23,22 @@ type AnalyticsMetricsService struct {
 	finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize
 }
 
+func ReportErrorIfExists(err error, getServerDetailsFunc func() (*config.ServerDetails, error)) error {
+	if err == nil || !usage.ShouldReportUsage() {
+		return err
+	}
+	var serverDetails *config.ServerDetails
+	serverDetails, innerError := getServerDetailsFunc()
+	if innerError != nil {
+		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
+		return err
+	}
+	if reportError := ReportError(serverDetails, err, "cli"); reportError != nil {
+		log.Debug("failed to report error log:" + reportError.Error())
+	}
+	return err
+}
+
 func NewAnalyticsMetricsService(serviceDetails *config.ServerDetails) *AnalyticsMetricsService {
 	ams := AnalyticsMetricsService{}
 	xscManager, err := CreateXscServiceManager(serviceDetails)

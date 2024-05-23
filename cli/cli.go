@@ -16,5 +16,12 @@ func GetJfrogCliSecurityApp() components.App {
 		Commands:    getXrayNameSpaceCommands(),
 		Category:    "Command Namespaces",
 	})
+	// TOOD: make namespace hidden?
+	app.Subcommands = append(app.Subcommands, components.Namespace{
+		Name:        "git",
+		Description: "Git integration commands.",
+		Commands:    getGitNameSpaceCommands(),
+		Category:    "Command Namespaces",
+	})
 	return app
 }

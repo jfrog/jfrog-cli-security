@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
 
@@ -330,26 +328,12 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
 
-	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+	return utils.ReportErrorIfExists(progressbar.ExecWithProgress(auditCmd), auditCmd.ServerDetails)
 }
 
-func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
-	if err == nil || !usage.ShouldReportUsage() {
-		return
-	}
-	var serverDetails *coreConfig.ServerDetails
-	serverDetails, innerError := auditCmd.ServerDetails()
-	if innerError != nil {
-		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
-		return
-	}
-	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
-		log.Debug("failed to report error log:" + reportError.Error())
-	}
+func createAuditParams(c *components.Context) (*audit.AuditParams, error) {
+	return nil, nil
 }
 
 func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
@@ -419,11 +403,7 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
-
-	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+	return utils.ReportErrorIfExists(progressbar.ExecWithProgress(auditCmd), auditCmd.ServerDetails)
 }
 
 func CurationCmd(c *components.Context) error {
