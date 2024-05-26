@@ -148,34 +148,34 @@ func TestXrayAuditNugetJson(t *testing.T) {
 		minVulnerabilities int
 		minLicences        int
 	}{
-		//{
-		//	projectName:        "single4.0",
-		//	format:             string(format.Json),
-		//	restoreTech:        "nuget",
-		//	minVulnerabilities: 2,
-		//	minLicences:        0,
-		//},
-		//{
-		//	projectName:        "single5.0",
-		//	format:             string(format.Json),
-		//	restoreTech:        "dotnet",
-		//	minVulnerabilities: 3,
-		//	minLicences:        2,
-		//},
-		//{
-		//	projectName:        "single5.0",
-		//	format:             string(format.Json),
-		//	restoreTech:        "",
-		//	minVulnerabilities: 3,
-		//	minLicences:        2,
-		//},
-		//{
-		//	projectName:        "multi",
-		//	format:             string(format.Json),
-		//	restoreTech:        "dotnet",
-		//	minVulnerabilities: 4,
-		//	minLicences:        3,
-		//},
+		{
+			projectName:        "single4.0",
+			format:             string(format.Json),
+			restoreTech:        "nuget",
+			minVulnerabilities: 2,
+			minLicences:        0,
+		},
+		{
+			projectName:        "single5.0",
+			format:             string(format.Json),
+			restoreTech:        "dotnet",
+			minVulnerabilities: 3,
+			minLicences:        2,
+		},
+		{
+			projectName:        "single5.0",
+			format:             string(format.Json),
+			restoreTech:        "",
+			minVulnerabilities: 3,
+			minLicences:        2,
+		},
+		{
+			projectName:        "multi",
+			format:             string(format.Json),
+			restoreTech:        "dotnet",
+			minVulnerabilities: 4,
+			minLicences:        3,
+		},
 		{
 			projectName:        "multi",
 			format:             string(format.Json),
