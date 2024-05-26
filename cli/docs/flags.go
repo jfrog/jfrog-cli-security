@@ -129,8 +129,7 @@ var commandFlags = map[string][]string{
 		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
 	},
 	Audit: getAuditFlags(),
-	GitAudit: getAuditGitFlags(),
-	
+	GitAudit: getAuditFlags(),
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
@@ -157,11 +156,6 @@ func getAuditFlags() []string {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
 	}
-}
-
-func getAuditGitFlags() []string {
-	auditFlags := getAuditFlags()
-	return auditFlags
 }
 
 // Security Flag keys mapped to their corresponding components.Flag definition.
