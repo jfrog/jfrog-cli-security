@@ -50,8 +50,9 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "Multiple Sections",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section: Build,
-					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
+					Section:         Build,
+					ContextProvided: true,
+					Results:         formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
 				},
 				ScanCommandSummaryResult{
 					Section: Build,
