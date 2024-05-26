@@ -1,3 +1,3 @@
 ```
-✅ No Vulnerabilities were found
+✅ No issues were found
 ```

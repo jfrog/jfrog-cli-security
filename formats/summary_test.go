@@ -72,7 +72,7 @@ func TestScanSummaryResult(t *testing.T) {
 		{
 			"Single",
 			&ScanSummaryResult{
-				ScaScanResults: &ScaSummaryCount{"High": SummaryCount{"Applicable": 1}},
+				ScaScanResults: &ScaScanSummaryResult{ViolationSummary: ScaSummaryCount{"High": SummaryCount{"Applicable": 1}}},
 			},
 			1,
 			[]SummarySubScanType{ScaScan},
@@ -81,7 +81,7 @@ func TestScanSummaryResult(t *testing.T) {
 		{
 			"Multiple",
 			&ScanSummaryResult{
-				ScaScanResults:  &ScaSummaryCount{"High": SummaryCount{"Applicable": 1}},
+				ScaScanResults:  &ScaScanSummaryResult{VulnerabilitiesSummary: ScaSummaryCount{"High": SummaryCount{"Applicable": 1}}},
 				SastScanResults: &SummaryCount{"High": 1},
 			},
 			2,

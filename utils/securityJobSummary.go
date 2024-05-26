@@ -32,7 +32,6 @@ type SecurityCommandsSummary struct {
 	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands"`
 	ScanCommands      []formats.SummaryResults `json:"scanCommands"`
 	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
-	ContextProvided   bool                     `json:"contextProvided"`
 }
 
 // Manage the job summary for security commands
@@ -75,9 +74,6 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		case Modules:
 			scs.AuditCommands = append(scs.AuditCommands, cmdResults.Results)
 		}
-		if cmdResults.ContextProvided {
-			scs.ContextProvided = true
-		}
 	}
 	return
 }
@@ -113,7 +109,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	addSectionTitle := len(sectionsWithContent) > 1
 	var sectionSummary string
 	for i, section := range sectionsWithContent {
-		if sectionSummary, err = GetSummaryString(results.ContextProvided, results.GetSectionSummaries(section)...); err != nil {
+		if sectionSummary, err = GetSummaryString(results.GetSectionSummaries(section)...); err != nil {
 			return
 		}
 		if addSectionTitle {
@@ -127,7 +123,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	return
 }
 
-func GetSummaryString(contextProvided bool, summaries ...formats.SummaryResults) (str string, err error) {
+func GetSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
 	wd, err := coreutils.GetWorkingDirectory()
@@ -145,7 +141,7 @@ func GetSummaryString(contextProvided bool, summaries ...formats.SummaryResults)
 			if parsed > 0 {
 				str += "\n"
 			}
-			str += GetScanSummaryString(scan, singleScan, contextProvided)
+			str += GetScanSummaryString(scan, singleScan)
 			parsed++
 		}
 	}
@@ -163,31 +159,24 @@ func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
 	return true
 }
 
-func getIssueTypeString(contextProvided bool) string {
-	if contextProvided {
-		return "Security violations"
-	}
-	return "Vulnerabilities"
-}
-
-func GetScanSummaryString(summary formats.ScanSummaryResult, singleData, contextProvided bool) (content string) {
+func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (content string) {
 	// single data -> no table
 	hasIssues := summary.HasIssues()
 	if !hasIssues {
 		if singleData {
-			return fmt.Sprintf("```\n✅ No %s were found\n```", getIssueTypeString(contextProvided))
+			return "```\n✅ No issues were found\n```"
 		}
 		return fmt.Sprintf("| ✅ | %s |  |", summary.Target)
 	}
-	issueDetails := getDetailsString(summary, contextProvided)
+	issueDetails := getDetailsString(summary)
 	if singleData {
 		return fmt.Sprintf("<pre>❌ %s</pre>", issueDetails)
 	}
 	return fmt.Sprintf("| ❌ | %s | <pre>%s</pre> |", summary.Target, issueDetails)
 }
 
-func getDetailsString(summary formats.ScanSummaryResult, contextProvided bool) (content string) {
-	content = fmt.Sprintf("%s found %d", getIssueTypeString(contextProvided), summary.GetTotalIssueCount())
+func getDetailsString(summary formats.ScanSummaryResult) (content string) {
+	content = getMainSummaryString(summary)
 	// Display sub scans with issues
 	subScansWithIssues := summary.GetSubScansWithIssues()
 	for i, subScanType := range subScansWithIssues {
@@ -204,6 +193,28 @@ func getDetailsString(summary formats.ScanSummaryResult, contextProvided bool) (
 			subScanPrefix += "SAST "
 		}
 		content += subScanPrefix + getSubScanSummaryCountsString(summary, subScanType, getPrefixPadding(subScanPrefix))
+	}
+	return
+}
+
+func getMainSummaryString(summary formats.ScanSummaryResult) (content string) {
+	vulnerabilityCount := summary.GetTotalIssueCount()
+	violationCount := 0
+	if summary.ScaScanResults != nil {
+		// Violations only relevant for SCA (XRAY) scans
+		violationCount = summary.ScaScanResults.ViolationSummary.GetTotal()
+	}
+	if violationCount > 0 {
+		content += fmt.Sprintf("%d violation", violationCount)
+		if vulnerabilityCount > 0 {
+			content += " found, "
+		}
+	}
+	if vulnerabilityCount > 0 {
+		content += fmt.Sprintf("%d unique vulnerabilities", vulnerabilityCount)
+		if violationCount == 0 {
+			content += " found"
+		}
 	}
 	return
 }
@@ -225,7 +236,7 @@ func getListItemPrefix(index, total int) (content string) {
 func getSubScanSummaryCountsString(summary formats.ScanSummaryResult, subScanType formats.SummarySubScanType, padding int) (content string) {
 	switch subScanType {
 	case formats.ScaScan:
-		content += GetScaSummaryCountString(*summary.ScaScanResults, padding)
+		content += GetScaSummaryCountString(summary.ScaScanResults.GetIssuesCount(), padding)
 	case formats.IacScan:
 		content += GetSeveritySummaryCountString(*summary.IacScanResults, padding)
 	case formats.SecretsScan:
@@ -249,8 +260,7 @@ func hasApplicableDataToDisplayInSummary(summary formats.ScaSummaryCount) bool {
 }
 
 func GetScaSummaryCountString(summary formats.ScaSummaryCount, padding int) (content string) {
-	severityCount := len(summary)
-	if severityCount == 0 {
+	if summary.GetTotal() == 0 {
 		return
 	}
 	if !hasApplicableDataToDisplayInSummary(summary) {
@@ -377,8 +387,9 @@ func getUniqueVulnerabilitiesInfo(cves []services.Cve, issueId, severity string,
 	return
 }
 
-func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScaSummaryCount {
-	uniqueFindings := map[string]SeverityWithApplicable{}
+func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScaScanSummaryResult {
+	vulUniqueFindings := map[string]SeverityWithApplicable{}
+	vioUniqueFindings := map[string]SeverityWithApplicable{}
 	if len(*scaScanResults) == 0 {
 		return nil
 	}
@@ -386,20 +397,27 @@ func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sa
 	for _, scaResult := range *scaScanResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, vulnerability := range xrayResult.Vulnerabilities {
-				vulUniqueFindings := getUniqueVulnerabilitiesInfo(vulnerability.Cves, vulnerability.IssueId, vulnerability.Severity, vulnerability.Components, applicableRuns...)
-				for key, value := range vulUniqueFindings {
-					uniqueFindings[key] = value
+				vulUniqueFinding := getUniqueVulnerabilitiesInfo(vulnerability.Cves, vulnerability.IssueId, vulnerability.Severity, vulnerability.Components, applicableRuns...)
+				for key, value := range vulUniqueFinding {
+					vulUniqueFindings[key] = value
 				}
 			}
 			for _, violation := range xrayResult.Violations {
-				vioUniqueFindings := getUniqueVulnerabilitiesInfo(violation.Cves, violation.IssueId, violation.Severity, violation.Components, applicableRuns...)
-				for key, value := range vioUniqueFindings {
-					uniqueFindings[key] = value
+				vioUniqueFinding := getUniqueVulnerabilitiesInfo(violation.Cves, violation.IssueId, violation.Severity, violation.Components, applicableRuns...)
+				for key, value := range vioUniqueFinding {
+					vioUniqueFindings[key] = value
 				}
 			}
 		}
 	}
 	// Create summary
+	return &formats.ScaScanSummaryResult{
+		VulnerabilitiesSummary: toScaSummaryCount(vulUniqueFindings),
+		ViolationSummary:       toScaSummaryCount(vioUniqueFindings),
+	}
+}
+
+func toScaSummaryCount(uniqueFindings map[string]SeverityWithApplicable) formats.ScaSummaryCount {
 	summary := formats.ScaSummaryCount{}
 	for _, severityWithApplicable := range uniqueFindings {
 		severity := severityWithApplicable.SeverityInfo.Severity
@@ -409,7 +427,7 @@ func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sa
 		}
 		summary[severity][status]++
 	}
-	return &summary
+	return summary
 }
 
 func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {

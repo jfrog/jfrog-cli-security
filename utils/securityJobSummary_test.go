@@ -50,14 +50,14 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "Multiple Sections",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section:         Build,
-					Results:         formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
+					Section: Build,
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
 				},
 				ScanCommandSummaryResult{
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target:         "build-name (build-number)",
-						ScaScanResults: &formats.ScaSummaryCount{"Low": formats.SummaryCount{"": 1}, "High": formats.SummaryCount{"": 2}},
+						ScaScanResults: &formats.ScaScanSummaryResult{ViolationSummary: formats.ScaSummaryCount{"Low": formats.SummaryCount{"": 1}, "High": formats.SummaryCount{"": 2}}},
 					}}},
 				},
 				ScanCommandSummaryResult{
@@ -65,33 +65,35 @@ func TestConvertSummaryToString(t *testing.T) {
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target:             filepath.Join(wd, "binary-name"),
-							ScaScanResults:     &formats.ScaSummaryCount{},
+							ScaScanResults:     &formats.ScaScanSummaryResult{},
 							SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
 						},
 						{
 							Target:         filepath.Join("other-root", "dir", "binary-name2"),
-							ScaScanResults: &formats.ScaSummaryCount{},
+							ScaScanResults: &formats.ScaScanSummaryResult{},
 						},
 					}},
 				},
 				ScanCommandSummaryResult{
-					Section: Modules,
+					Section:         Modules,
 					ContextProvided: true,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target:          filepath.Join(wd, "application1"),
 							SastScanResults: &formats.SummaryCount{"Low": 1},
 							IacScanResults:  &formats.SummaryCount{"Medium": 5},
-							ScaScanResults: &formats.ScaSummaryCount{
+							ScaScanResults: &formats.ScaScanSummaryResult{VulnerabilitiesSummary: formats.ScaSummaryCount{
 								"Critical": formats.SummaryCount{"Undetermined": 1, "Not Applicable": 2},
 								"High":     formats.SummaryCount{"Applicable": 1, "Not Applicable": 1, "Not Covered": 2},
 								"Low":      formats.SummaryCount{"Undetermined": 1},
 							},
+							},
 						},
 						{
 							Target: filepath.Join(wd, "application2"),
-							ScaScanResults: &formats.ScaSummaryCount{
-								"High": formats.SummaryCount{"Not Applicable": 1},
+							ScaScanResults: &formats.ScaScanSummaryResult{
+								VulnerabilitiesSummary: formats.ScaSummaryCount{"High": formats.SummaryCount{"Not Applicable": 1}},
+								ViolationSummary:       formats.ScaSummaryCount{"High": formats.SummaryCount{"": 1}},
 							},
 						},
 						{
@@ -126,7 +128,6 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		ScanCommands:      []formats.SummaryResults{},
 		AuditCommands:     []formats.SummaryResults{},
 	}
-	contextProvided := false
 	for _, cmdResult := range cmdResults {
 		switch cmdResult.Section {
 		case Build:
@@ -136,10 +137,6 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		case Modules:
 			summary.AuditCommands = append(summary.AuditCommands, cmdResult.Results)
 		}
-		if cmdResult.ContextProvided {
-			contextProvided = true
-		}
 	}
-	summary.ContextProvided = contextProvided
 	return summary
 }

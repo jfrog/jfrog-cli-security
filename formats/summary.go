@@ -12,11 +12,11 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 }
 
 type ScanSummaryResult struct {
-	Target             string           `json:"target,omitempty"`
-	ScaScanResults     *ScaSummaryCount `json:"sca,omitempty"`
-	IacScanResults     *SummaryCount    `json:"iac,omitempty"`
-	SecretsScanResults *SummaryCount    `json:"secrets,omitempty"`
-	SastScanResults    *SummaryCount    `json:"sast,omitempty"`
+	Target             string                `json:"target,omitempty"`
+	ScaScanResults     *ScaScanSummaryResult `json:"sca,omitempty"`
+	IacScanResults     *SummaryCount         `json:"iac,omitempty"`
+	SecretsScanResults *SummaryCount         `json:"secrets,omitempty"`
+	SastScanResults    *SummaryCount         `json:"sast,omitempty"`
 }
 
 type SummarySubScanType string
@@ -27,6 +27,41 @@ const (
 	SecretsScan SummarySubScanType = "Secrets"
 	SastScan    SummarySubScanType = "SAST"
 )
+
+type ScaScanSummaryResult struct {
+	ViolationSummary       ScaSummaryCount
+	VulnerabilitiesSummary ScaSummaryCount
+}
+
+func (sssr *ScaScanSummaryResult) GetTotal() (total int) {
+	return sssr.GetIssuesCount().GetTotal()
+}
+
+func (sssr *ScaScanSummaryResult) GetIssuesCount() (count ScaSummaryCount) {
+	count = ScaSummaryCount{}
+	// Merge vulnerabilities and violations
+	if sssr.VulnerabilitiesSummary != nil {
+		for severity, statusCounts := range sssr.VulnerabilitiesSummary {
+			count[severity] = statusCounts
+		}
+	}
+	if sssr.ViolationSummary != nil {
+		for severity, statusCounts := range sssr.ViolationSummary {
+			if _, ok := count[severity]; !ok {
+				count[severity] = statusCounts
+				continue
+			}
+			for status, c := range statusCounts {
+				if _, ok := count[severity][status]; !ok {
+					count[severity][status] = c
+					continue
+				}
+				count[severity][status] += c
+			}
+		}
+	}
+	return
+}
 
 // Severity -> Count
 type SummaryCount map[string]int
