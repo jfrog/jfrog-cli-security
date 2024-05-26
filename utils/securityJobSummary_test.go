@@ -51,7 +51,6 @@ func TestConvertSummaryToString(t *testing.T) {
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
 					Section:         Build,
-					ContextProvided: true,
 					Results:         formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
 				},
 				ScanCommandSummaryResult{
@@ -77,6 +76,7 @@ func TestConvertSummaryToString(t *testing.T) {
 				},
 				ScanCommandSummaryResult{
 					Section: Modules,
+					ContextProvided: true,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target:          filepath.Join(wd, "application1"),
@@ -126,7 +126,7 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		ScanCommands:      []formats.SummaryResults{},
 		AuditCommands:     []formats.SummaryResults{},
 	}
-
+	contextProvided := false
 	for _, cmdResult := range cmdResults {
 		switch cmdResult.Section {
 		case Build:
@@ -136,7 +136,10 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		case Modules:
 			summary.AuditCommands = append(summary.AuditCommands, cmdResult.Results)
 		}
+		if cmdResult.ContextProvided {
+			contextProvided = true
+		}
 	}
-
+	summary.ContextProvided = contextProvided
 	return summary
 }
