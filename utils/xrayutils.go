@@ -12,10 +12,6 @@ type DepTreeNode struct {
 	Children   []string  `json:"children"`
 }
 
-func ContextProvided(projectKey string, watches []string) bool {
-	return projectKey != "" || len(watches) > 0
-}
-
 func toNodeTypesMap(depMap map[string]DepTreeNode) map[string]*DepTreeNode {
 	mapOfTypes := map[string]*DepTreeNode{}
 	for nodId, value := range depMap {

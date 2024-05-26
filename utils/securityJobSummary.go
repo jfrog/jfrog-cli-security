@@ -24,7 +24,6 @@ type SecuritySummarySection string
 
 type ScanCommandSummaryResult struct {
 	Section         SecuritySummarySection `json:"section"`
-	ContextProvided bool                   `json:"contextProvided"`
 	Results         formats.SummaryResults `json:"results"`
 }
 

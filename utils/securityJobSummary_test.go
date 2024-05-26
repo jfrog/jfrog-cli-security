@@ -76,7 +76,6 @@ func TestConvertSummaryToString(t *testing.T) {
 				},
 				ScanCommandSummaryResult{
 					Section:         Modules,
-					ContextProvided: true,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target:          filepath.Join(wd, "application1"),

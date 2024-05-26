@@ -270,7 +270,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 		return err
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), ContextProvided: utils.ContextProvided(scanCmd.projectKey, scanCmd.watches), Section: utils.Binary}); err != nil {
+	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
 		return err
 	}
 
