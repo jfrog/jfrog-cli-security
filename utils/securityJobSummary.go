@@ -163,7 +163,7 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 	hasIssues := summary.HasIssues()
 	if !hasIssues {
 		if singleData {
-			return "```\n✅ No vulnerabilities were found\n```"
+			return "```\n✅ No security violations were found\n```"
 		}
 		return fmt.Sprintf("| ✅ | %s |  |", summary.Target)
 	}
@@ -175,7 +175,7 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 }
 
 func getDetailsString(summary formats.ScanSummaryResult) (content string) {
-	content = fmt.Sprintf("Vulnerabilities found %d", summary.GetTotalIssueCount())
+	content = fmt.Sprintf("Security violations found %d", summary.GetTotalIssueCount())
 	// Display sub scans with issues
 	subScansWithIssues := summary.GetSubScansWithIssues()
 	for i, subScanType := range subScansWithIssues {
