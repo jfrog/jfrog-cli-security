@@ -204,7 +204,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	} else {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 	}
-	
+
 	// Wait for the Download of the AnalyzerManager to complete.
 	if err = errGroup.Wait(); err != nil {
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
