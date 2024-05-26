@@ -1,1 +1,1 @@
-<pre>❌ Security violations found 3<br>└── 3 Secrets 🔴 <span style="color:red">2 High</span><br>              🟡 <span style="color:yellow">1 Low</span></pre>
+<pre>❌ Vulnerabilities found 3<br>└── 3 Secrets 🔴 <span style="color:red">2 High</span><br>              🟡 <span style="color:yellow">1 Low</span></pre>

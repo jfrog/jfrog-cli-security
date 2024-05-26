@@ -23,14 +23,16 @@ const (
 type SecuritySummarySection string
 
 type ScanCommandSummaryResult struct {
-	Section SecuritySummarySection `json:"section"`
-	Results formats.SummaryResults `json:"results"`
+	Section         SecuritySummarySection `json:"section"`
+	ContextProvided bool                   `json:"contextProvided"`
+	Results         formats.SummaryResults `json:"results"`
 }
 
 type SecurityCommandsSummary struct {
 	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands"`
 	ScanCommands      []formats.SummaryResults `json:"scanCommands"`
 	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
+	ContextProvided   bool                     `json:"contextProvided"`
 }
 
 // Manage the job summary for security commands
@@ -73,6 +75,9 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		case Modules:
 			scs.AuditCommands = append(scs.AuditCommands, cmdResults.Results)
 		}
+		if cmdResults.ContextProvided {
+			scs.ContextProvided = true
+		}
 	}
 	return
 }
@@ -108,7 +113,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	addSectionTitle := len(sectionsWithContent) > 1
 	var sectionSummary string
 	for i, section := range sectionsWithContent {
-		if sectionSummary, err = GetSummaryString(results.GetSectionSummaries(section)...); err != nil {
+		if sectionSummary, err = GetSummaryString(results.ContextProvided, results.GetSectionSummaries(section)...); err != nil {
 			return
 		}
 		if addSectionTitle {
@@ -122,7 +127,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	return
 }
 
-func GetSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
+func GetSummaryString(contextProvided bool, summaries ...formats.SummaryResults) (str string, err error) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
 	wd, err := coreutils.GetWorkingDirectory()
@@ -140,7 +145,7 @@ func GetSummaryString(summaries ...formats.SummaryResults) (str string, err erro
 			if parsed > 0 {
 				str += "\n"
 			}
-			str += GetScanSummaryString(scan, singleScan)
+			str += GetScanSummaryString(scan, singleScan, contextProvided)
 			parsed++
 		}
 	}
@@ -158,24 +163,31 @@ func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
 	return true
 }
 
-func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (content string) {
+func GetScanSummaryString(summary formats.ScanSummaryResult, singleData, contextProvided bool) (content string) {
 	// single data -> no table
 	hasIssues := summary.HasIssues()
 	if !hasIssues {
 		if singleData {
-			return "```\n✅ No security violations were found\n```"
+			return fmt.Sprintf("```\n✅ No %s were found\n```", getIssueTypeString(contextProvided))
 		}
 		return fmt.Sprintf("| ✅ | %s |  |", summary.Target)
 	}
-	issueDetails := getDetailsString(summary)
+	issueDetails := getDetailsString(summary, contextProvided)
 	if singleData {
 		return fmt.Sprintf("<pre>❌ %s</pre>", issueDetails)
 	}
 	return fmt.Sprintf("| ❌ | %s | <pre>%s</pre> |", summary.Target, issueDetails)
 }
 
-func getDetailsString(summary formats.ScanSummaryResult) (content string) {
-	content = fmt.Sprintf("Security violations found %d", summary.GetTotalIssueCount())
+func getIssueTypeString(contextProvided bool) string {
+	if contextProvided {
+		return "Security violations"
+	}
+	return "Vulnerabilities"
+}
+
+func getDetailsString(summary formats.ScanSummaryResult, contextProvided bool) (content string) {
+	content = fmt.Sprintf("%s found %d", getIssueTypeString(contextProvided), summary.GetTotalIssueCount())
 	// Display sub scans with issues
 	subScansWithIssues := summary.GetSubScansWithIssues()
 	for i, subScanType := range subScansWithIssues {
