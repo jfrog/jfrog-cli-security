@@ -227,7 +227,7 @@ func autoDetectionForMissingConfigurations(params *AuditParams) (scans []*xrayut
 	// Update params working directories to include all the detected working directories.
 	detected := datastructures.MakeSet[string]()
 	for _, scan := range scans {
-		detected.Add(scan.WorkingDirectory)
+		detected.Add(scan.Target)
 	}
 	params.workingDirs = detected.ToSlice()
 	return

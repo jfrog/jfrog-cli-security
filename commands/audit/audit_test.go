@@ -131,8 +131,8 @@ func getExpectedTestScaScans(wd string, techs ...coreutils.Technology) (results 
 		switch tech {
 		case coreutils.Maven:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Maven,
-				WorkingDirectory: filepath.Join(wd, "dir", "maven"),
+				Technology: coreutils.Maven,
+				Target:     filepath.Join(wd, "dir", "maven"),
 				Descriptors: []string{
 					filepath.Join(wd, "dir", "maven", "pom.xml"),
 					filepath.Join(wd, "dir", "maven", "maven-sub", "pom.xml"),
@@ -141,39 +141,39 @@ func getExpectedTestScaScans(wd string, techs ...coreutils.Technology) (results 
 			})
 		case coreutils.Npm:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Npm,
-				WorkingDirectory: filepath.Join(wd, "dir", "npm"),
-				Descriptors:      []string{filepath.Join(wd, "dir", "npm", "package.json")},
+				Technology:  coreutils.Npm,
+				Target:      filepath.Join(wd, "dir", "npm"),
+				Descriptors: []string{filepath.Join(wd, "dir", "npm", "package.json")},
 			})
 		case coreutils.Go:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Go,
-				WorkingDirectory: filepath.Join(wd, "dir", "go"),
-				Descriptors:      []string{filepath.Join(wd, "dir", "go", "go.mod")},
+				Technology:  coreutils.Go,
+				Target:      filepath.Join(wd, "dir", "go"),
+				Descriptors: []string{filepath.Join(wd, "dir", "go", "go.mod")},
 			})
 		case coreutils.Yarn:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Yarn,
-				WorkingDirectory: filepath.Join(wd, "yarn"),
-				Descriptors:      []string{filepath.Join(wd, "yarn", "package.json")},
+				Technology:  coreutils.Yarn,
+				Target:      filepath.Join(wd, "yarn"),
+				Descriptors: []string{filepath.Join(wd, "yarn", "package.json")},
 			})
 		case coreutils.Pip:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Pip,
-				WorkingDirectory: filepath.Join(wd, "yarn", "Pip"),
-				Descriptors:      []string{filepath.Join(wd, "yarn", "Pip", "requirements.txt")},
+				Technology:  coreutils.Pip,
+				Target:      filepath.Join(wd, "yarn", "Pip"),
+				Descriptors: []string{filepath.Join(wd, "yarn", "Pip", "requirements.txt")},
 			})
 		case coreutils.Pipenv:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Pipenv,
-				WorkingDirectory: filepath.Join(wd, "yarn", "Pipenv"),
-				Descriptors:      []string{filepath.Join(wd, "yarn", "Pipenv", "Pipfile")},
+				Technology:  coreutils.Pipenv,
+				Target:      filepath.Join(wd, "yarn", "Pipenv"),
+				Descriptors: []string{filepath.Join(wd, "yarn", "Pipenv", "Pipfile")},
 			})
 		case coreutils.Nuget:
 			results = append(results, &utils.ScaScanResult{
-				Technology:       coreutils.Nuget,
-				WorkingDirectory: filepath.Join(wd, "Nuget"),
-				Descriptors:      []string{filepath.Join(wd, "Nuget", "project.sln"), filepath.Join(wd, "Nuget", "Nuget-sub", "project.csproj")},
+				Technology:  coreutils.Nuget,
+				Target:      filepath.Join(wd, "Nuget"),
+				Descriptors: []string{filepath.Join(wd, "Nuget", "project.sln"), filepath.Join(wd, "Nuget", "Nuget-sub", "project.csproj")},
 			})
 		}
 	}
