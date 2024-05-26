@@ -23,8 +23,8 @@ const (
 type SecuritySummarySection string
 
 type ScanCommandSummaryResult struct {
-	Section         SecuritySummarySection `json:"section"`
-	Results         formats.SummaryResults `json:"results"`
+	Section SecuritySummarySection `json:"section"`
+	Results formats.SummaryResults `json:"results"`
 }
 
 type SecurityCommandsSummary struct {
@@ -197,16 +197,16 @@ func getDetailsString(summary formats.ScanSummaryResult) (content string) {
 }
 
 func getMainSummaryString(summary formats.ScanSummaryResult) (content string) {
-	vulnerabilityCount := summary.GetTotalIssueCount()
 	violationCount := 0
 	if summary.ScaScanResults != nil {
 		// Violations only relevant for SCA (XRAY) scans
 		violationCount = summary.ScaScanResults.ViolationSummary.GetTotal()
 	}
+	vulnerabilityCount := summary.GetTotalIssueCount() - violationCount
 	if violationCount > 0 {
-		content += fmt.Sprintf("%d violation", violationCount)
+		content += fmt.Sprintf("%d violations found", violationCount)
 		if vulnerabilityCount > 0 {
-			content += " found, "
+			content += ", "
 		}
 	}
 	if vulnerabilityCount > 0 {

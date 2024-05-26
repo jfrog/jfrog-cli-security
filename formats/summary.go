@@ -34,7 +34,7 @@ type ScaScanSummaryResult struct {
 }
 
 func (sssr *ScaScanSummaryResult) GetTotal() (total int) {
-	return sssr.GetIssuesCount().GetTotal()
+	return sssr.ViolationSummary.GetTotal() + sssr.VulnerabilitiesSummary.GetTotal()
 }
 
 func (sssr *ScaScanSummaryResult) GetIssuesCount() (count ScaSummaryCount) {
