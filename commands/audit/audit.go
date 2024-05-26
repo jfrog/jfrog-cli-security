@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -197,13 +196,8 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	results.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId
 
-	scaScansToPreform := autoDetectionForMissingConfigurations(auditParams)
-	if len(scaScansToPreform) > 0 {
-		// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-		results.ScaError = runScaScan(auditParams, results)
-	} else {
-		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
-	}
+	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
+	results.ScaError = runScaScan(auditParams, results)
 
 	// Wait for the Download of the AnalyzerManager to complete.
 	if err = errGroup.Wait(); err != nil {
@@ -214,22 +208,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if results.ExtendedScanResults.EntitledForJas {
 		results.JasError = runJasScannersAndSetResults(results, auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId)
 	}
-	return
-}
-
-// Detect missing configurations for Audit that was not provided by the user specifically.
-func autoDetectionForMissingConfigurations(params *AuditParams) (scans []*xrayutils.ScaScanResult) {
-	// Detect modules by descriptors and technologies.
-	scans = getScaScansToPreform(params)
-	if !params.IsRecursiveScan() || len(scans) <= 1 {
-		return
-	}
-	// Update params working directories to include all the detected working directories.
-	detected := datastructures.MakeSet[string]()
-	for _, scan := range scans {
-		detected.Add(scan.Target)
-	}
-	params.workingDirs = detected.ToSlice()
 	return
 }
 
