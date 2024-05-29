@@ -50,10 +50,6 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 }
 
 func TestGetSummary(t *testing.T) {
-	dummyScaVulnerabilities := []services.Vulnerability{
-		{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-		{IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-	}
 	dummyExtendedScanResults := &ExtendedScanResults{
 		ApplicabilityScanResults: []*sarif.Run{
 			CreateRunWithDummyResults(CreateDummyPassingResult("applic_CVE-2")).WithInvocations([]*sarif.Invocation{
@@ -80,19 +76,21 @@ func TestGetSummary(t *testing.T) {
 		results      Results
 		expected     formats.SummaryResults
 		findingCount int
+		issueCount   int
 	}{
 		{
 			name:         "Empty results",
 			results:      Results{ScaResults: []ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
+			issueCount:   0,
 		},
 		{
 			name: "One module result",
 			results: Results{
 				ScaResults: []ScaScanResult{{
 					Target:      "target1",
-					XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
+					XrayResults: getDummyScaTestResults(true, false),
 				}},
 				ExtendedScanResults: dummyExtendedScanResults,
 			},
@@ -105,6 +103,7 @@ func TestGetSummary(t *testing.T) {
 								"Critical": formats.SummaryCount{"Undetermined": 1},
 								"High":     formats.SummaryCount{"Not Applicable": 1},
 							},
+							ViolationSummary: formats.ScaSummaryCount{},
 						},
 						SecretsScanResults: &formats.SummaryCount{"Low": 2},
 						SastScanResults:    &formats.SummaryCount{"Low": 1},
@@ -112,6 +111,7 @@ func TestGetSummary(t *testing.T) {
 				},
 			},
 			findingCount: 5,
+			issueCount:   5,
 		},
 		{
 			name: "Multiple module results",
@@ -119,11 +119,11 @@ func TestGetSummary(t *testing.T) {
 				ScaResults: []ScaScanResult{
 					{
 						Target:      "target1",
-						XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
+						XrayResults: getDummyScaTestResults(false, true),
 					},
 					{
 						Target:      "target2",
-						XrayResults: []services.ScanResponse{{Vulnerabilities: dummyScaVulnerabilities}},
+						XrayResults: getDummyScaTestResults(true, true),
 					},
 				},
 				ExtendedScanResults: dummyExtendedScanResults,
@@ -133,6 +133,7 @@ func TestGetSummary(t *testing.T) {
 					{
 						Target: "target1",
 						ScaScanResults: &formats.ScaScanSummaryResult{
+							VulnerabilitiesSummary: formats.ScaSummaryCount{},
 							ViolationSummary: formats.ScaSummaryCount{
 								"Critical": formats.SummaryCount{"Undetermined": 1},
 								"High":     formats.SummaryCount{"Not Applicable": 1},
@@ -155,7 +156,8 @@ func TestGetSummary(t *testing.T) {
 					},
 				},
 			},
-			findingCount: 5,
+			findingCount: 6,
+			issueCount:   7,
 		},
 	}
 	for _, testCase := range testCases {
@@ -163,6 +165,34 @@ func TestGetSummary(t *testing.T) {
 			result := testCase.results.GetSummary()
 			assert.Equal(t, testCase.expected, result)
 			assert.Equal(t, testCase.findingCount, testCase.results.CountScanResultsFindings())
+			assert.Equal(t, testCase.issueCount, testCase.results.GetSummary().GetTotalIssueCount())
 		})
 	}
+}
+
+func getDummyScaTestResults(vulnerability, violation bool) (responses []services.ScanResponse) {
+	response := services.ScanResponse{}
+	if vulnerability && violation {
+		// Mix
+		response.Vulnerabilities = []services.Vulnerability{
+			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+		response.Violations = []services.Violation{
+			{WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+	} else if vulnerability {
+		// only vulnerability
+		response.Vulnerabilities = []services.Vulnerability{
+			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+	} else if violation {
+		// only violation
+		response.Violations = []services.Violation{
+			{WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+	}
+	responses = append(responses, response)
+	return
 }
