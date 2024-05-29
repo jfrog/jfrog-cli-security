@@ -44,7 +44,9 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 			err = errCacheFolder
 			return
 		}
-		goartifactoryutils.SetGoModCache(projCacheDir)
+		if err = goartifactoryutils.SetGoModCache(projCacheDir); err != nil {
+			return
+		}
 	}
 	// Calculate go dependencies graph
 	dependenciesGraph, err := goutils.GetDependenciesGraph(currentDir)

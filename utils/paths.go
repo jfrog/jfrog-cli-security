@@ -42,7 +42,7 @@ func GetCurationCacheFolder() (string, error) {
 }
 
 func GetCurationCacheFolderByTech(tech coreutils.Technology) (projectDir string, err error) {
-	pathHash, errFromHash := getProjectPathHash(err)
+	pathHash, errFromHash := getProjectPathHash()
 	if errFromHash != nil {
 		err = errFromHash
 		return
@@ -55,7 +55,7 @@ func GetCurationCacheFolderByTech(tech coreutils.Technology) (projectDir string,
 	return
 }
 
-func getProjectPathHash(err error) (string, error) {
+func getProjectPathHash() (string, error) {
 	workingDir, err := os.Getwd()
 	if err != nil {
 		return "", err

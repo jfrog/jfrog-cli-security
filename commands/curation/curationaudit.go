@@ -72,13 +72,13 @@ var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (boo
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, envName string, rtVersion string) (bool, error) {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, envName string, minArtiVersion string) (bool, error) {
 	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
 		return true, nil
 	} else if err != nil {
 		log.Error(err)
 	}
-	rtVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
+	artiVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
 	if err != nil {
 		return false, err
 	}
@@ -89,7 +89,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 	}
 
 	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
-	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, rtVersion, rtVersion)
+	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
 	}

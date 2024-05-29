@@ -91,7 +91,7 @@ func Test_handleCurationGoError(t *testing.T) {
 		{
 			name:          "curation error 403",
 			err:           errors.New("package download failed due to 403 forbidden test failure"),
-			expectedError: errors.New(fmt.Sprintf(sca.CurationErrorMsgToUserTemplate, coreutils.Go)),
+			expectedError: fmt.Errorf(sca.CurationErrorMsgToUserTemplate, coreutils.Go),
 		},
 		{
 			name: "not curation error 500",
