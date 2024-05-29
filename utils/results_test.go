@@ -172,7 +172,8 @@ func TestGetSummary(t *testing.T) {
 
 func getDummyScaTestResults(vulnerability, violation bool) (responses []services.ScanResponse) {
 	response := services.ScanResponse{}
-	if vulnerability && violation {
+	switch {
+	case vulnerability && violation:
 		// Mix
 		response.Vulnerabilities = []services.Vulnerability{
 			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
@@ -180,13 +181,13 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 		response.Violations = []services.Violation{
 			{WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
-	} else if vulnerability {
+	case vulnerability:
 		// only vulnerability
 		response.Vulnerabilities = []services.Vulnerability{
 			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 			{IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
-	} else if violation {
+	case violation:
 		// only violation
 		response.Violations = []services.Violation{
 			{WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
