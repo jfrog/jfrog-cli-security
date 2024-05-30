@@ -247,8 +247,8 @@ func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech st
 	addDummyPackageDescriptor(t, false)
 	// Run NuGet/Dotnet restore before executing jfrog xr audit (NuGet)
 	if restoreTech != "" {
-		_, err := exec.Command(restoreTech, "restore").CombinedOutput()
-		assert.NoError(t, err)
+		output, err := exec.Command(restoreTech, "restore").CombinedOutput()
+		assert.NoError(t, err, output)
 	}
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--nuget", "--format="+format, "--licenses")
 }
