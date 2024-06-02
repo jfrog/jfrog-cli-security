@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"

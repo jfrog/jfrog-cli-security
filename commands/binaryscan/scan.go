@@ -1,4 +1,4 @@
-package scan
+package binaryscan
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -400,7 +400,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 
 				extendedScanResults := utils.ExtendedScanResults{}
 				if entitledForJas && scanCmd.commandSupportsJAS {
-                    // Run Jas scans
+					// Run Jas scans
 					workingDirs := []string{filePath}
 					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []coreutils.Technology{coreutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
 

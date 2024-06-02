@@ -22,7 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 
@@ -40,7 +40,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
@@ -81,7 +81,7 @@ func testXrayBinaryScan(t *testing.T, format string) string {
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, binaryscan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
@@ -136,7 +136,7 @@ func initNativeDockerWithXrayTest(t *testing.T) func() {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
+	securityTestUtils.ValidateXrayVersion(t, binaryscan.DockerScanMinXrayVersion)
 	// Create server config to use with the command.
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	// Add docker scan mock command

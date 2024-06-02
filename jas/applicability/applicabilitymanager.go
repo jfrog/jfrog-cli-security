@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	applicabilityScanCommand        = "ca"
-	applicabilityDocsUrlSuffix      = "contextual-analysis"
+	applicabilityScanCommand   = "ca"
+	applicabilityDocsUrlSuffix = "contextual-analysis"
 
-    ApplicabilityScannerType        ApplicabilityScanType = "analyze-applicability"
+	ApplicabilityScannerType        ApplicabilityScanType = "analyze-applicability"
 	ApplicabilityDockerScanScanType ApplicabilityScanType = "analyze-applicability-docker-scan"
 )
 

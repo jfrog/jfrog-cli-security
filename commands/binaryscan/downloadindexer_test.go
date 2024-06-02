@@ -1,10 +1,11 @@
-package scan
+package binaryscan
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/assert"

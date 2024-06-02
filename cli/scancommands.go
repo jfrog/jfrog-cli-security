@@ -28,7 +28,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
+	"github.com/jfrog/jfrog-cli-security/commands/buildscan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -188,7 +189,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	scanCmd := scan.NewScanCommand().
+	scanCmd := binaryscan.NewScanCommand().
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
 		SetSpec(specFile).
@@ -294,7 +295,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	buildScanCmd := scan.NewBuildScanCommand().
+	buildScanCmd := buildscan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
 		SetBuildConfiguration(buildConfiguration).
@@ -477,7 +478,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	containerScanCommand := scan.NewDockerScanCommand()
+	containerScanCommand := binaryscan.NewDockerScanCommand()
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
