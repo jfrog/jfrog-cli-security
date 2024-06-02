@@ -412,7 +412,7 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech coreutils.Technology) error {
-	resolverParams, err := ca.getRepoParams(audit.TechType[tech])
+	resolverParams, err := ca.getRepoParams(utils.TechType[tech])
 	if err != nil {
 		return err
 	}
