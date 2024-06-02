@@ -24,15 +24,17 @@ import (
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/enrich"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
-const auditScanCategory = "Audit & Scan"
+const auditScanCategory = "Audit & Scan & Import"
 
 const dockerScanCmdHiddenName = "dockerscan"
 
@@ -46,6 +48,15 @@ func getAuditAndScansCommands() []components.Command {
 			Arguments:   scanDocs.GetArguments(),
 			Category:    auditScanCategory,
 			Action:      ScanCmd,
+		},
+		{
+			Name:        "enrich",
+			Aliases:     []string{"e"},
+			Flags:       flags.GetCommandFlags(flags.Enrich),
+			Description: enrichDocs.GetDescription(),
+			Arguments:   enrichDocs.GetArguments(),
+			Category:    auditScanCategory,
+			Action:      EnrichCmd,
 		},
 		{
 			Name:        "build-scan",
@@ -148,6 +159,35 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 	}
+}
+
+func EnrichCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
+		return pluginsCommon.PrintHelpAndReturnError("providing a <source pattern> argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	err = validateXrayContext(c, serverDetails)
+	if err != nil {
+		return err
+	}
+	var specFile *spec.SpecFiles
+	specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+	err = spec.ValidateSpec(specFile.Files, false, false)
+	if err != nil {
+		return err
+	}
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	EnrichCmd := enrich.NewEnrichCommand().
+		SetServerDetails(serverDetails).
+		SetThreads(threads).
+		SetSpec(specFile)
+	return commandsCommon.Exec(EnrichCmd)
 }
 
 func ScanCmd(c *components.Context) error {

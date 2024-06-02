@@ -30,6 +30,10 @@ func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
 	return
 }
 
+func (r *Results) getScaScanFileName() string {
+	return r.ScaResults[0].Target
+}
+
 func (r *Results) GetScaScannedTechnologies() []coreutils.Technology {
 	technologies := datastructures.MakeSet[coreutils.Technology]()
 	for _, scaResult := range r.ScaResults {

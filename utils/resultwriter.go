@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,11 @@ type ResultsWriter struct {
 	scanType services.ScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
+}
+
+type Vulnerability struct {
+	BomRef string `json:"bom-ref"`
+	ID     string `json:"id"`
 }
 
 func NewResultsWriter(scanResults *Results) *ResultsWriter {
@@ -110,6 +116,33 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	}
 	return nil
 }
+
+func (rw *ResultsWriter) AppendVulnsToJson() error {
+	fileName := rw.results.getScaScanFileName()
+	fileContent, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return err
+	}
+	var data map[string]interface{}
+	err = json.Unmarshal(fileContent, &data)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return err
+	}
+	var vulnerabilities []map[string]string
+	xrayResults := rw.results.GetScaScansXrayResults()[0]
+	for _, vuln := range xrayResults.Vulnerabilities {
+		for component := range vuln.Components {
+			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
+			vulnerabilities = append(vulnerabilities, vulnerability)
+		}
+	}
+	data["vulnerabilities"] = vulnerabilities
+	return PrintJson(data)
+
+}
+
 func (rw *ResultsWriter) printScanResultsTables() (err error) {
 	printMessages(rw.messages)
 	violations, vulnerabilities, licenses := SplitScanResults(rw.results.ScaResults)
