@@ -3,20 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
-	"time"
-
-	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
@@ -40,9 +37,6 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/scangraph"
-	"github.com/jfrog/jfrog-cli-security/utils"
-
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -56,7 +50,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
@@ -70,7 +64,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
 }
 
 func testXrayBinaryScan(t *testing.T, format string) string {
@@ -108,7 +102,7 @@ func TestDockerScan(t *testing.T) {
 	cleanup := initNativeDockerWithXrayTest(t)
 	defer cleanup()
 
-	watchName, deleteWatch := createTestWatch(t)
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
 	defer deleteWatch()
 
 	imagesToScan := []string{
@@ -193,43 +187,6 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
 		}
-	}
-}
-
-func createTestWatch(t *testing.T) (string, func()) {
-	xrayManager, err := utils.CreateXrayServiceManager(securityTests.XrDetails)
-	require.NoError(t, err)
-	// Create new default policy.
-	policyParams := xrayUtils.PolicyParams{
-		Name: fmt.Sprintf("%s-%s", "docker-policy", strconv.FormatInt(time.Now().Unix(), 10)),
-		Type: xrayUtils.Security,
-		Rules: []xrayUtils.PolicyRule{{
-			Name:     "sec_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(xrayUtils.Low),
-			Priority: 1,
-			Actions: &xrayUtils.PolicyAction{
-				FailBuild: clientUtils.Pointer(true),
-			},
-		}},
-	}
-	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
-		return "", func() {}
-	}
-	// Create new default watch.
-	watchParams := xrayUtils.NewWatchParams()
-	watchParams.Name = fmt.Sprintf("%s-%s", "docker-watch", strconv.FormatInt(time.Now().Unix(), 10))
-	watchParams.Active = true
-	watchParams.Builds.Type = xrayUtils.WatchBuildAll
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
-		{
-			Name: policyParams.Name,
-			Type: "security",
-		},
-	}
-	assert.NoError(t, xrayManager.CreateWatch(watchParams))
-	return watchParams.Name, func() {
-		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
-		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
 }
 
