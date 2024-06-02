@@ -27,9 +27,9 @@ import (
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
 	"github.com/jfrog/jfrog-cli-security/commands/buildscan"
+	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 

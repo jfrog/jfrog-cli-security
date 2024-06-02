@@ -21,8 +21,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
+	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 
