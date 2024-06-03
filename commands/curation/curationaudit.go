@@ -52,7 +52,6 @@ const (
 	TotalConcurrentRequests = 10
 
 	MinArtiPassThroughSupport = "7.82.0"
-
 	MinArtiGolangSupport      = "7.87.0"
 	MinXrayPassTHroughSupport = "3.92.0"
 )
@@ -68,7 +67,7 @@ var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(coreutils.Maven, utils.CurationMavenSupport, MinArtiPassThroughSupport)
 	},
 	coreutils.Go: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Go, utils.CurationGoSupport, MinArtiGolangSupport)
+		return ca.checkSupportByVersionOrEnv(coreutils.Go, utils.CurationMavenSupport, MinArtiGolangSupport)
 	},
 }
 
@@ -307,6 +306,7 @@ func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map
 		return err
 	}
 	rootNode := depTreeResult.FullDepTrees[0]
+	// we don't pass artiUrl and repo as we don't want to download the package, only to get the name and version.
 	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
 	if projectName == "" {
 		workPath, err := os.Getwd()
@@ -657,7 +657,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 
 // input - id: go://github.com/kennygrant/sanitize:v1.2.4
 // input - repo: go
-// output: downloadUrl: <artiUrl>/api/go/go/github.com/kennygrant/sanitize/@v/v1.2.4
+// output: downloadUrl: <artiUrl>/api/go/go/github.com/kennygrant/sanitize/@v/v1.2.4.zip
 func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, coreutils.Go.String()+"://")
 	nameVersion := strings.Split(id, ":")

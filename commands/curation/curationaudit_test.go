@@ -416,8 +416,8 @@ func TestDoCurationAudit(t *testing.T) {
 			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
 			defer callbackPip()
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
-
 			defer mockServer.Close()
+
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
@@ -438,6 +438,13 @@ func TestDoCurationAudit(t *testing.T) {
 			}
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
 			defer func() {
+				cacheFolder, err := utils.GetCurationCacheFolder()
+				require.NoError(t, err)
+				err = fileutils.RemoveTempDir(cacheFolder)
+				if err != nil {
+					// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+					assert.ErrorIs(t, err, os.ErrPermission)
+				}
 				callback3()
 			}()
 			results := map[string][]*PackageStatus{}

@@ -278,6 +278,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	mvnOutput1 := "status code: 403, reason phrase: Forbidden (403)"
 	mvnOutput2 := "status code: 500, reason phrase: Server Error (500)"
 	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
+	goOutput := "Failed running Go command: 403 Forbidden"
 
 	tests := []struct {
 		name          string
@@ -303,7 +304,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 		{
 			name:          "pip 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          coreutils.Pip,
 			output:        pipOutput,
 			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, coreutils.Pip),
 		},
@@ -320,7 +321,14 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 			output:        "http error 401",
 		},
 		{
-			name:          "nota supported tech",
+			name:          "golang 403 error",
+			isCurationCmd: true,
+			tech:          coreutils.Go,
+			output:        goOutput,
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, coreutils.Go),
+		},
+		{
+			name:          "not a supported tech",
 			isCurationCmd: true,
 			tech:          coreutils.CI,
 			output:        pipOutput,
@@ -328,7 +336,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output)
+			assert.Equal(t, SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output), tt.expect)
 		})
 	}
 }

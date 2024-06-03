@@ -30,15 +30,10 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = fmt.Errorf("failed while getting server details: %s", err.Error())
 		return
 	}
-
-	remoteGoRepo := params.DepsRepo()
-	if remoteGoRepo != "" {
-		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo, params.IsCurationCmd()); err != nil {
-			return
-		}
-	}
+	goProxyParams := goutils.GoProxyUrlParams{}
 	// in case of curation command, we set an alternative cache folder when building go dep tree
 	if params.IsCurationCmd() {
+		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
 		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(coreutils.Go)
 		if errCacheFolder != nil {
 			err = errCacheFolder
@@ -48,6 +43,14 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 			return
 		}
 	}
+
+	remoteGoRepo := params.DepsRepo()
+	if remoteGoRepo != "" {
+		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo, goProxyParams); err != nil {
+			return
+		}
+	}
+
 	// Calculate go dependencies graph
 	dependenciesGraph, err := goutils.GetDependenciesGraph(currentDir)
 	if err != nil || len(dependenciesGraph) == 0 {
