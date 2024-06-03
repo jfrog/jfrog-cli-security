@@ -51,6 +51,9 @@ func testXrayAuditNpm(t *testing.T, format string) string {
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
+	// Make sure the audit request will work with xsc and not xray
+	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
+	assert.NoError(t, err)
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--npm", "--licenses", "--format="+format, "--watches="+watchName, "--fail=false")
