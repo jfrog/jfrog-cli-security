@@ -42,8 +42,7 @@ func TestXscAuditNpmJson(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	output := testAuditNpm(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 1, 1, 1)
-
+	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
 }
 
 func TestXscAuditNpmSimpleJson(t *testing.T) {
@@ -55,6 +54,29 @@ func TestXscAuditNpmSimpleJson(t *testing.T) {
 		assert.NoError(t, err)
 	}()
 	output := testAuditNpm(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
+}
 
+func TestXscAuditMavenJson(t *testing.T) {
+	// Make sure the audit request will work with xsc and not xray
+	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
+	assert.NoError(t, err)
+	defer func() {
+		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
+		assert.NoError(t, err)
+	}()
+	output := testXscAuditMaven(t, string(format.Json))
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+}
+
+func TestXscAuditMavenSimpleJson(t *testing.T) {
+	// Make sure the audit request will work with xsc and not xray
+	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
+	assert.NoError(t, err)
+	defer func() {
+		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
+		assert.NoError(t, err)
+	}()
+	output := testXscAuditMaven(t, string(format.SimpleJson))
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
 }

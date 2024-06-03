@@ -281,16 +281,16 @@ func testXrayAuditGradle(t *testing.T, format string) string {
 }
 
 func TestXrayAuditMavenJson(t *testing.T) {
-	output := testXrayAuditMaven(t, string(format.Json))
+	output := testXscAuditMaven(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
 }
 
 func TestXrayAuditMavenSimpleJson(t *testing.T) {
-	output := testXrayAuditMaven(t, string(format.SimpleJson))
+	output := testXscAuditMaven(t, string(format.SimpleJson))
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
 }
 
-func testXrayAuditMaven(t *testing.T, format string) string {
+func testXscAuditMaven(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
