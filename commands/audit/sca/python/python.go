@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
@@ -12,6 +13,7 @@ import (
 	utils "github.com/jfrog/jfrog-cli-core/v2/utils/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -259,7 +261,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}

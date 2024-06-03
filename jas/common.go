@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -219,12 +220,12 @@ var FakeBasicXrayResults = []services.ScanResponse{
 	{
 		ScanId: "scanId_1",
 		Vulnerabilities: []services.Vulnerability{
-			{IssueId: "issueId_1", Technology: coreutils.Pipenv.String(),
+			{IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
 				Cves:       []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
 				Components: map[string]services.Component{"issueId_1_direct_dependency": {}, "issueId_3_direct_dependency": {}}},
 		},
 		Violations: []services.Violation{
-			{IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+			{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 				Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
 				Components: map[string]services.Component{"issueId_2_direct_dependency": {}, "issueId_4_direct_dependency": {}}},
 		},
@@ -279,7 +280,7 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreutils.Technology) func() {
+func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
 	errMsg := "failed %s %s environment variable. Cause: %s"
 	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
 	if err != nil {
@@ -299,7 +300,7 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
 	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(utils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
 	}

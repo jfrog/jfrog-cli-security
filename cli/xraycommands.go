@@ -6,11 +6,11 @@ import (
 	corecommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 
 	"github.com/jfrog/jfrog-cli-security/commands/xray/curl"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -57,7 +57,7 @@ func getXrayNameSpaceCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditMvn),
 			Description: auditSpecificDocs.GetMvnDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Maven)
+				return AuditSpecificCmd(c, techutils.Maven)
 			},
 		},
 		{
@@ -67,7 +67,7 @@ func getXrayNameSpaceCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGradle),
 			Description: auditSpecificDocs.GetGradleDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Gradle)
+				return AuditSpecificCmd(c, techutils.Gradle)
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func getXrayNameSpaceCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditNpm),
 			Description: auditSpecificDocs.GetNpmDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Npm)
+				return AuditSpecificCmd(c, techutils.Npm)
 			},
 		},
 		{
@@ -87,7 +87,7 @@ func getXrayNameSpaceCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGo),
 			Description: auditSpecificDocs.GetGoDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Go)
+				return AuditSpecificCmd(c, techutils.Go)
 			},
 		},
 		{
@@ -97,7 +97,7 @@ func getXrayNameSpaceCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditPip),
 			Description: auditSpecificDocs.GetPipDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Pip)
+				return AuditSpecificCmd(c, techutils.Pip)
 			},
 		},
 	}

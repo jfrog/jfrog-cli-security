@@ -1,4 +1,4 @@
-package utils
+package techutils
 
 import (
 	"fmt"
@@ -556,20 +556,20 @@ func TestContainsApplicabilityScannableTech(t *testing.T) {
 func TestTechnologyToLanguage(t *testing.T) {
 	tests := []struct {
 		name       string
-		technology coreutils.Technology
+		technology Technology
 		language   CodeLanguage
 	}{
-		{name: "Maven to Java", technology: coreutils.Maven, language: Java},
-		{name: "Gradle to Java", technology: coreutils.Gradle, language: Java},
-		{name: "Npm to JavaScript", technology: coreutils.Npm, language: JavaScript},
-		{name: "Pnpm to JavaScript", technology: coreutils.Pnpm, language: JavaScript},
-		{name: "Yarn to JavaScript", technology: coreutils.Yarn, language: JavaScript},
-		{name: "Go to GoLang", technology: coreutils.Go, language: GoLang},
-		{name: "Pip to Python", technology: coreutils.Pip, language: Python},
-		{name: "Pipenv to Python", technology: coreutils.Pipenv, language: Python},
-		{name: "Poetry to Python", technology: coreutils.Poetry, language: Python},
-		{name: "Nuget to CSharp", technology: coreutils.Nuget, language: CSharp},
-		{name: "Dotnet to CSharp", technology: coreutils.Dotnet, language: CSharp},
+		{name: "Maven to Java", technology: Maven, language: Java},
+		{name: "Gradle to Java", technology: Gradle, language: Java},
+		{name: "Npm to JavaScript", technology: Npm, language: JavaScript},
+		{name: "Pnpm to JavaScript", technology: Pnpm, language: JavaScript},
+		{name: "Yarn to JavaScript", technology: Yarn, language: JavaScript},
+		{name: "Go to GoLang", technology: Go, language: GoLang},
+		{name: "Pip to Python", technology: Pip, language: Python},
+		{name: "Pipenv to Python", technology: Pipenv, language: Python},
+		{name: "Poetry to Python", technology: Poetry, language: Python},
+		{name: "Nuget to CSharp", technology: Nuget, language: CSharp},
+		{name: "Dotnet to CSharp", technology: Dotnet, language: CSharp},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

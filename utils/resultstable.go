@@ -15,6 +15,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/gookit/color"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -116,7 +117,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 						References:               violation.References,
 						JfrogResearchInformation: jfrogResearchInfo,
 						ImpactPaths:              impactPaths[compIndex],
-						Technology:               coreutils.Technology(violation.Technology),
+						Technology:               techutils.Technology(violation.Technology),
 						Applicable:               printApplicabilityCveValue(applicabilityStatus, isTable),
 					},
 				)
@@ -241,7 +242,7 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 					References:               vulnerability.References,
 					JfrogResearchInformation: jfrogResearchInfo,
 					ImpactPaths:              impactPaths[compIndex],
-					Technology:               coreutils.Technology(vulnerability.Technology),
+					Technology:               techutils.Technology(vulnerability.Technology),
 					Applicable:               printApplicabilityCveValue(applicabilityStatus, isTable),
 				},
 			)
