@@ -29,16 +29,16 @@ import (
 )
 
 func TestXrayAuditNpmJson(t *testing.T) {
-	output := testXrayAuditNpm(t, string(format.Json))
+	output := testAuditNpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
 }
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
-	output := testXrayAuditNpm(t, string(format.SimpleJson))
+	output := testAuditNpm(t, string(format.SimpleJson))
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
 }
 
-func testXrayAuditNpm(t *testing.T, format string) string {
+func testAuditNpm(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -51,9 +51,6 @@ func testXrayAuditNpm(t *testing.T, format string) string {
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
-	// Make sure the audit request will work with xsc and not xray
-	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
-	assert.NoError(t, err)
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--npm", "--licenses", "--format="+format, "--watches="+watchName, "--fail=false")
@@ -530,7 +527,7 @@ func TestXscAnalyticsForAudit(t *testing.T) {
 	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer reportUsageCallBack()
 	// Scan npm project and verify that analytics general event were sent to XSC.
-	output := testXrayAuditNpm(t, string(format.SimpleJson))
+	output := testAuditNpm(t, string(format.SimpleJson))
 	validateAnalyticsBasicEvent(t, output)
 }
 
