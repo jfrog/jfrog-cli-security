@@ -415,6 +415,9 @@ func TestDoCurationAudit(t *testing.T) {
 			defer callbackMaven()
 			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
 			defer callbackPip()
+			// in go we don't want to compare checksum as the test works with mock server
+			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
+			defer callbackNoSum()
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
 
