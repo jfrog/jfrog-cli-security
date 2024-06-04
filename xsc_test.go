@@ -36,7 +36,7 @@ func TestReportError(t *testing.T) {
 
 func initXscTest(t *testing.T) func() {
 	// Make sure the audit request will work with xsc and not xray
-	assert.NoError(t, os.Setenv(coreutils.ReportUsage, ""))
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
 	return func() {
 		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
