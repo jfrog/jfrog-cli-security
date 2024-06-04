@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -111,6 +112,25 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 	return requestedDescriptors
 }
 
+func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
+		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
+		return
+	}
+	artifactoryDetails, err := utils.GetResolutionRepoIfExists(tech)
+	if err != nil {
+		return
+	}
+	if artifactoryDetails == nil {
+		return params.ServerDetails()
+	}
+	// If the configuration file is found, the server details and the target repository are extracted from it.
+	params.SetDepsRepo(artifactoryDetails.TargetRepository)
+	params.SetServerDetails(artifactoryDetails.ServerDetails)
+	serverDetails = artifactoryDetails.ServerDetails
+	return
+}
+
 // Preform the SCA scan for the given scan information.
 // This method will change the working directory to the scan's working directory.
 func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) (err error) {
@@ -118,7 +138,11 @@ func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, sc
 	if err = os.Chdir(scan.Target); err != nil {
 		return errorutils.CheckError(err)
 	}
-	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+	serverDetails, err = SetResolutionRepoIfExists(params.AuditBasicParams, scan.Technology)
+	if err != nil {
+		return err
+	}
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
 	if techErr != nil {
 		return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
@@ -193,7 +217,7 @@ type DependencyTreeResult struct {
 	DownloadUrls map[string]string
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
+func GetTechDependencyTree(params xrayutils.AuditParams, serverDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -206,14 +230,6 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
 
-	err = xrayutils.SetResolutionRepoIfExists(params, tech)
-	if err != nil {
-		return
-	}
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
 	var uniqueDeps []string
 	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
 	startTime := time.Now()
