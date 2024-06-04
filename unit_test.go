@@ -2,15 +2,15 @@ package main
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
+	"testing"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	clientLog "github.com/jfrog/jfrog-client-go/utils/log"
 
-	"os"
-	"testing"
+	"github.com/jfrog/jfrog-cli-security/tests/utils"
 )
 
 const (
@@ -18,9 +18,7 @@ const (
 )
 
 func TestUnitTests(t *testing.T) {
-	if *configTests.SkipUnitTests {
-		t.Skip("Skipping unit tests.")
-	}
+	utils.InitUnitTest(t)
 	// Create temp jfrog home
 	cleanUpJfrogHome, err := coreTests.SetJfrogHome()
 	if err != nil {
@@ -32,5 +30,5 @@ func TestUnitTests(t *testing.T) {
 
 	packages := clientTests.GetTestPackages("./...")
 	packages = clientTests.ExcludeTestsPackage(packages, CliIntegrationTests)
-	assert.NoError(t, clientTests.RunTests(packages, *configTests.HideUnitTestLog))
+	assert.NoError(t, clientTests.RunTests(packages, false))
 }

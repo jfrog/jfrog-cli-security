@@ -11,7 +11,7 @@ import (
 )
 
 func TestXrayCurl(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
+	securityTestUtils.InitXrayTest(t, "")
 	// Configure a new server named "default".
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
@@ -27,7 +27,7 @@ func TestXrayCurl(t *testing.T) {
 }
 
 func TestXrayOfflineDBSyncV3(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
+	securityTestUtils.InitXrayTest(t, "")
 	// Validate license-id
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou")
 	assert.EqualError(t, err, "Mandatory flag 'license-id' is missing")

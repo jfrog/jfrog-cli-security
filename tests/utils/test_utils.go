@@ -16,9 +16,42 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
-func InitSecurityTest(t *testing.T, xrayMinVersion string) {
-	if !*configTests.TestSecurity {
-		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
+func InitUnitTest(t *testing.T) {
+	if !*configTests.TestUnit {
+		t.Skip("Skipping unit tests.")
+	}
+}
+
+func InitArtifactoryTest(t *testing.T) {
+	if !*configTests.TestArtifactory {
+		t.Skip("Skipping Artifactory test. To run Artifactory tests, add the '-test.artifactory=true' option.")
+	}
+}
+
+func InitXrayTest(t *testing.T, minVersion string) {
+	if !*configTests.TestXray {
+		t.Skip("Skipping Xray test. To run Xray tests, add the '-test.xray=true' option.")
+	}
+	ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAudit {
+		t.Skip("Skipping audit test. To run Audit tests, add the '-test.audit=true' option.")
+	}
+	ValidateXrayVersion(t, minVersion)
+}
+
+func InitScanTest(t *testing.T, minVersion string) {
+	if !*configTests.TestScan {
+		t.Skip("Skipping scan test. To run Scan tests, add the '-test.scan=true' option.")
+	}
+	ValidateXrayVersion(t, minVersion)
+}
+
+func InitDockerScanTest(t *testing.T, minVersion string) {
+	if !*configTests.TestDockerScan || !*configTests.TestScan {
+		t.Skip("Skipping Docker scan test. To run Xray Docker tests, add the '-test.dockerScan=true' and '-test.scan=true' options.")
 	}
 	ValidateXrayVersion(t, xrayMinVersion)
 }
