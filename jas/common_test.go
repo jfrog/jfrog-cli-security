@@ -1,11 +1,11 @@
 package jas
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"os"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -94,24 +94,24 @@ func TestAddScoreToRunRules(t *testing.T) {
 func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 	type args struct {
 		msi          string
-		technologies []coreutils.Technology
+		technologies []techutils.Technology
 	}
 	tests := []struct {
 		name string
 		args args
 		want func()
 	}{
-		{name: "One valid technology", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven}}, want: func() {
-			assert.Equal(t, string(coreutils.Maven), os.Getenv(utils.JfPackageManagerEnvVariable))
-			assert.Equal(t, string(utils.Java), os.Getenv(utils.JfLanguageEnvVariable))
+		{name: "One valid technology", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven}}, want: func() {
+			assert.Equal(t, string(techutils.Maven), os.Getenv(utils.JfPackageManagerEnvVariable))
+			assert.Equal(t, string(techutils.Java), os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
-		{name: "Multiple technologies", args: args{msi: "msi", technologies: []coreutils.Technology{coreutils.Maven, coreutils.Npm}}, want: func() {
+		{name: "Multiple technologies", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven, techutils.Npm}}, want: func() {
 			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
 			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
 		}},
-		{name: "Zero technologies", args: args{msi: "msi", technologies: []coreutils.Technology{}}, want: func() {
+		{name: "Zero technologies", args: args{msi: "msi", technologies: []techutils.Technology{}}, want: func() {
 			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
 			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
 			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))

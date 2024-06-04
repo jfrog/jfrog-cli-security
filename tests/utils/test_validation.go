@@ -55,10 +55,11 @@ func VerifyJsonScanResults(t *testing.T, content string, minViolations, minVulne
 	}
 }
 
-func VerifySimpleJsonScanResults(t *testing.T, content string, minVulnerabilities, minLicenses int) {
+func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, minVulnerabilities, minLicenses int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
+		assert.GreaterOrEqual(t, len(results.SecurityViolations), minViolations)
 		assert.GreaterOrEqual(t, len(results.Vulnerabilities), minVulnerabilities)
 		assert.GreaterOrEqual(t, len(results.Licenses), minLicenses)
 	}
