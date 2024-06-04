@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
 )
@@ -39,7 +40,7 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationCacheFolderByTech(tech coreutils.Technology) (projectDir string, err error) {
+func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string, err error) {
 	pathHash, errFromHash := getProjectPathHash()
 	if errFromHash != nil {
 		err = errFromHash

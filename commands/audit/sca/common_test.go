@@ -325,9 +325,9 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 		{
 			name:          "golang 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Go,
+			tech:          techutils.Go,
 			output:        goOutput,
-			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, coreutils.Go),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go),
 		},
 		{
 			name:          "not a supported tech",

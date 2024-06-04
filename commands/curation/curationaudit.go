@@ -634,7 +634,7 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 	case techutils.Pip:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
-	case coreutils.Go:
+	case techutils.Go:
 		return getGoNameScopeAndVersion(node.Id, artiUrl, repo)
 	}
 	return
@@ -661,7 +661,7 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 // input - repo: go
 // output: downloadUrl: <artiUrl>/api/go/go/github.com/kennygrant/sanitize/@v/v1.2.4.zip
 func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
-	id = strings.TrimPrefix(id, coreutils.Go.String()+"://")
+	id = strings.TrimPrefix(id, techutils.Go.String()+"://")
 	nameVersion := strings.Split(id, ":")
 	name = nameVersion[0]
 	if len(nameVersion) > 1 {

@@ -3,7 +3,7 @@ package _go
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +91,7 @@ func Test_handleCurationGoError(t *testing.T) {
 		{
 			name:          "curation error 403",
 			err:           errors.New("package download failed due to 403 forbidden test failure"),
-			expectedError: fmt.Errorf(sca.CurationErrorMsgToUserTemplate, coreutils.Go),
+			expectedError: fmt.Errorf(sca.CurationErrorMsgToUserTemplate, techutils.Go),
 		},
 		{
 			name: "not curation error 500",

@@ -10,6 +10,7 @@ import (
 	goutils "github.com/jfrog/jfrog-cli-core/v2/utils/golang"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"strings"
 )
@@ -35,7 +36,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	if params.IsCurationCmd() {
 		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
 		goProxyParams.IsDirect = false
-		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(coreutils.Go)
+		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go)
 		if errCacheFolder != nil {
 			err = errCacheFolder
 			return
@@ -102,7 +103,7 @@ func handleCurationGoError(err error) (bool, error) {
 	if err == nil {
 		return false, nil
 	}
-	if msgToUser := sca.SuspectCurationBlockedError(true, coreutils.Go, err.Error()); msgToUser != "" {
+	if msgToUser := sca.SuspectCurationBlockedError(true, techutils.Go, err.Error()); msgToUser != "" {
 		return true, errors.New(msgToUser)
 	}
 	return false, nil
