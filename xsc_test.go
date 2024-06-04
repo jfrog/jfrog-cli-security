@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -33,50 +34,39 @@ func TestReportError(t *testing.T) {
 	assert.NoError(t, utils.ReportError(serverDetails, errorToReport, "cli"))
 }
 
-func TestXscAuditNpmJson(t *testing.T) {
+func initXscTest(t *testing.T) func() {
 	// Make sure the audit request will work with xsc and not xray
-	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
-	assert.NoError(t, err)
-	defer func() {
-		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
-		assert.NoError(t, err)
-	}()
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, ""))
+	return func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
+	}
+}
+
+// In the npm tests we use a watch flag, so we would get only violations
+func TestXscAuditNpmJson(t *testing.T) {
+	restoreFunc := initXscTest(t)
+	defer restoreFunc()
 	output := testAuditNpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
 }
 
 func TestXscAuditNpmSimpleJson(t *testing.T) {
-	// Make sure the audit request will work with xsc and not xray
-	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
-	assert.NoError(t, err)
-	defer func() {
-		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
-		assert.NoError(t, err)
-	}()
+	restoreFunc := initXscTest(t)
+	defer restoreFunc()
 	output := testAuditNpm(t, string(format.SimpleJson))
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
 }
 
 func TestXscAuditMavenJson(t *testing.T) {
-	// Make sure the audit request will work with xsc and not xray
-	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
-	assert.NoError(t, err)
-	defer func() {
-		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
-		assert.NoError(t, err)
-	}()
+	restoreFunc := initXscTest(t)
+	defer restoreFunc()
 	output := testXscAuditMaven(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
 }
 
 func TestXscAuditMavenSimpleJson(t *testing.T) {
-	// Make sure the audit request will work with xsc and not xray
-	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "")
-	assert.NoError(t, err)
-	defer func() {
-		err = os.Setenv("JFROG_CLI_REPORT_USAGE", "false")
-		assert.NoError(t, err)
-	}()
+	restoreFunc := initXscTest(t)
+	defer restoreFunc()
 	output := testXscAuditMaven(t, string(format.SimpleJson))
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
 }
