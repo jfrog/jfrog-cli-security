@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"net/http"
@@ -188,6 +190,50 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
 		}
 	}
+}
+
+// JAS docker scan tests
+
+func TestAdvancedSecurityDockerScan(t *testing.T) {
+	cleanup := initNativeDockerWithXrayTest(t)
+	defer cleanup()
+	runAdvancedSecurityDockerScan(t, "jfrog/demo-security:latest")
+}
+
+func runAdvancedSecurityDockerScan(t *testing.T, imageName string) {
+	// Pull image from docker repo
+	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
+	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
+	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
+	if assert.NoError(t, dockerPullCommand.Run()) {
+		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+		args := []string{"docker", "scan", imageTag, "--server-id=default", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
+
+		// Run docker scan on image
+		output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+		if assert.NotEmpty(t, output) {
+			verifyAdvancedSecurityScanResults(t, output)
+		}
+	}
+}
+
+func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(content), &results)
+	assert.NoError(t, err)
+	// Verify that the scan succeeded, and that at least one "Applicable" status was received.
+	applicableStatusExists := false
+	for _, vulnerability := range results.Vulnerabilities {
+		if vulnerability.Applicable == string(utils.Applicable) {
+			applicableStatusExists = true
+			break
+		}
+	}
+	assert.True(t, applicableStatusExists)
+
+	// Verify that secretes detection succeeded.
+	assert.NotEqual(t, 0, len(results.Secrets))
+
 }
 
 // Curation tests
