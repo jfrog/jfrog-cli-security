@@ -60,10 +60,6 @@ type TechData struct {
 	// Suffixes of file/directory names that indicate if a project does not use this technology.
 	// The names of all the files/directories in the project's directory must NOT end with any of these suffixes.
 	exclude []string
-	// Whether this technology is supported by the 'jf ci-setup' command.
-	ciSetupSupport bool
-	// Whether Contextual Analysis supported in this technology.
-	applicabilityScannable bool
 	// The files that handle the project's dependencies.
 	packageDescriptors []string
 	// Formal name of the technology
@@ -81,27 +77,21 @@ type ContentValidator func(content []byte) bool
 
 var technologiesData = map[Technology]TechData{
 	Maven: {
-		indicators:             []string{"pom.xml"},
-		ciSetupSupport:         true,
-		packageDescriptors:     []string{"pom.xml"},
-		execCommand:            "mvn",
-		applicabilityScannable: true,
+		indicators:         []string{"pom.xml"},
+		packageDescriptors: []string{"pom.xml"},
+		execCommand:        "mvn",
 	},
 	Gradle: {
-		indicators:             []string{"build.gradle", "build.gradle.kts"},
-		ciSetupSupport:         true,
-		packageDescriptors:     []string{"build.gradle", "build.gradle.kts"},
-		applicabilityScannable: true,
+		indicators:         []string{"build.gradle", "build.gradle.kts"},
+		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
 		exclude:                    []string{"pnpm-lock.yaml", ".yarnrc.yml", "yarn.lock", ".yarn"},
-		ciSetupSupport:             true,
 		packageDescriptors:         []string{"package.json"},
 		formal:                     string(Npm),
 		packageVersionOperator:     "@",
 		packageInstallationCommand: "install",
-		applicabilityScannable:     true,
 	},
 	Pnpm: {
 		indicators:                 []string{"pnpm-lock.yaml"},
@@ -109,14 +99,12 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
 		packageInstallationCommand: "update",
-		applicabilityScannable:     true,
 	},
 	Yarn: {
 		indicators:             []string{".yarnrc.yml", "yarn.lock", ".yarn", ".yarnrc"},
 		exclude:                []string{"pnpm-lock.yaml"},
 		packageDescriptors:     []string{"package.json"},
 		packageVersionOperator: "@",
-		applicabilityScannable: true,
 	},
 	Go: {
 		indicators:                 []string{"go.mod"},
@@ -125,12 +113,11 @@ var technologiesData = map[Technology]TechData{
 		packageInstallationCommand: "get",
 	},
 	Pip: {
-		packageType:            Pypi,
-		indicators:             []string{"pyproject.toml", "setup.py", "requirements.txt"},
-		validators:             map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
-		packageDescriptors:     []string{"setup.py", "requirements.txt", "pyproject.toml"},
-		exclude:                []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
-		applicabilityScannable: true,
+		packageType:        Pypi,
+		indicators:         []string{"pyproject.toml", "setup.py", "requirements.txt"},
+		validators:         map[string]ContentValidator{"pyproject.toml": pyProjectTomlIndicatorContent(Pip)},
+		packageDescriptors: []string{"setup.py", "requirements.txt", "pyproject.toml"},
+		exclude:            []string{"Pipfile", "Pipfile.lock", "poetry.lock"},
 	},
 	Pipenv: {
 		packageType:                Pypi,
@@ -138,7 +125,6 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors:         []string{"Pipfile"},
 		packageVersionOperator:     "==",
 		packageInstallationCommand: "install",
-		applicabilityScannable:     true,
 	},
 	Poetry: {
 		packageType:                Pypi,
@@ -147,7 +133,6 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors:         []string{"pyproject.toml"},
 		packageInstallationCommand: "add",
 		packageVersionOperator:     "==",
-		applicabilityScannable:     true,
 	},
 	Nuget: {
 		indicators:         []string{".sln", ".csproj"},
@@ -164,12 +149,8 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{".sln", ".csproj"},
 		formal:             ".NET",
 	},
-	Docker: {
-		applicabilityScannable: true,
-	},
-	Oci: {
-		applicabilityScannable: true,
-	},
+	Docker: {},
+	Oci:    {},
 }
 
 var (
@@ -193,7 +174,7 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 			return false
 		}
 		// Default to Pip
-		return true
+		return tech == Pip
 	}
 }
 
@@ -243,10 +224,6 @@ func (tech Technology) GetPackageDescriptor() []string {
 	return technologiesData[tech].packageDescriptors
 }
 
-func (tech Technology) IsCiSetup() bool {
-	return technologiesData[tech].ciSetupSupport
-}
-
 func (tech Technology) GetPackageVersionOperator() string {
 	return technologiesData[tech].packageVersionOperator
 }
@@ -255,8 +232,22 @@ func (tech Technology) GetPackageInstallationCommand() string {
 	return technologiesData[tech].packageInstallationCommand
 }
 
-func (tech Technology) ApplicabilityScannable() bool {
-	return technologiesData[tech].applicabilityScannable
+func (tech Technology) isDescriptor(path string) bool {
+	for _, descriptor := range technologiesData[tech].packageDescriptors {
+		if strings.HasSuffix(path, descriptor) {
+			return true
+		}
+	}
+	return false
+}
+
+func (tech Technology) isIndicator(path string) (bool, error) {
+	for _, suffix := range technologiesData[tech].indicators {
+		if strings.HasSuffix(path, suffix) {
+			return checkPotentialIndicator(path, technologiesData[tech].validators[suffix])
+		}
+	}
+	return false, nil
 }
 
 func DetectedTechnologiesList() (technologies []string) {
@@ -268,7 +259,7 @@ func DetectedTechnologiesList() (technologies []string) {
 }
 
 func detectedTechnologiesListInPath(path string, recursive bool) (technologies []string) {
-	detectedTechnologies, err := DetectTechnologies(path, false, recursive)
+	detectedTechnologies, err := DetectTechnologiesDescriptors(path, recursive, []string{}, map[Technology][]string{}, "")
 	if err != nil {
 		return
 	}
@@ -323,12 +314,12 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 
 		for tech, techData := range technologiesData {
 			// Check if the working directory contains indicators/descriptors for the technology
-			indicator, e := isIndicator(path, techData)
+			indicator, e := tech.isIndicator(path)
 			if e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, tech, e))
 				continue
 			}
-			relevant := indicator || isDescriptor(path, techData) || isRequestedDescriptor(path, requestedDescriptors[tech])
+			relevant := indicator || tech.isDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech])
 			if relevant {
 				if _, exist := workingDirectoryToIndicatorsSet[directory]; !exist {
 					workingDirectoryToIndicatorsSet[directory] = datastructures.MakeSet[string]()
@@ -348,15 +339,6 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 	return
 }
 
-func isDescriptor(path string, techData TechData) bool {
-	for _, descriptor := range techData.packageDescriptors {
-		if strings.HasSuffix(path, descriptor) {
-			return true
-		}
-	}
-	return false
-}
-
 func isRequestedDescriptor(path string, requestedDescriptors []string) bool {
 	for _, requestedDescriptor := range requestedDescriptors {
 		if strings.HasSuffix(path, requestedDescriptor) {
@@ -364,15 +346,6 @@ func isRequestedDescriptor(path string, requestedDescriptors []string) bool {
 		}
 	}
 	return false
-}
-
-func isIndicator(path string, techData TechData) (bool, error) {
-	for _, suffix := range techData.indicators {
-		if strings.HasSuffix(path, suffix) {
-			return checkPotentialIndicator(path, techData.validators[suffix])
-		}
-	}
-	return false, nil
 }
 
 func checkPotentialIndicator(path string, validator ContentValidator) (isIndicator bool, err error) {
@@ -438,10 +411,10 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 		}
 		// Check if the working directory contains indicators/descriptors for the technology
 		for _, path := range indicators {
-			if isDescriptor(path, technologiesData[tech]) || isRequestedDescriptor(path, requestedDescriptors[tech]) {
+			if tech.isDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech]) {
 				descriptorsAtWd = append(descriptorsAtWd, path)
 			}
-			if indicator, e := isIndicator(path, technologiesData[tech]); e != nil {
+			if indicator, e := tech.isIndicator(path); e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, tech, e))
 				continue
 			} else if indicator || isRequestedDescriptor(path, requestedDescriptors[tech]) {
@@ -496,58 +469,8 @@ func getExistingRootDir(path string, workingDirectoryToIndicators map[string][]s
 	return
 }
 
-// DetectTechnologies tries to detect all technologies types according to the files in the given path.
-// 'isCiSetup' will limit the search of possible techs to Maven, Gradle, and npm.
-// 'recursive' will determine if the search will be limited to files in the root path or not.
-func DetectTechnologies(path string, isCiSetup, recursive bool) (map[Technology]bool, error) {
-	var filesList []string
-	var err error
-	if recursive {
-		filesList, err = fileutils.ListFilesRecursiveWalkIntoDirSymlink(path, false)
-	} else {
-		filesList, err = fileutils.ListFiles(path, true)
-	}
-	if err != nil {
-		return nil, err
-	}
-	log.Info(fmt.Sprintf("Scanning %d file(s):%s", len(filesList), filesList))
-	return detectTechnologiesByFilePaths(filesList, isCiSetup)
-}
-
-func detectTechnologiesByFilePaths(paths []string, isCiSetup bool) (detected map[Technology]bool, err error) {
-	detected = make(map[Technology]bool)
-	exclude := make(map[Technology]bool)
-	for _, path := range paths {
-		for techName, techData := range technologiesData {
-			// If the detection is in a 'jf ci-setup' command, then the checked technology must be supported.
-			if !isCiSetup || (isCiSetup && techData.ciSetupSupport) {
-				// If the project contains a file/directory with a name that ends with an excluded suffix, then this technology is excluded.
-				for _, excludeFile := range techData.exclude {
-					if strings.HasSuffix(path, excludeFile) {
-						exclude[techName] = true
-					}
-				}
-				// If this technology was already excluded, there's no need to look for indicator files/directories.
-				if _, exist := exclude[techName]; !exist {
-					// If the project contains a file/directory with a name that ends with the indicator suffix, then the project probably uses this technology.
-					if indicator, e := isIndicator(path, techData); e != nil {
-						err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, techName, e))
-					} else if indicator {
-						detected[techName] = true
-					}
-				}
-			}
-		}
-	}
-	// Remove excluded technologies.
-	for excludeTech := range exclude {
-		delete(detected, excludeTech)
-	}
-	return detected, err
-}
-
 // DetectedTechnologiesToSlice returns a string slice that includes all the names of the detected technologies.
-func DetectedTechnologiesToSlice(detected map[Technology]bool) []string {
+func DetectedTechnologiesToSlice(detected map[Technology]map[string][]string) []string {
 	keys := make([]string, 0, len(detected))
 	for tech := range detected {
 		keys = append(keys, string(tech))
@@ -567,13 +490,4 @@ func GetAllTechnologiesList() (technologies []Technology) {
 		technologies = append(technologies, tech)
 	}
 	return
-}
-
-func ContainsApplicabilityScannableTech(technologies []Technology) bool {
-	for _, technology := range technologies {
-		if technology.ApplicabilityScannable() {
-			return true
-		}
-	}
-	return false
 }
