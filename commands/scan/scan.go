@@ -400,7 +400,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 
 				extendedScanResults := utils.ExtendedScanResults{}
 				if entitledForJas && scanCmd.commandSupportsJAS {
-                    // Run Jas scans
+					// Run Jas scans
 					workingDirs := []string{filePath}
 					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []coreutils.Technology{coreutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
 

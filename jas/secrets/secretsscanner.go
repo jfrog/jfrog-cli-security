@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	secretsScanCommand           = "sec"
-    secretsDocsUrlSuffix         = "secrets"
+	secretsScanCommand   = "sec"
+	secretsDocsUrlSuffix = "secrets"
 
 	SecretsScannerType           SecretsScanType = "secrets-scan"        // #nosec
 	SecretsScannerDockerScanType SecretsScanType = "secrets-docker-scan" // #nosec
