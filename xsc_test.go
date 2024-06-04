@@ -43,14 +43,14 @@ func initXscTest(t *testing.T) func() {
 }
 
 // In the npm tests we use a watch flag, so we would get only violations
-func TestXscAuditNpmJson(t *testing.T) {
+func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testAuditNpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
 }
 
-func TestXscAuditNpmSimpleJson(t *testing.T) {
+func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testAuditNpm(t, string(format.SimpleJson))
