@@ -5,9 +5,9 @@ import (
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -46,7 +46,7 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scannedTechnologies []coreutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType) (results []*sarif.Run, err error) {
+	scannedTechnologies []techutils.Technology, scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType) (results []*sarif.Run, err error) {
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType)
 	if !applicabilityScanManager.cvesExists() {
 		log.Debug("We couldn't find any vulnerable dependencies. Skipping....")

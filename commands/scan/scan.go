@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -402,7 +403,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 				if entitledForJas && scanCmd.commandSupportsJAS {
 					// Run Jas scans
 					workingDirs := []string{filePath}
-					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []coreutils.Technology{coreutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
+					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))

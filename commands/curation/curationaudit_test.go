@@ -3,16 +3,6 @@ package curation
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/gofrog/datastructures"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,6 +15,18 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jfrog/gofrog/datastructures"
+	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
@@ -144,7 +146,7 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 			componentId:     "npm://test:1.0.0",
 			artiUrl:         "http://localhost:8000/artifactory",
 			repo:            "npm",
-			tech:            coreutils.Npm.String(),
+			tech:            techutils.Npm.String(),
 			wantDownloadUrl: "http://localhost:8000/artifactory/api/npm/npm/test/-/test-1.0.0.tgz",
 			wantName:        "test",
 			wantVersion:     "1.0.0",
@@ -154,7 +156,7 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 			componentId:     "npm://dev/test:1.0.0",
 			artiUrl:         "http://localhost:8000/artifactory",
 			repo:            "npm",
-			tech:            coreutils.Npm.String(),
+			tech:            techutils.Npm.String(),
 			wantDownloadUrl: "http://localhost:8000/artifactory/api/npm/npm/dev/test/-/test-1.0.0.tgz",
 			wantName:        "test",
 			wantVersion:     "1.0.0",
