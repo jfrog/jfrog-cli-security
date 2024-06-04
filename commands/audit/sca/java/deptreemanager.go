@@ -2,12 +2,13 @@ package java
 
 import (
 	"encoding/json"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"os"
 	"strings"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -16,8 +17,8 @@ const (
 	GavPackageTypeIdentifier = "gav://"
 )
 
-func BuildDependencyTree(depTreeParams DepTreeParams, tech coreutils.Technology) ([]*xrayUtils.GraphNode, map[string]*utils.DepTreeNode, error) {
-	if tech == coreutils.Maven {
+func BuildDependencyTree(depTreeParams DepTreeParams, tech techutils.Technology) ([]*xrayUtils.GraphNode, map[string]*utils.DepTreeNode, error) {
+	if tech == techutils.Maven {
 		return buildMavenDependencyTree(&depTreeParams)
 	}
 	return buildGradleDependencyTree(&depTreeParams)

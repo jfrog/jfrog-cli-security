@@ -2,14 +2,16 @@ package sca
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"reflect"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -282,41 +284,41 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	tests := []struct {
 		name          string
 		isCurationCmd bool
-		tech          coreutils.Technology
+		tech          techutils.Technology
 		output        string
 		expect        string
 	}{
 		{
 			name:          "mvn 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput1,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "mvn 500 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput2,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "pip 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        pipOutput,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Pip),
 		},
 		{
 			name:          "pip not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Pip,
+			tech:          techutils.Pip,
 			output:        "http error 401",
 		},
 		{
 			name:          "maven not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        "http error 401",
 		},
 		{

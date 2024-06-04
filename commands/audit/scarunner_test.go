@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -137,7 +137,7 @@ func TestGetScaScansToPreform(t *testing.T) {
 			},
 			expected: []*xrayutils.ScaScanResult{
 				{
-					Technology: coreutils.Maven,
+					Technology: techutils.Maven,
 					Target:     filepath.Join(dir, "dir", "maven"),
 					Descriptors: []string{
 						filepath.Join(dir, "dir", "maven", "pom.xml"),
@@ -146,12 +146,12 @@ func TestGetScaScansToPreform(t *testing.T) {
 					},
 				},
 				{
-					Technology:  coreutils.Npm,
+					Technology:  techutils.Npm,
 					Target:      filepath.Join(dir, "dir", "npm"),
 					Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 				},
 				{
-					Technology:  coreutils.Go,
+					Technology:  techutils.Go,
 					Target:      filepath.Join(dir, "dir", "go"),
 					Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 				},
@@ -167,7 +167,7 @@ func TestGetScaScansToPreform(t *testing.T) {
 			},
 			expected: []*xrayutils.ScaScanResult{
 				{
-					Technology: coreutils.Maven,
+					Technology: techutils.Maven,
 					Target:     filepath.Join(dir, "dir", "maven"),
 					Descriptors: []string{
 						filepath.Join(dir, "dir", "maven", "pom.xml"),
@@ -176,32 +176,32 @@ func TestGetScaScansToPreform(t *testing.T) {
 					},
 				},
 				{
-					Technology:  coreutils.Npm,
+					Technology:  techutils.Npm,
 					Target:      filepath.Join(dir, "dir", "npm"),
 					Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 				},
 				{
-					Technology:  coreutils.Go,
+					Technology:  techutils.Go,
 					Target:      filepath.Join(dir, "dir", "go"),
 					Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 				},
 				{
-					Technology:  coreutils.Yarn,
+					Technology:  techutils.Yarn,
 					Target:      filepath.Join(dir, "yarn"),
 					Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
 				},
 				{
-					Technology:  coreutils.Pip,
+					Technology:  techutils.Pip,
 					Target:      filepath.Join(dir, "yarn", "Pip"),
 					Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
 				},
 				{
-					Technology:  coreutils.Pipenv,
+					Technology:  techutils.Pipenv,
 					Target:      filepath.Join(dir, "yarn", "Pipenv"),
 					Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
 				},
 				{
-					Technology:  coreutils.Nuget,
+					Technology:  techutils.Nuget,
 					Target:      filepath.Join(dir, "Nuget"),
 					Descriptors: []string{filepath.Join(dir, "Nuget", "project.sln"), filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj")},
 				},

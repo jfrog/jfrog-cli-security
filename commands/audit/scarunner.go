@@ -23,6 +23,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -77,14 +78,14 @@ func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaS
 			continue
 		}
 		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := coreutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
+		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
 		}
 		// Create scans to preform
 		for tech, workingDirs := range techToWorkingDirs {
-			if tech == coreutils.Dotnet {
+			if tech == techutils.Dotnet {
 				// We detect Dotnet and Nuget the same way, if one detected so does the other.
 				// We don't need to scan for both and get duplicate results.
 				continue
@@ -102,10 +103,10 @@ func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaS
 	return
 }
 
-func getRequestedDescriptors(params *AuditParams) map[coreutils.Technology][]string {
-	requestedDescriptors := map[coreutils.Technology][]string{}
+func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
+	requestedDescriptors := map[techutils.Technology][]string{}
 	if params.PipRequirementsFile() != "" {
-		requestedDescriptors[coreutils.Pip] = []string{params.PipRequirementsFile()}
+		requestedDescriptors[techutils.Pip] = []string{params.PipRequirementsFile()}
 	}
 	return requestedDescriptors
 }
@@ -135,7 +136,7 @@ func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, sc
 	return
 }
 
-func runScaWithTech(tech coreutils.Technology, params *AuditParams, serverDetails *config.ServerDetails, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
 		SetXrayGraphScanParams(params.xrayGraphScanParams).
@@ -150,7 +151,7 @@ func runScaWithTech(tech coreutils.Technology, params *AuditParams, serverDetail
 	return
 }
 
-func addThirdPartyDependenciesToParams(params *AuditParams, tech coreutils.Technology, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) {
+func addThirdPartyDependenciesToParams(params *AuditParams, tech techutils.Technology, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) {
 	var dependenciesForApplicabilityScan []string
 	if shouldUseAllDependencies(params.thirdPartyApplicabilityScan, tech) {
 		dependenciesForApplicabilityScan = getDirectDependenciesFromTree([]*xrayCmdUtils.GraphNode{flatTree})
@@ -164,8 +165,8 @@ func addThirdPartyDependenciesToParams(params *AuditParams, tech coreutils.Techn
 // Our solution for this case is to send all dependencies to the CA scanner.
 // When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
 // Only npm is supported for this flag.
-func shouldUseAllDependencies(thirdPartyApplicabilityScan bool, tech coreutils.Technology) bool {
-	return tech == coreutils.Pip || (thirdPartyApplicabilityScan && tech == coreutils.Npm)
+func shouldUseAllDependencies(thirdPartyApplicabilityScan bool, tech techutils.Technology) bool {
+	return tech == techutils.Pip || (thirdPartyApplicabilityScan && tech == techutils.Npm)
 }
 
 // This function retrieves the dependency trees of the scanned project and extracts a set that contains only the direct dependencies.
@@ -179,8 +180,8 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
-func getCurationCacheByTech(tech coreutils.Technology) (string, error) {
-	if tech == coreutils.Maven {
+func getCurationCacheByTech(tech techutils.Technology) (string, error) {
+	if tech == techutils.Maven {
 		return xrayutils.GetCurationMavenCacheFolder()
 	}
 	return "", nil
@@ -192,7 +193,7 @@ type DependencyTreeResult struct {
 	DownloadUrls map[string]string
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technology) (depTreeResult DependencyTreeResult, err error) {
+func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -218,7 +219,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	startTime := time.Now()
 
 	switch tech {
-	case coreutils.Maven, coreutils.Gradle:
+	case techutils.Maven, techutils.Gradle:
 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  serverDetails,
 			DepsRepo:                params.DepsRepo(),
@@ -227,15 +228,15 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			IsCurationCmd:           params.IsCurationCmd(),
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
-	case coreutils.Npm:
+	case techutils.Npm:
 		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
-	case coreutils.Pnpm:
+	case techutils.Pnpm:
 		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
-	case coreutils.Yarn:
+	case techutils.Yarn:
 		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
-	case coreutils.Go:
+	case techutils.Go:
 		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
-	case coreutils.Pipenv, coreutils.Pip, coreutils.Poetry:
+	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
 		depTreeResult.FullDepTrees, uniqueDeps,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
 			Server:              serverDetails,
@@ -244,7 +245,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 			PipRequirementsFile: params.PipRequirementsFile(),
 			IsCurationCmd:       params.IsCurationCmd(),
 		})
-	case coreutils.Nuget:
+	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
@@ -261,7 +262,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech coreutils.Technolo
 	return
 }
 
-func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech coreutils.Technology) (logMessage string, curationCacheFolder string, err error) {
+func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
 	if !params.IsCurationCmd() {
 		return
 	}
