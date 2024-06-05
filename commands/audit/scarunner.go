@@ -127,7 +127,7 @@ func executeScaScan(auditParallelRunner *utils.AuditParallelRunner, serverDetail
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
 		if xrayErr != nil {
-			return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
+			return fmt.Errorf("error from thread_id %d: '%s' Xray dependency tree scan request failed:\n%s", threadId, scan.Technology, xrayErr.Error())
 		}
 		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)

@@ -45,7 +45,7 @@ func RunSecretsScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, thre
 	}
 	results = secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(results...), "secrets")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(results...), "secrets vulnerabilities")
 	}
 	return
 }
