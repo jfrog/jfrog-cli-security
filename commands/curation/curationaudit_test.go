@@ -508,7 +508,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
 		{
 			name:                     "go tree - one blocked package",
-			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "simple-project", ".jfrog"),
+			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "curation-project", ".jfrog"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
 				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
