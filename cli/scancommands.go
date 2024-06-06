@@ -50,8 +50,8 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      ScanCmd,
 		},
 		{
-			Name:        "enrich",
-			Aliases:     []string{"e"},
+			Name:        "sbom-enrich",
+			Aliases:     []string{"se"},
 			Flags:       flags.GetCommandFlags(flags.Enrich),
 			Description: enrichDocs.GetDescription(),
 			Arguments:   enrichDocs.GetArguments(),
