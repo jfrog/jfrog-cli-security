@@ -72,7 +72,7 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		}
 		results := cmdResults.Results
 		// Update the working directory
-		updateSummaryNamesToRelativePath(cmdResults.WorkingDirectory, &results)
+		updateSummaryNamesToRelativePath(&results, cmdResults.WorkingDirectory)
 		// Append the new data
 		switch cmdResults.Section {
 		case Build:
@@ -339,20 +339,18 @@ func GetSummaryContentString(summary formats.SummaryCount, delimiter string, wra
 	return
 }
 
-func updateSummaryNamesToRelativePath(wd string, summaries ...*formats.SummaryResults) {
-	for _, summary := range summaries {
-		for i, scan := range summary.Scans {
-			if scan.Target == "" {
-				continue
-			}
-			if !strings.HasPrefix(scan.Target, wd) {
-				continue
-			}
-			if scan.Target == wd {
-				summary.Scans[i].Target = filepath.Base(wd)
-			}
-			summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
+func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
+	for i, scan := range summary.Scans {
+		if scan.Target == "" {
+			continue
 		}
+		if !strings.HasPrefix(scan.Target, wd) {
+			continue
+		}
+		if scan.Target == wd {
+			summary.Scans[i].Target = filepath.Base(wd)
+		}
+		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
 	}
 }
 
