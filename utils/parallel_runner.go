@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type AuditParallelRunner struct {
+type SecurityParallelRunner struct {
 	Runner      parallel.Runner
 	ErrorsQueue chan error
 	ResultsMu   sync.Mutex
@@ -14,18 +14,18 @@ type AuditParallelRunner struct {
 	JasWg       sync.WaitGroup // verify that downloading analyzer manager and running all scanners are done
 }
 
-func NewAuditParallelRunner(numOfParallelScans int) AuditParallelRunner {
-	return AuditParallelRunner{
+func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {
+	return SecurityParallelRunner{
 		Runner:      parallel.NewRunner(numOfParallelScans, 20000, false),
 		ErrorsQueue: make(chan error, 100),
 	}
 }
 
-func CreateAuditParallelRunner(numOfParallelScans int) *AuditParallelRunner {
-	auditParallelRunner := NewAuditParallelRunner(numOfParallelScans)
+func CreateSecurityParallelRunner(numOfParallelScans int) *SecurityParallelRunner {
+	auditParallelRunner := NewSecurityParallelRunner(numOfParallelScans)
 	return &auditParallelRunner
 }
 
-func (apr *AuditParallelRunner) AddErrorToChan(err error) {
-	apr.ErrorsQueue <- err
+func (spr *SecurityParallelRunner) AddErrorToChan(err error) {
+	spr.ErrorsQueue <- err
 }

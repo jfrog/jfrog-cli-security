@@ -97,12 +97,18 @@ func isSameLocation(location *sarif.Location, other *sarif.Location) bool {
 	if location == other {
 		return true
 	}
-	return GetLocationFileName(location) == GetLocationFileName(other) &&
-		GetLocationSnippet(location) == GetLocationSnippet(other) &&
-		GetLocationStartLine(location) == GetLocationStartLine(other) &&
-		GetLocationStartColumn(location) == GetLocationStartColumn(other) &&
-		GetLocationEndLine(location) == GetLocationEndLine(other) &&
-		GetLocationEndColumn(location) == GetLocationEndColumn(other)
+	return GetLocationId(location) == GetLocationId(other)
+}
+
+func GetLocationId(location *sarif.Location) string {
+	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
+		GetLocationFileName(location),
+		GetLocationSnippet(location),
+		GetLocationStartLine(location),
+		GetLocationStartColumn(location),
+		GetLocationEndLine(location),
+		GetLocationEndColumn(location),
+	)
 }
 
 func GetResultsLocationCount(runs ...*sarif.Run) (count int) {
@@ -112,6 +118,20 @@ func GetResultsLocationCount(runs ...*sarif.Run) (count int) {
 		}
 	}
 	return
+}
+
+func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (filteredRuns []*sarif.Run) {
+	for _, run := range runs {
+		for _, invocation := range run.Invocations {
+			runWorkingDir := GetInvocationWorkingDirectory(invocation)
+			if runWorkingDir == workingDirectory {
+				filteredRuns = append(filteredRuns, run)
+				break
+			}
+		}
+	}
+	return
+
 }
 
 func GetResultMsgText(result *sarif.Result) string {

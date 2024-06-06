@@ -3,7 +3,7 @@ package applicability
 import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -15,10 +15,14 @@ import (
 )
 
 const (
-	applicabilityScanType      = "analyze-applicability"
 	applicabilityScanCommand   = "ca"
 	applicabilityDocsUrlSuffix = "contextual-analysis"
+
+	ApplicabilityScannerType        ApplicabilityScanType = "analyze-applicability"
+	ApplicabilityDockerScanScanType ApplicabilityScanType = "analyze-applicability-docker-scan"
 )
+
+type ApplicabilityScanType string
 
 type ApplicabilityScanManager struct {
 	applicabilityScanResults []*sarif.Run
@@ -27,6 +31,7 @@ type ApplicabilityScanManager struct {
 	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
+	commandType              string
 	configFileName           string
 	resultsFileName          string
 }
@@ -40,13 +45,13 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner,
-	thirdPartyContextualAnalysis bool, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
 		return
 	}
-	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scannerTempDir)
+	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
 		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping....")
 		return
@@ -63,7 +68,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	return
 }
 
-func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scannerTempDir string) (manager *ApplicabilityScanManager) {
+func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
 		applicabilityScanResults: []*sarif.Run{},
@@ -72,6 +77,7 @@ func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, direct
 		xrayResults:              xrayScanResults,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
+		commandType:              string(scanType),
 		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
 	}
@@ -150,6 +156,7 @@ type scanConfiguration struct {
 	CveWhitelist         []string `yaml:"cve-whitelist"`
 	IndirectCveWhitelist []string `yaml:"indirect-cve-whitelist"`
 	SkippedDirs          []string `yaml:"skipped-folders"`
+	ScanType             string   `yaml:"scantype"`
 }
 
 func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module) error {
@@ -167,7 +174,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			{
 				Roots:                roots,
 				Output:               asm.resultsFileName,
-				Type:                 applicabilityScanType,
+				Type:                 asm.commandType,
 				GrepDisable:          false,
 				CveWhitelist:         asm.directDependenciesCves,
 				IndirectCveWhitelist: asm.indirectDependenciesCves,

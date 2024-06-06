@@ -2,13 +2,21 @@ package utils
 
 import (
 	"errors"
+	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -67,4 +75,41 @@ func ChangeWD(t *testing.T, newPath string) string {
 	assert.NoError(t, err, "Failed to get current dir")
 	clientTests.ChangeDirAndAssert(t, newPath)
 	return prevDir
+}
+
+func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
+	xrayManager, err := utils.CreateXrayServiceManager(securityTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default policy.
+	policyParams := xrayUtils.PolicyParams{
+		Name: fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Type: xrayUtils.Security,
+		Rules: []xrayUtils.PolicyRule{{
+			Name:     "sec_rule",
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity),
+			Priority: 1,
+			Actions: &xrayUtils.PolicyAction{
+				FailBuild: clientUtils.Pointer(true),
+			},
+		}},
+	}
+	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
+		return "", func() {}
+	}
+	// Create new default watch.
+	watchParams := xrayUtils.NewWatchParams()
+	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
+	watchParams.Active = true
+	watchParams.Builds.Type = xrayUtils.WatchBuildAll
+	watchParams.Policies = []xrayUtils.AssignedPolicy{
+		{
+			Name: policyParams.Name,
+			Type: "security",
+		},
+	}
+	assert.NoError(t, xrayManager.CreateWatch(watchParams))
+	return watchParams.Name, func() {
+		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
 }

@@ -2,15 +2,16 @@ package sca
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"reflect"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	coreXray "github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -61,13 +62,13 @@ func TestGetExcludePattern(t *testing.T) {
 }
 
 func TestBuildXrayDependencyTree(t *testing.T) {
-	treeHelper := make(map[string]coreXray.DepTreeNode)
-	rootDep := coreXray.DepTreeNode{Children: []string{"topDep1", "topDep2", "topDep3"}}
-	topDep1 := coreXray.DepTreeNode{Children: []string{"midDep1", "midDep2"}}
-	topDep2 := coreXray.DepTreeNode{Children: []string{"midDep2", "midDep3"}}
-	midDep1 := coreXray.DepTreeNode{Children: []string{"bottomDep1"}}
-	midDep2 := coreXray.DepTreeNode{Children: []string{"bottomDep2", "bottomDep3"}}
-	bottomDep3 := coreXray.DepTreeNode{Children: []string{"leafDep"}}
+	treeHelper := make(map[string]utils.DepTreeNode)
+	rootDep := utils.DepTreeNode{Children: []string{"topDep1", "topDep2", "topDep3"}}
+	topDep1 := utils.DepTreeNode{Children: []string{"midDep1", "midDep2"}}
+	topDep2 := utils.DepTreeNode{Children: []string{"midDep2", "midDep3"}}
+	midDep1 := utils.DepTreeNode{Children: []string{"bottomDep1"}}
+	midDep2 := utils.DepTreeNode{Children: []string{"bottomDep2", "bottomDep3"}}
+	bottomDep3 := utils.DepTreeNode{Children: []string{"leafDep"}}
 	treeHelper["rootDep"] = rootDep
 	treeHelper["topDep1"] = topDep1
 	treeHelper["topDep2"] = topDep2
@@ -116,7 +117,7 @@ func TestBuildXrayDependencyTree(t *testing.T) {
 	topDep2Node.Parent = rootNode
 	topDep3Node.Parent = rootNode
 
-	tree, uniqueDeps := coreXray.BuildXrayDependencyTree(treeHelper, "rootDep")
+	tree, uniqueDeps := utils.BuildXrayDependencyTree(treeHelper, "rootDep")
 
 	assert.ElementsMatch(t, expectedUniqueDeps, maps.Keys(uniqueDeps))
 	assert.True(t, tests.CompareTree(tree, rootNode))
@@ -283,41 +284,41 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	tests := []struct {
 		name          string
 		isCurationCmd bool
-		tech          coreutils.Technology
+		tech          techutils.Technology
 		output        string
 		expect        string
 	}{
 		{
 			name:          "mvn 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput1,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "mvn 500 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput2,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "pip 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        pipOutput,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip),
+			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Pip),
 		},
 		{
 			name:          "pip not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Pip,
+			tech:          techutils.Pip,
 			output:        "http error 401",
 		},
 		{
 			name:          "maven not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        "http error 401",
 		},
 		{

@@ -3,16 +3,17 @@ package scan
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -81,6 +82,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		Pattern(imageTarPath).
 		Target(dsc.targetRepoPath).
 		BuildSpec()).SetThreads(1)
+	dsc.ScanCommand.SetRunJasScans(true)
 	err = dsc.setCredentialEnvsForIndexerApp()
 	if err != nil {
 		return errorutils.CheckError(err)

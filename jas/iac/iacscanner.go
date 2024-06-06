@@ -2,7 +2,7 @@ package iac
 
 import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"github.com/jfrog/jfrog-cli-security/jas"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"path/filepath"
 

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +11,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -23,6 +24,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -59,17 +61,17 @@ const (
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
 
-var supportedTech = map[coreutils.Technology]func(ca *CurationAuditCommand) (bool, error){
-	coreutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
-	coreutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Pip, utils.CurationPipSupport)
+var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
+	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
+	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Pip, utils.CurationPipSupport)
 	},
-	coreutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(coreutils.Maven, utils.CurationMavenSupport)
+	techutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Maven, utils.CurationMavenSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Technology, envName string) (bool, error) {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, envName string) (bool, error) {
 	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
 		return true, nil
 	} else if err != nil {
@@ -93,7 +95,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech coreutils.Techno
 	return true, nil
 }
 
-func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech coreutils.Technology) (string, *config.ServerDetails, error) {
+func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech techutils.Technology) (string, *config.ServerDetails, error) {
 	rtManager, serveDetails, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
 		return "", nil, err
@@ -154,7 +156,7 @@ type treeAnalyzer struct {
 	httpClientDetails    httputils.HttpClientDetails
 	url                  string
 	repo                 string
-	tech                 coreutils.Technology
+	tech                 techutils.Technology
 	parallelRequests     int
 	downloadUrls         map[string]string
 }
@@ -233,9 +235,9 @@ func (ca *CurationAuditCommand) Run() (err error) {
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatus) error {
-	techs := coreutils.DetectedTechnologiesList()
+	techs := techutils.DetectedTechnologiesList()
 	for _, tech := range techs {
-		supportedFunc, ok := supportedTech[coreutils.Technology(tech)]
+		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
 		if !ok {
 			log.Info(fmt.Sprintf(errorTemplateUnsupportedTech, tech))
 			continue
@@ -249,14 +251,14 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 			continue
 		}
 
-		if err := ca.auditTree(coreutils.Technology(tech), results); err != nil {
+		if err := ca.auditTree(techutils.Technology(tech), results); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (ca *CurationAuditCommand) getRtManagerAndAuth(tech coreutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
+func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
 			return
@@ -273,20 +275,20 @@ func (ca *CurationAuditCommand) getRtManagerAndAuth(tech coreutils.Technology) (
 	return
 }
 
-func (ca *CurationAuditCommand) getAuditParamsByTech(tech coreutils.Technology) utils.AuditParams {
+func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) utils.AuditParams {
 	switch tech {
-	case coreutils.Npm:
+	case techutils.Npm:
 		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
 			SetNpmIgnoreNodeModules(true).
 			SetNpmOverwritePackageLock(true)
-	case coreutils.Maven:
+	case techutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
 	}
 
 	return ca.AuditParams
 }
 
-func (ca *CurationAuditCommand) auditTree(tech coreutils.Technology, results map[string][]*PackageStatus) error {
+func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string][]*PackageStatus) error {
 	depTreeResult, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
 	if err != nil {
 		return err
@@ -413,7 +415,7 @@ func (ca *CurationAuditCommand) CommandName() string {
 	return "curation_audit"
 }
 
-func (ca *CurationAuditCommand) SetRepo(tech coreutils.Technology) error {
+func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
 	resolverParams, err := ca.getRepoParams(audit.TechType[tech])
 	if err != nil {
 		return err
@@ -616,14 +618,14 @@ func makeLegiblePolicyDetails(explanation, recommendation string) (string, strin
 	return explanation, recommendation
 }
 
-func getUrlNameAndVersionByTech(tech coreutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
+func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.GraphNode, downloadUrlsMap map[string]string, artiUrl, repo string) (downloadUrls []string, name string, scope string, version string) {
 	switch tech {
-	case coreutils.Npm:
-		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, coreutils.Npm.String())
-	case coreutils.Maven:
-		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node.Types)
+	case techutils.Npm:
+		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
+	case techutils.Maven:
+		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
 
-	case coreutils.Pip:
+	case techutils.Pip:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
 
@@ -650,18 +652,22 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 
 // input- id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33
 // input - repo: libs-release
-// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
-func getMavenNameScopeAndVersion(id, artiUrl, repo string, types *[]string) (downloadUrls []string, name, scope, version string) {
+// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33-jdk15.jar
+func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.GraphNode) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, "gav://")
 	allParts := strings.Split(id, ":")
 	if len(allParts) < 3 {
 		return
 	}
 	nameVersion := allParts[1] + "-" + allParts[2]
+	versionDir := allParts[2]
+	if node != nil && node.Classifier != nil && *node.Classifier != "" {
+		versionDir = strings.TrimSuffix(versionDir, "-"+*node.Classifier)
+	}
 	packagePath := strings.Join(strings.Split(allParts[0], "."), "/") + "/" +
-		allParts[1] + "/" + allParts[2] + "/" + nameVersion
-	if types != nil {
-		for _, fileType := range *types {
+		allParts[1] + "/" + versionDir + "/" + nameVersion
+	if node.Types != nil {
+		for _, fileType := range *node.Types {
 			// curation service supports maven only for jar and war file types.
 			if fileType == "jar" || fileType == "war" {
 				downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/"+repo+"/"+packagePath+"."+fileType)

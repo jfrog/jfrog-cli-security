@@ -3,7 +3,6 @@ package jas
 import (
 	"errors"
 	"fmt"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,13 +11,18 @@ import (
 	"time"
 	"unicode"
 
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +55,7 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 }
 
-func NewJasScanner(serverDetails *config.ServerDetails, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig) (scanner *JasScanner, err error) {
+func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
 	scanner = &JasScanner{}
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = utils.GetAnalyzerManagerExecutable(); err != nil {
 		return
@@ -65,7 +69,7 @@ func NewJasScanner(serverDetails *config.ServerDetails, jfrogAppsConfig *jfrogap
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.JFrogAppsConfig = jfrogAppsConfig
+	scanner.JFrogAppsConfig, err = CreateJFrogAppsConfig(workingDirs)
 	return
 }
 
@@ -198,12 +202,12 @@ var FakeBasicXrayResults = []services.ScanResponse{
 	{
 		ScanId: "scanId_1",
 		Vulnerabilities: []services.Vulnerability{
-			{IssueId: "issueId_1", Technology: coreutils.Pipenv.String(),
+			{IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
 				Cves:       []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
 				Components: map[string]services.Component{"issueId_1_direct_dependency": {}, "issueId_3_direct_dependency": {}}},
 		},
 		Violations: []services.Violation{
-			{IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+			{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 				Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
 				Components: map[string]services.Component{"issueId_2_direct_dependency": {}, "issueId_4_direct_dependency": {}}},
 		},
@@ -212,9 +216,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
-	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
-	assert.NoError(t, err)
-	scanner, err := NewJasScanner(&FakeServerDetails, jfrogAppsConfigForTest)
+	scanner, err := NewJasScanner(workingDirs, &FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -222,7 +224,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 }
 
 func GetTestDataPath() string {
-	return filepath.Join("..", "..", "..", "..", "tests", "testdata", "other")
+	return filepath.Join("..", "..", "tests", "testdata", "other")
 }
 
 func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType) bool {
@@ -260,7 +262,7 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreutils.Technology) func() {
+func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
 	errMsg := "failed %s %s environment variable. Cause: %s"
 	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
 	if err != nil {
@@ -280,7 +282,7 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
 	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(utils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
 	if err != nil {
 		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
 	}
@@ -298,6 +300,15 @@ func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []coreut
 			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
 		}
 	}
+}
+
+func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+		log.Debug(e)
+		return
+	}
+	entitled, err = xrayManager.IsEntitled(utils.ApplicabilityFeatureId)
+	return
 }
 
 func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, error) {

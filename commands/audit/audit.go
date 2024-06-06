@@ -3,19 +3,24 @@ package audit
 import (
 	"errors"
 	"fmt"
-	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/jas/applicability"
+	"github.com/jfrog/jfrog-cli-security/jas/runner"
+	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"os"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+
+	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
+
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-	"os"
 )
 
 type AuditCommand struct {
@@ -186,15 +191,15 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		return
 	}
 	results.XrayVersion = auditParams.xrayVersion
-	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams.xrayVersion)
+	results.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
 	if err != nil {
 		return
 	}
 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
-	auditParallelRunner := utils.CreateAuditParallelRunner(auditParams.threads)
-	JFrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
+	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	//JFrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
 	}
@@ -202,10 +207,11 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
 		_, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
-			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, JFrogAppsConfig, threadId)
+			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, threadId)
 		}, auditParallelRunner.AddErrorToChan)
 		if jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
+			auditParallelRunner.JasWg.Done()
 		}
 	}
 
@@ -230,24 +236,15 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	return
 }
 
-func isEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, xrayutils.EntitlementsMinVersion); e != nil {
-		log.Debug(e)
-		return
-	}
-	entitled, err = xrayManager.IsEntitled(xrayutils.ApplicabilityFeatureId)
-	return
-}
-
-func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.AuditParallelRunner, scanResults *utils.Results,
-	serverDetails *config.ServerDetails, auditParams *AuditParams, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, threadId int) error {
+func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results,
+	serverDetails *config.ServerDetails, auditParams *AuditParams, threadId int) error {
 	defer func() {
 		auditParallelRunner.JasWg.Done()
 	}()
-	if err := utils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+	if err := xrayutils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
 	}
-	if err := RunJasScannersAndSetResults(auditParallelRunner, scanResults, serverDetails, auditParams, jfrogAppsConfig, scanResults.MultiScanId); err != nil {
+	if err := runner.RunJasScannersAndSetResults(auditParallelRunner, scanResults.ExtendedScanResults, scanResults.GetScaScannedTechnologies(), scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.thirdPartyApplicabilityScan, auditParams.commonGraphScanParams.MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan); err != nil {
 		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
 	}
 	return nil
