@@ -366,7 +366,7 @@ func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...*Sca
 	return
 }
 
-func getScanViolationsSummary(scaResults ...ScaScanResult) (violations formats.TwoLevelSummaryCount) {
+func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.TwoLevelSummaryCount) {
 	vioUniqueFindings := map[string]IssueDetails{}
 	if len(scaResults) == 0 {
 		return
@@ -392,7 +392,7 @@ func getScanViolationsSummary(scaResults ...ScaScanResult) (violations formats.T
 	return issueDetailsToSummaryCount(vioUniqueFindings)
 }
 
-func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
+func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
 	summary = &formats.ScanVulnerabilitiesSummary{}
 	if extendedScanResults == nil {
 		summary.ScaScanResults = getScaSummaryResults(scaResults)
