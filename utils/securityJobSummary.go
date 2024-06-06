@@ -23,8 +23,9 @@ const (
 type SecuritySummarySection string
 
 type ScanCommandSummaryResult struct {
-	Section SecuritySummarySection `json:"section"`
-	Results formats.SummaryResults `json:"results"`
+	Section          SecuritySummarySection `json:"section"`
+	WorkingDirectory string                 `json:"workingDirectory"`
+	Results          formats.SummaryResults `json:"results"`
 }
 
 type SecurityCommandsSummary struct {
@@ -47,6 +48,11 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil || manager == nil {
 		return
 	}
+	wd, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return
+	}
+	content.WorkingDirectory = wd
 	return manager.Record(content)
 }
 
@@ -64,14 +70,17 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		if err = commandsummary.UnmarshalFromFilePath(dataFilePath, &cmdResults); err != nil {
 			return fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
 		}
+		results := cmdResults.Results
+		// Update the working directory
+		updateSummaryNamesToRelativePath(cmdResults.WorkingDirectory, &results)
 		// Append the new data
 		switch cmdResults.Section {
 		case Build:
-			scs.BuildScanCommands = append(scs.BuildScanCommands, cmdResults.Results)
+			scs.BuildScanCommands = append(scs.BuildScanCommands, results)
 		case Binary:
-			scs.ScanCommands = append(scs.ScanCommands, cmdResults.Results)
+			scs.ScanCommands = append(scs.ScanCommands, results)
 		case Modules:
-			scs.AuditCommands = append(scs.AuditCommands, cmdResults.Results)
+			scs.AuditCommands = append(scs.AuditCommands, results)
 		}
 	}
 	return
@@ -91,7 +100,7 @@ func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []
 
 }
 
-func (scs *SecurityCommandsSummary) GetSectionSummaries(section SecuritySummarySection) (summaries []formats.SummaryResults) {
+func (scs *SecurityCommandsSummary) getSectionSummaries(section SecuritySummarySection) (summaries []formats.SummaryResults) {
 	switch section {
 	case Build:
 		summaries = scs.BuildScanCommands
@@ -108,7 +117,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	addSectionTitle := len(sectionsWithContent) > 1
 	var sectionSummary string
 	for i, section := range sectionsWithContent {
-		if sectionSummary, err = GetSummaryString(results.GetSectionSummaries(section)...); err != nil {
+		if sectionSummary, err = getSummaryString(results.getSectionSummaries(section)...); err != nil {
 			return
 		}
 		if addSectionTitle {
@@ -122,20 +131,13 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	return
 }
 
-func GetSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
+func getSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
-	wd, err := coreutils.GetWorkingDirectory()
-	if err != nil {
-		return
-	}
 	if !singleScan {
 		str += "| Status | Id | Details |\n|--------|----|---------|\n"
 	}
 	for i := range summaries {
-		if !singleScan {
-			updateSummaryNamesToRelativePath(&summaries[i], wd)
-		}
 		for _, scan := range summaries[i].Scans {
 			if parsed > 0 {
 				str += "\n"
@@ -337,18 +339,20 @@ func GetSummaryContentString(summary formats.SummaryCount, delimiter string, wra
 	return
 }
 
-func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
-	for i, scan := range summary.Scans {
-		if scan.Target == "" {
-			continue
+func updateSummaryNamesToRelativePath(wd string, summaries ...*formats.SummaryResults) {
+	for _, summary := range summaries {
+		for i, scan := range summary.Scans {
+			if scan.Target == "" {
+				continue
+			}
+			if !strings.HasPrefix(scan.Target, wd) {
+				continue
+			}
+			if scan.Target == wd {
+				summary.Scans[i].Target = filepath.Base(wd)
+			}
+			summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
 		}
-		if !strings.HasPrefix(scan.Target, wd) {
-			continue
-		}
-		if scan.Target == wd {
-			summary.Scans[i].Target = filepath.Base(wd)
-		}
-		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
 	}
 }
 
