@@ -117,9 +117,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	addSectionTitle := len(sectionsWithContent) > 1
 	var sectionSummary string
 	for i, section := range sectionsWithContent {
-		if sectionSummary, err = getSummaryString(results.getSectionSummaries(section)...); err != nil {
-			return
-		}
+		sectionSummary = getSummaryString(results.getSectionSummaries(section)...)
 		if addSectionTitle {
 			if i > 0 {
 				summary += "\n"
@@ -131,7 +129,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	return
 }
 
-func getSummaryString(summaries ...formats.SummaryResults) (str string, err error) {
+func getSummaryString(summaries ...formats.SummaryResults) (str string) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
 	if !singleScan {
