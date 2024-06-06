@@ -198,7 +198,7 @@ var FakeServerDetails = config.ServerDetails{
 	User:     "user",
 }
 
-var FakeBasicXrayResults = []services.ScanResponse{
+var FakeBasicXrayResults = []*services.ScanResponse{
 	{
 		ScanId: "scanId_1",
 		Vulnerabilities: []services.Vulnerability{

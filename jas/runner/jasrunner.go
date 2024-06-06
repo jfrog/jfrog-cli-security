@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
@@ -18,7 +17,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
-func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelRunner, extendedScanResults *utils.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []services.ScanResponse, directDependencies []string,
+func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelRunner, extendedScanResults *utils.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []*services.ScanResponse, directDependencies []string,
 	serverDetails *config.ServerDetails, workingDirs []string, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error)) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
@@ -76,7 +75,6 @@ func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanT
 	securityParallelRunner.ScannersWg.Add(1)
 	if _, err = securityParallelRunner.Runner.AddTaskWithError(task, errHandlerFunc); err != nil {
 		err = fmt.Errorf("failed to create %s scan task: %s", scanType, err.Error())
-		//securityParallelRunner.ScannersWg.Done()
 	}
 	return
 }
@@ -133,7 +131,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 }
 
 func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
-	xrayScanResults []services.ScanResponse, module jfrogappsconfig.Module, directDependencies []string, thirdPartyApplicabilityScan bool, scanType applicability.ApplicabilityScanType) parallel.TaskFunc {
+	xrayScanResults []*services.ScanResponse, module jfrogappsconfig.Module, directDependencies []string, thirdPartyApplicabilityScan bool, scanType applicability.ApplicabilityScanType) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.ScannersWg.Done()

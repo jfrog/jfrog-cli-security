@@ -75,7 +75,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
-	scaResults := []*ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
+	scaResults := []*ScaScanResult{{XrayResults: []*services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
 	auditResults := Results{
 		ScaResults: scaResults,
 		ExtendedScanResults: &ExtendedScanResults{

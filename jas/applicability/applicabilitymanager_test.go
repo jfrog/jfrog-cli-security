@@ -50,7 +50,7 @@ func TestNewApplicabilityScanManager_DependencyTreeDoesntExist(t *testing.T) {
 
 func TestNewApplicabilityScanManager_NoDirectDependenciesInScan(t *testing.T) {
 	// Arrange
-	var noDirectDependenciesResults = []services.ScanResponse{
+	var noDirectDependenciesResults = []*services.ScanResponse{
 		{
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{
@@ -106,7 +106,7 @@ func TestNewApplicabilityScanManager_MultipleDependencyTrees(t *testing.T) {
 
 func TestNewApplicabilityScanManager_ViolationsDontExistInResults(t *testing.T) {
 	// Arrange
-	noViolationScanResponse := []services.ScanResponse{
+	noViolationScanResponse := []*services.ScanResponse{
 		{
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{
@@ -132,7 +132,7 @@ func TestNewApplicabilityScanManager_ViolationsDontExistInResults(t *testing.T) 
 
 func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 	// Arrange
-	noVulnerabilitiesScanResponse := []services.ScanResponse{
+	noVulnerabilitiesScanResponse := []*services.ScanResponse{
 		{
 			ScanId: "scanId_1",
 			Violations: []services.Violation{
@@ -157,7 +157,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 }
 
 func TestExtractXrayDirectViolations(t *testing.T) {
-	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
+	var xrayResponseForDirectViolationsTest = []*services.ScanResponse{
 		{
 			Violations: []services.Violation{
 				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
@@ -194,7 +194,7 @@ func TestExtractXrayDirectViolations(t *testing.T) {
 }
 
 func TestExtractXrayDirectVulnerabilities(t *testing.T) {
-	var xrayResponseForDirectVulnerabilitiesTest = []services.ScanResponse{
+	var xrayResponseForDirectVulnerabilitiesTest = []*services.ScanResponse{
 		{
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{

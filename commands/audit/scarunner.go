@@ -140,12 +140,13 @@ func executeScaScan(auditParallelRunner *utils.SecurityParallelRunner, serverDet
 		auditParallelRunner.ResultsMu.Lock()
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.ResultsMu.Unlock()
+		log.Info("finish running sca scan, got results from xray. the first cve is: " + scanResults[0].Vulnerabilities[0].IssueId)
 		return
 	}
 }
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
-	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []*services.ScanResponse, err error) {
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
 		SetXrayGraphScanParams(params.createXrayGraphScanParams()).

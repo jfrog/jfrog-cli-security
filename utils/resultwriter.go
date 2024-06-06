@@ -548,7 +548,7 @@ func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
 	return nil
 }
 
-func CheckIfFailBuild(results []services.ScanResponse) bool {
+func CheckIfFailBuild(results []*services.ScanResponse) bool {
 	for _, result := range results {
 		for _, violation := range result.Violations {
 			if violation.FailBuild {

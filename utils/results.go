@@ -22,7 +22,7 @@ func NewAuditResults() *Results {
 	return &Results{ExtendedScanResults: &ExtendedScanResults{}}
 }
 
-func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
+func (r *Results) GetScaScansXrayResults() (results []*services.ScanResponse) {
 	for _, scaResult := range r.ScaResults {
 		results = append(results, scaResult.XrayResults...)
 	}
@@ -119,11 +119,11 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
-	Target                string                  `json:"Target"`
-	Technology            techutils.Technology    `json:"Technology,omitempty"`
-	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
-	Descriptors           []string                `json:"Descriptors,omitempty"`
-	IsMultipleRootProject *bool                   `json:"IsMultipleRootProject,omitempty"`
+	Target                string                   `json:"Target"`
+	Technology            techutils.Technology     `json:"Technology,omitempty"`
+	XrayResults           []*services.ScanResponse `json:"XrayResults,omitempty"`
+	Descriptors           []string                 `json:"Descriptors,omitempty"`
+	IsMultipleRootProject *bool                    `json:"IsMultipleRootProject,omitempty"`
 }
 
 func (s ScaScanResult) HasInformation() bool {

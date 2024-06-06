@@ -32,7 +32,7 @@ func GetExcludePattern(params utils.AuditParams) string {
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []*services.ScanResponse, err error) {
 	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {
@@ -56,7 +56,7 @@ func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, techno
 	for i := range scanResults.Violations {
 		scanResults.Violations[i].Technology = technology.String()
 	}
-	results = append(results, *scanResults)
+	results = append(results, scanResults)
 	return
 }
 
@@ -82,7 +82,7 @@ func LogExecutableVersion(executable string) {
 
 // BuildImpactPathsForScanResponse builds the full impact paths for each vulnerability found in the scanResult argument, using the dependencyTrees argument.
 // Returns the updated services.ScanResponse slice.
-func BuildImpactPathsForScanResponse(scanResult []services.ScanResponse, dependencyTree []*xrayUtils.GraphNode) []services.ScanResponse {
+func BuildImpactPathsForScanResponse(scanResult []*services.ScanResponse, dependencyTree []*xrayUtils.GraphNode) []*services.ScanResponse {
 	for _, result := range scanResult {
 		if len(result.Vulnerabilities) > 0 {
 			buildVulnerabilitiesImpactPaths(result.Vulnerabilities, dependencyTree)

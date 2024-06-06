@@ -210,7 +210,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		}, auditParallelRunner.AddErrorToChan)
 		if jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
-			//auditParallelRunner.JasWg.Done()
 		}
 	}
 

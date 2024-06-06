@@ -180,7 +180,7 @@ func TestUpdateVulnerableComponent(t *testing.T) {
 
 func TestBuildImpactPaths(t *testing.T) {
 	// create sample scan result and dependency trees
-	scanResult := []services.ScanResponse{
+	scanResult := []*services.ScanResponse{
 		{
 			Vulnerabilities: []services.Vulnerability{
 				{

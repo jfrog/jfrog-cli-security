@@ -172,7 +172,7 @@ func TestGetSummary(t *testing.T) {
 	}
 }
 
-func getDummyScaTestResults(vulnerability, violation bool) (responses []services.ScanResponse) {
+func getDummyScaTestResults(vulnerability, violation bool) (responses []*services.ScanResponse) {
 	response := services.ScanResponse{}
 	switch {
 	case vulnerability && violation:
@@ -197,6 +197,6 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 			{ViolationType: formats.ViolationTypeLicense.String(), WatchName: "test-watch-name", IssueId: "MIT", Severity: "High", LicenseKey: "MIT", Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 	}
-	responses = append(responses, response)
+	responses = append(responses, &response)
 	return
 }
