@@ -199,7 +199,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	//JFrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
 	}
@@ -211,7 +210,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		}, auditParallelRunner.AddErrorToChan)
 		if jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
-			auditParallelRunner.JasWg.Done()
+			//auditParallelRunner.JasWg.Done()
 		}
 	}
 

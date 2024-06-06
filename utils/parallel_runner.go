@@ -22,8 +22,8 @@ func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {
 }
 
 func CreateSecurityParallelRunner(numOfParallelScans int) *SecurityParallelRunner {
-	auditParallelRunner := NewSecurityParallelRunner(numOfParallelScans)
-	return &auditParallelRunner
+	securityParallelRunner := NewSecurityParallelRunner(numOfParallelScans)
+	return &securityParallelRunner
 }
 
 func (spr *SecurityParallelRunner) AddErrorToChan(err error) {

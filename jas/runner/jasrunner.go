@@ -76,7 +76,7 @@ func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanT
 	securityParallelRunner.ScannersWg.Add(1)
 	if _, err = securityParallelRunner.Runner.AddTaskWithError(task, errHandlerFunc); err != nil {
 		err = fmt.Errorf("failed to create %s scan task: %s", scanType, err.Error())
-		securityParallelRunner.ScannersWg.Done()
+		//securityParallelRunner.ScannersWg.Done()
 	}
 	return
 }
