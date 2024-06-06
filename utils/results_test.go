@@ -98,15 +98,16 @@ func TestGetSummary(t *testing.T) {
 				Scans: []formats.ScanSummaryResult{
 					{
 						Target: "target1",
-						ScaScanResults: &formats.ScaScanSummaryResult{
-							VulnerabilitiesSummary: formats.ScaSummaryCount{
-								"Critical": formats.SummaryCount{"Undetermined": 1},
-								"High":     formats.SummaryCount{"Not Applicable": 1},
+						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+							ScaScanResults: &formats.ScanScaResult{
+								SummaryCount: formats.TwoLevelSummaryCount{
+									"Critical": formats.SummaryCount{"Undetermined": 1},
+									"High":     formats.SummaryCount{"Not Applicable": 1},
+								},
 							},
-							ViolationSummary: formats.ScaSummaryCount{},
+							SecretsScanResults: &formats.SummaryCount{"Low": 2},
+							SastScanResults:    &formats.SummaryCount{"Low": 1},
 						},
-						SecretsScanResults: &formats.SummaryCount{"Low": 2},
-						SastScanResults:    &formats.SummaryCount{"Low": 1},
 					},
 				},
 			},
@@ -132,27 +133,24 @@ func TestGetSummary(t *testing.T) {
 				Scans: []formats.ScanSummaryResult{
 					{
 						Target: "target1",
-						ScaScanResults: &formats.ScaScanSummaryResult{
-							VulnerabilitiesSummary: formats.ScaSummaryCount{},
-							ViolationSummary: formats.ScaSummaryCount{
-								"Critical": formats.SummaryCount{"Undetermined": 1},
-								"High":     formats.SummaryCount{"Not Applicable": 1},
-							},
+						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+							SecretsScanResults: &formats.SummaryCount{"Low": 1},
+							SastScanResults:    &formats.SummaryCount{"Low": 1},
 						},
-						SecretsScanResults: &formats.SummaryCount{"Low": 1},
-						SastScanResults:    &formats.SummaryCount{"Low": 1},
+						Violations: &formats.TwoLevelSummaryCount{
+							"Critical": formats.SummaryCount{"Undetermined": 1},
+							"High":     formats.SummaryCount{"Not Applicable": 1},
+						},
 					},
 					{
 						Target: "target2",
-						ScaScanResults: &formats.ScaScanSummaryResult{
-							VulnerabilitiesSummary: formats.ScaSummaryCount{
-								"Critical": formats.SummaryCount{"": 1},
+						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+							ScaScanResults: &formats.ScanScaResult{
+								SummaryCount: formats.TwoLevelSummaryCount{"Critical": formats.SummaryCount{"": 1}},
 							},
-							ViolationSummary: formats.ScaSummaryCount{
-								"High": formats.SummaryCount{"": 1},
-							},
+							SecretsScanResults: &formats.SummaryCount{"Low": 1},
 						},
-						SecretsScanResults: &formats.SummaryCount{"Low": 1},
+						Violations: &formats.TwoLevelSummaryCount{"High": formats.SummaryCount{"": 1}},
 					},
 				},
 			},

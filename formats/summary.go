@@ -1,5 +1,23 @@
 package formats
 
+const (
+	ScaScan     SummarySubScanType = "SCA"
+	IacScan     SummarySubScanType = "IAC"
+	SecretsScan SummarySubScanType = "Secrets"
+	SastScan    SummarySubScanType = "SAST"
+
+	ViolationTypeSecurity        ViolationIssueType = "security"
+	ViolationTypeLicense         ViolationIssueType = "license"
+	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+)
+
+type SummarySubScanType string
+type ViolationIssueType string
+
+func (v ViolationIssueType) String() string {
+	return string(v)
+}
+
 type SummaryResults struct {
 	Scans []ScanSummaryResult `json:"scans"`
 }
@@ -12,53 +30,108 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 }
 
 type ScanSummaryResult struct {
-	Target             string                `json:"target,omitempty"`
-	ScaScanResults     *ScaScanSummaryResult `json:"sca,omitempty"`
-	IacScanResults     *SummaryCount         `json:"iac,omitempty"`
-	SecretsScanResults *SummaryCount         `json:"secrets,omitempty"`
-	SastScanResults    *SummaryCount         `json:"sast,omitempty"`
+	Target          string                      `json:"target,omitempty"`
+	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
+	Violations      *TwoLevelSummaryCount       `json:"violations,omitempty"`
 }
 
-type SummarySubScanType string
-
-const (
-	ScaScan     SummarySubScanType = "SCA"
-	IacScan     SummarySubScanType = "IAC"
-	SecretsScan SummarySubScanType = "Secrets"
-	SastScan    SummarySubScanType = "SAST"
-)
-
-type ScaScanSummaryResult struct {
-	ViolationSummary       ScaSummaryCount
-	VulnerabilitiesSummary ScaSummaryCount
+type ScanVulnerabilitiesSummary struct {
+	ScaScanResults     *ScanScaResult `json:"sca,omitempty"`
+	IacScanResults     *SummaryCount  `json:"iac,omitempty"`
+	SecretsScanResults *SummaryCount  `json:"secrets,omitempty"`
+	SastScanResults    *SummaryCount  `json:"sast,omitempty"`
 }
 
-func (sssr *ScaScanSummaryResult) GetTotal() (total int) {
-	return sssr.ViolationSummary.GetTotal() + sssr.VulnerabilitiesSummary.GetTotal()
+type ScanScaResult struct {
+	SummaryCount   TwoLevelSummaryCount `json:"sca,omitempty"`
+	UniqueFindings int                  `json:"unique_findings,omitempty"`
 }
 
-func (sssr *ScaScanSummaryResult) GetIssuesCount() (count ScaSummaryCount) {
-	count = ScaSummaryCount{}
-	// Merge vulnerabilities and violations
-	if sssr.VulnerabilitiesSummary != nil {
-		for severity, statusCounts := range sssr.VulnerabilitiesSummary {
-			count[severity] = statusCounts
+func (s *ScanSummaryResult) HasIssues() bool {
+	return s.HasViolations() || s.HasSecurityVulnerabilities()
+}
+
+func (ssr *ScanSummaryResult) HasViolations() bool {
+	return ssr.Violations == nil || ssr.Violations.GetTotal() > 0
+}
+
+func (ssr *ScanSummaryResult) HasSecurityVulnerabilities() bool {
+	return ssr.Vulnerabilities == nil || ssr.Vulnerabilities.GetTotalIssueCount() > 0
+}
+
+func (ssr *ScanSummaryResult) GetTotalIssueCount() (total int) {
+	if ssr.Vulnerabilities != nil {
+		total += ssr.Vulnerabilities.GetTotalIssueCount()
+	}
+	if ssr.Violations != nil {
+		total += ssr.Violations.GetTotal()
+	}
+	return
+
+}
+
+func (s *ScanSummaryResult) GetTotalViolationCount() (total int) {
+	if s.Violations != nil {
+		total += s.Violations.GetTotal()
+	}
+	return
+}
+
+func (s *ScanVulnerabilitiesSummary) GetTotalUniqueIssueCount() (total int) {
+	return s.getTotalIssueCount(true)
+}
+
+func (s *ScanVulnerabilitiesSummary) GetTotalIssueCount() (total int) {
+	return s.getTotalIssueCount(false)
+}
+
+func (s *ScanVulnerabilitiesSummary) getTotalIssueCount(unique bool) (total int) {
+	if s.ScaScanResults != nil {
+		if unique {
+			total += s.ScaScanResults.UniqueFindings
+		} else {
+			total += s.ScaScanResults.SummaryCount.GetTotal()
 		}
 	}
-	if sssr.ViolationSummary != nil {
-		for severity, statusCounts := range sssr.ViolationSummary {
-			if _, ok := count[severity]; !ok {
-				count[severity] = statusCounts
-				continue
-			}
-			for status, c := range statusCounts {
-				if _, ok := count[severity][status]; !ok {
-					count[severity][status] = c
-					continue
-				}
-				count[severity][status] += c
-			}
-		}
+	if s.IacScanResults != nil {
+		total += s.IacScanResults.GetTotal()
+	}
+	if s.SecretsScanResults != nil {
+		total += s.SecretsScanResults.GetTotal()
+	}
+	if s.SastScanResults != nil {
+		total += s.SastScanResults.GetTotal()
+	}
+	return
+}
+
+func (s *ScanVulnerabilitiesSummary) GetSubScansWithIssues() []SummarySubScanType {
+	subScans := []SummarySubScanType{}
+	if s.SecretsScanResults != nil && s.SecretsScanResults.GetTotal() > 0 {
+		subScans = append(subScans, SecretsScan)
+	}
+	if s.SastScanResults != nil && s.SastScanResults.GetTotal() > 0 {
+		subScans = append(subScans, SastScan)
+	}
+	if s.IacScanResults != nil && s.IacScanResults.GetTotal() > 0 {
+		subScans = append(subScans, IacScan)
+	}
+	if s.ScaScanResults != nil && s.ScaScanResults.SummaryCount.GetTotal() > 0 {
+		subScans = append(subScans, ScaScan)
+	}
+	return subScans
+}
+
+func (svs *ScanVulnerabilitiesSummary) GetSubScanTotalIssueCount(subScanType SummarySubScanType) (count int) {
+	switch subScanType {
+	case ScaScan:
+		count = svs.ScaScanResults.SummaryCount.GetTotal()
+	case IacScan:
+		count = svs.IacScanResults.GetTotal()
+	case SecretsScan:
+		count = svs.SecretsScanResults.GetTotal()
+	case SastScan:
+		count = svs.SastScanResults.GetTotal()
 	}
 	return
 }
@@ -75,72 +148,21 @@ func (sc SummaryCount) GetTotal() int {
 }
 
 // Severity -> Applicable status -> Count
-type ScaSummaryCount map[string]SummaryCount
+type TwoLevelSummaryCount map[string]SummaryCount
 
-func (sc ScaSummaryCount) GetTotal() (total int) {
+func (sc TwoLevelSummaryCount) GetTotal() (total int) {
 	for _, count := range sc {
 		total += count.GetTotal()
 	}
 	return
 }
 
-func (sc ScaSummaryCount) GetSeverityCountsWithoutStatus() (severityCounts SummaryCount) {
-	severityCounts = SummaryCount{}
-	for severity, statusCounts := range sc {
-		for _, count := range statusCounts {
-			severityCounts[severity] += count
+func (sc TwoLevelSummaryCount) GetCombinedLowerLevel() (oneLvlCounts SummaryCount) {
+	oneLvlCounts = SummaryCount{}
+	for firstLvl, secondLvl := range sc {
+		for _, count := range secondLvl {
+			oneLvlCounts[firstLvl] += count
 		}
-	}
-	return
-}
-
-func (s *ScanSummaryResult) HasIssues() bool {
-	return s.GetTotalIssueCount() > 0
-}
-
-func (s *ScanSummaryResult) GetTotalIssueCount() (total int) {
-	if s.ScaScanResults != nil {
-		total += s.ScaScanResults.GetTotal()
-	}
-	if s.IacScanResults != nil {
-		total += s.IacScanResults.GetTotal()
-	}
-	if s.SecretsScanResults != nil {
-		total += s.SecretsScanResults.GetTotal()
-	}
-	if s.SastScanResults != nil {
-		total += s.SastScanResults.GetTotal()
-	}
-	return
-}
-
-func (s *ScanSummaryResult) GetSubScansWithIssues() []SummarySubScanType {
-	subScans := []SummarySubScanType{}
-	if s.SecretsScanResults != nil && s.SecretsScanResults.GetTotal() > 0 {
-		subScans = append(subScans, SecretsScan)
-	}
-	if s.SastScanResults != nil && s.SastScanResults.GetTotal() > 0 {
-		subScans = append(subScans, SastScan)
-	}
-	if s.IacScanResults != nil && s.IacScanResults.GetTotal() > 0 {
-		subScans = append(subScans, IacScan)
-	}
-	if s.ScaScanResults != nil && s.ScaScanResults.GetTotal() > 0 {
-		subScans = append(subScans, ScaScan)
-	}
-	return subScans
-}
-
-func (s *ScanSummaryResult) GetSubScanTotalIssueCount(subScanType SummarySubScanType) (count int) {
-	switch subScanType {
-	case ScaScan:
-		count = s.ScaScanResults.GetTotal()
-	case IacScan:
-		count = s.IacScanResults.GetTotal()
-	case SecretsScan:
-		count = s.SecretsScanResults.GetTotal()
-	case SastScan:
-		count = s.SastScanResults.GetTotal()
 	}
 	return
 }

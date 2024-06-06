@@ -39,8 +39,9 @@ func TestConvertSummaryToString(t *testing.T) {
 				ScanCommandSummaryResult{
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target:             "build-name (build-number)",
-						SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
+						Target:          "build-name (build-number)",
+						Violations:      &formats.TwoLevelSummaryCount{formats.ViolationTypeLicense.String(): formats.SummaryCount{"High": 1}},
+						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2}},
 					}}},
 				},
 			),
@@ -56,21 +57,26 @@ func TestConvertSummaryToString(t *testing.T) {
 				ScanCommandSummaryResult{
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
-						Target:         "build-name (build-number)",
-						ScaScanResults: &formats.ScaScanSummaryResult{ViolationSummary: formats.ScaSummaryCount{"Low": formats.SummaryCount{"": 1}, "High": formats.SummaryCount{"": 2}}},
+						Target: "build-name (build-number)",
+						Violations: &formats.TwoLevelSummaryCount{
+							formats.ViolationTypeSecurity.String():        formats.SummaryCount{"High": 1, "Medium": 1},
+							formats.ViolationTypeLicense.String():         formats.SummaryCount{"Medium": 1},
+							formats.ViolationTypeOperationalRisk.String(): formats.SummaryCount{"Low": 1},
+						},
 					}}},
 				},
 				ScanCommandSummaryResult{
 					Section: Binary,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
-							Target:             filepath.Join(wd, "binary-name"),
-							ScaScanResults:     &formats.ScaScanSummaryResult{},
-							SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
+							Target: filepath.Join(wd, "binary-name"),
+							Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+								SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2},
+							},
 						},
 						{
-							Target:         filepath.Join("other-root", "dir", "binary-name2"),
-							ScaScanResults: &formats.ScaScanSummaryResult{},
+							Target:          filepath.Join("other-root", "dir", "binary-name2"),
+							Vulnerabilities: &formats.ScanVulnerabilitiesSummary{},
 						},
 					}},
 				},
@@ -78,21 +84,28 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Modules,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
-							Target:          filepath.Join(wd, "application1"),
-							SastScanResults: &formats.SummaryCount{"Low": 1},
-							IacScanResults:  &formats.SummaryCount{"Medium": 5},
-							ScaScanResults: &formats.ScaScanSummaryResult{VulnerabilitiesSummary: formats.ScaSummaryCount{
-								"Critical": formats.SummaryCount{"Undetermined": 1, "Not Applicable": 2},
-								"High":     formats.SummaryCount{"Applicable": 1, "Not Applicable": 1, "Not Covered": 2},
-								"Low":      formats.SummaryCount{"Undetermined": 1},
-							},
+							Target: filepath.Join(wd, "application1"),
+							Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+								SastScanResults: &formats.SummaryCount{"Low": 1},
+								IacScanResults:  &formats.SummaryCount{"Medium": 5},
+								ScaScanResults: &formats.ScanScaResult{
+									SummaryCount: formats.TwoLevelSummaryCount{
+										"Critical": formats.SummaryCount{"Undetermined": 1, "Not Applicable": 2},
+										"High":     formats.SummaryCount{"Applicable": 1, "Not Applicable": 1, "Not Covered": 2},
+										"Low":      formats.SummaryCount{"Undetermined": 1},
+									},
+									UniqueFindings: 6,
+								},
 							},
 						},
 						{
-							Target: filepath.Join(wd, "application2"),
-							ScaScanResults: &formats.ScaScanSummaryResult{
-								VulnerabilitiesSummary: formats.ScaSummaryCount{"High": formats.SummaryCount{"Not Applicable": 1}},
-								ViolationSummary:       formats.ScaSummaryCount{"High": formats.SummaryCount{"": 1}},
+							Target:     filepath.Join(wd, "application2"),
+							Violations: &formats.TwoLevelSummaryCount{formats.ViolationTypeSecurity.String(): formats.SummaryCount{"High": 1}},
+							Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+								ScaScanResults: &formats.ScanScaResult{
+									SummaryCount:   formats.TwoLevelSummaryCount{"High": formats.SummaryCount{"Not Applicable": 1}},
+									UniqueFindings: 1,
+								},
 							},
 						},
 						{
