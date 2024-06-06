@@ -142,6 +142,7 @@ func TestGetSummary(t *testing.T) {
 						},
 						Violations: formats.TwoLevelSummaryCount{
 							formats.ViolationTypeSecurity.String(): formats.SummaryCount{"Critical": 1, "High": 1},
+							formats.ViolationTypeLicense.String():  formats.SummaryCount{"High": 1},
 						},
 					},
 					{
@@ -157,8 +158,8 @@ func TestGetSummary(t *testing.T) {
 					},
 				},
 			},
-			findingCount: 6,
-			issueCount:   7,
+			findingCount: 7,
+			issueCount:   8,
 		},
 	}
 	for _, testCase := range testCases {
@@ -193,6 +194,7 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 		response.Violations = []services.Violation{
 			{ViolationType: formats.ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 			{ViolationType: formats.ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: formats.ViolationTypeLicense.String(), WatchName: "test-watch-name", IssueId: "MIT", Severity: "High", LicenseKey: "MIT", Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 	}
 	responses = append(responses, response)

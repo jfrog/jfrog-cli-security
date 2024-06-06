@@ -281,7 +281,7 @@ func GetScaSummaryCountString(summary formats.ScanScaResult, padding int) (conte
 }
 
 var (
-	// convert summary of the given keys to the needed string
+	// Convert summary of the given keys to the needed string
 	summaryContentToFormatString = map[string]string{
 		"Critical":                             `❗️ <span style="color:red">%d Critical</span>`,
 		"High":                                 `🔴 <span style="color:red">%d High</span>`,
@@ -294,7 +294,7 @@ var (
 		formats.ViolationTypeLicense.String():  "%d License",
 		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
 	}
-	// allowedSorted is the order of the keys to display in the summary
+	// AllowedSorted is the order of the keys to display in the summary
 	allowedSorted = []string{
 		"Critical", "High", "Medium", "Low", "Unknown",
 		Applicable.String(), NotApplicable.String(),
