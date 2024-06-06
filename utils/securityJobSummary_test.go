@@ -27,8 +27,9 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "One Section - No Issues",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section: Binary,
-					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: filepath.Join(wd, "binary-name")}}},
+					Section:          Binary,
+					WorkingDirectory: wd,
+					Results:          formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: filepath.Join(wd, "binary-name")}}},
 				},
 			),
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "single_no_issue.md"),
@@ -66,7 +67,8 @@ func TestConvertSummaryToString(t *testing.T) {
 					}}},
 				},
 				ScanCommandSummaryResult{
-					Section: Binary,
+					Section:          Binary,
+					WorkingDirectory: wd,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target: filepath.Join(wd, "binary-name"),
@@ -81,7 +83,8 @@ func TestConvertSummaryToString(t *testing.T) {
 					}},
 				},
 				ScanCommandSummaryResult{
-					Section: Modules,
+					Section:          Modules,
+					WorkingDirectory: wd,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
 							Target: filepath.Join(wd, "application1"),
@@ -141,6 +144,9 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		AuditCommands:     []formats.SummaryResults{},
 	}
 	for _, cmdResult := range cmdResults {
+		results := cmdResult.Results
+		// Update the working directory
+		updateSummaryNamesToRelativePath(&results, cmdResult.WorkingDirectory)
 		switch cmdResult.Section {
 		case Build:
 			summary.BuildScanCommands = append(summary.BuildScanCommands, cmdResult.Results)
