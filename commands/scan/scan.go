@@ -414,7 +414,6 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
-						return
 					}
 				}
 				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults, ExtendedScanResults: &extendedScanResults})
