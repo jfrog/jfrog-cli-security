@@ -18,8 +18,6 @@ const (
 	Build   SecuritySummarySection = "Builds"
 	Binary  SecuritySummarySection = "Artifacts"
 	Modules SecuritySummarySection = "Modules"
-
-	uniqueVulnCountKey = "unique"
 )
 
 type SecuritySummarySection string
