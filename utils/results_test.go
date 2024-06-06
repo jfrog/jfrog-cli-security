@@ -104,10 +104,12 @@ func TestGetSummary(t *testing.T) {
 									"Critical": formats.SummaryCount{"Undetermined": 1},
 									"High":     formats.SummaryCount{"Not Applicable": 1},
 								},
+								UniqueFindings: 2,
 							},
 							SecretsScanResults: &formats.SummaryCount{"Low": 2},
 							SastScanResults:    &formats.SummaryCount{"Low": 1},
 						},
+						Violations: formats.TwoLevelSummaryCount{},
 					},
 				},
 			},
@@ -134,23 +136,24 @@ func TestGetSummary(t *testing.T) {
 					{
 						Target: "target1",
 						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
+							ScaScanResults:     &formats.ScanScaResult{SummaryCount: formats.TwoLevelSummaryCount{}},
 							SecretsScanResults: &formats.SummaryCount{"Low": 1},
 							SastScanResults:    &formats.SummaryCount{"Low": 1},
 						},
-						Violations: &formats.TwoLevelSummaryCount{
-							"Critical": formats.SummaryCount{"Undetermined": 1},
-							"High":     formats.SummaryCount{"Not Applicable": 1},
+						Violations: formats.TwoLevelSummaryCount{
+							formats.ViolationTypeSecurity.String(): formats.SummaryCount{"Critical": 1, "High": 1},
 						},
 					},
 					{
 						Target: "target2",
 						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
 							ScaScanResults: &formats.ScanScaResult{
-								SummaryCount: formats.TwoLevelSummaryCount{"Critical": formats.SummaryCount{"": 1}},
+								SummaryCount:   formats.TwoLevelSummaryCount{"Critical": formats.SummaryCount{"": 1}},
+								UniqueFindings: 1,
 							},
 							SecretsScanResults: &formats.SummaryCount{"Low": 1},
 						},
-						Violations: &formats.TwoLevelSummaryCount{"High": formats.SummaryCount{"": 1}},
+						Violations: formats.TwoLevelSummaryCount{formats.ViolationTypeSecurity.String(): formats.SummaryCount{"High": 1}},
 					},
 				},
 			},
@@ -177,7 +180,7 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 		response.Violations = []services.Violation{
-			{WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: formats.ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 	case vulnerability:
 		// only vulnerability
@@ -188,8 +191,8 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 	case violation:
 		// only violation
 		response.Violations = []services.Violation{
-			{WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-			{WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: formats.ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: formats.ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 	}
 	responses = append(responses, response)

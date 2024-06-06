@@ -32,7 +32,7 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 type ScanSummaryResult struct {
 	Target          string                      `json:"target,omitempty"`
 	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
-	Violations      *TwoLevelSummaryCount       `json:"violations,omitempty"`
+	Violations      TwoLevelSummaryCount        `json:"violations,omitempty"`
 }
 
 type ScanVulnerabilitiesSummary struct {
@@ -51,30 +51,25 @@ func (s *ScanSummaryResult) HasIssues() bool {
 	return s.HasViolations() || s.HasSecurityVulnerabilities()
 }
 
-func (ssr *ScanSummaryResult) HasViolations() bool {
-	return ssr.Violations == nil || ssr.Violations.GetTotal() > 0
+func (s *ScanSummaryResult) HasViolations() bool {
+	return s.Violations.GetTotal() > 0
 }
 
-func (ssr *ScanSummaryResult) HasSecurityVulnerabilities() bool {
-	return ssr.Vulnerabilities == nil || ssr.Vulnerabilities.GetTotalIssueCount() > 0
+func (s *ScanSummaryResult) HasSecurityVulnerabilities() bool {
+	return s.Vulnerabilities != nil && s.Vulnerabilities.GetTotalIssueCount() > 0
 }
 
-func (ssr *ScanSummaryResult) GetTotalIssueCount() (total int) {
-	if ssr.Vulnerabilities != nil {
-		total += ssr.Vulnerabilities.GetTotalIssueCount()
+func (s *ScanSummaryResult) GetTotalIssueCount() (total int) {
+	if s.Vulnerabilities != nil {
+		total += s.Vulnerabilities.GetTotalIssueCount()
 	}
-	if ssr.Violations != nil {
-		total += ssr.Violations.GetTotal()
-	}
+	total += s.Violations.GetTotal()
 	return
 
 }
 
 func (s *ScanSummaryResult) GetTotalViolationCount() (total int) {
-	if s.Violations != nil {
-		total += s.Violations.GetTotal()
-	}
-	return
+	return s.Violations.GetTotal()
 }
 
 func (s *ScanVulnerabilitiesSummary) GetTotalUniqueIssueCount() (total int) {

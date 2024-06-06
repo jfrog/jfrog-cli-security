@@ -85,7 +85,6 @@ func TestScanVulnerabilitiesSummary(t *testing.T) {
 		{
 			"Multiple",
 			&ScanVulnerabilitiesSummary{
-
 				ScaScanResults: &ScanScaResult{
 					SummaryCount:   TwoLevelSummaryCount{"High": SummaryCount{"Applicable": 2}},
 					UniqueFindings: 1,
@@ -114,10 +113,10 @@ func validateScanVulnerabilitiesSummary(t *testing.T, summary *ScanVulnerabiliti
 	}
 }
 
-func validateViolationSummary(t *testing.T, summary *TwoLevelSummaryCount, expectedTotalIssueCount int, expectedViolationTypeCount map[ViolationIssueType]int) {
+func validateViolationSummary(t *testing.T, summary TwoLevelSummaryCount, expectedTotalIssueCount int, expectedViolationTypeCount map[ViolationIssueType]int) {
 	assert.Equal(t, expectedTotalIssueCount, summary.GetTotal())
 	for violationType, expectedCount := range expectedViolationTypeCount {
-		assert.Equal(t, expectedCount, (*summary)[violationType.String()])
+		assert.Equal(t, expectedCount, summary[violationType.String()].GetTotal())
 	}
 }
 
@@ -146,7 +145,10 @@ func TestScanSummaryResult(t *testing.T) {
 			"Single",
 			&ScanSummaryResult{
 				Vulnerabilities: &ScanVulnerabilitiesSummary{
-					ScaScanResults: &ScanScaResult{SummaryCount: TwoLevelSummaryCount{"High": SummaryCount{"Applicable": 1}}},
+					ScaScanResults: &ScanScaResult{
+						SummaryCount:   TwoLevelSummaryCount{"High": SummaryCount{"Applicable": 1}},
+						UniqueFindings: 1,
+					},
 				},
 			},
 			1, 1, 0,
@@ -158,10 +160,13 @@ func TestScanSummaryResult(t *testing.T) {
 			"Multiple",
 			&ScanSummaryResult{
 				Vulnerabilities: &ScanVulnerabilitiesSummary{
-					ScaScanResults:  &ScanScaResult{SummaryCount: TwoLevelSummaryCount{"High": SummaryCount{"Applicable": 1}}},
+					ScaScanResults: &ScanScaResult{
+						SummaryCount:   TwoLevelSummaryCount{"High": SummaryCount{"Applicable": 1}},
+						UniqueFindings: 1,
+					},
 					SastScanResults: &SummaryCount{"High": 1},
 				},
-				Violations: &TwoLevelSummaryCount{
+				Violations: TwoLevelSummaryCount{
 					ViolationTypeSecurity.String():        {"High": 1},
 					ViolationTypeLicense.String():         {"High": 1},
 					ViolationTypeOperationalRisk.String(): {"High": 1},
@@ -177,13 +182,17 @@ func TestScanSummaryResult(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			// validate general
 			assert.Equal(t, testCase.expectedTotalIssueCount > 0, testCase.result.HasIssues())
+			assert.Equal(t, testCase.expectedTotalIssueCount, testCase.result.GetTotalIssueCount())
 			assert.Equal(t, testCase.expectedTotalViolationCount > 0, testCase.result.HasViolations())
-			assert.Equal(t, testCase.expectedTotalVulnerabilityCount > 0, testCase.result.HasSecurityVulnerabilities())
-			assert.Equal(t, testCase.expectedTotalVulnerabilityCount, testCase.result.GetTotalIssueCount())
 			assert.Equal(t, testCase.expectedTotalViolationCount, testCase.result.GetTotalViolationCount())
+
+			assert.Equal(t, testCase.expectedTotalVulnerabilityCount > 0, testCase.result.HasSecurityVulnerabilities())
+
 			// validate content
-			validateScanVulnerabilitiesSummary(t, testCase.result.Vulnerabilities, testCase.expectedTotalIssueCount, testCase.expectedTotalIssueCount, testCase.expectedSubScansWithIssues, testCase.expectedSubScansIssuesCount)
-			validateViolationSummary(t, testCase.result.Violations, testCase.expectedTotalIssueCount, testCase.expectedViolationTypeCount)
+			if testCase.result.Vulnerabilities != nil {
+				validateScanVulnerabilitiesSummary(t, testCase.result.Vulnerabilities, testCase.expectedTotalVulnerabilityCount, testCase.expectedTotalVulnerabilityCount, testCase.expectedSubScansWithIssues, testCase.expectedSubScansIssuesCount)
+			}
+			validateViolationSummary(t, testCase.result.Violations, testCase.expectedTotalViolationCount, testCase.expectedViolationTypeCount)
 		})
 	}
 

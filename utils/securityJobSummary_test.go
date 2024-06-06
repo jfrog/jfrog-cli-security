@@ -40,7 +40,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target:          "build-name (build-number)",
-						Violations:      &formats.TwoLevelSummaryCount{formats.ViolationTypeLicense.String(): formats.SummaryCount{"High": 1}},
+						Violations:      formats.TwoLevelSummaryCount{formats.ViolationTypeLicense.String(): formats.SummaryCount{"High": 1}},
 						Vulnerabilities: &formats.ScanVulnerabilitiesSummary{SecretsScanResults: &formats.SummaryCount{"Low": 1, "High": 2}},
 					}}},
 				},
@@ -58,7 +58,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					Section: Build,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target: "build-name (build-number)",
-						Violations: &formats.TwoLevelSummaryCount{
+						Violations: formats.TwoLevelSummaryCount{
 							formats.ViolationTypeSecurity.String():        formats.SummaryCount{"High": 1, "Medium": 1},
 							formats.ViolationTypeLicense.String():         formats.SummaryCount{"Medium": 1},
 							formats.ViolationTypeOperationalRisk.String(): formats.SummaryCount{"Low": 1},
@@ -100,7 +100,7 @@ func TestConvertSummaryToString(t *testing.T) {
 						},
 						{
 							Target:     filepath.Join(wd, "application2"),
-							Violations: &formats.TwoLevelSummaryCount{formats.ViolationTypeSecurity.String(): formats.SummaryCount{"High": 1}},
+							Violations: formats.TwoLevelSummaryCount{formats.ViolationTypeSecurity.String(): formats.SummaryCount{"High": 1}},
 							Vulnerabilities: &formats.ScanVulnerabilitiesSummary{
 								ScaScanResults: &formats.ScanScaResult{
 									SummaryCount:   formats.TwoLevelSummaryCount{"High": formats.SummaryCount{"Not Applicable": 1}},

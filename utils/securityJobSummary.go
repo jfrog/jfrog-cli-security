@@ -176,8 +176,14 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 	return fmt.Sprintf("| ❌ | %s | <pre>%s</pre> |", summary.Target, issueDetails)
 }
 
-func getDetailsString(summary formats.ScanSummaryResult) (content string) {
-	return getViolationSummaryString(summary) + getVulnerabilitiesSummaryString(summary)
+func getDetailsString(summary formats.ScanSummaryResult) string {
+	violationContent := getViolationSummaryString(summary)
+	vulnerabilitiesContent := getVulnerabilitiesSummaryString(summary)
+	delimiter := ""
+	if len(violationContent) > 0 && len(vulnerabilitiesContent) > 0 {
+		delimiter = "<br>"
+	}
+	return violationContent + delimiter + vulnerabilitiesContent
 }
 
 func getViolationSummaryString(summary formats.ScanSummaryResult) (content string) {
@@ -349,6 +355,9 @@ func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string
 }
 
 func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
+	if len(scaResults) == 0 {
+		return
+	}
 	if len(scaResults) == 1 {
 		summary.Target = scaResults[0].Target
 	}
@@ -359,10 +368,10 @@ func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaS
 	return
 }
 
-func getScanViolationsSummary(scaResults ...ScaScanResult) (violations *formats.TwoLevelSummaryCount) {
+func getScanViolationsSummary(scaResults ...ScaScanResult) (violations formats.TwoLevelSummaryCount) {
 	vioUniqueFindings := map[string]IssueDetails{}
 	if len(scaResults) == 0 {
-		return nil
+		return
 	}
 	// Parse unique findings
 	for _, scaResult := range scaResults {
@@ -386,11 +395,14 @@ func getScanViolationsSummary(scaResults ...ScaScanResult) (violations *formats.
 }
 
 func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
+	summary = &formats.ScanVulnerabilitiesSummary{}
 	if extendedScanResults == nil {
 		summary.ScaScanResults = getScaSummaryResults(&scaResults)
 		return
 	}
-	summary.ScaScanResults = getScaSummaryResults(&scaResults, extendedScanResults.ApplicabilityScanResults...)
+	if len(scaResults) > 0 {
+		summary.ScaScanResults = getScaSummaryResults(&scaResults, extendedScanResults.ApplicabilityScanResults...)
+	}
 	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
 	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
 	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)
@@ -423,7 +435,7 @@ func getSecurityIssueFindings(cves []services.Cve, issueId, severity string, com
 			SecondLevelValue: applicableStatus.String(),
 		}
 		for compId := range components {
-			findings[cveId+compId] = findings[cveId]
+			findings[cveId+compId] = uniqueFindings[cveId]
 		}
 	}
 	return
@@ -450,22 +462,20 @@ func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sa
 		}
 	}
 	return &formats.ScanScaResult{
-		SummaryCount:   *issueDetailsToSummaryCount(vulFindings),
+		SummaryCount:   issueDetailsToSummaryCount(vulFindings),
 		UniqueFindings: issueDetailsToSummaryCount(vulUniqueFindings).GetTotal(),
 	}
 }
 
-func issueDetailsToSummaryCount(uniqueFindings map[string]IssueDetails) *formats.TwoLevelSummaryCount {
+func issueDetailsToSummaryCount(uniqueFindings map[string]IssueDetails) formats.TwoLevelSummaryCount {
 	summary := formats.TwoLevelSummaryCount{}
 	for _, details := range uniqueFindings {
-		firstLvlValue := details.FirstLevelValue
-		secondLvlValue := details.SecondLevelValue
-		if _, ok := summary[firstLvlValue]; !ok {
-			summary[firstLvlValue] = formats.SummaryCount{}
+		if _, ok := summary[details.FirstLevelValue]; !ok {
+			summary[details.FirstLevelValue] = formats.SummaryCount{}
 		}
-		summary[firstLvlValue][secondLvlValue]++
+		summary[details.FirstLevelValue][details.SecondLevelValue]++
 	}
-	return &summary
+	return summary
 }
 
 func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
