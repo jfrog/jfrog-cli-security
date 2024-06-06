@@ -140,7 +140,6 @@ func executeScaScan(auditParallelRunner *utils.SecurityParallelRunner, serverDet
 		auditParallelRunner.ResultsMu.Lock()
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.ResultsMu.Unlock()
-		log.Info("finish running sca scan, got results from xray. the first cve is: " + scanResults[0].Vulnerabilities[0].IssueId)
 		return
 	}
 }
