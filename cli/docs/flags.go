@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -14,13 +15,14 @@ import (
 
 const (
 	// Security Commands Keys
-	XrCurl        = "xr-curl"
-	OfflineUpdate = "offline-update"
-	XrScan        = "xr-scan"
-	BuildScan     = "build-scan"
-	DockerScan    = "docker scan"
-	Audit         = "audit"
-	CurationAudit = "curation-audit"
+	XrCurl          = "xr-curl"
+	OfflineUpdate   = "offline-update"
+	XrScan          = "xr-scan"
+	BuildScan       = "build-scan"
+	DockerScan      = "docker scan"
+	Audit           = "audit"
+	CurationAudit   = "curation-audit"
+	GitContributing = "contributing"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -107,6 +109,15 @@ const (
 	// Unique curation flags
 	CurationOutput  = "curation-format"
 	CurationThreads = "curation-threads"
+
+	// Unique git flags
+	ScmType         = "scm-type"
+	ScmApiUrl       = "scm-api-url"
+	Token           = "token"
+	Owner           = "owner"
+	RepoName        = "repo-name"
+	Months          = "months"
+	DetailedSummary = "detailed-summary"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -129,6 +140,9 @@ var commandFlags = map[string][]string{
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
+	},
+	GitContributing: {
+		ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -221,6 +235,15 @@ var flagsMap = map[string]components.Flag{
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
 	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	// Git flags
+	ScmType:   components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
+	ScmApiUrl: components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'."),
+	Token:     components.NewStringFlag(Token, "SCM API token.", components.SetMandatory()),
+	RepoName:  components.NewStringFlag(RepoName, "Specific repository name to analyze."),
+	// TODO: explain better the Owner flag
+	Owner:           components.NewStringFlag(Owner, "The owner of the repository. The owner can be either an individual username or an organization name."),
+	Months:          components.NewStringFlag(Months, "Number of months to analyze."),
+	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a detailed summary."),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {
