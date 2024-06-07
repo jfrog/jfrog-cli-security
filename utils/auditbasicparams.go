@@ -7,7 +7,7 @@ import (
 )
 
 type AuditParams interface {
-	DirectDependencies() []string
+	DirectDependencies() *[]string
 	AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
 	ServerDetails() (*config.ServerDetails, error)
 	SetServerDetails(serverDetails *config.ServerDetails) *AuditBasicParams
@@ -63,8 +63,8 @@ type AuditBasicParams struct {
 	isRecursiveScan                  bool
 }
 
-func (abp *AuditBasicParams) DirectDependencies() []string {
-	return abp.dependenciesForApplicabilityScan
+func (abp *AuditBasicParams) DirectDependencies() *[]string {
+	return &abp.dependenciesForApplicabilityScan
 }
 
 func (abp *AuditBasicParams) AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams {

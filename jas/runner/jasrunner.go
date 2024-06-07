@@ -16,7 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies []string,
+func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies *[]string,
 	serverDetails *config.ServerDetails, workingDirs []string, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error)) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
@@ -60,7 +60,7 @@ func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelR
 	// Wait for sca scan to complete
 	securityParallelRunner.ScaScansWg.Wait()
 	for _, module := range scanner.JFrogAppsConfig.Modules {
-		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
+		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, *directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
 			return
 		}
 	}

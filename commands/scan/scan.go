@@ -419,7 +419,8 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						jasErrors[threadId] = append(jasErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
 					workingDirs := []string{filePath}
-					err = runner.RunJasScannersAndSetResults(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, depsListFromVulnerabilities(*graphScanResults), scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
+					depsList := depsListFromVulnerabilities(*graphScanResults)
+					err = runner.RunJasScannersAndSetResults(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
