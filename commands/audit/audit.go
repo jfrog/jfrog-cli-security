@@ -242,7 +242,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err := xrayutils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
 	}
-	if err := runner.RunJasScannersAndSetResults(auditParallelRunner, scanResults.ExtendedScanResults, scanResults.GetScaScannedTechnologies(), scanResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.thirdPartyApplicabilityScan, auditParams.commonGraphScanParams.MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan); err != nil {
+	if err := runner.RunJasScannersAndSetResults(auditParallelRunner, scanResults, scanResults.GetScaScannedTechnologies(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.thirdPartyApplicabilityScan, auditParams.commonGraphScanParams.MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan); err != nil {
 		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
 	}
 	return nil

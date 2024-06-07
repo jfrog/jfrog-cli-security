@@ -28,7 +28,7 @@ type ApplicabilityScanManager struct {
 	applicabilityScanResults []*sarif.Run
 	directDependenciesCves   []string
 	indirectDependenciesCves []string
-	xrayResults              []*services.ScanResponse
+	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
 	commandType              string
@@ -45,7 +45,7 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-func RunApplicabilityScan(xrayResults []*services.ScanResponse, directDependencies []string,
+func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
@@ -68,7 +68,7 @@ func RunApplicabilityScan(xrayResults []*services.ScanResponse, directDependenci
 	return
 }
 
-func newApplicabilityScanManager(xrayScanResults []*services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
+func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
 		applicabilityScanResults: []*sarif.Run{},
@@ -93,7 +93,7 @@ func addCvesToSet(cves []services.Cve, set *datastructures.Set[string]) {
 
 // This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
 // lists of the direct and indirect CVEs
-func extractDependenciesCvesFromScan(xrayScanResults []*services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
+func extractDependenciesCvesFromScan(xrayScanResults []services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
 	directCvesSet := datastructures.MakeSet[string]()
 	indirectCvesSet := datastructures.MakeSet[string]()
 	for _, scanResult := range xrayScanResults {

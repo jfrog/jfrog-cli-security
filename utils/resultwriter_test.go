@@ -337,7 +337,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		result          *services.ScanResponse
+		result          services.ScanResponse
 		includeLicenses bool
 		allowedLicenses []string
 		expectedOutput  formats.SimpleJsonResults
@@ -346,21 +346,21 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			name:            "Vulnerabilities only",
 			includeLicenses: false,
 			allowedLicenses: nil,
-			result:          &services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
+			result:          services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
 			expectedOutput:  formats.SimpleJsonResults{Vulnerabilities: expectedVulnerabilities},
 		},
 		{
 			name:            "Vulnerabilities with licenses",
 			includeLicenses: true,
 			allowedLicenses: nil,
-			result:          &services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
+			result:          services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
 			expectedOutput:  formats.SimpleJsonResults{Vulnerabilities: expectedVulnerabilities, Licenses: expectedLicenses},
 		},
 		{
 			name:            "Vulnerabilities only - with allowed licenses",
 			includeLicenses: false,
 			allowedLicenses: []string{"license-1"},
-			result:          &services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
+			result:          services.ScanResponse{Vulnerabilities: vulnerabilities, Licenses: licenses},
 			expectedOutput: formats.SimpleJsonResults{
 				Vulnerabilities: expectedVulnerabilities,
 				LicensesViolations: []formats.LicenseRow{
@@ -375,21 +375,21 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			name:            "Violations only",
 			includeLicenses: false,
 			allowedLicenses: nil,
-			result:          &services.ScanResponse{Violations: violations, Licenses: licenses},
+			result:          services.ScanResponse{Violations: violations, Licenses: licenses},
 			expectedOutput:  formats.SimpleJsonResults{SecurityViolations: expectedSecViolations, LicensesViolations: expectedLicViolations},
 		},
 		{
 			name:            "Violations - override allowed licenses",
 			includeLicenses: false,
 			allowedLicenses: []string{"license-1"},
-			result:          &services.ScanResponse{Violations: violations, Licenses: licenses},
+			result:          services.ScanResponse{Violations: violations, Licenses: licenses},
 			expectedOutput:  formats.SimpleJsonResults{SecurityViolations: expectedSecViolations, LicensesViolations: expectedLicViolations},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			results := NewAuditResults()
-			scaScanResult := ScaScanResult{XrayResults: []*services.ScanResponse{tc.result}}
+			scaScanResult := ScaScanResult{XrayResults: []services.ScanResponse{tc.result}}
 			results.ScaResults = append(results.ScaResults, &scaScanResult)
 			output, err := ConvertXrayScanToSimpleJson(results, false, tc.includeLicenses, true, tc.allowedLicenses)
 			if assert.NoError(t, err) {

@@ -264,7 +264,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []*services.ScanResponse{res.Result}})
+			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
 			scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, res.ExtendedScanResults.ApplicabilityScanResults...)
 			scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, res.ExtendedScanResults.SecretsScanResults...)
 		}
@@ -396,21 +396,24 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 				if err != nil {
 					return err
 				}
-				scanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
+				graphScanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
 					log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
 				}
 
-				extendedScanResults := utils.ExtendedScanResults{}
+				scanResults := utils.Results{
+					ScaResults:          []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{*graphScanResults}}},
+					ExtendedScanResults: &utils.ExtendedScanResults{},
+				}
 				if entitledForJas && scanCmd.commandSupportsJAS {
 					// Run Jas scans
 					jasErrHandlerFunc := func(err error) {
 						jasErrors[threadId] = append(jasErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
 					workingDirs := []string{filePath}
-					err = runner.RunJasScannersAndSetResults(jasFileProducerConsumer, &extendedScanResults, []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}, []*services.ScanResponse{scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
+					err = runner.RunJasScannersAndSetResults(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, depsListFromVulnerabilities(*graphScanResults), scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
@@ -418,7 +421,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						return
 					}
 				}
-				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults, ExtendedScanResults: &extendedScanResults})
+				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: graphScanResults, ExtendedScanResults: scanResults.ExtendedScanResults})
 				return
 			}
 
