@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -93,7 +94,16 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.Run()
+	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *utils.Results) (err error) {
+		if scanResults == nil || len(scanResults.ScaResults) == 0 {
+			return
+		}
+		for i := range scanResults.ScaResults {
+			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
+			scanResults.ScaResults[i].Target = dsc.imageTag
+		}
+		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	})
 }
 
 // When indexing RPM files inside the docker container, the indexer-app needs to connect to the Xray Server.

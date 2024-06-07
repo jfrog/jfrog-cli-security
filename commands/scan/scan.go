@@ -182,6 +182,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
+	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	})
+}
+
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -307,7 +313,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 		return err
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
+	if err = recordResFunc(scanResults); err != nil {
 		return err
 	}
 
@@ -418,7 +424,6 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
-						return
 					}
 				}
 				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: graphScanResults, ExtendedScanResults: scanResults.ExtendedScanResults})
