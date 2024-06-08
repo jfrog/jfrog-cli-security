@@ -40,11 +40,12 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 }
 
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
-	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 
-	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err := RunJasScannersAndSetResults(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
+	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
+	scanner, _ := jas.NewJasScanner(nil, &jas.FakeServerDetails)
+	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
+		scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 
 	// Expect error:
 	assert.ErrorContains(t, err, "failed to run Applicability scan")
