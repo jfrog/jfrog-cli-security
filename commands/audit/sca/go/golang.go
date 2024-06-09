@@ -55,12 +55,12 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	}
 
 	// Calculate go dependencies graph
-	dependenciesGraph, err := goutils.GetDependenciesGraph(currentDir)
+	dependenciesGraph, err := utils.GetDependenciesGraph(currentDir)
 	if err != nil || len(dependenciesGraph) == 0 {
 		return
 	}
 	// Calculate go dependencies list
-	dependenciesList, err := goutils.GetDependenciesList(currentDir, handleCurationGoError)
+	dependenciesList, err := utils.GetDependenciesList(currentDir, handleCurationGoError)
 	if err != nil {
 		return
 	}
