@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -319,7 +320,7 @@ func addXrayIssueToSarifRun(issueId, impactedDependencyName, impactedDependencyV
 
 }
 
-func getDescriptorFullPath(tech coreutils.Technology, run *sarif.Run) (string, error) {
+func getDescriptorFullPath(tech techutils.Technology, run *sarif.Run) (string, error) {
 	descriptors := tech.GetPackageDescriptor()
 	if len(descriptors) == 1 {
 		// Generate the full path
@@ -338,7 +339,7 @@ func getDescriptorFullPath(tech coreutils.Technology, run *sarif.Run) (string, e
 }
 
 // Get the descriptor location with the Xray issues if exists.
-func getXrayIssueLocationIfValidExists(tech coreutils.Technology, run *sarif.Run) (location *sarif.Location, err error) {
+func getXrayIssueLocationIfValidExists(tech techutils.Technology, run *sarif.Run) (location *sarif.Location, err error) {
 	descriptorPath, err := getDescriptorFullPath(tech, run)
 	if err != nil {
 		return

@@ -7,7 +7,8 @@ import (
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/jas"
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
@@ -19,7 +20,7 @@ func TestNewApplicabilityScanManager_InputIsValid(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	// Act
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false, ApplicabilityScannerType)
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -33,7 +34,7 @@ func TestNewApplicabilityScanManager_DependencyTreeDoesntExist(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	// Act
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, nil, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, nil, scanner, false, ApplicabilityScannerType)
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -51,13 +52,13 @@ func TestNewApplicabilityScanManager_NoDirectDependenciesInScan(t *testing.T) {
 		{
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{
-				{IssueId: "issueId_1", Technology: coreutils.Pipenv.String(),
+				{IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
 					Cves: []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
 					Components: map[string]services.Component{
 						"issueId_1_non_direct_dependency": {}}},
 			},
 			Violations: []services.Violation{
-				{IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 					Cves: []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
 					Components: map[string]services.Component{
 						"issueId_2_non_direct_dependency": {}}},
@@ -70,10 +71,10 @@ func TestNewApplicabilityScanManager_NoDirectDependenciesInScan(t *testing.T) {
 	// Act
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	applicabilityManager := newApplicabilityScanManager(noDirectDependenciesResults, mockDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(noDirectDependenciesResults, mockDirectDependencies, scanner, false, ApplicabilityScannerType)
 	assertApplicabilityScanner(t, applicabilityManager)
 	// ThirdPartyContextual shouldn't change anything here as this is not npm.
-	applicabilityManager = newApplicabilityScanManager(noDirectDependenciesResults, mockDirectDependencies, scanner, true)
+	applicabilityManager = newApplicabilityScanManager(noDirectDependenciesResults, mockDirectDependencies, scanner, true, ApplicabilityScannerType)
 	assertApplicabilityScanner(t, applicabilityManager)
 }
 
@@ -91,7 +92,7 @@ func TestNewApplicabilityScanManager_MultipleDependencyTrees(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	// Act
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockMultiRootDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockMultiRootDirectDependencies, scanner, false, ApplicabilityScannerType)
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -107,7 +108,7 @@ func TestNewApplicabilityScanManager_ViolationsDontExistInResults(t *testing.T) 
 		{
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{
-				{IssueId: "issueId_1", Technology: coreutils.Pipenv.String(),
+				{IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
 					Cves:       []services.Cve{{Id: "test_cve_1"}, {Id: "test_cve_2"}, {Id: "test_cve_3"}},
 					Components: map[string]services.Component{"issueId_1_direct_dependency": {}}},
 			},
@@ -117,7 +118,7 @@ func TestNewApplicabilityScanManager_ViolationsDontExistInResults(t *testing.T) 
 	defer cleanUp()
 
 	// Act
-	applicabilityManager := newApplicabilityScanManager(noViolationScanResponse, mockDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(noViolationScanResponse, mockDirectDependencies, scanner, false, ApplicabilityScannerType)
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -133,7 +134,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 		{
 			ScanId: "scanId_1",
 			Violations: []services.Violation{
-				{IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 					Cves:       []services.Cve{{Id: "test_cve_3"}, {Id: "test_cve_4"}},
 					Components: map[string]services.Component{"issueId_2_direct_dependency": {}}},
 			},
@@ -143,7 +144,7 @@ func TestNewApplicabilityScanManager_VulnerabilitiesDontExist(t *testing.T) {
 	defer cleanUp()
 
 	// Act
-	applicabilityManager := newApplicabilityScanManager(noVulnerabilitiesScanResponse, mockDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(noVulnerabilitiesScanResponse, mockDirectDependencies, scanner, false, ApplicabilityScannerType)
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
@@ -157,7 +158,7 @@ func TestExtractXrayDirectViolations(t *testing.T) {
 	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
 		{
 			Violations: []services.Violation{
-				{IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
 					Components: map[string]services.Component{"issueId_2_direct_dependency": {}}},
 			},
@@ -196,12 +197,12 @@ func TestExtractXrayDirectVulnerabilities(t *testing.T) {
 			ScanId: "scanId_1",
 			Vulnerabilities: []services.Vulnerability{
 				{
-					IssueId: "issueId_1", Technology: coreutils.Pipenv.String(),
+					IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
 					Cves:       []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
 					Components: map[string]services.Component{"issueId_1_direct_dependency": {}},
 				},
 				{
-					IssueId: "issueId_2", Technology: coreutils.Pipenv.String(),
+					IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
 					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
 					Components: map[string]services.Component{"issueId_2_direct_dependency": {}},
 				},
@@ -241,7 +242,7 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, scanner, false, ApplicabilityScannerType)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -294,7 +295,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	// Arrange
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false)
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false, ApplicabilityScannerType)
 
 	// Act
 	for _, tc := range testCases {
