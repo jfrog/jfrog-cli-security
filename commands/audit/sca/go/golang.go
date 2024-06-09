@@ -31,11 +31,12 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = fmt.Errorf("failed while getting server details: %s", err.Error())
 		return
 	}
-	goProxyParams := goutils.GoProxyUrlParams{IsDirect: true}
-	// in case of curation command, we set an alternative cache folder when building go dep tree
+	goProxyParams := goutils.GoProxyUrlParams{Direct: true}
+	// in case of curation command, we set an alternative cache folder when building go dep tree,
+	// also, it's not using the "direct" option, artifacts should be resolved only from the configured repo.
 	if params.IsCurationCmd() {
 		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
-		goProxyParams.IsDirect = false
+		goProxyParams.Direct = false
 		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go)
 		if errCacheFolder != nil {
 			err = errCacheFolder
