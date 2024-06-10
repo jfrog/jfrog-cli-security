@@ -280,6 +280,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	mvnOutput1 := "status code: 403, reason phrase: Forbidden (403)"
 	mvnOutput2 := "status code: 500, reason phrase: Server Error (500)"
 	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
+	goOutput := "Failed running Go command: 403 Forbidden"
 
 	tests := []struct {
 		name          string
@@ -293,21 +294,21 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 			isCurationCmd: true,
 			tech:          techutils.Maven,
 			output:        mvnOutput1,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "mvn 500 error",
 			isCurationCmd: true,
 			tech:          techutils.Maven,
 			output:        mvnOutput2,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "pip 403 error",
 			isCurationCmd: true,
-			tech:          techutils.Maven,
+			tech:          techutils.Pip,
 			output:        pipOutput,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Pip),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Pip),
 		},
 		{
 			name:          "pip not pass through error",
@@ -322,7 +323,14 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 			output:        "http error 401",
 		},
 		{
-			name:          "nota supported tech",
+			name:          "golang 403 error",
+			isCurationCmd: true,
+			tech:          techutils.Go,
+			output:        goOutput,
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go),
+		},
+		{
+			name:          "not a supported tech",
 			isCurationCmd: true,
 			tech:          coreutils.CI,
 			output:        pipOutput,
@@ -330,7 +338,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output)
+			assert.Equal(t, SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output), tt.expect)
 		})
 	}
 }

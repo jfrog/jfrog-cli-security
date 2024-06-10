@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
 )
@@ -15,8 +16,7 @@ const (
 	CurationsDir = "JFROG_CLI_CURATION_DIR"
 
 	// #nosec G101 -- Not credentials.
-	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
-	CurationPipSupport   = "JFROG_CLI_CURATION_PIP"
+	CurationSupportFlag = "JFROG_CLI_CURATION"
 )
 
 func getJfrogCurationFolder() (string, error) {
@@ -39,11 +39,21 @@ func GetCurationCacheFolder() (string, error) {
 	return filepath.Join(curationFolder, "cache"), nil
 }
 
-func GetCurationMavenCacheFolder() (projectDir string, err error) {
+func GetCurationCacheFolderByTech(tech techutils.Technology) (projectDir string, err error) {
+	pathHash, errFromHash := getProjectPathHash()
+	if errFromHash != nil {
+		err = errFromHash
+		return
+	}
 	curationFolder, err := GetCurationCacheFolder()
 	if err != nil {
 		return "", err
 	}
+	projectDir = filepath.Join(curationFolder, tech.String(), pathHash)
+	return
+}
+
+func getProjectPathHash() (string, error) {
 	workingDir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -54,8 +64,7 @@ func GetCurationMavenCacheFolder() (projectDir string, err error) {
 	if err != nil {
 		return "", err
 	}
-	projectDir = filepath.Join(curationFolder, "maven", hex.EncodeToString(hasher.Sum(nil)))
-	return
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func GetCurationPipCacheFolder() (string, error) {
