@@ -2,15 +2,16 @@ package utils
 
 import (
 	"errors"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"testing"
-	"time"
 )
 
 const (
@@ -73,15 +74,24 @@ func TestAddGeneralEvent(t *testing.T) {
 func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
-	vulnerabilities := []services.Vulnerability{{IssueId: "CVE-123", Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
+	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 	scaResults := []ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
 	auditResults := Results{
 		ScaResults: scaResults,
 		ExtendedScanResults: &ExtendedScanResults{
-			ApplicabilityScanResults: []*sarif.Run{{}, {}},
-			SecretsScanResults:       []*sarif.Run{{}, {}},
-			IacScanResults:           []*sarif.Run{{}, {}},
-			SastScanResults:          []*sarif.Run{{}, {}},
+			ApplicabilityScanResults: []*sarif.Run{CreateRunWithDummyResults(CreateDummyPassingResult("applic_CVE-123"))},
+			SecretsScanResults: []*sarif.Run{
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+			},
+			IacScanResults: []*sarif.Run{
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+			},
+			SastScanResults: []*sarif.Run{
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
+				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+			},
 		},
 	}
 	testStruct := []struct {

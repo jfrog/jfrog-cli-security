@@ -4,14 +4,16 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -24,7 +26,7 @@ const (
 	mavenDepTreeJarFile    = "maven-dep-tree.jar"
 	mavenDepTreeOutputFile = "mavendeptree.out"
 	// Changing this version also requires a change in MAVEN_DEP_TREE_VERSION within buildscripts/download_jars.sh
-	mavenDepTreeVersion = "1.1.0"
+	mavenDepTreeVersion = "1.1.1"
 	settingsXmlFile     = "settings.xml"
 )
 
@@ -68,7 +70,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 	}
 }
 
-func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string][]string, err error) {
+func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*utils.DepTreeNode, err error) {
 	manager := NewMavenDepTreeManager(params, Tree)
 	outputFilePaths, clearMavenDepTreeRun, err := manager.RunMavenDepTree()
 	if err != nil {
@@ -176,7 +178,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 		if len(cmdOutput) > 0 {
 			log.Info(stringOutput)
 		}
-		if msg := sca.SuspectCurationBlockedError(mdt.isCurationCmd, coreutils.Maven, stringOutput); msg != "" {
+		if msg := sca.SuspectCurationBlockedError(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)
 		} else {
 			err = fmt.Errorf("failed running command 'mvn %s': %s", strings.Join(goals, " "), err.Error())
