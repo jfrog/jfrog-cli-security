@@ -63,13 +63,13 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Pip, utils.CurationPipSupport, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Pip, utils.CurationSupportFlag, MinArtiPassThroughSupport)
 	},
 	techutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Maven, utils.CurationMavenSupport, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Maven, utils.CurationSupportFlag, MinArtiPassThroughSupport)
 	},
 	techutils.Go: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Go, utils.CurationMavenSupport, MinArtiGolangSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Go, utils.CurationSupportFlag, MinArtiGolangSupport)
 	},
 }
 

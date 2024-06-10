@@ -4,11 +4,11 @@ go 1.22.3
 
 require (
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.27
+	github.com/jfrog/build-info-go v1.9.29
 	github.com/jfrog/gofrog v1.7.2
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.53.0
-	github.com/jfrog/jfrog-client-go v1.40.2
+	github.com/jfrog/jfrog-cli-core/v2 v2.53.1
+	github.com/jfrog/jfrog-client-go v1.41.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -98,8 +98,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240609182644-97f97b8be2a5
+//replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240530101935-539b5837ce04
+//replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
-replace github.com/jfrog/build-info-go => github.com/asafambar/build-info-go v1.8.9-0.20240523073441-dc480858800e
+//replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev

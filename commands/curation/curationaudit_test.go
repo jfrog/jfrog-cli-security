@@ -408,39 +408,37 @@ func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Set configuration for test
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
 			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-			callbackMaven := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationMavenSupport, "true")
-			defer callbackMaven()
-			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
-			defer callbackPip()
-			// in go we don't want to compare checksum as the test works with mock server
+			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
+			defer callbackCurationFlag()
+			// Golang option to disable the use of the checksum database
 			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
 			defer callbackNoSum()
+
+			// Create Mock server and write configuration file
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
-
 			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
-			curationCmd := NewCurationAuditCommand()
-			curationCmd.SetIsCurationCmd(true)
-			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			rootDir, err := os.Getwd()
 			assert.NoError(t, err)
-			// Set the working dir for npm project.
-			require.NoError(t, err)
+
+			// Run pre-test command
 			if tt.preTestExec != "" {
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
 				output, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
 				assert.NoErrorf(t, err, string(output))
 				callbackPreTest()
 			}
+
+			// Set the working dir for project.
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
 			defer func() {
 				cacheFolder, err := utils.GetCurationCacheFolder()
@@ -452,6 +450,12 @@ func TestDoCurationAudit(t *testing.T) {
 				}
 				callback3()
 			}()
+
+			// Create audit command, and run it
+			curationCmd := NewCurationAuditCommand()
+			curationCmd.SetIsCurationCmd(true)
+			curationCmd.parallelRequests = 3
+			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
@@ -469,6 +473,7 @@ func TestDoCurationAudit(t *testing.T) {
 					assert.NoError(t, tt.cleanDependencies())
 				}
 			}()
+
 			// Add the mock server to the expected blocked message url
 			for key := range tt.expectedResp {
 				for index := range tt.expectedResp[key] {
