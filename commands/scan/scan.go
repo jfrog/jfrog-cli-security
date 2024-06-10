@@ -420,7 +420,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					}
 					workingDirs := []string{filePath}
 					depsList := depsListFromVulnerabilities(*graphScanResults)
-					err = runner.RunJasScannersAndSetResults(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
+					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))

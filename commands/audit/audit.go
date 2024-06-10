@@ -239,10 +239,10 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 		auditParallelRunner.JasWg.Done()
 	}()
 	if err := xrayutils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	if err := runner.RunJasScannersAndSetResults(auditParallelRunner, scanResults, scanResults.GetScaScannedTechnologies(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.thirdPartyApplicabilityScan, auditParams.commonGraphScanParams.MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan); err != nil {
-		return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+	if err := runner.AddJasScannersTasks(auditParallelRunner, scanResults, scanResults.GetScaScannedTechnologies(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.thirdPartyApplicabilityScan, auditParams.commonGraphScanParams.MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan); err != nil {
+		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return nil
 }
