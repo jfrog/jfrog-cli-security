@@ -17,8 +17,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -28,7 +31,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	xrutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -45,7 +47,7 @@ type indexFileHandlerFunc func(file string)
 type ScanInfo struct {
 	Target              string
 	Result              *services.ScanResponse
-	ExtendedScanResults *utils.ExtendedScanResults
+	ExtendedScanResults *jas.ExtendedScanResults
 }
 
 const (
@@ -182,12 +184,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	return scanCmd.RunAndRecordResults(func(scanResults *resultutils.ScanCommandResults) error {
+		return resultutils.RecordSecurityCommandOutput(resultutils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: resultutils.Binary})
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *resultutils.ScanCommandResults) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -198,7 +200,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 			}
 		}
 	}()
-	xrayManager, xrayVersion, err := xrutils.CreateXrayServiceManagerAndGetVersion(scanCmd.serverDetails)
+	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(scanCmd.serverDetails)
 	if err != nil {
 		return err
 	}
@@ -210,7 +212,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	errGroup := new(errgroup.Group)
 	if scanResults.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
-		errGroup.Go(xrutils.DownloadAnalyzerManagerIfNeeded)
+		errGroup.Go(jas.DownloadAnalyzerManagerIfNeeded)
 	}
 
 	// Validate Xray minimum version for graph scan command
@@ -315,8 +317,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
 	if scanCmd.fail && !scanCmd.includeVulnerabilities {
-		if xrutils.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
-			return xrutils.NewFailBuildError()
+		if output.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
+			return output.NewFailBuildError()
 		}
 	}
 	if len(scanErrors) > 0 {
@@ -393,7 +395,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					SetXrayVersion(xrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
 					SetSeverityLevel(scanCmd.minSeverityFilter)
-				xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {
 					return err
 				}
@@ -405,7 +407,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					return
 				}
 
-				extendedScanResults := utils.ExtendedScanResults{}
+				extendedScanResults := jas.ExtendedScanResults{}
 				if entitledForJas && scanCmd.commandSupportsJAS {
 					// Run Jas scans
 					workingDirs := []string{filePath}

@@ -84,6 +84,8 @@ type Location struct {
 type ComponentRow struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	// TODO: Add the following fields to the API conversion
+	Location *Location `json:"location,omitempty"`
 }
 
 type CveRow struct {

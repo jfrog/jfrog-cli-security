@@ -3,7 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
@@ -78,7 +78,7 @@ func ChangeWD(t *testing.T, newPath string) string {
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
-	xrayManager, err := utils.CreateXrayServiceManager(securityTests.XrDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(securityTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
 	policyParams := xrayUtils.PolicyParams{

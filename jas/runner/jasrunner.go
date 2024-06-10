@@ -9,14 +9,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
-func RunJasScannersAndSetResults(extendedScanResults *utils.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []services.ScanResponse, directDependencies []string,
+func RunJasScannersAndSetResults(extendedScanResults *jas.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []services.ScanResponse, directDependencies []string,
 	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")

@@ -5,8 +5,9 @@ import (
 	"strings"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -38,12 +39,12 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType) (results 
 	secretScanManager := newSecretsScanManager(scanner, scanType)
 	log.Info("Running secrets scanning...")
 	if err = secretScanManager.scanner.Run(secretScanManager); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
 	results = secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(results...), "secrets")
+		log.Info("Found", sarifutils.GetResultsLocationCount(results...), "secrets")
 	}
 	return
 }
@@ -57,7 +58,7 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType) (m
 }
 
 func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.Secrets) {
+	if jas.ShouldSkipScanner(module, jasutils.Secrets) {
 		return
 	}
 	if err = ssm.createConfigFile(module); err != nil {
@@ -100,7 +101,7 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(s.scanner.ConfigFileName, configFileContent, utils.Secrets)
+	return jas.CreateScannersConfigFile(s.scanner.ConfigFileName, configFileContent, jasutils.Secrets)
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
@@ -119,7 +120,7 @@ func processSecretScanRuns(sarifRuns []*sarif.Run) []*sarif.Run {
 		// Hide discovered secrets value
 		for _, secretResult := range secretRun.Results {
 			for _, location := range secretResult.Locations {
-				utils.SetLocationSnippet(location, maskSecret(utils.GetLocationSnippet(location)))
+				sarifutils.SetLocationSnippet(location, maskSecret(sarifutils.GetLocationSnippet(location)))
 			}
 		}
 	}

@@ -5,10 +5,10 @@ import (
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -53,7 +53,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		return
 	}
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
 	results = applicabilityScanManager.applicabilityScanResults
@@ -116,7 +116,7 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.Applicability) {
+	if jas.ShouldSkipScanner(module, jasutils.Applicability) {
 		return
 	}
 	if len(asm.scanner.JFrogAppsConfig.Modules) > 1 {
@@ -180,7 +180,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(asm.scanner.ConfigFileName, configFileContent, utils.Applicability)
+	return jas.CreateScannersConfigFile(asm.scanner.ConfigFileName, configFileContent, jasutils.Applicability)
 }
 
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for

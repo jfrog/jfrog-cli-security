@@ -4,9 +4,10 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -34,11 +35,11 @@ func RunIacScan(scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	iacScanManager := newIacScanManager(scanner)
 	log.Info("Running IaC scanning...")
 	if err = iacScanManager.scanner.Run(iacScanManager); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
 	if len(iacScanManager.iacScannerResults) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
+		log.Info("Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
 	}
 	results = iacScanManager.iacScannerResults
 	return
@@ -52,7 +53,7 @@ func newIacScanManager(scanner *jas.JasScanner) (manager *IacScanManager) {
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.IaC) {
+	if jas.ShouldSkipScanner(module, jasutils.IaC) {
 		return
 	}
 	if err = iac.createConfigFile(module); err != nil {
@@ -95,7 +96,7 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module) error
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(iac.scanner.ConfigFileName, configFileContent, utils.IaC)
+	return jas.CreateScannersConfigFile(iac.scanner.ConfigFileName, configFileContent, jasutils.IaC)
 }
 
 func (iac *IacScanManager) runAnalyzerManager() error {

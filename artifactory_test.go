@@ -17,7 +17,7 @@ import (
 
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/generic"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -215,13 +215,13 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	defer setEnvCallBack()
 
 	// Download
-	err := utils.DownloadAnalyzerManagerIfNeeded()
+	err := jas.DownloadAnalyzerManagerIfNeeded()
 	assert.NoError(t, err)
 
 	// Validate Analyzer manager app & checksum.sh2 file exist
-	path, err := utils.GetAnalyzerManagerDirAbsolutePath()
+	path, err := jas.GetAnalyzerManagerDirAbsolutePath()
 	assert.NoError(t, err)
-	amPath := filepath.Join(path, utils.GetAnalyzerManagerExecutableName())
+	amPath := filepath.Join(path, jas.GetAnalyzerManagerExecutableName())
 	exists, err := fileutils.IsFileExists(amPath, false)
 	assert.NoError(t, err)
 	assert.True(t, exists)
@@ -236,7 +236,7 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	// Validate no second download occurred
 	firstFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)
-	err = utils.DownloadAnalyzerManagerIfNeeded()
+	err = jas.DownloadAnalyzerManagerIfNeeded()
 	assert.NoError(t, err)
 	secondFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)

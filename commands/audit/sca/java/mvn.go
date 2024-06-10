@@ -83,6 +83,9 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 		err = errors.Join(err, clearMavenDepTreeRun())
 	}()
 	dependencyTree, uniqueDeps, err = getGraphFromDepTree(outputFilePaths)
+
+	// TODO: run mvn com.jfrog:maven-dep-tree:projects -q
+	// will generate the project info for each subproject that contains a pom.xml file.
 	return
 }
 

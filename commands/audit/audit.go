@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"os"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
-
 	"github.com/jfrog/jfrog-cli-security/jas"
-
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-	"golang.org/x/sync/errgroup"
-
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 )
 
 type AuditCommand struct {
@@ -31,7 +32,7 @@ type AuditCommand struct {
 	IncludeLicenses         bool
 	Fail                    bool
 	PrintExtendedTable      bool
-	analyticsMetricsService *xrayutils.AnalyticsMetricsService
+	analyticsMetricsService *xsc.AnalyticsMetricsService
 	AuditParams
 }
 
@@ -74,7 +75,7 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xrayutils.AnalyticsMetricsService) *AuditCommand {
+func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *AuditCommand {
 	auditCmd.analyticsMetricsService = analyticsMetricsService
 	return auditCmd
 }
@@ -136,13 +137,13 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		}
 	}
 	var messages []string
-	if !auditResults.ExtendedScanResults.EntitledForJas {
+	if !auditResults.EntitledForJas { // !auditResults.ExtendedScanResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
 	}
 	// Print Scan results on all cases except if errors accrued on SCA scan and no security/license issues found.
 	printScanResults := !(auditResults.ScaError != nil && !auditResults.IsScaIssuesFound())
 	if printScanResults {
-		if err = xrayutils.NewResultsWriter(auditResults).
+		if err = resultutils.NewResultsWriter(auditResults).
 			SetIsMultipleRootProject(auditResults.IsMultipleProject()).
 			SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 			SetIncludeLicenses(auditCmd.IncludeLicenses).
@@ -159,8 +160,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && xrayutils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
-		err = xrayutils.NewFailBuildError()
+	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && resultutils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+		err = resultutils.NewFailBuildError()
 	}
 	return
 }
@@ -172,7 +173,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
+func RunAudit(auditParams *AuditParams) (results *resultutils.ScanCommandResults, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
 
@@ -181,7 +182,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		return
 	}
 	var xrayManager *xray.XrayServicesManager
-	if xrayManager, auditParams.xrayVersion, err = xrayutils.CreateXrayServiceManagerAndGetVersion(serverDetails); err != nil {
+	if xrayManager, auditParams.xrayVersion, err = xrayUtils.CreateXrayServiceManagerAndGetVersion(serverDetails); err != nil {
 		return
 	}
 	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, auditParams.xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
@@ -196,7 +197,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	errGroup := new(errgroup.Group)
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
-		errGroup.Go(xrayutils.DownloadAnalyzerManagerIfNeeded)
+		errGroup.Go(jas.DownloadAnalyzerManagerIfNeeded)
 	}
 
 	results.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId

@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
@@ -28,11 +29,11 @@ func RunSastScan(scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	sastScanManager := newSastScanManager(scanner)
 	log.Info("Running SAST scanning...")
 	if err = sastScanManager.scanner.Run(sastScanManager); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Sast, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 		return
 	}
 	if len(sastScanManager.sastScannerResults) > 0 {
-		log.Info("Found", utils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
+		log.Info("Found", sarifutils.GetResultsLocationCount(sastScanManager.sastScannerResults...), "SAST vulnerabilities")
 	}
 	results = sastScanManager.sastScannerResults
 	return
@@ -46,7 +47,7 @@ func newSastScanManager(scanner *jas.JasScanner) (manager *SastScanManager) {
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if jas.ShouldSkipScanner(module, utils.Sast) {
+	if jas.ShouldSkipScanner(module, jasutils.Sast) {
 		return
 	}
 	if err = ssm.createConfigFile(module); err != nil {
@@ -97,7 +98,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(ssm.scanner.ConfigFileName, configFileContent, utils.Sast)
+	return jas.CreateScannersConfigFile(ssm.scanner.ConfigFileName, configFileContent, jasutils.Sast)
 }
 
 func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
@@ -128,11 +129,11 @@ func getResultLocationStr(result *sarif.Result) string {
 	}
 	location := result.Locations[0]
 	return fmt.Sprintf("%s%d%d%d%d",
-		utils.GetLocationFileName(location),
-		utils.GetLocationStartLine(location),
-		utils.GetLocationStartColumn(location),
-		utils.GetLocationEndLine(location),
-		utils.GetLocationEndColumn(location))
+		sarifutils.GetLocationFileName(location),
+		sarifutils.GetLocationStartLine(location),
+		sarifutils.GetLocationStartColumn(location),
+		sarifutils.GetLocationEndLine(location),
+		sarifutils.GetLocationEndColumn(location))
 }
 
 func getResultRuleId(result *sarif.Result) string {
@@ -143,5 +144,5 @@ func getResultRuleId(result *sarif.Result) string {
 }
 
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + utils.GetResultSeverity(result) + utils.GetResultMsgText(result) + getResultLocationStr(result)
+	return getResultRuleId(result) + sarifutils.GetResultSeverity(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }

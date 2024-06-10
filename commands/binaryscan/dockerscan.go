@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -44,7 +44,7 @@ func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanComm
 
 func (dsc *DockerScanCommand) Run() (err error) {
 	// Validate Xray minimum version
-	_, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
+	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
 	if err != nil {
 		return err
 	}
@@ -94,15 +94,19 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *utils.Results) (err error) {
+	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *resultutils.ScanCommandResults) (err error) {
 		if scanResults == nil {
 			return
 		}
-		for _, scaResult := range scanResults.ScaResults {
+		for _, scan := range scanResults.Scans {
 			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
-			scaResult.Target = dsc.imageTag
+			scan.Target = dsc.imageTag
 		}
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+		// for _, scaResult := range scanResults.ScaResults {
+		// 	// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
+		// 	scaResult.Target = dsc.imageTag
+		// }
+		return resultutils.RecordSecurityCommandOutput(resultutils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: resultutils.Binary})
 	})
 }
 

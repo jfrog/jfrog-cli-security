@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -18,27 +18,27 @@ func TestExcludeSuppressResults(t *testing.T) {
 	}{
 		{
 			sarifResults: []*sarif.Result{
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 			expectedOutput: []*sarif.Result{
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 		},
 		{
 			sarifResults: []*sarif.Result{
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 			expectedOutput: []*sarif.Result{
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 		},
 		{
 			sarifResults: []*sarif.Result{
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
-				utils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
 			},
 			expectedOutput: []*sarif.Result{},
 		},
@@ -57,10 +57,10 @@ func TestAddScoreToRunRules(t *testing.T) {
 		expectedOutput []*sarif.ReportingDescriptor
 	}{
 		{
-			sarifRun: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "warning"),
+			sarifRun: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "warning"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
 				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": "6.9"}),
@@ -68,12 +68,12 @@ func TestAddScoreToRunRules(t *testing.T) {
 			},
 		},
 		{
-			sarifRun: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule1", "none"),
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "note"),
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule3", "info"),
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule4", "warning"),
-				utils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule5", "error"),
+			sarifRun: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule1", "none"),
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "note"),
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule3", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule4", "warning"),
+				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule5", "error"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
 				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": "0.0"}),
@@ -102,19 +102,19 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 		want func()
 	}{
 		{name: "One valid technology", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven}}, want: func() {
-			assert.Equal(t, string(techutils.Maven), os.Getenv(utils.JfPackageManagerEnvVariable))
-			assert.Equal(t, string(techutils.Java), os.Getenv(utils.JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+			assert.Equal(t, string(techutils.Maven), os.Getenv(JfPackageManagerEnvVariable))
+			assert.Equal(t, string(techutils.Java), os.Getenv(JfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(JfMsiEnvVariable))
 		}},
 		{name: "Multiple technologies", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven, techutils.Npm}}, want: func() {
-			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(JfMsiEnvVariable))
 		}},
 		{name: "Zero technologies", args: args{msi: "msi", technologies: []techutils.Technology{}}, want: func() {
-			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
+			assert.Equal(t, "msi", os.Getenv(JfMsiEnvVariable))
 		}},
 	}
 	for _, tt := range tests {
@@ -122,9 +122,9 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 			callback := SetAnalyticsMetricsDataForAnalyzerManager(tt.args.msi, tt.args.technologies)
 			tt.want()
 			callback()
-			assert.Equal(t, "", os.Getenv(utils.JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(utils.JfLanguageEnvVariable))
-			assert.Equal(t, "", os.Getenv(utils.JfMsiEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
+			assert.Equal(t, "", os.Getenv(JfMsiEnvVariable))
 
 		})
 	}

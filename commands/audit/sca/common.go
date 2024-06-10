@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -45,7 +46,7 @@ func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progr
 	}
 	log.Info(scanMessage + "...")
 	var scanResults *services.ScanResponse
-	xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 	if err != nil {
 		return nil, err
 	}

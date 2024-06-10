@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -117,7 +118,7 @@ func TestBuildXrayDependencyTree(t *testing.T) {
 	topDep2Node.Parent = rootNode
 	topDep3Node.Parent = rootNode
 
-	tree, uniqueDeps := utils.BuildXrayDependencyTree(treeHelper, "rootDep")
+	tree, uniqueDeps := xray.BuildXrayDependencyTree(treeHelper, "rootDep")
 
 	assert.ElementsMatch(t, expectedUniqueDeps, maps.Keys(uniqueDeps))
 	assert.True(t, tests.CompareTree(tree, rootNode))

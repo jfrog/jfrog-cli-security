@@ -50,6 +50,21 @@ const (
 	CSharp     CodeLanguage = "C#"
 )
 
+var PackageTypes = map[string]string{
+	"gav":      "Maven",
+	"docker":   "Docker",
+	"rpm":      "RPM",
+	"deb":      "Debian",
+	"nuget":    "NuGet",
+	"generic":  "Generic",
+	"npm":      "npm",
+	"pip":      "Python",
+	"pypi":     "Python",
+	"composer": "Composer",
+	"go":       "Go",
+	"alpine":   "Alpine",
+}
+
 // Associates a technology with project type (used in config commands for the package-managers).
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
 var TechToProjectType = map[Technology]project.ProjectType{
@@ -506,4 +521,69 @@ func GetAllTechnologiesList() (technologies []Technology) {
 		technologies = append(technologies, tech)
 	}
 	return
+}
+
+// SplitComponentId splits a Xray component ID to the component name, version and package type.
+// In case componentId doesn't contain a version, the returned version will be an empty string.
+// In case componentId's format is invalid, it will be returned as the component name
+// and empty strings will be returned instead of the version and the package type.
+// Examples:
+//  1. componentId: "gav://antparent:ant:1.6.5"
+//     Returned values:
+//     Component name: "antparent:ant"
+//     Component version: "1.6.5"
+//     Package type: "Maven"
+//  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
+//     Returned values:
+//     Component name: "foo.jar"
+//     Component version: ""
+//     Package type: "Generic"
+//  3. componentId: "invalid-comp-id"
+//     Returned values:
+//     Component name: "invalid-comp-id"
+//     Component version: ""
+//     Package type: ""
+func SplitComponentId(componentId string) (string, string, string) {
+	compIdParts := strings.Split(componentId, "://")
+	// Invalid component ID
+	if len(compIdParts) != 2 {
+		return componentId, "", ""
+	}
+
+	packageType := compIdParts[0]
+	packageId := compIdParts[1]
+
+	// Generic identifier structure: generic://sha256:<Checksum>/name
+	if packageType == "generic" {
+		lastSlashIndex := strings.LastIndex(packageId, "/")
+		return packageId[lastSlashIndex+1:], "", PackageTypes[packageType]
+	}
+
+	var compName, compVersion string
+	switch packageType {
+	case "rpm":
+		// RPM identifier structure: rpm://os-version:package:epoch-version:version
+		// os-version is optional.
+		splitCompId := strings.Split(packageId, ":")
+		if len(splitCompId) >= 3 {
+			compName = splitCompId[len(splitCompId)-3]
+			compVersion = fmt.Sprintf("%s:%s", splitCompId[len(splitCompId)-2], splitCompId[len(splitCompId)-1])
+		}
+	default:
+		// All other identifiers look like this: package-type://package-name:version.
+		// Sometimes there's a namespace or a group before the package name, separated by a '/' or a ':'.
+		lastColonIndex := strings.LastIndex(packageId, ":")
+
+		if lastColonIndex != -1 {
+			compName = packageId[:lastColonIndex]
+			compVersion = packageId[lastColonIndex+1:]
+		}
+	}
+
+	// If there's an error while parsing the component ID
+	if compName == "" {
+		compName = packageId
+	}
+
+	return compName, compVersion, PackageTypes[packageType]
 }

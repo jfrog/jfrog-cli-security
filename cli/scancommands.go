@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -30,8 +31,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
 	"github.com/jfrog/jfrog-cli-security/commands/buildscan"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/commands/scanprofile"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
 const auditScanCategory = "Audit & Scan"
@@ -40,6 +43,12 @@ const dockerScanCmdHiddenName = "dockerscan"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
+		{
+			Name: "scan-profile",
+			Flags: flags.GetCommandFlags(flags.ScanProfile),
+			Hidden: true,
+			Action: ScanProfileCmd,
+		},
 		{
 			Name:        "scan",
 			Aliases:     []string{"s"},
@@ -152,6 +161,18 @@ func getAuditAndScansCommands() []components.Command {
 	}
 }
 
+func ScanProfileCmd(c *components.Context) error {
+
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	getScanProfileCmd := scanprofile.NewScanProfileCommand()
+	
+	
+	return commandsCommon.Exec(getScanProfileCmd)
+}
+
 func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
@@ -186,7 +207,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
 	if err != nil {
 		return err
 	}
@@ -349,7 +370,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
 		return
 	}
-	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
 }
@@ -368,11 +389,11 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
 	if err != nil {
 		return nil, err
 	}
-	auditCmd.SetAnalyticsMetricsService(utils.NewAnalyticsMetricsService(serverDetails))
+	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
@@ -484,7 +505,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
 	if err != nil {
 		return err
 	}

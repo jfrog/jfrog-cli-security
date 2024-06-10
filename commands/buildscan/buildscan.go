@@ -7,8 +7,10 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	xrutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output/jobsummary"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
@@ -75,7 +77,7 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
-	xrayManager, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
+	xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
 	if err != nil {
 		return err
 	}
@@ -110,7 +112,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	}
 	// If failBuild flag is true and also got fail build response from Xray
 	if bsc.failBuild && isFailBuildResponse {
-		return xrutils.NewFailBuildError()
+		return output.NewFailBuildError()
 	}
 	return
 }
@@ -123,17 +125,24 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	scanResponse := []services.ScanResponse{{
+	// scanResponse := []services.ScanResponse{{
+	// 	Violations:      buildScanResults.Violations,
+	// 	Vulnerabilities: buildScanResults.Vulnerabilities,
+	// 	XrayDataUrl:     buildScanResults.MoreDetailsUrl,
+	// }}
+
+	scanResults := results.NewCommandResults(xrayVersion, false)
+	scanResults.NewScanResults(fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)).NewScaScanResults(&services.ScanResponse{
 		Violations:      buildScanResults.Violations,
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
-	}}
+	})
 
-	scanResults := xrutils.NewAuditResults()
-	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
+	// scanResults := xrutils.NewAuditResults()
+	// scanResults.XrayVersion = xrayVersion
+	// scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
-	resultsPrinter := xrutils.NewResultsWriter(scanResults).
+	resultsPrinter := output.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
@@ -163,7 +172,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-	err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build})
+	err = jobsummary.RecordSecurityCommandOutput(jobsummary.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: jobsummary.Build})
 	return
 }
 

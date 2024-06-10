@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -76,13 +76,13 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 		var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
 		for _, vuln := range results.Vulnerabilities {
 			switch vuln.Applicable {
-			case string(utils.NotApplicable):
+			case string(jasutils.NotApplicable):
 				notApplicableResults++
-			case string(utils.Applicable):
+			case string(jasutils.Applicable):
 				applicableResults++
-			case string(utils.NotCovered):
+			case string(jasutils.NotCovered):
 				notCoveredResults++
-			case string(utils.ApplicabilityUndetermined):
+			case string(jasutils.ApplicabilityUndetermined):
 				undeterminedResults++
 			}
 		}

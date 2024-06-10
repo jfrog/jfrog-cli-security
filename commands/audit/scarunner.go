@@ -21,7 +21,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	"github.com/jfrog/jfrog-cli-security/softwarecomponents/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"

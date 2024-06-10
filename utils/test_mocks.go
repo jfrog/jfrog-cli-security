@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const testMsi = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+const TestMsi = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
 
@@ -29,7 +29,7 @@ func CreateXscRestsMockServer(t *testing.T, testHandler restsTestHandler) (*http
 	return testServer, serverDetails, serviceManager
 }
 
-func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
+func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
@@ -40,7 +40,7 @@ func xscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 		if r.RequestURI == "/xsc/api/v1/event" {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, testMsi)))
+				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, TestMsi)))
 				if err != nil {
 					return
 				}
