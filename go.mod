@@ -3,6 +3,7 @@ module github.com/jfrog/jfrog-cli-security
 go 1.21
 
 require (
+	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.9.27
 	github.com/jfrog/froggit-go v1.15.0
@@ -48,7 +49,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/go-github/v56 v56.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grokify/mogo v0.62.6 // indirect
@@ -118,4 +118,6 @@ require (
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
-replace github.com/jfrog/froggit-go => ../froggit-go
+replace github.com/jfrog/froggit-go => github.com/gailazar300/froggit-go v0.0.0-20240604120028-0540a10853d0
+
+//replace github.com/jfrog/froggit-go => ../froggit-go
