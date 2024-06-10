@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"strings"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -174,7 +173,7 @@ func NewEnrichCommand() *EnrichCommand {
 }
 
 func (enrichCmd *EnrichCommand) CommandName() string {
-	return "xr_scan"
+	return "xr_enrich"
 }
 
 func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
@@ -183,20 +182,18 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
 		specFiles := enrichCmd.spec.Files
-		for i := range specFiles {
-			artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(&specFiles[i], indexedFileProducer, resultsArr, fileErrors, indexedFileErrors, xrayVersion)
-			taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
+		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, fileErrors, indexedFileErrors, xrayVersion)
+		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
-			err := collectFilesForIndexing(specFiles[i], taskHandler)
-			if err != nil {
-				log.Error(err)
-				fileCollectingErrorsQueue.AddError(err)
-			}
+		err := collectFilesForIndexing(specFiles[0], taskHandler)
+		if err != nil {
+			log.Error(err)
+			fileCollectingErrorsQueue.AddError(err)
 		}
 	}()
 }
 
-func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(file *spec.File, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			// Add a new task to the second producer/consumer
@@ -310,17 +307,6 @@ func collectPatternMatchingFiles(fileData spec.File, rootPath string, dataHandle
 		}
 	}
 	return nil
-}
-
-// Xray expects a path inside a repo, but does not accept a path to a file.
-// Therefore, if the given target path is a path to a file,
-// the path to the parent directory will be returned.
-// Otherwise, the func will return the path itself.
-func getXrayRepoPathFromTarget(target string) (repoPath string) {
-	if strings.HasSuffix(target, "/") {
-		return target
-	}
-	return target[:strings.LastIndex(target, "/")+1]
 }
 
 func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]formats.SimpleJsonError) []formats.SimpleJsonError {

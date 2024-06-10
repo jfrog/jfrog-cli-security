@@ -174,8 +174,7 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	var specFile *spec.SpecFiles
-	specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
 	err = spec.ValidateSpec(specFile.Files, false, false)
 	if err != nil {
 		return err
