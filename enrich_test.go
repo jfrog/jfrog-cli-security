@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jfrog/jfrog-cli-security/enrichgraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"path/filepath"
@@ -8,8 +9,8 @@ import (
 )
 
 func testXrayEnrichSbom(t *testing.T) string {
-	//securityTestUtils.InitSecurityTest(t, enrichgraph.EnrichMinimumVersionXray)
-	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "other", "enrich", "enrich.json")
+	securityTestUtils.InitSecurityTest(t, enrichgraph.EnrichMinimumVersionXray)
+	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "other", "enrich", "*")
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "sbom enrich", binariesPath)
 }
 

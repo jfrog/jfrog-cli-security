@@ -24,7 +24,6 @@ import (
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/enrich"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
@@ -48,15 +47,6 @@ func getAuditAndScansCommands() []components.Command {
 			Arguments:   scanDocs.GetArguments(),
 			Category:    auditScanCategory,
 			Action:      ScanCmd,
-		},
-		{
-			Name:        "sbom-enrich",
-			Aliases:     []string{"se"},
-			Flags:       flags.GetCommandFlags(flags.Enrich),
-			Description: enrichDocs.GetDescription(),
-			Arguments:   enrichDocs.GetArguments(),
-			Category:    auditScanCategory,
-			Action:      EnrichCmd,
 		},
 		{
 			Name:        "build-scan",
