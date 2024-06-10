@@ -6,7 +6,7 @@ import (
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/enrich"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 )
 
