@@ -112,7 +112,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)
 	// Start walking on the filesystem to "produce" files that match the given pattern
 	// while the consumer uses the indexer to index those files.
-	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, resultsArr, fileProducerErrors, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
+	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, resultsArr, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
 	enrichCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
 	// Handle results
@@ -176,7 +176,7 @@ func (enrichCmd *EnrichCommand) CommandName() string {
 	return "xr_enrich"
 }
 
-func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
+func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
 	go func() {
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
