@@ -34,7 +34,7 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	}
 	// Set environments variables for analytics in analyzers manager.
 	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
-	go func() {
+	defer func() {
 		// Wait for all scanners to complete before cleaning up temp dir
 		securityParallelRunner.ScannersWg.Wait()
 		log.Debug("done scannersWg waiting")
@@ -63,6 +63,7 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 
 	// Wait for sca scan to complete before running contextual scan
 	securityParallelRunner.ScaScansWg.Wait()
+	log.Debug("done waiting for sca")
 	for _, module := range scanner.JFrogAppsConfig.Modules {
 		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, *directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
 			return
@@ -76,6 +77,7 @@ func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanT
 		return
 	}
 	securityParallelRunner.ScannersWg.Add(1)
+	log.Debug("add 1 to scannersWg")
 	if _, err = securityParallelRunner.Runner.AddTaskWithError(task, errHandlerFunc); err != nil {
 		err = fmt.Errorf("failed to create %s scan task: %s", scanType, err.Error())
 	}
