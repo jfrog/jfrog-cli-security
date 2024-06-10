@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"strconv"
-	"strings"
-
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -19,6 +15,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
+	"os"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -124,7 +123,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 
 func (rw *ResultsWriter) AppendVulnsToJson() error {
 	fileName := rw.results.getScaScanFileName()
-	fileContent, err := ioutil.ReadFile(fileName)
+	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return err

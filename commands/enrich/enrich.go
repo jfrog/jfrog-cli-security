@@ -182,7 +182,7 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
 		specFiles := enrichCmd.spec.Files
-		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, fileErrors, indexedFileErrors, xrayVersion)
+		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, indexedFileErrors, xrayVersion)
 		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
 		err := collectFilesForIndexing(specFiles[0], taskHandler)
@@ -193,7 +193,7 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 	}()
 }
 
-func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			// Add a new task to the second producer/consumer
