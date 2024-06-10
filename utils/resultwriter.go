@@ -58,6 +58,10 @@ func NewResultsWriter(scanResults *Results) *ResultsWriter {
 	return &ResultsWriter{results: scanResults}
 }
 
+func (r *Results) getScaScanFileName() string {
+	return r.ScaResults[0].Target
+}
+
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 	rw.format = f
 	return rw
