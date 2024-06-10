@@ -67,6 +67,8 @@ func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
 		months = defaultContributionMonths
 	}
 	params.MonthsNum = months
+	// DetailedSummery
+	params.DetailedSummery = c.GetBoolFlagValue(flags.DetailedSummary)
 	return &params, nil
 }
 
