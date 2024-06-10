@@ -5,6 +5,10 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
+const (
+	EnrichMinimumVersionXray = "3.90"
+)
+
 func RunImportGraphAndGetResults(params *EnrichGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
 	scanId, err := xrayManager.ImportGraph(*params.xrayGraphImportParams)
 	if err != nil {
