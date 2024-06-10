@@ -199,23 +199,21 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	if err != nil {
-		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
-	}
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
-		_, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+		if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
 			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, threadId)
-		}, auditParallelRunner.AddErrorToChan)
-		if jasErr != nil {
+		}, auditParallelRunner.AddErrorToChan); jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
 		}
 	}
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	if scaScanErr := runScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
-		auditParallelRunner.AddErrorToChan(scaScanErr)
+	if _, scaErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+		return buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results, threadId)
+	}, auditParallelRunner.AddErrorToChan); scaErr != nil {
+		auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create sca scan task %s", scaErr.Error()))
 	}
 	go func() {
 		auditParallelRunner.JasWg.Wait()

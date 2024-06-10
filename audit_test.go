@@ -568,6 +568,6 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	assert.NoError(t, err)
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
-	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.Json))
-	assert.Equal(t, "null\n", output)
+	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
@@ -34,6 +35,7 @@ func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelR
 	// Set environments variables for analytics in analyzers manager.
 	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
 	defer func() {
+		// Wait for all scanners to complete before cleaning up temp dir
 		securityParallelRunner.ScannersWg.Wait()
 		callback()
 		cleanup := scanner.ScannerDirCleanupFunc
@@ -57,7 +59,7 @@ func RunJasScannersAndSetResults(securityParallelRunner *utils.SecurityParallelR
 		}
 	}
 
-	// Wait for sca scan to complete
+	// Wait for sca scan to complete before running contextual scan
 	securityParallelRunner.ScaScansWg.Wait()
 	for _, module := range scanner.JFrogAppsConfig.Modules {
 		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, *directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
@@ -86,7 +88,7 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		}()
 		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		if err != nil {
-			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
@@ -103,7 +105,7 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		}()
 		results, err := iac.RunIacScan(scanner, module, threadId)
 		if err != nil {
-			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
@@ -120,7 +122,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		}()
 		results, err := sast.RunSastScan(scanner, module, threadId)
 		if err != nil {
-			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
@@ -137,7 +139,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {
-			return fmt.Errorf("error from thread_id %d: %s", threadId, err.Error())
+			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, results...)

@@ -34,7 +34,7 @@ import (
 	"time"
 )
 
-func runScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results, threadId int) (err error) {
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
@@ -54,7 +54,7 @@ func runScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Preforming", len(scans), "SCA scans:\n", scanInfo)
 
 	defer func() {
 		// Make sure to return to the original working directory, building the dependency tree may change it
@@ -69,7 +69,7 @@ func runScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScan(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
 		})
 		if taskErr != nil {
@@ -123,7 +123,7 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 }
 
 // Preform the SCA scan for the given scan information.
-func executeScaScan(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
+func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
 	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")

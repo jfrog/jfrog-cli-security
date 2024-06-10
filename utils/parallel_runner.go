@@ -9,9 +9,9 @@ type SecurityParallelRunner struct {
 	Runner      parallel.Runner
 	ErrorsQueue chan error
 	ResultsMu   sync.Mutex
-	ScaScansWg  sync.WaitGroup // verify that the sca scan routines are done before running contextual scan
-	ScannersWg  sync.WaitGroup // verify that all scanners routines are done before cleaning temp dir
-	JasWg       sync.WaitGroup // verify that downloading analyzer manager and running all scanners are done
+	ScaScansWg  sync.WaitGroup // Verify that the sca scan routines are done before running contextual scan
+	ScannersWg  sync.WaitGroup // Verify that all scanners routines are done before cleaning temp dir
+	JasWg       sync.WaitGroup // Verify that downloading analyzer manager and running all scanners are done
 }
 
 func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {
