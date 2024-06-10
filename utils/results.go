@@ -2,8 +2,8 @@ package utils
 
 import (
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -30,8 +30,8 @@ func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
 	return
 }
 
-func (r *Results) GetScaScannedTechnologies() []coreutils.Technology {
-	technologies := datastructures.MakeSet[coreutils.Technology]()
+func (r *Results) GetScaScannedTechnologies() []techutils.Technology {
+	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scaResult := range r.ScaResults {
 		technologies.Add(scaResult.Technology)
 	}
@@ -122,7 +122,7 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
 	Target                string                  `json:"Target"`
-	Technology            coreutils.Technology    `json:"Technology,omitempty"`
+	Technology            techutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`
 	IsMultipleRootProject *bool                   `json:"IsMultipleRootProject,omitempty"`

@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -181,6 +182,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
+	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	})
+}
+
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -301,7 +308,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 		return err
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
+	if err = recordResFunc(scanResults); err != nil {
 		return err
 	}
 
@@ -400,14 +407,13 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 
 				extendedScanResults := utils.ExtendedScanResults{}
 				if entitledForJas && scanCmd.commandSupportsJAS {
-                    // Run Jas scans
+					// Run Jas scans
 					workingDirs := []string{filePath}
-					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []coreutils.Technology{coreutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
+					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
-						return
 					}
 				}
 				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults, ExtendedScanResults: &extendedScanResults})

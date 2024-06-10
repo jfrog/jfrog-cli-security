@@ -30,6 +30,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const auditScanCategory = "Audit & Scan"
@@ -95,7 +96,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditMvn),
 			Description: auditSpecificDocs.GetMvnDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Maven)
+				return AuditSpecificCmd(c, techutils.Maven)
 			},
 			Hidden: true,
 		},
@@ -105,7 +106,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGradle),
 			Description: auditSpecificDocs.GetGradleDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Gradle)
+				return AuditSpecificCmd(c, techutils.Gradle)
 			},
 			Hidden: true,
 		},
@@ -115,7 +116,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditNpm),
 			Description: auditSpecificDocs.GetNpmDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Npm)
+				return AuditSpecificCmd(c, techutils.Npm)
 			},
 			Hidden: true,
 		},
@@ -125,7 +126,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGo),
 			Description: auditSpecificDocs.GetGoDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Go)
+				return AuditSpecificCmd(c, techutils.Go)
 			},
 			Hidden: true,
 		},
@@ -135,7 +136,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditPip),
 			Description: auditSpecificDocs.GetPipDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Pip)
+				return AuditSpecificCmd(c, techutils.Pip)
 			},
 			Hidden: true,
 		},
@@ -145,7 +146,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditPipenv),
 			Description: auditSpecificDocs.GetPipenvDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Pipenv)
+				return AuditSpecificCmd(c, techutils.Pipenv)
 			},
 			Hidden: true,
 		},
@@ -317,11 +318,11 @@ func AuditCmd(c *components.Context) error {
 	}
 
 	// Check if user used specific technologies flags
-	allTechnologies := coreutils.GetAllTechnologiesList()
+	allTechnologies := techutils.GetAllTechnologiesList()
 	technologies := []string{}
 	for _, tech := range allTechnologies {
 		var techExists bool
-		if tech == coreutils.Maven {
+		if tech == techutils.Maven {
 			// On Maven we use '--mvn' flag
 			techExists = c.GetBoolFlagValue(flags.Mvn)
 		} else {
@@ -413,7 +414,7 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 	}
 }
 
-func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) error {
+func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
 	auditCmd, err := createAuditCmd(c)
 	if err != nil {

@@ -1,1 +1,1 @@
-<pre>❌ Vulnerabilities found 3<br>└── 3 Secrets 🔴 <span style="color:red">2 High</span><br>              🟡 <span style="color:yellow">1 Low</span></pre>
+<pre>Violations: <b>1</b> - (1 License)<br>Security Vulnerabilities: <b>3</b> (3 unique)<br>└── 3 Secrets 🔴 <span style="color:red">2 High</span><br>              🟡 <span style="color:yellow">1 Low</span></pre>
