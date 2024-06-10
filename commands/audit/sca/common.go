@@ -22,7 +22,7 @@ import (
 
 var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
-var curationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
+var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
 func GetExcludePattern(params utils.AuditParams) string {
@@ -180,11 +180,15 @@ func SuspectCurationBlockedError(isCurationCmd bool, tech techutils.Technology, 
 	case techutils.Maven:
 		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
 			strings.Contains(cmdOutput, "status code: 500") {
-			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Maven)
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven)
 		}
 	case techutils.Pip:
 		if strings.Contains(strings.ToLower(cmdOutput), "http error 403") {
-			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, techutils.Pip)
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Pip)
+		}
+	case techutils.Go:
+		if strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") {
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go)
 		}
 	}
 	return

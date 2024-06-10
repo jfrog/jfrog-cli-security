@@ -1,0 +1,5 @@
+version: 1
+type: go
+resolver:
+  repo: go-virtual
+  serverId: test
