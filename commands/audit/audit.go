@@ -198,14 +198,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	auditParallelRunner.ScaScansWg.Add(1)
-	if _, scaErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
-		return buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results, threadId)
-	}, auditParallelRunner.AddErrorToChan); scaErr != nil {
-		auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create sca scan task %s", scaErr.Error()))
-	}
-
 	if results.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
@@ -214,6 +206,17 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		}, auditParallelRunner.AddErrorToChan); jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
 		}
+	}
+
+	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
+	//auditParallelRunner.ScaScansWg.Add(1)
+	//if _, scaErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+	//	return buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results, threadId)
+	//}, auditParallelRunner.AddErrorToChan); scaErr != nil {
+	//	auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create sca scan task %s", scaErr.Error()))
+	//}
+	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results, 0); scaScanErr != nil {
+		auditParallelRunner.AddErrorToChan(scaScanErr)
 	}
 	go func() {
 		auditParallelRunner.JasWg.Wait()
