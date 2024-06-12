@@ -36,9 +36,9 @@ import (
 
 func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results, threadId int) (err error) {
 	// Prepare
-	defer func() {
-		auditParallelRunner.ScaScansWg.Done()
-	}()
+	//defer func() {
+	//	auditParallelRunner.ScaScansWg.Done()
+	//}()
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
