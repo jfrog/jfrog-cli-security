@@ -65,6 +65,7 @@ func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (s
 		return
 	}
 	scanner.TempDir = tempDir
+	log.Debug("created tempdir")
 	scanner.ScannerDirCleanupFunc = func() error {
 		return fileutils.RemoveTempDir(tempDir)
 	}
