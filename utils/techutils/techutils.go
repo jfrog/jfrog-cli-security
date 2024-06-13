@@ -68,15 +68,15 @@ var PackageTypes = map[string]string{
 // Associates a technology with project type (used in config commands for the package-managers).
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
 var TechToProjectType = map[Technology]project.ProjectType{
-	Maven: project.Maven, 
+	Maven:  project.Maven,
 	Gradle: project.Gradle,
-	Npm: project.Npm,
-	Yarn: project.Yarn,
-	Go: project.Go,
-	Pip: project.Pip,
+	Npm:    project.Npm,
+	Yarn:   project.Yarn,
+	Go:     project.Go,
+	Pip:    project.Pip,
 	Pipenv: project.Pipenv,
 	Poetry: project.Poetry,
-	Nuget: project.Nuget,
+	Nuget:  project.Nuget,
 	Dotnet: project.Dotnet,
 }
 

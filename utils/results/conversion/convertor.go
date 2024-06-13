@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifformat"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonformat"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryformat"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/tableformat"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -17,20 +17,26 @@ import (
 )
 
 type CommandResultsConvertor struct {
-	Format format.OutputFormat
-	// Params
 	Params ResultConvertParams
 }
 
 type ResultConvertParams struct {
 	// Control if the output should include licenses information
 	IncludeLicenses bool
+	// Control if the output should include vulnerabilities information
+	IncludeVulnerabilities bool
 	// Output will contain only the unique violations determined by the GetUniqueKey function
 	SimplifiedOutput bool
+	// Create local license violations if repo context was not provided and a license is not in this list
+	AllowedLicenses []string
+	// Convert the results to a pretty format if supported
+	Pretty bool
+	// Relevant for Sarif format since Github format does not support results without locations
+	AllowResultsWithoutLocations bool
+}
 
-	// CombineTargets bool
-	// ResultType services.ScanType
-	//Format 	   format.OutputFormat
+func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConvertor {
+	return &CommandResultsConvertor{Params: params}
 }
 
 // Parse a stream of results and convert to the desired format
@@ -47,48 +53,54 @@ type ResultsStreamFormatConvertor interface {
 	ParseSecrets(target string, secrets ...*sarif.Run) error
 	ParseIacs(target string, iacs ...*sarif.Run) error
 	ParseSast(target string, sast ...*sarif.Run) error
-
-	// Print() error
 }
 
 func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.ScanCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
-	convertor := simplejsonformat.NewCmdResultsSimpleJsonConverter()
+	convertor := simplejsonformat.NewCmdResultsSimpleJsonConverter(false)
 	err = c.parseCommandResults(convertor, cmdResults)
 	if err != nil {
 		return
 	}
-	simpleJsonResults = convertor.Get()
+	content := convertor.Get()
+	if content == nil {
+		simpleJsonResults = formats.SimpleJsonResults{}
+	} else {
+		simpleJsonResults = *content
+	}
 	return
 }
 
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.ScanCommandResults) (sarifReport *sarif.Report, err error) {
-	convertor := sarifformat.NewCmdResultsSarifConverter()
+	convertor := sarifformat.NewCmdResultsSarifConverter(c.Params.Pretty, c.Params.AllowResultsWithoutLocations)
 	err = c.parseCommandResults(convertor, cmdResults)
 	if err != nil {
 		return
 	}
-	sarifReport = convertor.Get()
+	return convertor.Get()
+}
+
+func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.ScanCommandResults) (tableResults formats.ResultsTables, err error) {
+	convertor := tableformat.NewCmdResultsTableConverter(c.Params.Pretty)
+	err = c.parseCommandResults(convertor, cmdResults)
+	if err != nil {
+		return
+	}
+	content := convertor.Get()
+	if content == nil {
+		tableResults = formats.ResultsTables{}
+	} else {
+		tableResults = *content
+	}
 	return
 }
 
-func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.ScanCommandResults) (tableResults formats.TableResults, err error) {
-	convertor := tableformat.NewCmdResultsTableConverter()
+func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.ScanCommandResults) (summaryResults formats.SummaryResults, err error) {
+	convertor := summaryformat.NewCmdResultsSummaryConverter()
 	err = c.parseCommandResults(convertor, cmdResults)
 	if err != nil {
 		return
 	}
-	tableResults = convertor.Get()
-	return
-}
-
-func (c *CommandResultsConvertor) ConvertToScanTable(cmdResults *results.ScanCommandResults) (tableResults formats.ScanTableResults, err error) {
-	convertor := tableformat.NewCmdResultsTableConverter()
-	err = c.parseCommandResults(convertor, cmdResults)
-	if err != nil {
-		return
-	}
-	tableResults = convertor.Get()
-	return
+	return *convertor.Get(), nil
 }
 
 func (c *CommandResultsConvertor) parseCommandResults(convertor ResultsStreamFormatConvertor, cmdResults *results.ScanCommandResults) (err error) {
@@ -102,7 +114,8 @@ func (c *CommandResultsConvertor) parseCommandResults(convertor ResultsStreamFor
 		for _, scaResults := range scan.ScaResults {
 			actualTarget := scaResults.Target
 			if actualTarget == "" {
-				// If no target was provided, use the scan target 
+				// If target was not provided, use the scan target
+				// TODO: make sure works for build-scan since its not a file
 				actualTarget = scan.Target
 			}
 			var applicableRuns []*sarif.Run
@@ -126,8 +139,16 @@ func (c *CommandResultsConvertor) parseCommandResults(convertor ResultsStreamFor
 				if err = convertor.ParseViolations(actualTarget, scaResults.Technology, violations, applicableRuns...); err != nil {
 					return
 				}
+			} else if len(c.Params.AllowedLicenses) > 0 {
+				// If no violations were found, check if there are licenses that are not allowed
+				licViolations := results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.XrayResult.Licenses)
+				if len(licViolations) > 0 {
+					if err = convertor.ParseViolations(actualTarget, scaResults.Technology, results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.XrayResult.Licenses)); err != nil {
+						return
+					}
+				}
 			}
-			if c.Params.IncludeLicenses && len(scaResults.XrayResult.Licenses) > 0 {
+			if c.Params.IncludeLicenses {
 				if err = convertor.ParseLicenses(actualTarget, scaResults.Technology, scaResults.XrayResult.Licenses); err != nil {
 					return
 				}

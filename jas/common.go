@@ -14,9 +14,9 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -38,14 +38,14 @@ const (
 var (
 	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
 
-	mapSeverityToScore = map[string]string{
-		"":         "0.0",
-		"unknown":  "0.0",
-		"low":      "3.9",
-		"medium":   "6.9",
-		"high":     "8.9",
-		"critical": "10",
-	}
+	// mapSeverityToScore = map[string]string{
+	// 	"":         "0.0",
+	// 	"unknown":  "0.0",
+	// 	"low":      "3.9",
+	// 	"medium":   "6.9",
+	// 	"high":     "8.9",
+	// 	"critical": "10",
+	// }
 )
 
 type JasScanner struct {
@@ -144,7 +144,7 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Also used to calculate relative paths if needed with it
 		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
 		// Process runs values
-		fillMissingRequiredDriverInformation(output.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
+		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
 		addScoreToRunRules(sarifRun)
 	}

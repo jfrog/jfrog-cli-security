@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -15,6 +15,24 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
+
+// The test only checks cases of returning an error in case of a violation with FailBuild == true
+func TestPrintViolationsTable(t *testing.T) {
+	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
+	tests := []struct {
+		violations    []services.Violation
+		expectedError bool
+	}{
+		{[]services.Violation{{Components: components, FailBuild: false}, {Components: components, FailBuild: false}, {Components: components, FailBuild: false}}, false},
+		{[]services.Violation{{Components: components, FailBuild: false}, {Components: components, FailBuild: true}, {Components: components, FailBuild: false}}, true},
+		{[]services.Violation{{Components: components, FailBuild: true}, {Components: components, FailBuild: true}, {Components: components, FailBuild: true}}, true},
+	}
+
+	for _, test := range tests {
+		err := PrintViolationsTable(test.violations, results.NewCommandResults("xrayVersion", false), false, true, services.Binary)
+		assert.NoError(t, err)
+	}
+}
 
 func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
 	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getXrayIssueSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))

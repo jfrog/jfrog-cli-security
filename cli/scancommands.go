@@ -44,8 +44,8 @@ const dockerScanCmdHiddenName = "dockerscan"
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
 		{
-			Name: "scan-profile",
-			Flags: flags.GetCommandFlags(flags.ScanProfile),
+			Name:   "scan-profile",
+			Flags:  flags.GetCommandFlags(flags.ScanProfile),
 			Hidden: true,
 			Action: ScanProfileCmd,
 		},
@@ -168,8 +168,7 @@ func ScanProfileCmd(c *components.Context) error {
 		return err
 	}
 	getScanProfileCmd := scanprofile.NewScanProfileCommand()
-	
-	
+
 	return commandsCommon.Exec(getScanProfileCmd)
 }
 

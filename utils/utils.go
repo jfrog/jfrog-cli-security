@@ -12,6 +12,9 @@ import (
 )
 
 const (
+	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	JasInfoURL           = "https://jfrog.com/xray/"
+
 	JfrogCurationDirName = "curation"
 
 	CurationsDir = "JFROG_CLI_CURATION_DIR"

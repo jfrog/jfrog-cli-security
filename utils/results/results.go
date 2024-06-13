@@ -3,6 +3,7 @@ package results
 import (
 	"errors"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -32,14 +33,14 @@ type ScanCommandResults struct {
 type ScanResults struct {
 	// Could be working directory (audit), file path (binary scan), imageTag (docker scan) or build name+number (build scan)
 	Target string `json:"Target"`
-	Errors error `json:"Errors,omitempty"`
+	Errors error  `json:"Errors,omitempty"`
 	// All scan results for the target
-	ScaResults []ScaScanResults `json:"ScaResults,omitempty"`
-	JasResults *JasScansResults `json:"JasResults,omitempty"`
+	ScaResults []ScaScanResults `json:"ScaScans"`
+	JasResults *JasScansResults `json:"JasScans,omitempty"`
 }
 
 type ScaScanResults struct {
-	XrayResult services.ScanResponse `json:"XrayResult,omitempty"`
+	XrayResult services.ScanResponse `json:"XrayScan"`
 	// Optional field (not used only in build scan) to provide the technology of the scan
 	Technology techutils.Technology `json:"Technology,omitempty"`
 	// Optional field (used in audit) to provide the descriptor path that provided the dependencies for the scan
@@ -48,10 +49,10 @@ type ScaScanResults struct {
 }
 
 type JasScansResults struct {
-	ApplicabilityScanResults []*sarif.Run `json:"ApplicabilityScanResults,omitempty"`
-	SecretsScanResults       []*sarif.Run `json:"SecretsScanResults,omitempty"`
-	IacScanResults           []*sarif.Run `json:"IacScanResults,omitempty"`
-	SastScanResults          []*sarif.Run `json:"SastScanResults,omitempty"`
+	ApplicabilityScanResults []*sarif.Run `json:"ContextualAnalysis,omitempty"`
+	SecretsScanResults       []*sarif.Run `json:"Secrets,omitempty"`
+	IacScanResults           []*sarif.Run `json:"Iac,omitempty"`
+	SastScanResults          []*sarif.Run `json:"Sast,omitempty"`
 }
 
 func NewCommandResults(xrayVersion string, entitledForJas bool) *ScanCommandResults {
@@ -91,6 +92,18 @@ func (r *ScanCommandResults) GetErrors() (err error) {
 	return
 }
 
+func (r *ScanCommandResults) GetScaScannedTechnologies() []techutils.Technology {
+	technologies := datastructures.MakeSet[techutils.Technology]()
+	for _, scan := range r.Scans {
+		for _, scaResult := range scan.ScaResults {
+			technologies.Add(scaResult.Technology)
+		}
+	}
+	return technologies.ToSlice()
+}
+
+// In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
+// Set multipleRoots to true in case the given vulnerabilities array contains (or may contain) results of several projects or files (like in binary scan).
 func (r *ScanCommandResults) HasMultipleTargets() bool {
 	if len(r.Scans) > 1 {
 		return true

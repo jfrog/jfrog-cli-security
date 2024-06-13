@@ -3,7 +3,7 @@ package scanprofile
 import "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 type ScanProfileCommand struct {
-	serverDetails                    *config.ServerDetails
+	serverDetails *config.ServerDetails
 }
 
 func NewScanProfileCommand() *ScanProfileCommand {
@@ -25,7 +25,7 @@ func (spc *ScanProfileCommand) Run() error {
 }
 
 // To be used internally by the CLI
-func  (spc *ScanProfileCommand) DetectScanProfileCommand() (string, error) {
+func (spc *ScanProfileCommand) DetectScanProfileCommand() (string, error) {
 	// Get scan profile (TODO: when API ready)
 
 	// Get local scan profile (if exists) and override

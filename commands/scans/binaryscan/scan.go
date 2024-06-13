@@ -17,11 +17,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -30,8 +32,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	xrutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -294,13 +296,17 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	if err = errGroup.Wait(); err != nil {
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
 	}
-
-	if err = xrutils.NewResultsWriter(scanResults).
+	var messages []string
+	if scanCmd.commandSupportsJAS && !scanResults.EntitledForJas { // !auditResults.ExtendedScanResults.EntitledForJas {
+		messages = []string{coreutils.PrintTitle("The ‘jf docker scan‘ command also supports JFrog Advanced Security features, such as 'Contextual Analysis' and 'Secret Detection'.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+	}
+	if err = output.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(true).
+		SetExtraMessages(messages).
 		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
 		return
@@ -317,8 +323,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
 	if scanCmd.fail && !scanCmd.includeVulnerabilities {
-		if output.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
-			return output.NewFailBuildError()
+		if results.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
+			return results.NewFailBuildError()
 		}
 	}
 	if len(scanErrors) > 0 {

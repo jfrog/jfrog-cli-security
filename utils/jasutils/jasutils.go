@@ -1,8 +1,15 @@
 package jasutils
 
+import (
+	"strings"
+
+	"github.com/gookit/color"
+)
+
 const (
-	EntitlementsMinVersion                    = "3.66.5"
-	ApplicabilityFeatureId                    = "contextual_analysis"
+	EntitlementsMinVersion    = "3.66.5"
+	ApplicabilityFeatureId    = "contextual_analysis"
+	ApplicabilityRuleIdPrefix = "applic_"
 )
 
 const (
@@ -32,6 +39,20 @@ func (as ApplicabilityStatus) String() string {
 	return string(as)
 }
 
+func (as ApplicabilityStatus) ToString(pretty bool) string {
+	if !pretty {
+		return as.String()
+	}
+	switch as {
+	case Applicable:
+		return color.New(color.Red).Render(as)
+	case NotApplicable:
+		return color.New(color.Green).Render(as)
+	default:
+		return as.String()
+	}
+}
+
 func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	switch status {
 	case Applicable.String():
@@ -47,5 +68,10 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 	}
 }
 
+func CveToApplicabilityRuleId(cveId string) string {
+	return ApplicabilityRuleIdPrefix + cveId
+}
 
-
+func ApplicabilityRuleIdToCve(sarifRuleId string) string {
+	return strings.TrimPrefix(sarifRuleId, ApplicabilityRuleIdPrefix)
+}

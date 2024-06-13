@@ -15,9 +15,9 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
+	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/generic"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"

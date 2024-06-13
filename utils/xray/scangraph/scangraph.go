@@ -1,12 +1,11 @@
 package scangraph
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	
 )
 
 const (
@@ -93,5 +92,5 @@ func getFixableComponents(components map[string]services.Component) map[string]s
 }
 
 func getLevelOfSeverity(s string) int {
-	return utils.GetSeverityPriority(utils.ParseToSeverity(s), jasutils.ApplicabilityUndetermined)
+	return severityutils.GetSeverityPriority(severityutils.GetSeverity(s), jasutils.ApplicabilityUndetermined)
 }

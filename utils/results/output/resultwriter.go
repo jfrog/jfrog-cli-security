@@ -3,39 +3,34 @@ package output
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"strconv"
-	"strings"
+	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output/conversion"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v2/sarif"
-	"golang.org/x/exp/slices"
 )
 
-const (
-	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-)
-
-const MissingCveScore = "0"
-const maxPossibleCve = 10.0
+// const (
+// 	securityViolationTitle := "Security Violations"
+// 	noSecurityViolationMessage := "No security violations were found"
+// 	licenseViolationTitle := "License Compliance Violations"
+// 	noLicenseViolationMessage := "No license compliance violations were found"
+// 	operationalRiskViolationTitle := "Operational Risk Violations"
+// 	noOperationalRiskViolationMessage := "No operational risk violations were found"
+// )
 
 type ResultsWriter struct {
 	// The scan commandResults.
 	commandResults *results.ScanCommandResults
-	// SimpleJsonError  Errors to be added to output of the SimpleJson format.
-	simpleJsonError []formats.SimpleJsonError
 	// Format  The output format.
 	format format.OutputFormat
 	// IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
@@ -66,12 +61,6 @@ func (rw *ResultsWriter) SetScanType(scanType services.ScanType) *ResultsWriter 
 	return rw
 }
 
-// TODO: use in all commands, get from results? so no need any more after handling files base on scan type (Binary -> target, SourceCode -> descriptor)
-func (rw *ResultsWriter) SetSimpleJsonError(jsonErrors []formats.SimpleJsonError) *ResultsWriter {
-	rw.simpleJsonError = jsonErrors
-	return rw
-}
-
 func (rw *ResultsWriter) SetIncludeVulnerabilities(includeVulnerabilities bool) *ResultsWriter {
 	rw.includeVulnerabilities = includeVulnerabilities
 	return rw
@@ -97,66 +86,6 @@ func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 	return rw
 }
 
-// PrintScanResults prints the scan results in the specified format.
-// Note that errors are printed only with SimpleJson format.
-func (rw *ResultsWriter) PrintScanResults() error {
-	switch rw.format {
-	case format.Table:
-		return rw.printScanResultsTables()
-	case format.SimpleJson:
-		jsonTable, err := rw.convertScanToSimpleJson()
-		if err != nil {
-			return err
-		}
-		return PrintJson(jsonTable)
-	case format.Json:
-		return PrintJson(rw.commandResults.GetScaScansXrayResults())
-	case format.Sarif:
-		return PrintSarif(rw.commandResults, rw.isMultipleRoots, rw.includeLicenses)
-	}
-	return nil
-}
-func (rw *ResultsWriter) printScanResultsTables() (err error) {
-	printMessages(rw.messages)
-	violations, vulnerabilities, licenses := SplitScaScanResults(rw.commandResults)// SplitScanResults(rw.results.ScaResults)
-	if rw.commandResults.HasInformation() { //IsIssuesFound() {
-		var resultsPath string
-		if resultsPath, err = writeJsonResults(rw.commandResults); err != nil {
-			return
-		}
-		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
-	}
-	log.Output()
-	if rw.includeVulnerabilities {
-		err = conversion.PrintVulnerabilitiesTable(vulnerabilities, rw.commandResults, rw.isMultipleRoots, rw.printExtended, rw.scanType)
-	} else {
-		err = conversion.PrintViolationsTable(violations, rw.commandResults, rw.isMultipleRoots, rw.printExtended, rw.scanType)
-	}
-	if err != nil {
-		return
-	}
-	if rw.includeLicenses {
-		if err = conversion.PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
-			return
-		}
-	}
-	if err = conversion.PrintSecretsTable(rw.commandResults.GetJasScansResults(jasutils.Secrets), rw.commandResults.EntitledForJas); err != nil {
-		return
-	}
-	if err = conversion.PrintIacTable(rw.commandResults.GetJasScansResults(jasutils.IaC), rw.commandResults.EntitledForJas); err != nil {
-		return
-	}
-	return conversion.PrintSastTable(rw.commandResults.GetJasScansResults(jasutils.Sast), rw.commandResults.EntitledForJas)
-
-	// if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-	// 	return
-	// }
-	// if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-	// 	return
-	// }
-	// return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
-}
-
 func printMessages(messages []string) {
 	if len(messages) > 0 {
 		log.Output()
@@ -170,132 +99,180 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
-	out, err := json.Marshal(report)
-	if err != nil {
-		return "", errorutils.CheckError(err)
-	}
-	return clientUtils.IndentJson(out), nil
+func isPrettyOutputSupported() bool {
+	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
-func (rw *ResultsWriter) convertScanToSimpleJson() (formats.SimpleJsonResults, error) {
-	jsonTable, err := ConvertXrayScanToSimpleJson(rw.commandResults, rw.isMultipleRoots, rw.includeLicenses, false, nil)
-	if err != nil {
-		return formats.SimpleJsonResults{}, err
-	}
-	
-	if len(rw.commandResults.GetJasScansResults(jasutils.Secrets)) > 0 {
-		jsonTable.Secrets = conversion.PrepareSecrets(rw.commandResults.GetJasScansResults(jasutils.Secrets))
-	}
-	if len(rw.commandResults.GetJasScansResults(jasutils.IaC)) > 0 {
-		jsonTable.Iacs = conversion.PrepareIacs(rw.commandResults.GetJasScansResults(jasutils.IaC))
-	}
-	if len(rw.commandResults.GetJasScansResults(jasutils.Sast)) > 0 {
-		jsonTable.Sast = conversion.PrepareSast(rw.commandResults.GetJasScansResults(jasutils.Sast))
-	}
-	jsonTable.Errors = rw.simpleJsonError
-
-	return jsonTable, nil
-}
-
-func GetIssueIdentifier(cvesRow []formats.CveRow, issueId string) string {
-	var identifier string
-	if len(cvesRow) != 0 {
-		var cvesBuilder strings.Builder
-		for _, cve := range cvesRow {
-			cvesBuilder.WriteString(cve.Id + ", ")
-		}
-		identifier = strings.TrimSuffix(cvesBuilder.String(), ", ")
-	}
-	if identifier == "" {
-		identifier = issueId
-	}
-
-	return identifier
-}
-
-func getXrayIssueSarifRuleId(depName, version, key string) string {
-	return fmt.Sprintf("%s_%s_%s", key, depName, version)
-}
-
-func getXrayIssueSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("[%s] %s %s", key, depName, version)
-}
-
-func getXrayLicenseSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("License violation [%s] %s %s", key, depName, version)
-}
-
-func getLicenseViolationSummary(depName, version, key string) string {
-	return fmt.Sprintf("Dependency %s version %s is using a license (%s) that is not allowed.", depName, version, key)
-}
-
-func getLicenseViolationMarkdown(depName, version, key, formattedDirectDependencies string) string {
-	return fmt.Sprintf("**The following direct dependencies are utilizing the `%s %s` dependency with `%s` license violation:**\n%s", depName, version, key, formattedDirectDependencies)
-}
-
-func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (string, error) {
-	var formattedDirectDependencies strings.Builder
-	for _, dependency := range directDependencies {
-		if _, err := formattedDirectDependencies.WriteString(fmt.Sprintf("`%s %s`<br/>", dependency.Name, dependency.Version)); err != nil {
-			return "", err
-		}
-	}
-	return strings.TrimSuffix(formattedDirectDependencies.String(), "<br/>"), nil
-}
-
-func getSarifTableDescription(formattedDirectDependencies, maxCveScore, applicable string, fixedVersions []string) string {
-	descriptionFixVersions := "No fix available"
-	if len(fixedVersions) > 0 {
-		descriptionFixVersions = strings.Join(fixedVersions, ", ")
-	}
-	if applicable == jasutils.NotScanned.String() {
-		return fmt.Sprintf("| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| %s      | %s       | %s   |",
-			maxCveScore, formattedDirectDependencies, descriptionFixVersions)
-	}
-	return fmt.Sprintf("| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| %s      | %s       | %s       | %s   |",
-		maxCveScore, applicable, formattedDirectDependencies, descriptionFixVersions)
-}
-
-func findMaxCVEScore(cves []formats.CveRow) (string, error) {
-	maxCve := 0.0
-	for _, cve := range cves {
-		if cve.CvssV3 == "" {
-			continue
-		}
-		floatCve, err := strconv.ParseFloat(cve.CvssV3, 32)
+// PrintScanResults prints the scan results in the specified format.
+// Note that errors are printed only with SimpleJson format.
+func (rw *ResultsWriter) PrintScanResults() error {
+	switch rw.format {
+	case format.Table:
+		return rw.printTables()
+	case format.SimpleJson:
+		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
 		if err != nil {
-			return "", err
+			return err
 		}
-		if floatCve > maxCve {
-			maxCve = floatCve
+		return PrintJson(simpleJson)
+	case format.Json:
+		if rw.printExtended {
+			return PrintJson(rw.commandResults)
 		}
-		// if found maximum possible cve score, no need to keep iterating
-		if maxCve == maxPossibleCve {
-			break
-		}
+		return PrintJson(rw.commandResults.GetScaScansXrayResults())
+	case format.Sarif:
+		return rw.printSarif()
 	}
-	strCve := fmt.Sprintf("%.1f", maxCve)
-
-	return strCve, nil
+	return nil
 }
 
+func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.CommandResultsConvertor {
+	return conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		IncludeLicenses:              rw.includeLicenses,
+		IncludeVulnerabilities:       rw.includeVulnerabilities,
+		Pretty:                       pretty,
+		AllowResultsWithoutLocations: true,
+	})
+}
 
+func (rw *ResultsWriter) printSarif() error {
+	sarifContent, err := rw.createResultsConvertor(false).ConvertToSarif(rw.commandResults)
+	if err != nil {
+		return err
+	}
+	sarifFile, err := sarifutils.ConvertSarifReportToString(sarifContent)
+	if err != nil {
+		return err
+	}
+	log.Output(sarifFile)
+	return nil
+}
 
-// // Splits scan responses into aggregated lists of violations, vulnerabilities and licenses.
-// func SplitScanResults(results []ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
-// 	var violations []services.Violation
-// 	var vulnerabilities []services.Vulnerability
-// 	var licenses []services.License
-// 	for _, scan := range results {
-// 		for _, result := range scan.XrayResults {
-// 			violations = append(violations, result.Violations...)
-// 			vulnerabilities = append(vulnerabilities, result.Vulnerabilities...)
-// 			licenses = append(licenses, result.Licenses...)
-// 		}
-// 	}
-// 	return violations, vulnerabilities, licenses
-// }
+func PrintJson(output interface{}) error {
+	results, err := json.Marshal(output)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	log.Output(clientUtils.IndentJson(results))
+	return nil
+}
+
+func (rw *ResultsWriter) printTables() (err error) {
+	tableContent, err := rw.createResultsConvertor(isPrettyOutputSupported()).ConvertToTable(rw.commandResults)
+	if err != nil {
+		return
+	}
+	printMessages(rw.messages)
+	if rw.commandResults.HasInformation() {
+		var resultsPath string
+		if resultsPath, err = writeJsonResults(rw.commandResults); err != nil {
+			return
+		}
+		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
+	}
+	log.Output()
+	if rw.includeVulnerabilities {
+		err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetScaScannedTechnologies()) > 0, rw.printExtended)
+	} else {
+		err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended)
+	}
+	if err != nil {
+		return
+	}
+	if rw.includeLicenses {
+		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.scanType); err != nil {
+			return
+		}
+	}
+	if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Secrets); err != nil {
+		return
+	}
+	if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
+		return
+	}
+	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
+}
+
+// PrintVulnerabilitiesTable prints the vulnerabilities in a table.
+// Set printExtended to true to print fields with 'extended' tag.
+// If the scan argument is set to true, print the scan tables.
+func PrintVulnerabilitiesTable(tables formats.ResultsTables, scanType services.ScanType, techDetected, printExtended bool) error {
+	if scanType == services.Binary {
+		return coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable),
+			"Vulnerable Components",
+			"✨ No vulnerable components were found ✨",
+			printExtended,
+		)
+	}
+	emptyTableMessage := "✨ No vulnerable dependencies were found ✨"
+	if !techDetected {
+		emptyTableMessage = coreutils.PrintYellow("🔧 Couldn't determine a package manager or build tool used by this project 🔧")
+	}
+	return coreutils.PrintTable(tables.SecurityVulnerabilitiesTable, "Vulnerable Dependencies", emptyTableMessage, printExtended)
+}
+
+// PrintViolationsTable prints the violations in 4 tables: security violations, license compliance violations, operational risk violations and ignore rule URLs.
+// Set printExtended to true to print fields with 'extended' tag.
+// If the scan argument is set to true, print the scan tables.
+func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanType, printExtended bool) (err error) {
+	if scanType == services.Binary {
+		err = coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable), "Security Violations", "No security violations were found", printExtended)
+		if err != nil {
+			return err
+		}
+		err = coreutils.PrintTable(formats.ConvertLicenseViolationTableRowToScanTableRow(tables.LicenseViolationsTable), "License Compliance Violations", "No license compliance violations were found", printExtended)
+		if err != nil {
+			return err
+		}
+		if len(tables.OperationalRiskViolationsTable) > 0 {
+			return coreutils.PrintTable(formats.ConvertOperationalRiskTableRowToScanTableRow(tables.OperationalRiskViolationsTable), "Operational Risk Violations", "No operational risk violations were found", printExtended)
+		}
+	} else {
+		err = coreutils.PrintTable(tables.SecurityVulnerabilitiesTable, "Security Violations", "No security violations were found", printExtended)
+		if err != nil {
+			return err
+		}
+		err = coreutils.PrintTable(tables.LicenseViolationsTable, "License Compliance Violations", "No license compliance violations were found", printExtended)
+		if err != nil {
+			return err
+		}
+		if len(tables.OperationalRiskViolationsTable) > 0 {
+			return coreutils.PrintTable(tables.OperationalRiskViolationsTable, "Operational Risk Violations", "No operational risk violations were found", printExtended)
+		}
+	}
+	return nil
+}
+
+// PrintLicensesTable prints the licenses in a table.
+// Set multipleRoots to true in case the given licenses array contains (or may contain) results of several projects or files (like in binary scan).
+// In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
+// Set printExtended to true to print fields with 'extended' tag.
+// If the scan argument is set to true, print the scan tables.
+func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, scanType services.ScanType) error {
+	if scanType == services.Binary {
+		return coreutils.PrintTable(formats.ConvertLicenseTableRowToScanTableRow(tables.LicensesTable), "Licenses", "No licenses were found", printExtended)
+	}
+	return coreutils.PrintTable(tables.LicensesTable, "Licenses", "No licenses were found", printExtended)
+}
+
+func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType jasutils.JasScanType) error {
+	if !entitledForJas {
+		return nil
+	}
+	log.Output()
+	switch scanType {
+	case jasutils.Secrets:
+		return coreutils.PrintTable(tables.SecretsTable, "Secret Detection",
+			"✨ No secrets were found ✨", false)
+	case jasutils.IaC:
+		return coreutils.PrintTable(tables.IacTable, "Infrastructure as Code Vulnerabilities",
+			"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
+	case jasutils.Sast:
+		return coreutils.PrintTable(tables.SastTable, "Static Application Security Testing (SAST)",
+			"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
+	}
+	return nil
+}
 
 func writeJsonResults(results *results.ScanCommandResults) (resultsPath string, err error) {
 	out, err := fileutils.CreateTempFile()
@@ -323,50 +300,4 @@ func writeJsonResults(results *results.ScanCommandResults) (resultsPath string, 
 	}
 	resultsPath = out.Name()
 	return
-}
-
-func PrintJson(output interface{}) error {
-	results, err := json.Marshal(output)
-	if err != nil {
-		return errorutils.CheckError(err)
-	}
-	log.Output(clientUtils.IndentJson(results))
-	return nil
-}
-
-func PrintSarif(results *results.ScanCommandResults, isMultipleRoots, includeLicenses bool) error {
-	sarifReport, err := GenerateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil)
-	if err != nil {
-		return err
-	}
-	sarifFile, err := ConvertSarifReportToString(sarifReport)
-	if err != nil {
-		return err
-	}
-	log.Output(sarifFile)
-	return nil
-}
-
-func CheckIfFailBuild(results []services.ScanResponse) bool {
-	for _, result := range results {
-		for _, violation := range result.Violations {
-			if violation.FailBuild {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func IsEmptyScanResponse(results []services.ScanResponse) bool {
-	for _, result := range results {
-		if len(result.Violations) > 0 || len(result.Vulnerabilities) > 0 || len(result.Licenses) > 0 {
-			return false
-		}
-	}
-	return true
-}
-
-func NewFailBuildError() error {
-	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the violations found are set to fail builds that include them"}
 }

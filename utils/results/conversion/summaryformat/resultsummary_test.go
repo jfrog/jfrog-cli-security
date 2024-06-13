@@ -35,14 +35,14 @@ func TestGetSummary(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		cmdResults      results.ScanCommandResults
+		cmdResults   results.ScanCommandResults
 		expected     formats.SummaryResults
 		findingCount int
 		issueCount   int
 	}{
 		{
 			name:         "Empty results",
-			cmdResults:      results.ScanCommandResults{ScaResults: []ScaScanResult{}},
+			cmdResults:   results.ScanCommandResults{ScaResults: []ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 			issueCount:   0,
@@ -162,4 +162,3 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 	responses = append(responses, response)
 	return
 }
-

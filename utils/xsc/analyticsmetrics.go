@@ -10,7 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryformat"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -167,10 +167,13 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	// if auditResults.ScaError != nil || auditResults.JasError != nil {
 	// 	eventStatus = xscservices.Failed
 	// }
-
+	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{}).ConvertToSummary(auditResults)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to convert audit results to summary. %s", err.Error()))
+	}
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     summaryformat.GetSummary(auditResults).GetTotalIssueCount(), //auditResults.CountScanResultsFindings(),
+		TotalFindings:     summary.GetTotalIssueCount(), //auditResults.CountScanResultsFindings(),
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{

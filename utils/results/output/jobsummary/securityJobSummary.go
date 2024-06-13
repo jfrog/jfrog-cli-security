@@ -8,7 +8,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"golang.org/x/exp/maps"
 )
@@ -115,12 +115,12 @@ func (scs *SecurityCommandsSummary) addCommandSummaryResult(cmdResults ...ScanCo
 		updateSummaryNamesToRelativePath(&results, cmdResult.WorkingDirectory)
 		// Append the new data
 		switch cmdResult.Section {
-			case Build:
-				scs.BuildScanCommands = append(scs.BuildScanCommands, results)
-			case Binary:
-				scs.ScanCommands = append(scs.ScanCommands, results)
-			case Modules:
-				scs.AuditCommands = append(scs.AuditCommands, results)
+		case Build:
+			scs.BuildScanCommands = append(scs.BuildScanCommands, results)
+		case Binary:
+			scs.ScanCommands = append(scs.ScanCommands, results)
+		case Modules:
+			scs.AuditCommands = append(scs.AuditCommands, results)
 		}
 	}
 }
@@ -163,7 +163,6 @@ func (scs *SecurityCommandsSummary) getSectionSummaries(section SecuritySummaryS
 	return
 }
 
-
 func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
 	for i, scan := range summary.Scans {
 		if scan.Target == "" {
@@ -189,8 +188,8 @@ var (
 		"Medium":                               `🟠 <span style="color:orange">%d Medium</span>`,
 		"Low":                                  `🟡 <span style="color:yellow">%d Low</span>`,
 		"Unknown":                              `⚪️ <span style="color:white">%d Unknown</span>`,
-		jasutils.Applicable.String():                    "%d " + jasutils.Applicable.String(),
-		jasutils.NotApplicable.String():                 "%d " + jasutils.NotApplicable.String(),
+		jasutils.Applicable.String():           "%d " + jasutils.Applicable.String(),
+		jasutils.NotApplicable.String():        "%d " + jasutils.NotApplicable.String(),
 		formats.ViolationTypeSecurity.String(): "%d Security",
 		formats.ViolationTypeLicense.String():  "%d License",
 		formats.ViolationTypeOperationalRisk.String(): "%d Operational",

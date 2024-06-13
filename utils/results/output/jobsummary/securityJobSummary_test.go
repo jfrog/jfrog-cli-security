@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/stretchr/testify/assert"
 )
 

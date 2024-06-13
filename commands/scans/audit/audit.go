@@ -12,9 +12,11 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -138,12 +140,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 	var messages []string
 	if !auditResults.EntitledForJas { // !auditResults.ExtendedScanResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	// Print Scan results on all cases except if errors accrued on SCA scan and no security/license issues found.
 	printScanResults := !(auditResults.ScaError != nil && !auditResults.IsScaIssuesFound())
 	if printScanResults {
-		if err = resultutils.NewResultsWriter(auditResults).
+		if err = output.NewResultsWriter(auditResults).
 			SetIsMultipleRootProject(auditResults.IsMultipleProject()).
 			SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 			SetIncludeLicenses(auditCmd.IncludeLicenses).
@@ -160,8 +162,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && resultutils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
-		err = resultutils.NewFailBuildError()
+	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && output.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+		err = output.NewFailBuildError()
 	}
 	return
 }
@@ -173,7 +175,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (results *resultutils.ScanCommandResults, err error) {
+func RunAudit(auditParams *AuditParams) (results *results.ScanCommandResults, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
 

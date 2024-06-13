@@ -51,8 +51,10 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 			expectedResponse: false,
 		},
 		{
-			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return utils.XscServer(t, supportedXscVersionForErrorLogs) },
-			expectedResponse:   true,
+			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
+				return utils.XscServer(t, supportedXscVersionForErrorLogs)
+			},
+			expectedResponse: true,
 		},
 	}
 
