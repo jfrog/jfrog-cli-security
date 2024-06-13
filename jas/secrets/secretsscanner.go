@@ -96,6 +96,8 @@ type secretsScanConfiguration struct {
 }
 
 func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) error {
+	cuurentDir, _ := os.Getwd()
+	log.Debug(fmt.Sprintf("current dir while creating config file: %s", cuurentDir))
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Secrets)
 	if err != nil {
 		return err
