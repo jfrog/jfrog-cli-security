@@ -9,7 +9,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
-const defaultContributionMonths = 1
+const defaultContributionMonths = 3
 
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
