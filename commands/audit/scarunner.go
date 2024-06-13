@@ -406,12 +406,12 @@ func logDeps(uniqueDeps any) (err error) {
 // This method will change the working directory to the scan's working directory.
 func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
 	cuurentDir, _ := os.Getwd()
-	log.Debug(fmt.Sprintf("current dir is: %s", cuurentDir))
+	log.Debug(fmt.Sprintf("current dir before changing to scan target is: %s", cuurentDir))
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
 	cuurentDir, _ = os.Getwd()
-	log.Debug(fmt.Sprintf("current dir is: %s", cuurentDir))
+	log.Debug(fmt.Sprintf("current dir after changing to scan target is: %s", cuurentDir))
 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
