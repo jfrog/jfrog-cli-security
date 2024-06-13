@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"os"
 )
 
 func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies *[]string,
@@ -48,11 +49,15 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			log.Debug(fmt.Sprintf("the source root of the first module: %s", jfrogAppsConfig.Modules[0].SourceRoot))
+			cuurentDir, _ := os.Getwd()
+			log.Debug(fmt.Sprintf("current dir is (secrets): %s", cuurentDir))
 			if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
 				log.Debug(fmt.Sprintf("the source root of the first module: %s", jfrogAppsConfig.Modules[0].SourceRoot))
+				cuurentDir, _ := os.Getwd()
+				log.Debug(fmt.Sprintf("current dir is (iac): %s", cuurentDir))
 				if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
@@ -93,6 +98,8 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 			securityParallelRunner.ScannersWg.Done()
 			log.Debug("done run secrets scan waiting")
 		}()
+		cuurentDir, _ := os.Getwd()
+		log.Debug(fmt.Sprintf("current dir is: %s", cuurentDir))
 		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
