@@ -200,8 +200,8 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
-	log.Debug("the num of modules created: " + string(rune(len(jfrogAppsConfig.Modules))))
-	log.Debug("the name of the first module: " + jfrogAppsConfig.Modules[0].Name)
+	log.Debug(fmt.Sprintf("the num of modules created: %s", string(rune(len(jfrogAppsConfig.Modules)))))
+	log.Debug(fmt.Sprintf("the name of the first module: %s", jfrogAppsConfig.Modules[0].Name))
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
 	}
