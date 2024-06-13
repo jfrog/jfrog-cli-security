@@ -6,7 +6,7 @@ import (
 )
 
 func GetDescription() string {
-	return "Enrich CycloneDX format JSON located on the local file-system with Xray."
+	return "Enrich sbom format JSON located on the local file-system with Xray."
 }
 
 func GetArguments() []components.Argument {
