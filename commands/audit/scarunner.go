@@ -61,6 +61,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 
 	defer func() {
 		// Make sure to return to the original working directory, building the dependency tree may change it
+		log.Debug(fmt.Sprintf("turning back to original wk: %s", currentWorkingDir))
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
 	}()
 	for _, scan := range scans {
