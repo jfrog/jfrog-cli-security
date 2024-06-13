@@ -17,10 +17,10 @@ func GetJfrogCliSecurityApp() components.App {
 		Category:    "Command Namespaces",
 	})
 	app.Subcommands = append(app.Subcommands, components.Namespace{
-		Name:        "sbom",
+		Name:        string(cliutils.Sbom),
 		Description: "Sbom commands.",
 		Commands:    getSbomCommands(),
-		Category:    "Command Namespaces",
+		Category:    "sbom Namespaces",
 	})
 	return app
 }

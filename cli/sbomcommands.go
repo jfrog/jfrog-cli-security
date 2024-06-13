@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
@@ -18,17 +20,20 @@ func getSbomCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.Enrich),
 			Description: enrichDocs.GetDescription(),
 			Arguments:   enrichDocs.GetArguments(),
-			Category:    auditScanCategory,
 			Action:      EnrichCmd,
 		},
 	}
+}
+
+func createServerDetails(c *components.Context) (*coreConfig.ServerDetails, error) {
+	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Sbom)
 }
 
 func EnrichCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing a <source pattern> argument is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := createServerDetails(c)
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-const auditScanCategory = "Audit & Scan & Import"
+const auditScanCategory = "Audit & Scan"
 
 const dockerScanCmdHiddenName = "dockerscan"
 

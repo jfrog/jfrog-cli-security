@@ -2,6 +2,7 @@ package enrich
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
+	"github.com/jfrog/jfrog-cli-security/cli/docs"
 )
 
 func GetDescription() string {
@@ -9,5 +10,5 @@ func GetDescription() string {
 }
 
 func GetArguments() []components.Argument {
-	return []components.Argument{{Name: "source pattern", Description: `Specifies the local file system path of the JSON to be scanned.`}}
+	return []components.Argument{{Name: "source pattern", ReplaceWithFlag: docs.SpecFlag, Description: `Specifies the local file system path of the JSON to be scanned.`}}
 }
