@@ -45,6 +45,8 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		log.Debug("done cleanup folder")
 	}()
 
+	// wait for the building of the dependency tree to finish, so the current dir would the root project
+	securityParallelRunner.ScannersWg.Wait()
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {

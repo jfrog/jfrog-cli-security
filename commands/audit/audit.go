@@ -209,6 +209,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	auditParallelRunner.ScaScansWg.Add(1)
+	auditParallelRunner.ScannersWg.Add(1)
 	if _, scaErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
 		return buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results, threadId)
 	}, auditParallelRunner.AddErrorToChan); scaErr != nil {
