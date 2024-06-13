@@ -241,6 +241,8 @@ func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType
 
 func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) ([]string, error) {
 	root, err := filepath.Abs(module.SourceRoot)
+	cuurentDir, _ := os.Getwd()
+	log.Debug(fmt.Sprintf("current dir is: %s", cuurentDir))
 	if err != nil {
 		return []string{}, errorutils.CheckError(err)
 	}

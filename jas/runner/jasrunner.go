@@ -47,12 +47,12 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
-			log.Debug(fmt.Sprintf("the module for secrets when creating task: %s", module.Name))
+			log.Debug(fmt.Sprintf("the source root of the first module: %s", jfrogAppsConfig.Modules[0].SourceRoot))
 			if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
-				log.Debug(fmt.Sprintf("the module for secrets when creating task: %s", module.Name))
+				log.Debug(fmt.Sprintf("the source root of the first module: %s", jfrogAppsConfig.Modules[0].SourceRoot))
 				if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
