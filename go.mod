@@ -3,6 +3,7 @@ module github.com/jfrog/jfrog-cli-security
 go 1.22.3
 
 require (
+	github.com/gofrs/flock v0.8.1
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.9.29
 	github.com/jfrog/gofrog v1.7.2

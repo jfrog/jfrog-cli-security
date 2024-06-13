@@ -20,6 +20,7 @@ import (
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/gofrs/flock"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -211,6 +212,19 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
+		analyzerManagerDirPath, amPathErr := xrayutils.GetAnalyzerManagerDirAbsolutePath()
+		if amPathErr != nil {
+			return
+		}
+		fileLock := flock.New(analyzerManagerDirPath)
+		lockErr := fileLock.Lock()
+		if lockErr != nil {
+			return
+		}
+		defer func() {
+			err = errors.Join(err, fileLock.Unlock())
+		}()
+
 		results.JasError = runner.RunJasScannersAndSetResults(results.ExtendedScanResults, results.GetScaScannedTechnologies(), results.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	}
 	return
