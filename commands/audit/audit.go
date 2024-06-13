@@ -212,20 +212,44 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		analyzerManagerDirPath, amPathErr := xrayutils.GetAnalyzerManagerDirAbsolutePath()
-		if amPathErr != nil {
-			return
-		}
-		fileLock := flock.New(analyzerManagerDirPath)
-		lockErr := fileLock.Lock()
+		//T ODO delete commented code
+		//analyzerManagerDirPath, amPathErr := xrayutils.GetAnalyzerManagerDirAbsolutePath()
+		//if amPathErr != nil {
+		//	return
+		//}
+		//fileLock := flock.New(analyzerManagerDirPath)
+		//lockErr := fileLock.Lock()
+		//if lockErr != nil {
+		//	return
+		//}
+		//defer func() {
+		//	err = errors.Join(err, fileLock.Unlock())
+		//}()
+
+		unlockFileFunc, lockErr := lockAnalyzerManagerWithCallback()
 		if lockErr != nil {
 			return
 		}
 		defer func() {
-			err = errors.Join(err, fileLock.Unlock())
+			err = errors.Join(err, unlockFileFunc())
 		}()
-
 		results.JasError = runner.RunJasScannersAndSetResults(results.ExtendedScanResults, results.GetScaScannedTechnologies(), results.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	}
 	return
+}
+
+func lockAnalyzerManagerWithCallback() (func() error, error) {
+	analyzerManagerDirPath, err := xrayutils.GetAnalyzerManagerDirAbsolutePath()
+	if err != nil {
+		return nil, err
+	}
+	fileLock := flock.New(analyzerManagerDirPath)
+	err = fileLock.Lock()
+	if err != nil {
+		return nil, err
+	}
+	callback := func() error {
+		return fileLock.Unlock()
+	}
+	return callback, nil
 }

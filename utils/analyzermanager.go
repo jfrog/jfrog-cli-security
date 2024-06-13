@@ -230,7 +230,8 @@ func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
 func DownloadAnalyzerManagerIfNeeded() error {
-	log.Info("ERAN CHECKPOINT 0: Entering DownloadAnalyzerManagerIfNeeded")
+	// TODO remove all ERAN CHECKPOINT comments
+	log.Info("ERAN CHECKPOINT 1: checking if AM checksum file exists")
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
