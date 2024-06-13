@@ -55,7 +55,7 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 }
 
-func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
+func NewJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
 	scanner = &JasScanner{}
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = utils.GetAnalyzerManagerExecutable(); err != nil {
 		return
@@ -70,7 +70,7 @@ func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (s
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.JFrogAppsConfig, err = CreateJFrogAppsConfig(workingDirs)
+	scanner.JFrogAppsConfig = jfrogAppsConfig
 	return
 }
 
@@ -217,7 +217,9 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := NewJasScanner(workingDirs, &FakeServerDetails)
+	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
+	assert.NoError(t, err)
+	scanner, err := NewJasScanner(jfrogAppsConfigForTest, &FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())

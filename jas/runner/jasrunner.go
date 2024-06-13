@@ -18,7 +18,7 @@ import (
 )
 
 func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies *[]string,
-	serverDetails *config.ServerDetails, workingDirs []string, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error)) (err error) {
+	serverDetails *config.ServerDetails, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error)) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -28,7 +28,7 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	if scanType == applicability.ApplicabilityScannerType || secretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
-	scanner, err := jas.NewJasScanner(workingDirs, serverDetails)
+	scanner, err := jas.NewJasScanner(jfrogAppsConfig, serverDetails)
 	if err != nil {
 		return
 	}

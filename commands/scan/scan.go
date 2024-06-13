@@ -420,8 +420,12 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					}
 					workingDirs := []string{filePath}
 					depsList := depsListFromVulnerabilities(*graphScanResults)
-					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, workingDirs, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
-
+					jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(workingDirs)
+					if err != nil {
+						log.Error(fmt.Sprintf("failed to create JFrogAppsConfig: %s", err.Error()))
+						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					}
+					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, jfrogAppsConfig, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc)
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
