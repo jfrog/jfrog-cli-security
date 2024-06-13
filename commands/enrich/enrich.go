@@ -20,7 +20,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"os"
 	"os/exec"
-	"regexp"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -185,7 +184,7 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, indexedFileErrors, xrayVersion)
 		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
-		err := collectFilesForIndexing(specFiles[0], taskHandler)
+		err := FileForIndexing(specFiles[0], taskHandler)
 		if err != nil {
 			log.Error(err)
 			fileCollectingErrorsQueue.AddError(err)
@@ -251,8 +250,7 @@ func (enrichCmd *EnrichCommand) performScanTasks(fileConsumer parallel.Runner, i
 	indexedFileConsumer.Run()
 }
 
-func collectFilesForIndexing(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) error {
-
+func FileForIndexing(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) error {
 	fileData.Pattern = clientutils.ReplaceTildeWithUserHome(fileData.Pattern)
 	patternType := fileData.GetPatternType()
 	rootPath, err := fspatterns.GetRootPath(fileData.Pattern, fileData.Target, "", patternType, false)
@@ -265,48 +263,12 @@ func collectFilesForIndexing(fileData spec.File, dataHandlerFunc indexFileHandle
 		return err
 	}
 
-	// If the path is a single file, index it and return
+	// path should be a single file
 	if !isDir {
 		dataHandlerFunc(rootPath)
 		return nil
 	}
-	fileData.Pattern = clientutils.ConvertLocalPatternToRegexp(fileData.Pattern, patternType)
-	return collectPatternMatchingFiles(fileData, rootPath, dataHandlerFunc)
-}
-
-func collectPatternMatchingFiles(fileData spec.File, rootPath string, dataHandlerFunc indexFileHandlerFunc) error {
-	fileParams, err := fileData.ToCommonParams()
-	if err != nil {
-		return err
-	}
-	excludePathPattern := fspatterns.PrepareExcludePathPattern(fileParams.Exclusions, fileParams.GetPatternType(), fileParams.IsRecursive())
-	patternRegex, err := regexp.Compile(fileData.Pattern)
-	if errorutils.CheckError(err) != nil {
-		return err
-	}
-	recursive, err := fileData.IsRecursive(true)
-	if err != nil {
-		return err
-	}
-
-	paths, err := fspatterns.ListFiles(rootPath, recursive, false, false, false, excludePathPattern)
-	if err != nil {
-		return err
-	}
-	for _, path := range paths {
-		matches, isDir, err := fspatterns.SearchPatterns(path, false, false, patternRegex)
-		if err != nil {
-			return err
-		}
-		// Because paths should contain all files and directories (walks recursively) we can ignore dirs, as only files relevance for indexing.
-		if isDir {
-			continue
-		}
-		if len(matches) > 0 {
-			dataHandlerFunc(path)
-		}
-	}
-	return nil
+	return errors.New("directory instead of a single file")
 }
 
 func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]formats.SimpleJsonError) []formats.SimpleJsonError {

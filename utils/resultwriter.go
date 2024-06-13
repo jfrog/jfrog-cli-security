@@ -58,7 +58,10 @@ func NewResultsWriter(scanResults *Results) *ResultsWriter {
 }
 
 func (r *Results) getScaScanFileName() string {
-	return r.ScaResults[0].Target
+	if len(r.ScaResults) > 0 {
+		return r.ScaResults[0].Target
+	}
+	return ""
 }
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {

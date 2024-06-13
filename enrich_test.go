@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/stretchr/testify/assert"
@@ -26,13 +25,13 @@ func UnmarshalJson(t *testing.T, output string) EnrichJson {
 	return jsonMap
 }
 
-func TestXrayEnrichSbom(t *testing.T) {
+func TestXrayEnrichSbom_Success(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, "")
 	// Configure a new server named "default".
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	// Check curl command with the default configured server.
-	jsonPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "other", "enrich", "*")
+	jsonPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "other", "enrich", "enrich.json")
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "sbom", "enrich", jsonPath)
 	enrichedSbom := UnmarshalJson(t, output)
 	assert.Equal(t, len(enrichedSbom.Vulnerabilities), 12)
@@ -40,5 +39,4 @@ func TestXrayEnrichSbom(t *testing.T) {
 		assert.NotEqual(t, vuln.BomRef, nil)
 		assert.NotEqual(t, vuln.Id, nil)
 	}
-	fmt.Println(enrichedSbom)
 }

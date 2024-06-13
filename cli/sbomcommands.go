@@ -30,7 +30,7 @@ func createServerDetails(c *components.Context) (*coreConfig.ServerDetails, erro
 }
 
 func EnrichCmd(c *components.Context) error {
-	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
+	if len(c.Arguments) == 0 {
 		return pluginsCommon.PrintHelpAndReturnError("providing a <source pattern> argument is mandatory", c)
 	}
 	serverDetails, err := createServerDetails(c)
