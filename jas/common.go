@@ -55,23 +55,22 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 }
 
-func NewJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
-	scanner = &JasScanner{}
+func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails) (*JasScanner, error) {
+	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = utils.GetAnalyzerManagerExecutable(); err != nil {
-		return
+		return scanner, err
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return
+		return scanner, err
 	}
 	scanner.TempDir = tempDir
-	log.Debug("created tempdir")
 	scanner.ScannerDirCleanupFunc = func() error {
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
 	scanner.JFrogAppsConfig = jfrogAppsConfig
-	return
+	return scanner, err
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
@@ -219,7 +218,8 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
-	scanner, err := NewJasScanner(jfrogAppsConfigForTest, &FakeServerDetails)
+	scanner := &JasScanner{}
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -241,8 +241,6 @@ func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType
 
 func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) ([]string, error) {
 	root, err := filepath.Abs(module.SourceRoot)
-	cuurentDir, _ := os.Getwd()
-	log.Debug(fmt.Sprintf("current dir in GetSourceRoots: %s", cuurentDir))
 	if err != nil {
 		return []string{}, errorutils.CheckError(err)
 	}

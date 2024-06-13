@@ -26,16 +26,22 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
+	scanner := &jas.JasScanner{}
+	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
+	assert.NoError(t, err)
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
+	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, false, "", jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
 	// Expect error:
 	assert.Error(t, err)
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
+	scanner := &jas.JasScanner{}
+	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
+	assert.NoError(t, err)
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err := AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
+	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, "", jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
 	assert.NoError(t, err)
 }
 
@@ -43,7 +49,8 @@ func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
-	scanner, _ := jas.NewJasScanner(nil, &jas.FakeServerDetails)
+	scanner := &jas.JasScanner{}
+	scanner, _ = jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
 	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
 		scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 

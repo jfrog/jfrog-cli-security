@@ -41,11 +41,10 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		return
 	}
 	defer func() {
-		auditParallelRunner.ScaScansWg.Done()
-		auditParallelRunner.ScannersWg.Done()
 		// Make sure to return to the original working directory, buildDependencyTree may change it
-		log.Debug(fmt.Sprintf("turning back to original wk: %s", currentWorkingDir))
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
+		auditParallelRunner.ScaScansWg.Done()
+		auditParallelRunner.JasScannersWg.Done()
 	}()
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
@@ -405,13 +404,9 @@ func logDeps(uniqueDeps any) (err error) {
 
 // This method will change the working directory to the scan's working directory.
 func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
-	cuurentDir, _ := os.Getwd()
-	log.Debug(fmt.Sprintf("current dir before changing to scan target is: %s", cuurentDir))
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	cuurentDir, _ = os.Getwd()
-	log.Debug(fmt.Sprintf("current dir after changing to scan target is: %s", cuurentDir))
 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())

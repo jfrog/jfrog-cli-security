@@ -1,9 +1,7 @@
 package secrets
 
 import (
-	"fmt"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -45,8 +43,6 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
-	cuurentDir, _ := os.Getwd()
-	log.Debug(fmt.Sprintf("current dir is: %s", cuurentDir))
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
@@ -96,8 +92,6 @@ type secretsScanConfiguration struct {
 }
 
 func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) error {
-	cuurentDir, _ := os.Getwd()
-	log.Debug(fmt.Sprintf("current dir while creating config file: %s", cuurentDir))
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Secrets)
 	if err != nil {
 		return err
