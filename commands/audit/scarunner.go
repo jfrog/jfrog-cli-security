@@ -34,18 +34,12 @@ import (
 	"time"
 )
 
-func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results, threadId int) (err error) {
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
-	defer func() {
-		// Make sure to return to the original working directory, buildDependencyTree may change it
-		err = errors.Join(err, os.Chdir(currentWorkingDir))
-		auditParallelRunner.ScaScansWg.Done()
-		auditParallelRunner.JasScannersWg.Done()
-	}()
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
@@ -60,8 +54,12 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Preforming", len(scans), "SCA scans:\n", scanInfo)
+	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
 
+	defer func() {
+		// Make sure to return to the original working directory, buildDependencyTree may change it
+		err = errors.Join(err, os.Chdir(currentWorkingDir))
+	}()
 	for _, scan := range scans {
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)

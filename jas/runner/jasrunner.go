@@ -32,9 +32,6 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	defer func() {
 		callback()
 	}()
-
-	// wait for the building of the dependency tree to finish, so the current dir would the root project
-	securityParallelRunner.JasScannersWg.Wait()
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
@@ -128,7 +125,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		// Wait for sca scan to complete before running contextual scan
+		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
 		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {

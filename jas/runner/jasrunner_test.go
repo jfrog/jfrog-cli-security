@@ -16,23 +16,19 @@ import (
 )
 
 func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
-	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
 	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
 	defer func() {
 		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
 	}()
-	assert.NoError(t, err)
 	assert.NoError(t, os.Setenv(coreutils.HomeDir, tmpDir))
 	defer func() {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanner := &jas.JasScanner{}
-	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
-	assert.NoError(t, err)
-	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
-	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, false, "", jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan)
-	// Expect error:
+	_, err = jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
 	assert.Error(t, err)
+	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
