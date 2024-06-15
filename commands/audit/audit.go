@@ -229,9 +229,8 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}()
 	go func() {
 		for e := range auditParallelRunner.ErrorsQueue {
-			auditParallelRunner.ResultsMu.Lock()
-			errors.Join(results.ScansErr, e)
-			auditParallelRunner.ResultsMu.Unlock()
+			newErrs := errors.Join(results.ScansErr, e)
+			results.ScansErr = newErrs
 		}
 	}()
 	if auditParams.Progress() != nil {
