@@ -76,7 +76,9 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
 		}
 		// Add the scan to the results
+		auditParallelRunner.ResultsMu.Lock()
 		results.ScaResults = append(results.ScaResults, scan)
+		auditParallelRunner.ResultsMu.Unlock()
 	}
 	return
 }
