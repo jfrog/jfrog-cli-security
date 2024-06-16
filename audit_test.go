@@ -435,27 +435,27 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas"), "3")
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas"), "3")
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas"), "1")
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas"), "1")
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-config"), "3")
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas-config"), "3")
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("package-managers", "npm", "npm"), "3")
+	output := testXrayAuditJas(t, filepath.Join("package-managers", "npm", "npm"), "3")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
 }
 
-func testXrayAuditJas(t *testing.T, format string, project string, threads string) string {
+func testXrayAuditJas(t *testing.T, project string, threads string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -469,7 +469,7 @@ func testXrayAuditJas(t *testing.T, format string, project string, threads strin
 	assert.NoError(t, err)
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
-	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+format, "--threads="+threads)
+	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), "--threads="+threads)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
