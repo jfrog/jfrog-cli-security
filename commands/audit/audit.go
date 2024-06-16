@@ -133,8 +133,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThreads(auditCmd.Threads)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	auditResults, err := RunAudit(auditParams, auditParallelRunner)
+	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
 	}
@@ -160,11 +159,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
-	auditParallelRunner.ResultsMu.Lock()
-	err = auditResults.ScansErr
-	auditParallelRunner.ResultsMu.Unlock()
-	if err != nil {
-		return err
+	if auditResults.ScansErr != nil {
+		return auditResults.ScansErr
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
@@ -181,7 +177,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams, auditParallelRunner *utils.SecurityParallelRunner) (results *xrayutils.Results, err error) {
+func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
 	serverDetails, err := auditParams.ServerDetails()
@@ -202,6 +198,7 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *utils.SecurityParal
 	}
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
+	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
