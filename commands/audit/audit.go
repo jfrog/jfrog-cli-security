@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"os"
+	"sync"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -218,6 +219,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
 		auditParallelRunner.AddErrorToChan(scaScanErr)
 	}
+	mu := sync.Mutex{}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
 		auditParallelRunner.JasWg.Wait()
@@ -234,9 +236,9 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 				if !ok {
 					return
 				}
-				auditParallelRunner.ResultsMu.Lock()
+				mu.Lock()
 				results.ScansErr = errors.Join(results.ScansErr, e)
-				auditParallelRunner.ResultsMu.Unlock()
+				mu.Unlock()
 			}
 		}
 	}()
