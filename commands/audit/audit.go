@@ -8,7 +8,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"os"
-	"sync"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -134,11 +133,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThreads(auditCmd.Threads)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	auditResults, err := RunAudit(auditParams)
+	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	auditResults, err := RunAudit(auditParams, auditParallelRunner)
 	if err != nil {
 		return
 	}
-	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults, auditParallelRunner))
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
@@ -160,8 +160,11 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
-	if auditResults.ScansErr != nil {
-		return auditResults.ScansErr
+	auditParallelRunner.ResultsMu.Lock()
+	errs := auditResults.ScansErr
+	auditParallelRunner.ResultsMu.Unlock()
+	if errs != nil {
+		return errs
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
@@ -178,7 +181,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
+func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityParallelRunner) (results *xrayutils.Results, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
 	serverDetails, err := auditParams.ServerDetails()
@@ -199,7 +202,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
-	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
@@ -219,7 +221,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
 		auditParallelRunner.AddErrorToChan(scaScanErr)
 	}
-	mu := sync.Mutex{}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
 		auditParallelRunner.JasWg.Wait()
@@ -236,9 +237,9 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 				if !ok {
 					return
 				}
-				mu.Lock()
+				auditParallelRunner.ResultsMu.Lock()
 				results.ScansErr = errors.Join(results.ScansErr, e)
-				mu.Unlock()
+				auditParallelRunner.ResultsMu.Unlock()
 			}
 		}
 	}()

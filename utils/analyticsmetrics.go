@@ -154,12 +154,14 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 	return event, err
 }
 
-func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *Results) *xscservices.XscAnalyticsGeneralEventFinalize {
+func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *Results, auditParallelRunner *SecurityParallelRunner) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
 	eventStatus := xscservices.Completed
+	auditParallelRunner.ResultsMu.Lock()
 	if auditResults.ScansErr != nil {
 		eventStatus = xscservices.Failed
 	}
+	auditParallelRunner.ResultsMu.Unlock()
 
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,

@@ -111,7 +111,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	time.Sleep(time.Millisecond)
 	for _, tt := range testStruct {
 		t.Run(tt.name, func(t *testing.T) {
-			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
+			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults, &SecurityParallelRunner{})
 			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
 			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
 			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
