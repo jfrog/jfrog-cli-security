@@ -198,6 +198,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	auditParallelRunner.ErrWg.Add(1)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
@@ -229,7 +230,6 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	}()
 	// a new routine that collects errors from the err channel into results object
 	go func() {
-		auditParallelRunner.ErrWg.Add(1)
 		defer auditParallelRunner.ErrWg.Done()
 		for {
 			select {

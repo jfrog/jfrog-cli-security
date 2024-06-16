@@ -127,12 +127,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-
-		securityParallelRunner.ResultsMu.Lock()
-		xrayScanResults := scanResults.GetScaScansXrayResults()
-		securityParallelRunner.ResultsMu.Unlock()
-
-		results, err := applicability.RunApplicabilityScan(xrayScanResults, *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
+		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
