@@ -12,6 +12,7 @@ type SecurityParallelRunner struct {
 	ScaScansWg    sync.WaitGroup // Verify that the sca scan routines are done before running contextual scan
 	JasScannersWg sync.WaitGroup // Verify that all scanners routines are done before cleaning temp dir
 	JasWg         sync.WaitGroup // Verify that downloading analyzer manager and running all scanners are done
+	ErrWg         sync.WaitGroup // Verify that all errors are handled before finishing the audit func
 }
 
 func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {

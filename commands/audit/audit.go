@@ -4,15 +4,13 @@ import (
 	"errors"
 	"fmt"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"os"
-	"sync"
-
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"os"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -134,12 +132,11 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThreads(auditCmd.Threads)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	auditResults, err := RunAudit(auditParams, auditParallelRunner)
+	auditResults, err := RunAudit(auditParams)
 	if err != nil {
 		return
 	}
-	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults, auditParallelRunner))
+	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return
@@ -161,11 +158,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		return
 	}
 
-	auditParallelRunner.ResultsMu.Lock()
-	errs := auditResults.ScansErr
-	auditParallelRunner.ResultsMu.Unlock()
-	if errs != nil {
-		return errs
+	if auditResults.ScansErr != nil {
+		return auditResults.ScansErr
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
@@ -182,7 +176,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityParallelRunner) (results *xrayutils.Results, err error) {
+func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
 	// Initialize Results struct
 	results = xrayutils.NewAuditResults()
 	serverDetails, err := auditParams.ServerDetails()
@@ -203,6 +197,7 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 	}
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
+	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
@@ -222,7 +217,6 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
 		auditParallelRunner.AddErrorToChan(scaScanErr)
 	}
-	testWG := sync.WaitGroup{}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
 		auditParallelRunner.JasWg.Wait()
@@ -230,11 +224,13 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 		auditParallelRunner.JasScannersWg.Wait()
 		cleanup := jasScanner.ScannerDirCleanupFunc
 		auditParallelRunner.AddErrorToChan(cleanup())
+		close(auditParallelRunner.ErrorsQueue)
 		auditParallelRunner.Runner.Done()
 	}()
+	// a new routine that collects errors from the err channel into results object
 	go func() {
-		testWG.Add(1)
-		defer testWG.Done()
+		auditParallelRunner.ErrWg.Add(1)
+		defer auditParallelRunner.ErrWg.Done()
 		for {
 			select {
 			case e, ok := <-auditParallelRunner.ErrorsQueue:
@@ -251,7 +247,7 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	auditParallelRunner.Runner.Run()
-	testWG.Wait()
+	auditParallelRunner.ErrWg.Wait()
 	return
 }
 

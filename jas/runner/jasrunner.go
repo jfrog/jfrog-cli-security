@@ -35,14 +35,14 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
-			if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults, module, secretsScanType), errHandlerFunc); err != nil {
+			if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
-				if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults, module), errHandlerFunc); err != nil {
+				if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
-				if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults, module), errHandlerFunc); err != nil {
+				if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 			}
@@ -68,7 +68,7 @@ func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanT
 	return
 }
 
-func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results,
+func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
 	module jfrogappsconfig.Module, secretsScanType secrets.SecretsScanType) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
@@ -79,13 +79,13 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
-		scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, results...)
+		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
 
-func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results,
+func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
 	module jfrogappsconfig.Module) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
@@ -96,13 +96,13 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
-		scanResults.ExtendedScanResults.IacScanResults = append(scanResults.ExtendedScanResults.IacScanResults, results...)
+		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
 
-func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results,
+func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
 	module jfrogappsconfig.Module) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
@@ -113,7 +113,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
-		scanResults.ExtendedScanResults.SastScanResults = append(scanResults.ExtendedScanResults.SastScanResults, results...)
+		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
