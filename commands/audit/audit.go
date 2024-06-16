@@ -231,16 +231,10 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	// a new routine that collects errors from the err channel into results object
 	go func() {
 		defer auditParallelRunner.ErrWg.Done()
-		for {
-			select {
-			case e, ok := <-auditParallelRunner.ErrorsQueue:
-				if !ok {
-					return
-				}
-				auditParallelRunner.ResultsMu.Lock()
-				results.ScansErr = errors.Join(results.ScansErr, e)
-				auditParallelRunner.ResultsMu.Unlock()
-			}
+		for e := range auditParallelRunner.ErrorsQueue {
+			auditParallelRunner.ResultsMu.Lock()
+			results.ScansErr = errors.Join(results.ScansErr, e)
+			auditParallelRunner.ResultsMu.Unlock()
 		}
 	}()
 	if auditParams.Progress() != nil {
