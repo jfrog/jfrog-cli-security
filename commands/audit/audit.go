@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"os"
+	"sync"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -221,6 +222,7 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
 		auditParallelRunner.AddErrorToChan(scaScanErr)
 	}
+	testWG := sync.WaitGroup{}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
 		auditParallelRunner.JasWg.Wait()
@@ -231,6 +233,8 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 		auditParallelRunner.Runner.Done()
 	}()
 	go func() {
+		testWG.Add(1)
+		defer testWG.Done()
 		for {
 			select {
 			case e, ok := <-auditParallelRunner.ErrorsQueue:
@@ -247,6 +251,7 @@ func RunAudit(auditParams *AuditParams, auditParallelRunner *xrayutils.SecurityP
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	auditParallelRunner.Runner.Run()
+	testWG.Wait()
 	return
 }
 
