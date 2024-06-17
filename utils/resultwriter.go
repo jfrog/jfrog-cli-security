@@ -509,7 +509,7 @@ func writeJsonResults(results *Results) (resultsPath string, err error) {
 			err = e
 		}
 	}()
-	bytesRes, err := json.Marshal(&results)
+	bytesRes, err := JSONMarshal(&results)
 	if errorutils.CheckError(err) != nil {
 		return
 	}
@@ -524,6 +524,14 @@ func writeJsonResults(results *Results) (resultsPath string, err error) {
 	}
 	resultsPath = out.Name()
 	return
+}
+
+func JSONMarshal(t interface{}) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(t)
+	return buffer.Bytes(), err
 }
 
 func PrintJson(output interface{}) error {
