@@ -259,7 +259,11 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
 		} else if rows[i].Applicable != rows[j].Applicable {
 			return sortApplicable(rows[i].Applicable, rows[j].Applicable)
+<<<<<<< HEAD
 		} else if rows[i].JfrogResearchInformation.SeverityNumValue != rows[j].JfrogResearchInformation.SeverityNumValue {
+=======
+		} else if rows[i].JfrogResearchInformation != nil && rows[j].JfrogResearchInformation != nil && rows[i].JfrogResearchInformation.SeverityNumValue != rows[j].JfrogResearchInformation.SeverityNumValue {
+>>>>>>> a8fc137 (Add product behavior Severity->Applicable->JFrog Severity->ID)
 			return rows[i].JfrogResearchInformation.SeverityNumValue > rows[j].JfrogResearchInformation.SeverityNumValue
 		}
 		return rows[i].IssueId > rows[j].IssueId
