@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -49,8 +50,16 @@ type ResultsWriter struct {
 }
 
 type Vulnerability struct {
-	BomRef string `json:"bom-ref"`
-	ID     string `json:"id"`
+	BomRef string `json:"bom-ref" xml:"bom-ref,attr"`
+	ID     string `json:"id" xml:"id"`
+}
+
+type XMLVulnerability struct {
+	Vulnerability []Vulnerability `xml:"vulnerability"`
+}
+
+type Vulnerabilities struct {
+	Vulnerabilities XMLVulnerability `xml:"vulnerabilities"`
 }
 
 func NewResultsWriter(scanResults *Results) *ResultsWriter {
@@ -134,7 +143,7 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 	var data map[string]interface{}
 	err = json.Unmarshal(fileContent, &data)
 	if err != nil {
-		fmt.Println("Error parsing JSON:", err)
+		fmt.Println("Error parsing XML:", err)
 		return err
 	}
 	var vulnerabilities []map[string]string
@@ -147,7 +156,46 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 	}
 	data["vulnerabilities"] = vulnerabilities
 	return PrintJson(data)
+}
 
+func (rw *ResultsWriter) createVulnXml() string {
+	xrayResults := rw.results.GetScaScansXrayResults()[0]
+	doc := etree.NewDocument()
+	vulns := doc.CreateElement("vulnerabilities")
+	for _, vuln := range xrayResults.Vulnerabilities {
+		for component := range vuln.Components {
+			addVuln := vulns.CreateElement("vulnerability")
+			addVuln.CreateAttr("bom-ref", component)
+			id := addVuln.CreateElement("id")
+			id.CreateText(vuln.Cves[0].Id)
+		}
+	}
+	doc.Indent(2)
+	doc.IndentTabs()
+	stringReturn, err := doc.WriteToString()
+	if err != nil {
+		return ""
+	}
+	return stringReturn
+}
+
+func (rw *ResultsWriter) AppendVulnsToXML() error {
+	fileName := rw.results.getScaScanFileName()
+	result := etree.NewDocument()
+	root := etree.NewDocument()
+	err := root.ReadFromString(rw.createVulnXml())
+	if err != nil {
+		return err
+	}
+	err = result.ReadFromFile(fileName)
+	if err != nil {
+		return err
+	}
+	destination := result.FindElements("//bom")[0]
+	destination.AddChild(root.Child[0])
+	stringReturn, _ := result.WriteToString()
+	log.Output(stringReturn)
+	return nil
 }
 
 func (rw *ResultsWriter) printScanResultsTables() (err error) {

@@ -22,8 +22,10 @@ github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPd
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/barv-jfrog/jfrog-cli-core/v2 v2.0.0-20240613104628-62e679bfffa4 h1:p0uoVJ9e54Za58LeN4TXw8Lki6FTjLVgVxoAMavMKdI=
 github.com/barv-jfrog/jfrog-cli-core/v2 v2.0.0-20240613104628-62e679bfffa4/go.mod h1:4iTSevmlThM1Aw5NAY4WyVxim5US4SkrmxHSHFimaqk=
-github.com/barv-jfrog/jfrog-client-go v0.0.0-20240610072103-f932d1184450 h1:BjSFjYlfTJvlNm7Jm9Yf5AyAXhHvdDnNjm6LTSbxoFI=
-github.com/barv-jfrog/jfrog-client-go v0.0.0-20240610072103-f932d1184450/go.mod h1:AN+/mT2DIBE4oRZicJojqND2BEKLfA7f73i5rT3Lfcc=
+github.com/barv-jfrog/jfrog-client-go v0.0.0-20240617141757-718674183bc0 h1:dQQYwVj+0LNaySKzp0aZKcC+o430qPTN+a8X50/vPMg=
+github.com/barv-jfrog/jfrog-client-go v0.0.0-20240617141757-718674183bc0/go.mod h1:AN+/mT2DIBE4oRZicJojqND2BEKLfA7f73i5rT3Lfcc=
+github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
+github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0/go.mod h1:bm7JXdkRd4BHJk9HpwqAI8BoAY1lps46Enkdqw6aRX0=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=

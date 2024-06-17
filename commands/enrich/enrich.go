@@ -1,6 +1,7 @@
 package enrich
 
 import (
+	"encoding/xml"
 	"errors"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
@@ -73,6 +74,19 @@ func (enrichCmd *EnrichCommand) SetFail(fail bool) *EnrichCommand {
 	return enrichCmd
 }
 
+func isXML(scaResults []utils.ScaScanResult) (bool, error) {
+	if len(scaResults) == 0 {
+		return false, errors.New("unable to retrieve file")
+	}
+	fileName := scaResults[0].Target
+	var x interface{}
+	content, err := os.ReadFile(fileName)
+	if err != nil {
+		return false, err
+	}
+	return xml.Unmarshal(content, &x) == nil, nil
+}
+
 func (enrichCmd *EnrichCommand) Run() (err error) {
 	defer func() {
 		if err != nil {
@@ -140,9 +154,20 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = flatResults
 
-	if err = xrutils.NewResultsWriter(scanResults).
-		AppendVulnsToJson(); err != nil {
+	isxml, err := isXML(scanResults.ScaResults)
+	if err != nil {
 		return
+	}
+	if isxml {
+		if err = xrutils.NewResultsWriter(scanResults).
+			AppendVulnsToXML(); err != nil {
+			return
+		}
+	} else {
+		if err = xrutils.NewResultsWriter(scanResults).
+			AppendVulnsToJson(); err != nil {
+			return
+		}
 	}
 
 	if err != nil {
@@ -203,8 +228,8 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					return err
 				}
 				params := &services.XrayGraphImportParams{
-					SBOMJson: string(fileContent),
-					ScanType: services.Binary,
+					SBOMInput: fileContent,
+					ScanType:  services.Binary,
 				}
 				if enrichCmd.progress != nil {
 					enrichCmd.progress.SetHeadlineMsg("Scanning 🔍")
