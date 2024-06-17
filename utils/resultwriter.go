@@ -158,10 +158,16 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 	return PrintJson(data)
 }
 
-func (rw *ResultsWriter) createVulnXml() string {
+func (rw *ResultsWriter) AppendVulnsToXML() error {
+	fileName := rw.results.getScaScanFileName()
+	result := etree.NewDocument()
+	err := result.ReadFromFile(fileName)
+	if err != nil {
+		return err
+	}
+	destination := result.FindElements("//bom")[0]
 	xrayResults := rw.results.GetScaScansXrayResults()[0]
-	doc := etree.NewDocument()
-	vulns := doc.CreateElement("vulnerabilities")
+	vulns := destination.CreateElement("vulnerabilities")
 	for _, vuln := range xrayResults.Vulnerabilities {
 		for component := range vuln.Components {
 			addVuln := vulns.CreateElement("vulnerability")
@@ -170,29 +176,8 @@ func (rw *ResultsWriter) createVulnXml() string {
 			id.CreateText(vuln.Cves[0].Id)
 		}
 	}
-	doc.Indent(2)
-	doc.IndentTabs()
-	stringReturn, err := doc.WriteToString()
-	if err != nil {
-		return ""
-	}
-	return stringReturn
-}
-
-func (rw *ResultsWriter) AppendVulnsToXML() error {
-	fileName := rw.results.getScaScanFileName()
-	result := etree.NewDocument()
-	root := etree.NewDocument()
-	err := root.ReadFromString(rw.createVulnXml())
-	if err != nil {
-		return err
-	}
-	err = result.ReadFromFile(fileName)
-	if err != nil {
-		return err
-	}
-	destination := result.FindElements("//bom")[0]
-	destination.AddChild(root.Child[0])
+	result.IndentTabs()
+	result.Indent(2)
 	stringReturn, _ := result.WriteToString()
 	log.Output(stringReturn)
 	return nil
