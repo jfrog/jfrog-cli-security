@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -46,38 +48,43 @@ var (
 )
 
 type JasScanner struct {
-	ConfigFileName        string
-	ResultsFileName       string
+	TempDir               string
 	AnalyzerManager       utils.AnalyzerManager
 	ServerDetails         *config.ServerDetails
 	JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
 	ScannerDirCleanupFunc func() error
 }
 
-func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
-	scanner = &JasScanner{}
+func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails) (*JasScanner, error) {
+	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = utils.GetAnalyzerManagerExecutable(); err != nil {
-		return
+		return scanner, err
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return
+		return scanner, err
 	}
+	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.ConfigFileName = filepath.Join(tempDir, "config.yaml")
-	scanner.ResultsFileName = filepath.Join(tempDir, "results.sarif")
-	scanner.JFrogAppsConfig, err = createJFrogAppsConfig(workingDirs)
-	return
+	scanner.JFrogAppsConfig = jfrogAppsConfig
+	return scanner, err
 }
 
-func createJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
+func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
 		// jfrog-apps-config.yml exist in the workspace
+		for _, module := range jfrogAppsConfig.Modules {
+			// converting to absolute path before starting the scan flow
+			module.SourceRoot, err = filepath.Abs(module.SourceRoot)
+			if err != nil {
+				return nil, errorutils.CheckError(err)
+			}
+		}
 		return jfrogAppsConfig, nil
 	}
 
@@ -97,38 +104,13 @@ type ScannerCmd interface {
 	Run(module jfrogappsconfig.Module) (err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd) (err error) {
-	for _, module := range a.JFrogAppsConfig.Modules {
-		func() {
-			defer func() {
-				err = errors.Join(err, deleteJasProcessFiles(a.ConfigFileName, a.ResultsFileName))
-			}()
-			if err = scannerCmd.Run(module); err != nil {
-				return
-			}
-		}()
-	}
-	return
-}
-
-func deleteJasProcessFiles(configFile string, resultFile string) error {
-	exist, err := fileutils.IsFileExists(configFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		if err = os.Remove(configFile); err != nil {
-			return errorutils.CheckError(err)
+func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (err error) {
+	func() {
+		if err = scannerCmd.Run(module); err != nil {
+			return
 		}
-	}
-	exist, err = fileutils.IsFileExists(resultFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		err = os.Remove(resultFile)
-	}
-	return errorutils.CheckError(err)
+	}()
+	return
 }
 
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
@@ -233,8 +215,11 @@ var FakeBasicXrayResults = []services.ScanResponse{
 }
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
-	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded())
-	scanner, err := NewJasScanner(workingDirs, &FakeServerDetails)
+	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
+	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
+	assert.NoError(t, err)
+	scanner := &JasScanner{}
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -327,4 +312,16 @@ func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 	}
 	entitled, err = xrayManager.IsEntitled(utils.ApplicabilityFeatureId)
 	return
+}
+
+func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, error) {
+	if scanner.TempDir == "" {
+		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
+	}
+	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + strconv.FormatInt(time.Now().Unix(), 10)
+	err := os.MkdirAll(scannerTempDir, 0777)
+	if err != nil {
+		return "", err
+	}
+	return scannerTempDir, nil
 }

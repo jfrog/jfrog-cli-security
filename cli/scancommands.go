@@ -331,8 +331,12 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	auditCmd.SetThreads(threads)
 	err = progressbar.ExecWithProgress(auditCmd)
-
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err
@@ -428,11 +432,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
-	if err != nil {
-		return err
-	}
-	threads, err := curation.DetectNumOfThreads(threadsFlag)
+	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
@@ -470,6 +470,10 @@ func DockerScan(c *components.Context, image string) error {
 		return printHelp()
 	}
 	// Run the command
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
 		return err
@@ -498,7 +502,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetThreads(threads)
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

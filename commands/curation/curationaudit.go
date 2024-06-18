@@ -12,12 +12,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
@@ -328,7 +330,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		projectName = projectScope + "/" + projectName
 	}
 	if ca.parallelRequests == 0 {
-		ca.parallelRequests = TotalConcurrentRequests
+		ca.parallelRequests = cliutils.Threads
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{
@@ -725,13 +727,6 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
-}
-
-func DetectNumOfThreads(threadsCount int) (int, error) {
-	if threadsCount > TotalConcurrentRequests {
-		return 0, errorutils.CheckErrorf("number of threads crossed the maximum, the maximum threads allowed is %v", TotalConcurrentRequests)
-	}
-	return threadsCount, nil
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {
