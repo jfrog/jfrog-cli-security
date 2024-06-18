@@ -47,7 +47,7 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 				} else if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
-				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
+				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SastScan) {
 					log.Debug("Skipping Sast scan...")
 				} else if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
