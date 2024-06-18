@@ -46,6 +46,16 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	if err != nil {
 		return
 	}
+	clearResolutionServerFunc, err := npm.ConfigNpmResolutionServerIfNeeded(params)
+	if err != nil {
+		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
+		return
+	}
+	defer func() {
+		if clearResolutionServerFunc != nil {
+			err = errors.Join(err, clearResolutionServerFunc())
+		}
+	}()
 	// Build
 	var dirForDependenciesCalculation string
 	if dirForDependenciesCalculation, err = installProjectIfNeeded(pnpmExecPath, currentDir); errorutils.CheckError(err) != nil {
