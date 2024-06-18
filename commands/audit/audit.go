@@ -212,7 +212,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		//T ODO delete commented code
+		// TODO delete commented code
 		//analyzerManagerDirPath, amPathErr := xrayutils.GetAnalyzerManagerDirAbsolutePath()
 		//if amPathErr != nil {
 		//	return
