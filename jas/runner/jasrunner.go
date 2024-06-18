@@ -36,14 +36,20 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
-			if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
+			if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SecretsScan) {
+				log.Debug("Skipping Secrets scan...")
+			} else if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
-				if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
+					log.Debug("Skipping Iac scan...")
+				} else if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
-				if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
+					log.Debug("Skipping Sast scan...")
+				} else if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 			}
