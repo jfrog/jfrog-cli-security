@@ -9,12 +9,11 @@ import (
 )
 
 type Results struct {
-	ScaResults  []ScaScanResult
+	ScaResults  []*ScaScanResult
 	XrayVersion string
-	ScaError    error
+	ScansErr    error
 
 	ExtendedScanResults *ExtendedScanResults
-	JasError            error
 
 	MultiScanId string
 }
@@ -63,7 +62,7 @@ func (r *Results) IsScaIssuesFound() bool {
 func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
 	for _, scan := range r.ScaResults {
 		if scan.Target == target {
-			return &scan
+			return scan
 		}
 	}
 	return nil
@@ -84,7 +83,6 @@ func (r *Results) IsIssuesFound() bool {
 func (r *Results) CountScanResultsFindings() (total int) {
 	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
-
 func (r *Results) GetSummary() (summary formats.SummaryResults) {
 	if len(r.ScaResults) <= 1 {
 		summary.Scans = r.getScanSummaryByTargets()
@@ -105,9 +103,9 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 	}
 	for _, target := range targets {
 		// Get target sca results
-		targetScaResults := []ScaScanResult{}
+		targetScaResults := []*ScaScanResult{}
 		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
-			targetScaResults = append(targetScaResults, *targetScaResult)
+			targetScaResults = append(targetScaResults, targetScaResult)
 		}
 		// Get target extended results
 		targetExtendedResults := r.ExtendedScanResults

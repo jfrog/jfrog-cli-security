@@ -352,7 +352,7 @@ func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string
 	}
 }
 
-func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary formats.ScanSummaryResult) {
+func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary formats.ScanSummaryResult) {
 	if len(scaResults) == 0 {
 		return
 	}
@@ -366,7 +366,7 @@ func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaS
 	return
 }
 
-func getScanViolationsSummary(scaResults ...ScaScanResult) (violations formats.TwoLevelSummaryCount) {
+func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.TwoLevelSummaryCount) {
 	vioUniqueFindings := map[string]IssueDetails{}
 	if len(scaResults) == 0 {
 		return
@@ -392,14 +392,14 @@ func getScanViolationsSummary(scaResults ...ScaScanResult) (violations formats.T
 	return issueDetailsToSummaryCount(vioUniqueFindings)
 }
 
-func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
+func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
 	summary = &formats.ScanVulnerabilitiesSummary{}
 	if extendedScanResults == nil {
-		summary.ScaScanResults = getScaSummaryResults(&scaResults)
+		summary.ScaScanResults = getScaSummaryResults(scaResults)
 		return
 	}
 	if len(scaResults) > 0 {
-		summary.ScaScanResults = getScaSummaryResults(&scaResults, extendedScanResults.ApplicabilityScanResults...)
+		summary.ScaScanResults = getScaSummaryResults(scaResults, extendedScanResults.ApplicabilityScanResults...)
 	}
 	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
 	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
@@ -439,14 +439,14 @@ func getSecurityIssueFindings(cves []services.Cve, issueId, severity string, com
 	return
 }
 
-func getScaSummaryResults(scaScanResults *[]ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
+func getScaSummaryResults(scaScanResults []*ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
 	vulFindings := map[string]IssueDetails{}
 	vulUniqueFindings := map[string]IssueDetails{}
-	if len(*scaScanResults) == 0 {
+	if len(scaScanResults) == 0 {
 		return nil
 	}
 	// Aggregate unique findings
-	for _, scaResult := range *scaScanResults {
+	for _, scaResult := range scaScanResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, vulnerability := range xrayResult.Vulnerabilities {
 				vulFinding, vulUniqueFinding := getSecurityIssueFindings(vulnerability.Cves, vulnerability.IssueId, vulnerability.Severity, vulnerability.Components, applicableRuns...)
