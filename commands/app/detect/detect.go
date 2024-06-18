@@ -6,6 +6,7 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -75,12 +76,19 @@ func RunDetectSecurityConfig(serverDetails *config.ServerDetails, params *AppsDe
 		return
 	}
 
+	
+
+	return
+}
+
+func handleScanConfigurations(params *scanconfig.AppsSecurityConfig, xrayVersion string, entitledForJas bool) (appsConfig *scanconfig.AppsSecurityConfig, err error) {
 	appsConfig = &scanconfig.AppsSecurityConfig{ XrayVersion: xrayVersion, EntitledForJas: entitledForJas }
 
 	// Get remote security config (TODO: when API ready)
 
 	// Get local config (if exists)
-	if err = tryLoadLocalScanConfig(appsConfig); err != nil {
+	localConfig, err = tryLoadLocalScanConfig()
+	if err != nil {
 		return
 	}
 
@@ -100,21 +108,63 @@ func RunDetectSecurityConfig(serverDetails *config.ServerDetails, params *AppsDe
 
 	// Detect tech information and descriptors (+ detect modules if needed -> create config based on default profile)
 	isRecursiveDetection := len(params.WorkingDirs) == 0 // If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+}
 
+func tryLoadLocalScanConfig(xrayVersion string, entitledForJas bool) (appsConfig *scanconfig.AppsSecurityConfig, err error) {
+	jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist()
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	if jfrogAppsConfig == nil {
+		log.Debug("No local scan configuration found for the current workspace.")
+		return
+	}
+	// Convert loaded local scan config
+	for _, module := range jfrogAppsConfig.Modules {
+		var jasConfig *scanconfig.ScannersConfig
+		if entitledForJas {
+			jasConfig = &scanconfig.ScannersConfig{}
+			if module.Scanners.Secrets != nil && !slices.Contains(module.ExcludeScanners, utils.SecretsScan.String()) {
+				jasConfig.Secrets = convertScannerInfo(module.Scanners.Secrets)
+			}
+			if module.Scanners.Iac != nil && !slices.Contains(module.ExcludeScanners, utils.IacScan.String()) {
+				jasConfig.Iac = convertScannerInfo(module.Scanners.Iac)
+			}
+			if module.Scanners.Sast != nil && !slices.Contains(module.ExcludeScanners, utils.SastScan.String()) {
+				jasConfig.Sast = convertSastScannerInfo(module.Scanners.Sast)
+			}
+		}
+		appsConfig.Targets = append(appsConfig.Targets, scanconfig.ScanTargetConfig{
+			ScanTarget: scanconfig.ScanTarget{Target: module.SourceRoot, Name: module.Name},
+			ExcludePatterns: module.ExcludePatterns,
+			JasScanConfigs: jasConfig,
+		})
+	}
 	return
 }
 
-func tryLoadLocalScanConfig(appsConfig *scanconfig.AppsSecurityConfig) (err error) {
-	jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist()
-	if err != nil {
-		return errorutils.CheckError(err)
+func convertScannerInfo(scanner *jfrogappsconfig.Scanner) *scanconfig.ScannerConfig {
+	if scanner == nil {
+		return nil
 	}
-	if jfrogAppsConfig == nil {
-		log.Debug("No local scan configuration found.")
-		return
+	return &scanconfig.ScannerConfig{
+		WorkingDirs: scanner.WorkingDirs,
+		ExcludePatterns: scanner.ExcludePatterns,
 	}
+}
 
-	return
+func convertSastScannerInfo(scanner *jfrogappsconfig.SastScanner) *scanconfig.SastScannerConfig {
+	if scanner == nil {
+		return nil
+	}
+	converted := &scanconfig.SastScannerConfig{
+		Language: scanner.Language,
+		ExcludedRules: scanner.ExcludedRules,
+	}
+	if baseConfig := convertScannerInfo(&scanner.Scanner); baseConfig != nil {
+		converted.ScannerConfig = *baseConfig
+	} 
+	return converted
 }
 
 func createModuleConfig()

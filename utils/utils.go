@@ -33,6 +33,10 @@ const (
 
 type SubScanType string
 
+func (s SubScanType) String() string {
+	return string(s)
+}
+
 // UniqueUnion returns a new slice of strings that contains elements from both input slices without duplicates
 func UniqueUnion(arr []string, others ...string) []string {
 	uniqueSet := datastructures.MakeSet[string]()
