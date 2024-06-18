@@ -332,7 +332,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 25, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 25, 2)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
@@ -436,7 +436,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
