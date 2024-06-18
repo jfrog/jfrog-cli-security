@@ -9,7 +9,7 @@ import (
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"

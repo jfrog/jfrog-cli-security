@@ -13,16 +13,19 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
+	_go "github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/go"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/java"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/npm"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/nuget"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/pnpm"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca/yarn"
+	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -32,7 +35,64 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
+func RunScaScan(params *AuditParams, cmdResults *results.ScanCommandResults) (err error) {
+	// Prepare
+	currentWorkingDir, err := os.Getwd()
+	if errorutils.CheckError(err) != nil {
+		return
+	}
+	defer func() {
+		// Make sure to return to the original working directory, executeScaScan may change it
+		err = errors.Join(err, os.Chdir(currentWorkingDir))
+	}()
+
+	for _, scan := range cmdResults.Scans {
+		scan.GetTechnologies()
+
+	}
+
+	// for _, scanScan := range cmdResults.GetTechnologyScaScans()
+
+	for _, scan := range cmdResults.Scans {
+		for _, scaScan := range scan.ScaResults {
+			// Run the scan
+			log.Info("Running SCA scan for", scaScan.Technology, "vulnerable dependencies in", scan.Target, "directory...")
+
+		}
+	}
+
+	for _, scan := range scans {
+		// Run the scan
+		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.Target, "directory...")
+		if wdScanErr := executeScaScan(serverDetails, params, scan); wdScanErr != nil {
+			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, wdScanErr.Error()))
+			continue
+		}
+		// Add the scan to the results
+		cmdResults.ScaResults = append(cmdResults.ScaResults, *scan)
+	}
+}
+
+func buildDependencyTree(params *AuditParams, workingDir string, tech techutils.Technology) (*DependencyTreeResult, error) {
+	// Get the dependency tree for the technology in the working directory.
+	if err := os.Chdir(workingDir); err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	serverDetails, err := SetResolutionRepoIfExists(params.AuditBasicParams, tech)
+	if err != nil {
+		return nil, err
+	}
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, tech)
+	if techErr != nil {
+		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", tech, techErr.Error())
+	}
+	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
+	}
+	return &treeResult, nil
+}
+
+func runScaScan(params *AuditParams, cmdResults *results.ScanCommandResults) (err error) {
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
@@ -42,12 +102,7 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 	if err != nil {
 		return
 	}
-
 	scans := getScaScansToPreform(params)
-	if len(scans) == 0 {
-		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
-		return
-	}
 	scanInfo, err := coreutils.GetJsonIndent(scans)
 	if err != nil {
 		return
@@ -66,7 +121,7 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 			continue
 		}
 		// Add the scan to the results
-		results.ScaResults = append(results.ScaResults, *scan)
+		cmdResults.ScaResults = append(cmdResults.ScaResults, *scan)
 	}
 	return
 }
@@ -117,7 +172,7 @@ func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technolo
 		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
 	}
-	artifactoryDetails, err := utils.GetResolutionRepoIfExists(tech)
+	artifactoryDetails, err := artifactory.GetResolutionRepoIfExists(tech)
 	if err != nil {
 		return
 	}
@@ -149,6 +204,7 @@ func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, sc
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
+
 	// Scan the dependency tree.
 	scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, treeResult.FlatTree, treeResult.FullDepTrees)
 	if xrayErr != nil {
@@ -231,7 +287,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, serverDetails *config.S
 	}
 
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
+	var uniqDepsWithTypes map[string]*dependencytree.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -303,7 +359,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 	return logMessage, curationCacheFolder, err
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*dependencytree.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}

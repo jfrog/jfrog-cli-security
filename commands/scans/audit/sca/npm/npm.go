@@ -3,11 +3,14 @@ package npm
 import (
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/npm"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/exp/maps"
@@ -104,11 +107,11 @@ func addIgnoreScriptsFlag(npmArgs []string) []string {
 
 // Parse the dependencies into an Xray dependency tree format
 func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *biutils.PackageInfo) (*xrayUtils.GraphNode, []string) {
-	treeMap := make(map[string]utils.DepTreeNode)
+	treeMap := make(map[string]dependencytree.DepTreeNode)
 	for _, dependency := range dependencies {
-		dependencyId := utils.NpmPackageTypeIdentifier + dependency.Id
+		dependencyId := results.NpmPackageTypeIdentifier + dependency.Id
 		for _, requestedByNode := range dependency.RequestedBy {
-			parent := utils.NpmPackageTypeIdentifier + requestedByNode[0]
+			parent := results.NpmPackageTypeIdentifier + requestedByNode[0]
 			depTreeNode, ok := treeMap[parent]
 			if ok {
 				depTreeNode.Children = appendUniqueChild(depTreeNode.Children, dependencyId)
@@ -118,7 +121,7 @@ func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *
 			treeMap[parent] = depTreeNode
 		}
 	}
-	graph, nodeMapTypes := utils.BuildXrayDependencyTree(treeMap, utils.NpmPackageTypeIdentifier+packageInfo.BuildInfoModuleId())
+	graph, nodeMapTypes := dependencytree.BuildXrayDependencyTree(treeMap, results.NpmPackageTypeIdentifier+packageInfo.BuildInfoModuleId())
 	return graph, maps.Keys(nodeMapTypes)
 }
 

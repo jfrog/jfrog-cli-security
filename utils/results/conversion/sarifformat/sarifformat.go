@@ -31,7 +31,6 @@ type CmdResultsSarifConverter struct {
 	currentApplicableRuns *datastructures.Set[*sarif.Run]
 	// General information on the current command results
 	entitledForJas bool
-	multipleRoots  bool
 	xrayVersion    string
 }
 
@@ -49,7 +48,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	return sc.current, nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas, multipleTargets bool) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas bool) (err error) {
 	sc.current, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -59,7 +58,6 @@ func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas,
 
 	sc.xrayVersion = xrayVersion
 	sc.entitledForJas = entitledForJas
-	sc.multipleRoots = multipleTargets
 	return
 }
 

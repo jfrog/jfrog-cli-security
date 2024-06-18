@@ -11,7 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	utils "github.com/jfrog/jfrog-cli-core/v2/utils/python"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
 	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"

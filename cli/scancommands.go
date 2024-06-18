@@ -27,12 +27,12 @@ import (
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/binaryscan"
-	"github.com/jfrog/jfrog-cli-security/commands/buildscan"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scanprofile"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
+	// appConfig "github.com/jfrog/jfrog-cli-security/commands/app/config"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/binaryscan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/buildscan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
@@ -43,12 +43,12 @@ const dockerScanCmdHiddenName = "dockerscan"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
-		{
-			Name:   "scan-profile",
-			Flags:  flags.GetCommandFlags(flags.ScanProfile),
-			Hidden: true,
-			Action: ScanProfileCmd,
-		},
+		// {
+		// 	Name:   "scan-profile",
+		// 	Flags:  flags.GetCommandFlags(flags.ScanProfile),
+		// 	Hidden: true,
+		// 	Action: ScanProfileCmd,
+		// },
 		{
 			Name:        "scan",
 			Aliases:     []string{"s"},
@@ -161,16 +161,16 @@ func getAuditAndScansCommands() []components.Command {
 	}
 }
 
-func ScanProfileCmd(c *components.Context) error {
+// func ScanProfileCmd(c *components.Context) error {
 
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
-	if err != nil {
-		return err
-	}
-	getScanProfileCmd := scanprofile.NewScanProfileCommand()
+// 	serverDetails, err := createServerDetailsWithConfigOffer(c)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	getScanProfileCmd := appConfig.NewScanProfileCommand()
 
-	return commandsCommon.Exec(getScanProfileCmd)
-}
+// 	return commandsCommon.Exec(getScanProfileCmd)
+// }
 
 func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
@@ -206,7 +206,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetMinSeverityFilter(minSeverity).
+		SetMinSeverityFilter(minSeverity.String()).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
 

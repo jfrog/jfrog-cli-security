@@ -7,12 +7,12 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -37,8 +37,6 @@ type ResultsWriter struct {
 	includeVulnerabilities bool
 	// IncludeLicenses  If true, also include license violations as part of the output.
 	includeLicenses bool
-	// IsMultipleRoots  multipleRoots is set to true, in case the given results array contains (or may contain) results of several projects (like in binary scan).
-	isMultipleRoots bool
 	// PrintExtended, If true, show extended results.
 	printExtended bool
 	// The scanType (binary,dependency)
@@ -68,11 +66,6 @@ func (rw *ResultsWriter) SetIncludeVulnerabilities(includeVulnerabilities bool) 
 
 func (rw *ResultsWriter) SetIncludeLicenses(licenses bool) *ResultsWriter {
 	rw.includeLicenses = licenses
-	return rw
-}
-
-func (rw *ResultsWriter) SetIsMultipleRootProject(isMultipleRootProject bool) *ResultsWriter {
-	rw.isMultipleRoots = isMultipleRootProject
 	return rw
 }
 
@@ -106,6 +99,10 @@ func isPrettyOutputSupported() bool {
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
+	if rw.commandResults.GetErrors() != nil && !rw.commandResults.HasInformation() {
+		// Don't print if there are no results and only errors.
+		return nil
+	}
 	switch rw.format {
 	case format.Table:
 		return rw.printTables()
@@ -148,12 +145,12 @@ func (rw *ResultsWriter) printSarif() error {
 	return nil
 }
 
-func PrintJson(output interface{}) error {
-	results, err := json.Marshal(output)
+func PrintJson(output interface{}) (err error) {
+	results, err := utils.GetAsJsonString(output)
 	if err != nil {
-		return errorutils.CheckError(err)
+		return
 	}
-	log.Output(clientUtils.IndentJson(results))
+	log.Output(results)
 	return nil
 }
 
@@ -172,7 +169,7 @@ func (rw *ResultsWriter) printTables() (err error) {
 	}
 	log.Output()
 	if rw.includeVulnerabilities {
-		err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetScaScannedTechnologies()) > 0, rw.printExtended)
+		err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended)
 	} else {
 		err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended)
 	}

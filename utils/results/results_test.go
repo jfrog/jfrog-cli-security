@@ -1,5 +1,12 @@
 package results
 
+import (
+	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/stretchr/testify/assert"
+)
+
 // import (
 // 	"testing"
 
@@ -49,3 +56,48 @@ package results
 // 		})
 // 	}
 // }
+
+func TestGetTechnologies(t *testing.T) {
+	testCases := []struct {
+		name     string
+		results  *ScanCommandResults
+		expected []techutils.Technology
+	}{
+		{
+			name:     "No technologies",
+			results:  &ScanCommandResults{},
+			expected: []techutils.Technology{},
+		},
+		{
+			name: "Multiple technologies, one scan result",
+			results: &ScanCommandResults{Scans: []*ScanResults{
+				{Target: "target1", ScaResults: []ScaScanResults{
+					{Technology: techutils.Maven},
+					{Technology: techutils.Maven},
+				}},
+			}},
+			expected: []techutils.Technology{techutils.Maven},
+		},
+		{
+			name: "Multiple technologies, multiple scan results",
+			results: &ScanCommandResults{Scans: []*ScanResults{
+				{Target: "target1", ScaResults: []ScaScanResults{
+					{Technology: techutils.Maven},
+					{Technology: techutils.Npm},
+				}},
+				{Target: "target2", ScaResults: []ScaScanResults{
+					{Technology: techutils.Pip},
+					{Technology: techutils.Npm},
+				}},
+			}},
+			expected: []techutils.Technology{techutils.Maven, techutils.Npm, techutils.Pip},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := testCase.results.GetTechnologies()
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
+}

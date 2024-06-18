@@ -17,7 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -185,22 +185,18 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	for _, sarifResult := range sarifRun.Results {
 		if rule, err := sarifRun.GetRuleById(*sarifResult.RuleID); err == nil {
 			// Add to the rule security-severity score based on results severity
-			score := convertToScore(sarifutils.GetResultSeverity(sarifResult))
-			if score != output.MissingCveScore {
-				if rule.Properties == nil {
-					rule.WithProperties(sarif.NewPropertyBag().Properties)
-				}
-				rule.Properties["security-severity"] = score
+			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+				severity = severityutils.Unknown
 			}
+			score := severityutils.GetSeverityScore(severity, jasutils.Applicable)
+			if rule.Properties == nil {
+				rule.WithProperties(sarif.NewPropertyBag().Properties)
+			}
+			rule.Properties["security-severity"] = score
 		}
 	}
-}
-
-func convertToScore(severity string) string {
-	if level, ok := mapSeverityToScore[strings.ToLower(severity)]; ok {
-		return level
-	}
-	return ""
 }
 
 func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType jasutils.JasScanType) error {

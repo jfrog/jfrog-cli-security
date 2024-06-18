@@ -3,15 +3,16 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"

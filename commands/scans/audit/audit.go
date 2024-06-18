@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/commands/app/detect"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -15,13 +14,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"golang.org/x/sync/errgroup"
 
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -111,22 +109,22 @@ func (auditCmd *AuditCommand) CreateXrayGraphScanParams() *services.XrayGraphSca
 
 func (auditCmd *AuditCommand) Run() (err error) {
 	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-	isRecursiveScan := len(auditCmd.workingDirs) == 0
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
-	if err != nil {
-		return
-	}
+	// isRecursiveScan := len(auditCmd.workingDirs) == 0
+	// workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
+	// if err != nil {
+	// 	return
+	// }
 
 	// Should be called before creating the audit params, so the params will contain XSC information.
 	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	auditParams := NewAuditParams().
 		SetXrayGraphScanParams(auditCmd.CreateXrayGraphScanParams()).
-		SetWorkingDirs(workingDirs).
+		//SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan)
-	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+	auditParams.SetExclusions(auditCmd.Exclusions()) //.SetIsRecursiveScan(isRecursiveScan)
 
 	auditResults, err := RunAudit(auditParams)
 	if err != nil {
@@ -143,27 +141,24 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	// Print Scan results on all cases except if errors accrued on SCA scan and no security/license issues found.
-	printScanResults := !(auditResults.ScaError != nil && !auditResults.IsScaIssuesFound())
-	if printScanResults {
-		if err = output.NewResultsWriter(auditResults).
-			SetIsMultipleRootProject(auditResults.IsMultipleProject()).
-			SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
-			SetIncludeLicenses(auditCmd.IncludeLicenses).
-			SetOutputFormat(auditCmd.OutputFormat()).
-			SetPrintExtendedTable(auditCmd.PrintExtendedTable).
-			SetExtraMessages(messages).
-			SetScanType(services.Dependency).
-			PrintScanResults(); err != nil {
-			return
-		}
-	}
-	if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
+	if err = output.NewResultsWriter(auditResults).
+		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
+		SetIncludeLicenses(auditCmd.IncludeLicenses).
+		SetOutputFormat(auditCmd.OutputFormat()).
+		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
+		SetExtraMessages(messages).
+		SetScanType(services.Dependency).
+		PrintScanResults(); err != nil {
 		return
 	}
+	err = auditResults.GetErrors()
+	// if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
+	// 	return
+	// }
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && output.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
-		err = output.NewFailBuildError()
+	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+		err = results.NewFailBuildError()
 	}
 	return
 }
@@ -175,37 +170,51 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (results *results.ScanCommandResults, err error) {
+func RunAudit(auditParams *AuditParams) (cmdResults *results.ScanCommandResults, err error) {
 	// Initialize Results struct
-	results = xrayutils.NewAuditResults()
-
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
 	}
-	var xrayManager *xray.XrayServicesManager
-	if xrayManager, auditParams.xrayVersion, err = xrayUtils.CreateXrayServiceManagerAndGetVersion(serverDetails); err != nil {
-		return
-	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, auditParams.xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
-		return
-	}
-	results.XrayVersion = auditParams.xrayVersion
-	results.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
+
+	appsConfig, err := detect.RunDetectSecurityConfig(serverDetails, &detect.AppsDetectParams{
+		WorkingDirs: auditParams.WorkingDirs(),
+	})
 	if err != nil {
 		return
 	}
+	if detectedStr, err := utils.GetAsJsonString(appsConfig); err == nil {
+		log.Info(fmt.Sprintf("Running audit with the following configurations:\n%s", detectedStr))
+	}
 
+	// xrayManager, xrayVersion, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	// if ; err != nil {
+	// 	return
+	// }
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, appsConfig.XrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+		return
+	}
 	errGroup := new(errgroup.Group)
-	if results.ExtendedScanResults.EntitledForJas {
+	if appsConfig.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
 		errGroup.Go(jas.DownloadAnalyzerManagerIfNeeded)
 	}
+	// entitledForJas, err := jas.IsEntitledForJas(xrayManager, xrayVersion)
+	// if err != nil {
+	// 	return
+	// }
+	cmdResults = createCmdResults(appsConfig)
 
-	results.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId
+	// scans := getScaScansToPreform(params)
+	// if len(scans) == 0 {
+	// 	log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
+	// 	return
+	// }
+
+	cmdResults.MultiScanId = auditParams.XrayGraphScanParams().MultiScanId
 
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	results.ScaError = runScaScan(auditParams, results)
+	cmdResults.Errors = runScaScan(auditParams, cmdResults)
 
 	// Wait for the Download of the AnalyzerManager to complete.
 	if err = errGroup.Wait(); err != nil {
@@ -213,8 +222,19 @@ func RunAudit(auditParams *AuditParams) (results *results.ScanCommandResults, er
 	}
 
 	// Run scanners only if the user is entitled for Advanced Security
-	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runner.RunJasScannersAndSetResults(results.ExtendedScanResults, results.GetScaScannedTechnologies(), results.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+	if cmdResults.EntitledForJas {
+		cmdResults.JasError = runner.RunJasScannersAndSetResults(cmdResults.ExtendedScanResults, cmdResults.GetTechnologies(), cmdResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	}
 	return
+}
+
+func createCmdResults(appsConfig *detect.AppsSecurityConfig) *results.ScanCommandResults {
+	cmdResults := results.NewCommandResults(appsConfig.XrayVersion, appsConfig.EntitledForJas)
+	for _, moduleConfig := range appsConfig.Modules {
+		moduleScans := cmdResults.NewScanResults(moduleConfig.Module.SourceRoot)
+		for _, descriptor := range moduleConfig.Descriptors {
+			moduleScans.NewScaScan(descriptor, moduleConfig.Technology)
+		}
+	}
+	return cmdResults
 }

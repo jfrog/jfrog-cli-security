@@ -12,7 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 

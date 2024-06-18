@@ -287,6 +287,7 @@ func convertCves(cves []services.Cve) []formats.CveRow {
 	return cveRows
 }
 
+// FindMaxCVEScore returns the maximum CVSS score of the given CVEs or score based on severity and applicability status if not exists.
 func FindMaxCVEScore(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, cves []formats.CveRow) (string, error) {
 	maxCve := severityutils.MinCveScore
 	for _, cve := range cves {
@@ -305,6 +306,7 @@ func FindMaxCVEScore(severity severityutils.Severity, applicabilityStatus jasuti
 	return fmt.Sprintf("%.1f", maxCve), nil
 }
 
+// GetCveScore returns the CVSS score of the given CVE or score based on severity and applicability status if not exists.
 func GetCveScore(severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, cve formats.CveRow) (float32, error) {
 	if cve.CvssV3 == "" {
 		return severityutils.GetSeverityScore(severity, applicabilityStatus), nil

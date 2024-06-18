@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -67,7 +67,7 @@ type ScanCommand struct {
 	indexerTempDir         string
 	outputFormat           format.OutputFormat
 	projectKey             string
-	minSeverityFilter      string
+	minSeverityFilter      severityutils.Severity
 	watches                []string
 	includeVulnerabilities bool
 	includeLicenses        bool
@@ -79,7 +79,7 @@ type ScanCommand struct {
 	commandSupportsJAS     bool
 }
 
-func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter string) *ScanCommand {
+func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
 	scanCmd.minSeverityFilter = minSeverityFilter
 	return scanCmd
 }
@@ -186,12 +186,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *resultutils.ScanCommandResults) error {
-		return resultutils.RecordSecurityCommandOutput(resultutils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: resultutils.Binary})
+	return scanCmd.RunAndRecordResults(func(scanResults *results.ScanCommandResults) error {
+		return output.RecordSecurityCommandOutput(output.Binary, scanResults)
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *resultutils.ScanCommandResults) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *results.ScanCommandResults) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -206,13 +206,12 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	if err != nil {
 		return err
 	}
+	entitledForJas, err := jas.IsEntitledForJas(xrayManager, xrayVersion)
 
-	scanResults := xrutils.NewAuditResults()
-	scanResults.XrayVersion = xrayVersion
+	scanResults := results.NewCommandResults(xrayVersion, entitledForJas)
 
-	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
 	errGroup := new(errgroup.Group)
-	if scanResults.ExtendedScanResults.EntitledForJas {
+	if entitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
 		errGroup.Go(jas.DownloadAnalyzerManagerIfNeeded)
 	}
@@ -261,7 +260,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)
 	// Start walking on the filesystem to "produce" files that match the given pattern
 	// while the consumer uses the indexer to index those files.
-	scanCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, scanResults.ExtendedScanResults.EntitledForJas, resultsArr, fileProducerErrors, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
+	scanCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, entitledForJas, resultsArr, fileProducerErrors, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
 	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
 	// Handle results
@@ -305,7 +304,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
-		SetIsMultipleRootProject(true).
+		// SetIsMultipleRootProject(true).
 		SetExtraMessages(messages).
 		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
@@ -400,7 +399,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(xrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
-					SetSeverityLevel(scanCmd.minSeverityFilter)
+					SetSeverityLevel(scanCmd.minSeverityFilter.String())
 				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {
 					return err

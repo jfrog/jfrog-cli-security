@@ -8,7 +8,7 @@ import (
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
 )

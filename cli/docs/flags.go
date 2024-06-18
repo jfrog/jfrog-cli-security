@@ -7,8 +7,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 )
 

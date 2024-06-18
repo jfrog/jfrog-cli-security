@@ -1,4 +1,4 @@
-package jobsummary
+package output
 
 import (
 	"fmt"
@@ -10,6 +10,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"golang.org/x/exp/maps"
 )
 
@@ -38,8 +40,20 @@ func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error)
 	return commandsummary.New(&SecurityCommandsSummary{}, "security")
 }
 
+func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (ScanCommandSummaryResult, error) {
+	convertor := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{})
+	summary, err := convertor.ConvertToSummary(cmdResults)
+	if err != nil {
+		return ScanCommandSummaryResult{Section: section}, err
+	}
+	return ScanCommandSummaryResult{
+		Section: section,
+		Results: summary,
+	}, nil
+}
+
 // Record the security command output
-func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
+func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (err error) {
 	if !commandsummary.ShouldRecordSummary() {
 		return
 	}
@@ -51,8 +65,12 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil {
 		return
 	}
-	content.WorkingDirectory = wd
-	return manager.Record(content)
+	summary, err := CreateCommandSummaryResult(section, cmdResults)
+	if err != nil {
+		return
+	}
+	summary.WorkingDirectory = wd
+	return manager.Record(summary)
 }
 
 func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {

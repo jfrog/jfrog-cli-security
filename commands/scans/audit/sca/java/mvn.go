@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
@@ -70,7 +70,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 	}
 }
 
-func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*utils.DepTreeNode, err error) {
+func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*dependencytree.DepTreeNode, err error) {
 	manager := NewMavenDepTreeManager(params, Tree)
 	outputFilePaths, clearMavenDepTreeRun, err := manager.RunMavenDepTree()
 	if err != nil {
@@ -173,6 +173,10 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	if mdt.settingsXmlPath != "" {
 		goals = append(goals, "-s", mdt.settingsXmlPath)
 	}
+
+	// c := exec.Command("mvn", goals...)
+	// TODO: remove constaint on the working directory
+	// c.Dir = mdt.workingDir
 
 	//#nosec G204
 	cmdOutput, err = exec.Command("mvn", goals...).CombinedOutput()

@@ -21,7 +21,6 @@ type CmdResultsSimpleJsonConverter struct {
 	current *formats.SimpleJsonResults
 	// General information on the current command results
 	entitledForJas bool
-	multipleRoots  bool
 }
 
 func NewCmdResultsSimpleJsonConverter(pretty bool) *CmdResultsSimpleJsonConverter {
@@ -36,10 +35,9 @@ func (sjc *CmdResultsSimpleJsonConverter) Get() *formats.SimpleJsonResults {
 	return sjc.current
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(multiScanId, _ string, entitledForJas, multipleTargets bool) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(multiScanId, _ string, entitledForJas bool) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
-	sjc.multipleRoots = multipleTargets
 	return
 }
 
@@ -57,7 +55,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target string, _ techu
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
-	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, violations, sjc.entitledForJas, sjc.multipleRoots, sjc.pretty, applicabilityRuns...)
+	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, violations, sjc.entitledForJas, sjc.pretty, applicabilityRuns...)
 	if err != nil {
 		return
 	}
@@ -71,7 +69,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseVulnerabilities(target string, _ 
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
-	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, vulnerabilities, sjc.entitledForJas, sjc.multipleRoots, sjc.pretty, applicabilityRuns...)
+	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, vulnerabilities, sjc.entitledForJas, sjc.pretty, applicabilityRuns...)
 	if err != nil || len(vulSimpleJson) == 0 {
 		return
 	}
@@ -136,7 +134,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(target string, sast ...*sari
 	return
 }
 
-func PrepareSimpleJsonViolations(target string, violations []services.Violation, jasEntitled, multipleRoots, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+func PrepareSimpleJsonViolations(target string, violations []services.Violation, jasEntitled, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
 	var licenseViolationsRows []formats.LicenseRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
@@ -153,7 +151,7 @@ func PrepareSimpleJsonViolations(target string, violations []services.Violation,
 	return securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err
 }
 
-func PrepareSimpleJsonVulnerabilities(target string, vulnerabilities []services.Vulnerability, entitledForJas, multipleRoots, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
+func PrepareSimpleJsonVulnerabilities(target string, vulnerabilities []services.Vulnerability, entitledForJas, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
 	err := results.PrepareScaVulnerabilities(
 		target,

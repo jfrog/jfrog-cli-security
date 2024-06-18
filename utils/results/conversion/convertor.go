@@ -42,7 +42,7 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 // Parse a stream of results and convert to the desired format
 type ResultsStreamFormatConvertor interface {
 	// Reset the convertor to start converting a new command results
-	Reset(multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) error
+	Reset(multiScanId, xrayVersion string, entitledForJas bool) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewScanResultsMetadata(target string, errors error) error
 	// Parse SCA content to the current scan target
@@ -106,7 +106,7 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.ScanComma
 func (c *CommandResultsConvertor) parseCommandResults(convertor ResultsStreamFormatConvertor, cmdResults *results.ScanCommandResults) (err error) {
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
-	convertor.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets)
+	convertor.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled)
 	for _, scan := range cmdResults.Scans {
 		if err = convertor.ParseNewScanResultsMetadata(scan.Target, scan.Errors); err != nil {
 			return err

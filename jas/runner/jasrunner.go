@@ -9,11 +9,22 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
+
+func RunJasScannersOnModule(module *scanconfig.ScanTargetConfig, msi string) (*results.JasScansResults, error) {
+	return nil, nil
+}
+
+type JasScanParams struct {
+	// Working directory / binary to scan
+	Target []string
+}
 
 func RunJasScannersAndSetResults(extendedScanResults *jas.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []services.ScanResponse, directDependencies []string,
 	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType) (err error) {

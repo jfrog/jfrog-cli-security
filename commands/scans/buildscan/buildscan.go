@@ -9,7 +9,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output/jobsummary"
 	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -112,7 +111,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	}
 	// If failBuild flag is true and also got fail build response from Xray
 	if bsc.failBuild && isFailBuildResponse {
-		return output.NewFailBuildError()
+		return results.NewFailBuildError()
 	}
 	return
 }
@@ -146,7 +145,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetOutputFormat(bsc.outputFormat).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
-		SetIsMultipleRootProject(true).
+		// SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
 		SetScanType(services.Binary).
 		SetExtraMessages(nil)
@@ -172,7 +171,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-	err = jobsummary.RecordSecurityCommandOutput(jobsummary.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: jobsummary.Build})
+	err = output.RecordSecurityCommandOutput(output.Build, scanResults)
 	return
 }
 

@@ -1,16 +1,10 @@
-package xray
+package dependencytree
 
 import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 const maxUniqueAppearances = 10
-
-type DepTreeNode struct {
-	Classifier *string   `json:"classifier"`
-	Types      *[]string `json:"types"`
-	Children   []string  `json:"children"`
-}
 
 func toNodeTypesMap(depMap map[string]DepTreeNode) map[string]*DepTreeNode {
 	mapOfTypes := map[string]*DepTreeNode{}

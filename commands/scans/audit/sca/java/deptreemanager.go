@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -17,7 +17,7 @@ const (
 	GavPackageTypeIdentifier = "gav://"
 )
 
-func BuildDependencyTree(depTreeParams DepTreeParams, tech techutils.Technology) ([]*xrayUtils.GraphNode, map[string]*utils.DepTreeNode, error) {
+func BuildDependencyTree(depTreeParams DepTreeParams, tech techutils.Technology) ([]*xrayUtils.GraphNode, map[string]*dependencytree.DepTreeNode, error) {
 	if tech == techutils.Maven {
 		return buildMavenDependencyTree(&depTreeParams)
 	}
@@ -45,18 +45,18 @@ func NewDepTreeManager(params *DepTreeParams) DepTreeManager {
 
 // The structure of a dependency tree of a module in a Gradle/Maven project, as created by the gradle-dep-tree and maven-dep-tree plugins.
 type moduleDepTree struct {
-	Root  string                       `json:"root"`
-	Nodes map[string]utils.DepTreeNode `json:"nodes"`
+	Root  string                                `json:"root"`
+	Nodes map[string]dependencytree.DepTreeNode `json:"nodes"`
 }
 
 // Reads the output files of the gradle-dep-tree and maven-dep-tree plugins and returns them as a slice of GraphNodes.
 // It takes the output of the plugin's run (which is a byte representation of a list of paths of the output files, separated by newlines) as input.
-func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNode, uniqueDepsMap map[string]*utils.DepTreeNode, err error) {
+func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNode, uniqueDepsMap map[string]*dependencytree.DepTreeNode, err error) {
 	modules, err := parseDepTreeFiles(outputFilePaths)
 	if err != nil {
 		return
 	}
-	uniqueDepsMap = map[string]*utils.DepTreeNode{}
+	uniqueDepsMap = map[string]*dependencytree.DepTreeNode{}
 	for _, module := range modules {
 		moduleTree, moduleUniqueDeps := GetModuleTreeAndDependencies(module)
 		depsGraph = append(depsGraph, moduleTree)
@@ -68,8 +68,8 @@ func getGraphFromDepTree(outputFilePaths string) (depsGraph []*xrayUtils.GraphNo
 }
 
 // Returns a dependency tree and a flat list of the module's dependencies for the given module
-func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, map[string]*utils.DepTreeNode) {
-	moduleTreeMap := make(map[string]utils.DepTreeNode)
+func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, map[string]*dependencytree.DepTreeNode) {
+	moduleTreeMap := make(map[string]dependencytree.DepTreeNode)
 	moduleDeps := module.Nodes
 	for depName, dependency := range moduleDeps {
 		dependencyId := GavPackageTypeIdentifier + depName
@@ -78,13 +78,13 @@ func GetModuleTreeAndDependencies(module *moduleDepTree) (*xrayUtils.GraphNode, 
 			childId := GavPackageTypeIdentifier + childName
 			childrenList = append(childrenList, childId)
 		}
-		moduleTreeMap[dependencyId] = utils.DepTreeNode{
+		moduleTreeMap[dependencyId] = dependencytree.DepTreeNode{
 			Classifier: dependency.Classifier,
 			Types:      dependency.Types,
 			Children:   childrenList,
 		}
 	}
-	return utils.BuildXrayDependencyTree(moduleTreeMap, GavPackageTypeIdentifier+module.Root)
+	return dependencytree.BuildXrayDependencyTree(moduleTreeMap, GavPackageTypeIdentifier+module.Root)
 }
 
 func parseDepTreeFiles(jsonFilePaths string) ([]*moduleDepTree, error) {

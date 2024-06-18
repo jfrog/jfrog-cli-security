@@ -167,6 +167,9 @@ func ParseToSarifSeverityLevel(sarifSeverity string) (parsed SarifSeverityLevel,
 		parsed = LevelNote
 	case LevelNone.String():
 		parsed = LevelNone
+	case "":
+		// Default value for Sarif severity level is 'Warning' (Medium) if not provided
+		parsed = LevelWarning
 	default:
 		err = errorutils.CheckErrorf("Sarif level '%s' is not supported, only the following levels are supported: %s", sarifSeverity, coreutils.ListToText(supportedSarifSeverities()))
 	}

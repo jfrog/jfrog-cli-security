@@ -1,11 +1,151 @@
 package simplejsonformat
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 
+	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
+
+func TestSortVulnerabilityOrViolationRows(t *testing.T) {
+	testCases := []struct {
+		name          string
+		rows          []formats.VulnerabilityOrViolationRow
+		expectedOrder []string
+	}{
+		{
+			name: "Sort by severity with different severity values",
+			rows: []formats.VulnerabilityOrViolationRow{
+				{
+					Summary: "Summary 1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "High",
+							SeverityNumValue: 9,
+						},
+						ImpactedDependencyName:    "Dependency 1",
+						ImpactedDependencyVersion: "1.0.0",
+					},
+					FixedVersions: []string{},
+				},
+				{
+					Summary: "Summary 2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 12,
+						},
+						ImpactedDependencyName:    "Dependency 2",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+					FixedVersions: []string{"1.0.0"},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Medium",
+							SeverityNumValue: 6,
+						},
+						ImpactedDependencyName:    "Dependency 3",
+						ImpactedDependencyVersion: "3.0.0",
+					},
+					Summary:       "Summary 3",
+					FixedVersions: []string{},
+				},
+			},
+			expectedOrder: []string{"Dependency 2", "Dependency 1", "Dependency 3"},
+		},
+		{
+			name: "Sort by severity with same severity values, but different fixed versions",
+			rows: []formats.VulnerabilityOrViolationRow{
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 12,
+						},
+						ImpactedDependencyName:    "Dependency 1",
+						ImpactedDependencyVersion: "1.0.0",
+					},
+					Summary:       "Summary 1",
+					FixedVersions: []string{"1.0.0"},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 12,
+						},
+						ImpactedDependencyName:    "Dependency 2",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+					Summary:       "Summary 2",
+					FixedVersions: []string{},
+				},
+			},
+			expectedOrder: []string{"Dependency 1", "Dependency 2"},
+		},
+		{
+			name: "Sort by severity with same severity values different applicability",
+			rows: []formats.VulnerabilityOrViolationRow{
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 13,
+						},
+						ImpactedDependencyName:    "Dependency 1",
+						ImpactedDependencyVersion: "1.0.0",
+					},
+					Summary:       "Summary 1",
+					Applicable:    jasutils.Applicable.String(),
+					FixedVersions: []string{"1.0.0"},
+				},
+				{
+					Summary:    "Summary 2",
+					Applicable: jasutils.NotApplicable.String(),
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 11,
+						},
+						ImpactedDependencyName:    "Dependency 2",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+				{
+					Summary:    "Summary 3",
+					Applicable: jasutils.ApplicabilityUndetermined.String(),
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails: formats.SeverityDetails{
+							Severity:         "Critical",
+							SeverityNumValue: 12,
+						},
+						ImpactedDependencyName:    "Dependency 3",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+			},
+			expectedOrder: []string{"Dependency 1", "Dependency 3", "Dependency 2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sortVulnerabilityOrViolationRows(tc.rows)
+
+			for i, row := range tc.rows {
+				assert.Equal(t, tc.expectedOrder[i], row.ImpactedDependencyName)
+			}
+		})
+	}
+}
 
 func TestGetOperationalRiskReadableData(t *testing.T) {
 	tests := []struct {
@@ -18,8 +158,8 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 			&operationalRiskViolationReadableData{"N/A", "N/A", "N/A", "N/A", "", "", "N/A", "N/A"},
 		},
 		{
-			services.Violation{IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
-				Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
+			services.Violation{IsEol: utils.NewBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: utils.NewIntPtr(5),
+				Cadence: utils.NewFloat64Ptr(3.5), Commits: utils.NewInt64Ptr(55), Committers: utils.NewIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
 			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
 		},
 	}
@@ -30,349 +170,164 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 	}
 }
 
-func newBoolPtr(v bool) *bool {
-	return &v
-}
+func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
+	testScaScanResults := []services.Vulnerability{
+		{
+			IssueId:    "XRAY-1",
+			Summary:    "summary-1",
+			Severity:   "High",
+			Cves:       []services.Cve{{Id: "CVE-1"}},
+			Components: map[string]services.Component{"component-A": {}, "component-B": {}},
+		},
+		{
+			IssueId:    "XRAY-2",
+			Summary:    "summary-2",
+			Severity:   "Low",
+			Cves:       []services.Cve{{Id: "CVE-2"}},
+			Components: map[string]services.Component{"component-B": {}},
+		},
+	}
 
-func newIntPtr(v int) *int {
-	return &v
-}
-
-func newInt64Ptr(v int64) *int64 {
-	return &v
-}
-
-func newFloat64Ptr(v float64) *float64 {
-	return &v
-}
-
-func TestPrepareIac(t *testing.T) {
 	testCases := []struct {
-		name           string
-		input          []*sarif.Run
-		expectedOutput []formats.SourceCodeRow
+		name             string
+		input            []services.Vulnerability
+		target           string
+		entitledForJas   bool
+		pretty           bool
+		applicablityRuns []*sarif.Run
+		expectedOutput   []formats.VulnerabilityOrViolationRow
 	}{
 		{
-			name:           "No Iac run",
-			input:          []*sarif.Run{},
-			expectedOutput: []formats.SourceCodeRow{},
+			name:             "No vulnerabilities",
+			input:            []services.Vulnerability{},
+			target:           "target",
+			entitledForJas:   false,
+			pretty:           false,
+			applicablityRuns: []*sarif.Run{},
+			expectedOutput:   []formats.VulnerabilityOrViolationRow{},
 		},
 		{
-			name: "Prepare Iac run - no results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-			},
-			expectedOutput: []formats.SourceCodeRow{},
-		},
-		{
-			name: "Prepare Iac run - with results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("iac finding", "rule1", "info",
-						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
-					),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
-				}),
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("other iac finding", "rule2", "error",
-						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
-					),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
-				}),
-			},
-			expectedOutput: []formats.SourceCodeRow{
+			name:             "Vulnerabilities with no applicability",
+			input:            testScaScanResults,
+			target:           "target",
+			entitledForJas:   false,
+			pretty:           false,
+			applicablityRuns: []*sarif.Run{},
+			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "High",
-						SeverityNumValue: 17,
-					},
-					Finding: "other iac finding",
-					Location: formats.Location{
-						File:        "file3",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "snippet",
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-A",
 					},
 				},
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
-					},
-					Finding: "iac finding",
-					Location: formats.Location{
-						File:        "file",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "snippet",
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-B",
 					},
 				},
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
-					},
-					Finding: "iac finding",
-					Location: formats.Location{
-						File:        "file2",
-						StartLine:   5,
-						StartColumn: 6,
-						EndLine:     7,
-						EndColumn:   8,
-						Snippet:     "other-snippet",
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						ImpactedDependencyName: "component-B",
 					},
 				},
 			},
 		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tc.expectedOutput, prepareIacs(tc.input, false))
-		})
-	}
-}
-
-func TestPrepareSecrets(t *testing.T) {
-	testCases := []struct {
-		name           string
-		input          []*sarif.Run
-		expectedOutput []formats.SourceCodeRow
-	}{
 		{
-			name:           "No Secret run",
-			input:          []*sarif.Run{},
-			expectedOutput: []formats.SourceCodeRow{},
-		},
-		{
-			name: "Prepare Secret run - no results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-			},
-			expectedOutput: []formats.SourceCodeRow{},
-		},
-		{
-			name: "Prepare Secret run - with results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
+			name:           "Vulnerabilities with applicability",
+			input:          testScaScanResults,
+			target:         "target",
+			entitledForJas: true,
+			pretty:         false,
+			applicablityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("secret finding", "rule1", "info",
-						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet"),
-						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-secret-snippet"),
-					),
+					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
 				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
-				}),
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("other secret finding", "rule2", "note",
-						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "some-secret-snippet"),
-					),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
 				}),
 			},
-			expectedOutput: []formats.SourceCodeRow{
+			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Low",
-						SeverityNumValue: 11,
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-A",
+						Components:             []formats.ComponentRow{{Name: "component-A", Location: &formats.Location{File: "target"}}},
 					},
-					Finding: "other secret finding",
-					Location: formats.Location{
-						File:        "file3",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "some-secret-snippet",
-					},
+					Applicable: jasutils.NotApplicable.String(),
+					Cves:       []formats.CveRow{{Id: "CVE-1"}},
 				},
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-B",
+						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
-					Finding: "secret finding",
-					Location: formats.Location{
-						File:        "file",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "some-secret-snippet",
-					},
+					Applicable: jasutils.NotApplicable.String(),
+					Cves:       []formats.CveRow{{Id: "CVE-1"}},
 				},
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						ImpactedDependencyName: "component-B",
+						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
-					Finding: "secret finding",
-					Location: formats.Location{
-						File:        "file2",
-						StartLine:   5,
-						StartColumn: 6,
-						EndLine:     7,
-						EndColumn:   8,
-						Snippet:     "other-secret-snippet",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tc.expectedOutput, prepareSecrets(tc.input, false))
-		})
-	}
-}
-
-// TODO: remove and replace with resource
-
-func TestPrepareSast(t *testing.T) {
-	testCases := []struct {
-		name           string
-		input          []*sarif.Run
-		expectedOutput []formats.SourceCodeRow
-	}{
-		{
-			name:           "No Sast run",
-			input:          []*sarif.Run{},
-			expectedOutput: []formats.SourceCodeRow{},
-		},
-		{
-			name: "Prepare Sast run - no results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(),
-			},
-			expectedOutput: []formats.SourceCodeRow{},
-		},
-		{
-			name: "Prepare Sast run - with results",
-			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(),
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("sast finding", "rule1", "info",
-						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
-					).WithCodeFlows([]*sarif.CodeFlow{
-						sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-							sarifutils.CreateLocation("file://wd/file2", 0, 2, 0, 2, "snippetA"),
-							sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						)),
-						sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
-							sarifutils.CreateLocation("file://wd/file4", 1, 0, 1, 8, "snippetB"),
-							sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						)),
-					}),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
-				}),
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithLocations("other sast finding", "rule2", "error",
-						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
-					),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
-				}),
-			},
-			expectedOutput: []formats.SourceCodeRow{
-				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "High",
-						SeverityNumValue: 17,
-					},
-					Finding: "other sast finding",
-					Location: formats.Location{
-						File:        "file3",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "snippet",
-					},
-				},
-				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
-					},
-					Finding: "sast finding",
-					Location: formats.Location{
-						File:        "file",
-						StartLine:   1,
-						StartColumn: 2,
-						EndLine:     3,
-						EndColumn:   4,
-						Snippet:     "snippet",
-					},
-					CodeFlow: [][]formats.Location{
-						{
-							{
-								File:        "file2",
-								StartLine:   0,
-								StartColumn: 2,
-								EndLine:     0,
-								EndColumn:   2,
-								Snippet:     "snippetA",
-							},
-							{
-								File:        "file",
-								StartLine:   1,
-								StartColumn: 2,
-								EndLine:     3,
-								EndColumn:   4,
-								Snippet:     "snippet",
-							},
+					Applicable: jasutils.Applicability.String(),
+					Cves: []formats.CveRow{{
+						Id: "CVE-2",
+						Applicability: &formats.Applicability{
+							Status: jasutils.Applicability.String(),
+							Evidence: []formats.Evidence{formats.Evidence{
+								Location: formats.Location{File: "target/file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+							}},
 						},
-						{
-							{
-								File:        "file4",
-								StartLine:   1,
-								StartColumn: 0,
-								EndLine:     1,
-								EndColumn:   8,
-								Snippet:     "snippetB",
-							},
-							{
-								File:        "file",
-								StartLine:   1,
-								StartColumn: 2,
-								EndLine:     3,
-								EndColumn:   4,
-								Snippet:     "snippet",
-							},
-						},
+					}},
+				},
+			},
+		},
+		{
+			name:             "Vulnerabilities only - with allowed licenses",
+			input:            testScaScanResults,
+			target:           "target",
+			entitledForJas:   false,
+			pretty:           false,
+			applicablityRuns: []*sarif.Run{},
+			expectedOutput: []formats.VulnerabilityOrViolationRow{
+				{
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+						ImpactedDependencyName: "component-A",
 					},
 				},
 				{
-					SeverityDetails: formats.SeverityDetails{
-						Severity:         "Medium",
-						SeverityNumValue: 14,
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+						ImpactedDependencyName: "component-B",
 					},
-					Finding: "sast finding",
-					Location: formats.Location{
-						File:        "file2",
-						StartLine:   5,
-						StartColumn: 6,
-						EndLine:     7,
-						EndColumn:   8,
-						Snippet:     "other-snippet",
+				},
+				{
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "low"},
+						ImpactedDependencyName: "component-B",
 					},
 				},
 			},
@@ -381,7 +336,170 @@ func TestPrepareSast(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tc.expectedOutput, prepareSast(tc.input, false))
+			out, err := PrepareSimpleJsonVulnerabilities(tc.target, tc.input, tc.entitledForJas, tc.pretty, tc.applicablityRuns...)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})
 	}
+}
+
+func TestPrepareSimpleJsonViolations(t *testing.T) {
+	testCases := []struct {
+		name                          string
+		input                         []services.Violation
+		target                        string
+		entitledForJas                bool
+		pretty                        bool
+		applicablityRuns              []*sarif.Run
+		expectedSecurityOutput        []formats.VulnerabilityOrViolationRow
+		expectedLicenseOutput         []formats.LicenseRow
+		expectedOperationalRiskOutput []formats.OperationalRiskViolationRow
+	}{
+		{
+			name:                   "No violations",
+			input:                  []services.Violation{},
+			target:                 "target",
+			entitledForJas:         false,
+			pretty:                 false,
+			applicablityRuns:       []*sarif.Run{},
+			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{},
+		},
+		{
+			name: "Violations with no applicability",
+			input: []services.Violation{
+				{
+					IssueId:       "XRAY-1",
+					Summary:       "summary-1",
+					Severity:      "High",
+					ViolationType: "security",
+					Components:    map[string]services.Component{"component-A": {}, "component-B": {}},
+				},
+				{
+					IssueId:       "XRAY-2",
+					Summary:       "summary-2",
+					Severity:      "Low",
+					ViolationType: "license",
+					LicenseKey:    "license-1",
+					Components:    map[string]services.Component{"component-B": {}},
+				},
+			},
+			target:           "target",
+			entitledForJas:   false,
+			pretty:           false,
+			applicablityRuns: []*sarif.Run{},
+			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
+				{
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-A",
+					},
+				},
+				{
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-B",
+					},
+				},
+				{
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						ImpactedDependencyName: "component-B",
+					},
+				},
+			},
+		},
+		{
+			name: "Violations with applicability",
+			input: []services.Violation{
+				{
+					IssueId:       "XRAY-1",
+					Summary:       "summary-1",
+					Severity:      "High",
+					WatchName:     "watch-1",
+					ViolationType: "security",
+					Components:    map[string]services.Component{"component-A": {}, "component-B": {}},
+				},
+				{
+					IssueId:       "XRAY-2",
+					Summary:       "summary-2",
+					Severity:      "Low",
+					WatchName:     "watch-1",
+					ViolationType: "license",
+					LicenseKey:    "license-1",
+					Components:    map[string]services.Component{"component-B": {}},
+				},
+			},
+			target:         "target",
+			entitledForJas: true,
+			pretty:         false,
+			applicablityRuns: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
+				}),
+			},
+			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
+				{
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-A",
+						Components:             []formats.ComponentRow{{Name: "component-A", Location: &formats.Location{File: "target"}}},
+					},
+					Applicable: jasutils.NotApplicable.String(),
+				},
+				{
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						ImpactedDependencyName: "component-B",
+						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+					},
+					Applicable: jasutils.NotApplicable.String(),
+				},
+				{
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						ImpactedDependencyName: "component-B",
+						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+					},
+					Applicable: jasutils.Applicability.String(),
+				},
+			},
+		},
+		{
+			name: "Violations - override allowed licenses",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, tc.input, tc.entitledForJas, tc.pretty, tc.applicablityRuns...)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedSecurityOutput, securityOutput)
+			assert.ElementsMatch(t, tc.expectedLicenseOutput, licenseOutput)
+			assert.ElementsMatch(t, tc.expectedOperationalRiskOutput, operationalRiskOutput)
+		})
+	}
+
+}
+
+func TestPrepareSimpleJsonLicenses(t *testing.T) {
+
+}
+
+func TestPrepareSimpleJsonJasIssues(t *testing.T) {
+
 }

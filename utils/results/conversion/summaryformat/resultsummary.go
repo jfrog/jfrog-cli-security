@@ -31,7 +31,7 @@ func (sc *CmdResultsSummaryConverter) Get() *formats.SummaryResults {
 	return sc.current
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_, _ string, entitledForJas, _ bool) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_, _ string, entitledForJas bool) (err error) {
 	sc.current = &formats.SummaryResults{}
 	sc.entitledForJas = entitledForJas
 	sc.currentCveUnique = datastructures.MakeSet[string]()

@@ -5,6 +5,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -22,30 +23,40 @@ type ScanCommandResults struct {
 	// TODO: remove above fields and use the below fields
 
 	// General fields describing the command metadata
-	XrayVersion    string `json:"XrayVersion"`
-	EntitledForJas bool   `json:"EntitledForJas"`
+	XrayVersion    string `json:"xray_version"`
+	EntitledForJas bool   `json:"entitledForJas"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
-	MultiScanId string `json:"MultiScanId,omitempty"`
+	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
-	Scans []*ScanResults `json:"Scans"`
+	Scans  []*ScanResults `json:"scans"`
+	Errors error          `json:"errors,omitempty"`
 }
 
 type ScanResults struct {
-	// Could be working directory (audit), file path (binary scan), imageTag (docker scan) or build name+number (build scan)
-	Target string `json:"Target"`
-	Errors error  `json:"Errors,omitempty"`
+	// // Could be working directory (audit), file path (binary scan), imageTag (docker scan) or build name+number (build scan)
+	// // Physical location of the target: Working directory (audit) / binary to scan (scan / docker scan)
+	// Target string `json:"target"`
+	// // Logical name of the target
+	// Name  string `json:"name,omitempty"`
+
+	scanconfig.ScanTarget `json:",inline"`
+
+	Errors error `json:"errors,omitempty"`
 	// All scan results for the target
-	ScaResults []ScaScanResults `json:"ScaScans"`
-	JasResults *JasScansResults `json:"JasScans,omitempty"`
+	ScaResults []ScaScanResults `json:"sca_scans"`
+	JasResults *JasScansResults `json:"Jas_scans,omitempty"`
 }
 
 type ScaScanResults struct {
+	scanconfig.ScanTarget `json:",inline"`
+
 	XrayResult services.ScanResponse `json:"XrayScan"`
+
 	// Optional field (not used only in build scan) to provide the technology of the scan
-	Technology techutils.Technology `json:"Technology,omitempty"`
+	// Technology techutils.Technology `json:"Technology,omitempty"`
 	// Optional field (used in audit) to provide the descriptor path that provided the dependencies for the scan
 	// If not exists (binary / docker scan) the field should be empty and the data is in `Target`
-	Target string `json:"Target,omitempty"`
+	// Target string `json:"Target,omitempty"`
 }
 
 type JasScansResults struct {
@@ -84,6 +95,7 @@ func (r *ScanCommandResults) GetJasScansResults(scanType jasutils.JasScanType) (
 }
 
 func (r *ScanCommandResults) GetErrors() (err error) {
+	err = r.Errors
 	for _, scan := range r.Scans {
 		if scan.Errors != nil {
 			err = errors.Join(err, scan.Errors)
@@ -92,7 +104,18 @@ func (r *ScanCommandResults) GetErrors() (err error) {
 	return
 }
 
-func (r *ScanCommandResults) GetScaScannedTechnologies() []techutils.Technology {
+func (r *ScanCommandResults) GetTechnologyScaScans(technology techutils.Technology) (scans []*ScaScanResults) {
+	for _, scan := range r.Scans {
+		for _, scaResult := range scan.ScaResults {
+			if scaResult.Technology == technology {
+				scans = append(scans, &scaResult)
+			}
+		}
+	}
+	return
+}
+
+func (r *ScanCommandResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scan := range r.Scans {
 		for _, scaResult := range scan.ScaResults {
@@ -162,6 +185,14 @@ func (sr *ScanResults) GetScaScansXrayResults() (results []services.ScanResponse
 	return
 }
 
+func (sr *ScanResults) GetTechnologies() []techutils.Technology {
+	technologies := datastructures.MakeSet[techutils.Technology]()
+	for _, scaResult := range sr.ScaResults {
+		technologies.Add(scaResult.Technology)
+	}
+	return technologies.ToSlice()
+}
+
 func (sr *ScanResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	if sr.JasResults == nil {
 		return
@@ -193,6 +224,12 @@ func (sr *ScanResults) NewScaScanResults(response *services.ScanResponse) *ScaSc
 	return scaScanResults
 }
 
+func (sr *ScanResults) NewScaScan(Target string, Technology techutils.Technology) *ScaScanResults {
+	scaScanResults := &ScaScanResults{ScanTarget: scanconfig.ScanTarget{Target: Target, Technology: Technology}}
+	sr.ScaResults = append(sr.ScaResults, *scaScanResults)
+	return scaScanResults
+}
+
 func NewScaScanResults(response *services.ScanResponse) *ScaScanResults {
 	return &ScaScanResults{XrayResult: *response}
 }
@@ -204,6 +241,11 @@ func (ssr *ScaScanResults) SetDescriptor(descriptor string) *ScaScanResults {
 
 func (ssr *ScaScanResults) SetTechnology(technology techutils.Technology) *ScaScanResults {
 	ssr.Technology = technology
+	return ssr
+}
+
+func (ssr *ScaScanResults) SetXrayScanResults(response *services.ScanResponse) *ScaScanResults {
+	ssr.XrayResult = *response
 	return ssr
 }
 

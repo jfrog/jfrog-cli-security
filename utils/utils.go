@@ -4,25 +4,34 @@ import (
 	// #nosec G505 -- Not in use for secrets.
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
 const (
 	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL           = "https://jfrog.com/xray/"
 
+	ScaScan     SubScanType = "sca"
+	SecretsScan SubScanType = "secrets"
+	IacScan     SubScanType = "iac"
+	SastScan    SubScanType = "sast"
+
 	JfrogCurationDirName = "curation"
-
-	CurationsDir = "JFROG_CLI_CURATION_DIR"
-
+	CurationsDir         = "JFROG_CLI_CURATION_DIR"
+	// TODO: remove this environment variable and start using a general one for all curation types.
 	// #nosec G101 -- Not credentials.
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
 	CurationPipSupport   = "JFROG_CLI_CURATION_PIP"
 )
+
+type SubScanType string
 
 // UniqueUnion returns a new slice of strings that contains elements from both input slices without duplicates
 func UniqueUnion(arr []string, others ...string) []string {
@@ -38,6 +47,30 @@ func UniqueUnion(arr []string, others ...string) []string {
 		}
 	}
 	return result
+}
+
+func GetAsJsonString(output interface{}) (string, error) {
+	results, err := json.Marshal(output)
+	if err != nil {
+		return "", errorutils.CheckError(err)
+	}
+	return clientUtils.IndentJson(results), nil
+}
+
+func NewBoolPtr(v bool) *bool {
+	return &v
+}
+
+func NewIntPtr(v int) *int {
+	return &v
+}
+
+func NewInt64Ptr(v int64) *int64 {
+	return &v
+}
+
+func NewFloat64Ptr(v float64) *float64 {
+	return &v
 }
 
 func getJfrogCurationFolder() (string, error) {

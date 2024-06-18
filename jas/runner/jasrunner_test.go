@@ -8,7 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/utils/resultutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/assert"
@@ -25,22 +25,22 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanResults := &resultutils.ScanCommandResults{ScaResults: []jas.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &jas.ExtendedScanResults{}}
-	err = RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetScaScannedTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+	err = RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	// Expect error:
 	assert.Error(t, err)
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
-	scanResults := &resultutils.ScanCommandResults{ScaResults: []jas.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &jas.ExtendedScanResults{}}
-	err := RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetScaScannedTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+	scanResults := &results.ScanCommandResults{ScaResults: []jas.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &jas.ExtendedScanResults{}}
+	err := RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	assert.NoError(t, err)
 }
 
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded())
 
-	scanResults := &resultutils.ScanCommandResults{ScaResults: []jas.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &jas.ExtendedScanResults{}}
-	err := RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetScaScannedTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+	scanResults := &results.ScanCommandResults{ScaResults: []jas.ScaScanResult{{Technology: techutils.Yarn, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &jas.ExtendedScanResults{}}
+	err := RunJasScannersAndSetResults(scanResults.ExtendedScanResults, scanResults.GetTechnologies(), scanResults.GetScaScansXrayResults(), []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, &jas.FakeServerDetails, nil, nil, false, "", applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 
 	// Expect error:
 	assert.ErrorContains(t, err, "failed to run Applicability scan")

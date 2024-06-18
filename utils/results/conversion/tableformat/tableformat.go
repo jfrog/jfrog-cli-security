@@ -35,8 +35,8 @@ func (tc *CmdResultsTableConverter) Get() *formats.ResultsTables {
 	}
 }
 
-func (tc *CmdResultsTableConverter) Reset(multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) (err error) {
-	return tc.simpleJsonConvertor.Reset(multiScanId, xrayVersion, entitledForJas, multipleTargets)
+func (tc *CmdResultsTableConverter) Reset(multiScanId, xrayVersion string, entitledForJas bool) (err error) {
+	return tc.simpleJsonConvertor.Reset(multiScanId, xrayVersion, entitledForJas)
 }
 
 func (tc *CmdResultsTableConverter) ParseNewScanResultsMetadata(target string, errors error) (err error) {

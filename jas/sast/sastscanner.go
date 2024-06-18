@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -144,5 +144,5 @@ func getResultRuleId(result *sarif.Result) string {
 }
 
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + sarifutils.GetResultSeverity(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
+	return getResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }
