@@ -230,8 +230,6 @@ func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
 func DownloadAnalyzerManagerIfNeeded() error {
-	// TODO remove all ERAN CHECKPOINT comments
-	log.Info("ERAN CHECKPOINT 1: checking if AM checksum file exists")
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
@@ -257,26 +255,18 @@ func DownloadAnalyzerManagerIfNeeded() error {
 	}
 	// Find current AnalyzerManager checksum.
 	checksumFilePath := filepath.Join(analyzerManagerDir, dependencies.ChecksumFileName)
-	log.Info("ERAN CHECKPOINT 1: checking if AM checksum file exists")
 	exist, err := fileutils.IsFileExists(checksumFilePath, false)
 	if err != nil {
-		log.Info("ERAN CHECKPOINT 1: checking if AM checksum file exists returned an error")
 		return err
 	}
-	log.Info("ERAN CHECKPOINT 1: checking if AM checksum file exists finished successfully")
-
 	if exist {
 		var sha2 []byte
-		log.Info("ERAN CHECKPOINT 2: Before reading checksum file")
 		sha2, err = fileutils.ReadFile(checksumFilePath)
 		if err != nil {
-			log.Info("ERAN CHECKPOINT 2: Reading checksum file exit with error")
 			return err
 		}
-		log.Info("ERAN CHECKPOINT 2: Reading checksum file finished successfully")
 		// If the checksums are identical, there's no need to download.
 		if remoteFileDetails.Checksum.Sha256 == string(sha2) {
-			log.Info("ERAN CHECKPOINT 3: Already existing AM matches the one that is about to be downloaded. Download skipped..")
 			return nil
 		}
 	}
