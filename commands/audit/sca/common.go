@@ -14,7 +14,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -33,16 +32,13 @@ func GetExcludePattern(params utils.AuditParams) string {
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
-	scanGraphParams.XrayGraphScanParams().DependenciesGraph = dependencyTree
+func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {
 		xscGitInfoContext.Technologies = []string{technology.String()}
 	}
 	scanMessage := fmt.Sprintf("Scanning %d %s dependencies", len(dependencyTree.Nodes), technology)
-	if progress != nil {
-		progress.SetHeadlineMsg(scanMessage)
-	}
 	log.Info(scanMessage + "...")
 	var scanResults *services.ScanResponse
 	xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
