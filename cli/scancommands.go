@@ -331,8 +331,22 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
 
+	allSubScans := utils.GetAllSupportedScans()
+	subScans := []utils.SubScanType{}
+	for _, subScan := range allSubScans {
+		if c.GetBoolFlagValue(subScan.String()) {
+			subScans = append(subScans, subScan)
+		}
+	}
+	if len(subScans) > 0 {
+		auditCmd.SetScansToPerform(subScans)
+	} else {
+		// If no specific sub-scan was provided, default to all sub-scans
+		auditCmd.SetScansToPerform(allSubScans)
+	}
+
+	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err

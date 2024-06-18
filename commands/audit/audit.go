@@ -150,6 +150,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 			SetExtraMessages(messages).
 			SetScanType(services.Dependency).
+			SetSubScansPreformed(auditCmd.ScansToPerform()).
 			PrintScanResults(); err != nil {
 			return
 		}
@@ -211,7 +212,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if results.ExtendedScanResults.EntitledForJas {
-		results.JasError = runner.RunJasScannersAndSetResults(results.ExtendedScanResults, results.GetScaScannedTechnologies(), results.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+		results.JasError = runner.RunJasScannersAndSetResults(results.ExtendedScanResults, results.GetScaScannedTechnologies(), results.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParams.ScansToPerform())
 	}
 	return
 }

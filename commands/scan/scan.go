@@ -300,6 +300,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(true).
 		SetScanType(services.Binary).
+		SetSubScansPreformed(utils.GetAllSupportedScans()).
 		PrintScanResults(); err != nil {
 		return
 	}
@@ -409,7 +410,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 				if entitledForJas && scanCmd.commandSupportsJAS {
 					// Run Jas scans
 					workingDirs := []string{filePath}
-					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType)
+					err = runner.RunJasScannersAndSetResults(&extendedScanResults, []techutils.Technology{techutils.Technology(scanResults.ScannedPackageType)}, []services.ScanResponse{*scanResults}, depsListFromVulnerabilities(*scanResults), scanCmd.serverDetails, workingDirs, nil, false, "", applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, utils.GetAllSupportedScans())
 
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))

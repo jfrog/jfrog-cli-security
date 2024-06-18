@@ -9,6 +9,7 @@ import (
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -33,6 +34,10 @@ import (
 )
 
 func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
+	if len(params.ScansToPerform()) > 0 && !slices.Contains(params.ScansToPerform(), xrayutils.ScaScan) {
+		log.Debug("Skipping SCA scan...")
+		return
+	}
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {

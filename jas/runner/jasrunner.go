@@ -14,10 +14,11 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	"golang.org/x/exp/slices"
 )
 
 func RunJasScannersAndSetResults(extendedScanResults *utils.ExtendedScanResults, technologiesList []techutils.Technology, xrayScanResults []services.ScanResponse, directDependencies []string,
-	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType) (err error) {
+	serverDetails *config.ServerDetails, workingDirs []string, progress io.ProgressMgr, thirdPartyApplicabilityScan bool, msi string, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, scansToPreform []utils.SubScanType) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -45,25 +46,38 @@ func RunJasScannersAndSetResults(extendedScanResults *utils.ExtendedScanResults,
 	if thirdPartyApplicabilityScan {
 		return
 	}
-	if progress != nil {
-		progress.SetHeadlineMsg("Running secrets scanning")
-	}
-	extendedScanResults.SecretsScanResults, err = secrets.RunSecretsScan(scanner, secretsScanType)
-	if err != nil {
-		return
-	}
-	if scanType == applicability.ApplicabilityScannerType || secretsScanType == secrets.SecretsScannerType {
+	if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SecretsScan) {
+		log.Debug("Skipping Secrets scan...")
+	} else {
 		if progress != nil {
-			progress.SetHeadlineMsg("Running IaC scanning")
+			progress.SetHeadlineMsg("Running secrets scanning")
 		}
-		extendedScanResults.IacScanResults, err = iac.RunIacScan(scanner)
+		extendedScanResults.SecretsScanResults, err = secrets.RunSecretsScan(scanner, secretsScanType)
 		if err != nil {
 			return
 		}
-		if progress != nil {
-			progress.SetHeadlineMsg("Running SAST scanning")
+	}
+
+	if scanType == applicability.ApplicabilityScannerType || secretsScanType == secrets.SecretsScannerType {
+		if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
+			log.Debug("Skipping Iac scan...")
+		} else {
+			if progress != nil {
+				progress.SetHeadlineMsg("Running IaC scanning")
+			}
+			extendedScanResults.IacScanResults, err = iac.RunIacScan(scanner)
+			if err != nil {
+				return
+			}
 		}
-		extendedScanResults.SastScanResults, err = sast.RunSastScan(scanner)
+		if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SastScan) {
+			log.Debug("Skipping Sast scan...")
+		} else {
+			if progress != nil {
+				progress.SetHeadlineMsg("Running SAST scanning")
+			}
+			extendedScanResults.SastScanResults, err = sast.RunSastScan(scanner)
+		}
 	}
 	return
 }

@@ -45,6 +45,13 @@ const (
 )
 
 const (
+	Sca     = "sca"
+	Iac     = "iac"
+	Sast    = "sast"
+	Secrets = "secrets"
+)
+
+const (
 	// Base flags keys
 	ServerId    = "server-id"
 	url         = "url"
@@ -126,6 +133,7 @@ var commandFlags = map[string][]string{
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
+		Sca, Iac, Sast, Secrets,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
@@ -221,6 +229,10 @@ var flagsMap = map[string]components.Flag{
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
 	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	Sca:              components.NewBoolFlag(Sca, "Set to true to request audit to only preform SCA sub scan."),
+	Iac:              components.NewBoolFlag(Iac, "Set to true to request audit to only preform IAC sub scan."),
+	Sast:             components.NewBoolFlag(Sast, "Set to true to request audit to only preform SAST sub scan."),
+	Secrets:          components.NewBoolFlag(Secrets, "Set to true to request audit to only preform Secrets sub scan."),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {
