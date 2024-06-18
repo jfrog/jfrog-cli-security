@@ -36,6 +36,7 @@ type AuditPython struct {
 	Tool                pythonutils.PythonTool
 	RemotePypiRepo      string
 	PipRequirementsFile string
+	InstallCommandArgs  []string
 	IsCurationCmd       bool
 }
 
@@ -247,11 +248,11 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		reportFileName = pythonReportFile
 	}
 
-	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName)
+	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
 	var reqErr error
 	err = executeCommand("python", pipInstallArgs...)
 	if err != nil && auditPython.PipRequirementsFile == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName)
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
 		reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
@@ -280,7 +281,7 @@ func executeCommand(executable string, args ...string) error {
 	return nil
 }
 
-func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder string, reportFileName string) []string {
+func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName string, customArgs ...string) []string {
 	args := []string{"-m", "pip", "install"}
 	if requirementsFile == "" {
 		// Run 'pip install .'
@@ -299,8 +300,8 @@ func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder st
 		// For report to include download urls, pip should ignore installed packages.
 		args = append(args, "--ignore-installed")
 		args = append(args, "--report", reportFileName)
-
 	}
+	args = append(args, customArgs...)
 	return args
 }
 

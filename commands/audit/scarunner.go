@@ -244,6 +244,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
 			PipRequirementsFile: params.PipRequirementsFile(),
+			InstallCommandArgs:  params.InstallCommandArgs(),
 			IsCurationCmd:       params.IsCurationCmd(),
 		})
 	case techutils.Nuget:
