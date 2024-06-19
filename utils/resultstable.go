@@ -258,23 +258,20 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
 		} else if rows[i].Applicable != rows[j].Applicable {
-			return sortApplicable(rows[i].Applicable, rows[j].Applicable)
-		} else if rows[i].JfrogResearchInformation.SeverityNumValue != rows[j].JfrogResearchInformation.SeverityNumValue {
-			return rows[i].JfrogResearchInformation.SeverityNumValue > rows[j].JfrogResearchInformation.SeverityNumValue
+			return convertApplicableToScore(rows[i].Applicable) > convertApplicableToScore(rows[j].Applicable)
+		} else if rows[i].JfrogResearchInformation != nil || rows[j].JfrogResearchInformation != nil {
+			if rows[i].JfrogResearchInformation == nil {
+				return false
+			}
+			if rows[j].JfrogResearchInformation == nil {
+				return true
+			}
+			if rows[i].JfrogResearchInformation.SeverityNumValue != rows[j].JfrogResearchInformation.SeverityNumValue {
+				return rows[i].JfrogResearchInformation.SeverityNumValue > rows[j].JfrogResearchInformation.SeverityNumValue
+			}
 		}
 		return rows[i].IssueId > rows[j].IssueId
 	})
-}
-
-func sortApplicable(applicableFirst string, applicableSecond string) bool {
-	applicableMap := make(map[string]int)
-
-	applicableMap[Applicable.String()] = 4
-	applicableMap[NotApplicable.String()] = 3
-	applicableMap[ApplicabilityUndetermined.String()] = 2
-	applicableMap[NotCovered.String()] = 1
-
-	return applicableMap[applicableFirst] > applicableMap[applicableSecond]
 }
 
 // PrintLicensesTable prints the licenses in a table.
