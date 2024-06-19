@@ -70,6 +70,12 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Maven,
 		},
 		{
+			testProjectPath: []string{"maven", "maven-snapshot"},
+			resolveRepoName: securityTests.MvnVirtualRepo,
+			cacheRepoName:   securityTests.MvnRemoteRepo,
+			projectType:     project.Maven,
+		},
+		{
 			testProjectPath: []string{"go", "simple-project"},
 			resolveRepoName: securityTests.GoVirtualRepo,
 			cacheRepoName:   securityTests.GoRemoteRepo,
@@ -120,8 +126,10 @@ func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []s
 		Url:            *securityTests.JfrogUrl,
 		ArtifactoryUrl: *securityTests.JfrogUrl + securityTests.ArtifactoryEndpoint,
 		XrayUrl:        *securityTests.JfrogUrl + securityTests.XrayEndpoint,
-		AccessToken:    *securityTests.JfrogAccessToken,
-		ServerId:       securityTests.ServerId,
+		//AccessToken:    *securityTests.JfrogAccessToken,
+		User:     *securityTests.JfrogUser,
+		Password: *securityTests.JfrogPassword,
+		ServerId: securityTests.ServerId,
 	}
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, securityTests.ServerId).SetDetails(server).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
