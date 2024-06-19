@@ -70,6 +70,22 @@ func convertToApplicabilityStatus(status string) ApplicabilityStatus {
 	}
 }
 
+// for sorting
+var applicableMapToScore = map[string]int{
+	"Applicable":                4,
+	"NotApplicable":             3,
+	"ApplicabilityUndetermined": 2,
+	"NotCovered":                1,
+	"NotScanned":                0,
+}
+
+func convertApplicableToScore(applicability string) int {
+	if level, ok := applicableMapToScore[strings.ToLower(applicability)]; ok {
+		return level
+	}
+	return -1
+}
+
 type JasScanType string
 
 const (
