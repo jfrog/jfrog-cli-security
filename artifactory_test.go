@@ -126,10 +126,8 @@ func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []s
 		Url:            *securityTests.JfrogUrl,
 		ArtifactoryUrl: *securityTests.JfrogUrl + securityTests.ArtifactoryEndpoint,
 		XrayUrl:        *securityTests.JfrogUrl + securityTests.XrayEndpoint,
-		//AccessToken:    *securityTests.JfrogAccessToken,
-		User:     *securityTests.JfrogUser,
-		Password: *securityTests.JfrogPassword,
-		ServerId: securityTests.ServerId,
+		AccessToken:    *securityTests.JfrogAccessToken,
+		ServerId:       securityTests.ServerId,
 	}
 	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, securityTests.ServerId).SetDetails(server).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
