@@ -335,16 +335,18 @@ func AuditCmd(c *components.Context) error {
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
-		if subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.NoContextualAnalysis) {
-			if !c.IsFlagSet(flags.Sca) {
-				// No CA flag provided but sca flag is not provided as well, error
-				return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.NoContextualAnalysis, flags.Sca), c)
+		if subScan == utils.ContextualAnalysisScan { 
+			if c.GetBoolFlagValue(flags.NoContextualAnalysis) {
+				if !c.GetBoolFlagValue(flags.Sca) {
+					// No CA flag provided but sca flag is not provided as well, error
+					return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.NoContextualAnalysis, flags.Sca), c)
+				}
+				continue
 			}
+		} else if !c.GetBoolFlagValue(subScan.String()) {
 			continue
 		}
-		if c.GetBoolFlagValue(subScan.String()) {
-			subScans = append(subScans, subScan)
-		}
+		subScans = append(subScans, subScan)
 	}
 	if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
