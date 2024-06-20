@@ -51,7 +51,8 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Tool:          pythonutils.PythonTool(techutils.Pip),
-		InstallCommandArgs: []string{"-e", filepath.Join(actualMainPath,"requirementsproject")},
+		InstallCommandArgs: []string{"--break-system-packages"},
+		PipRequirementsFile: "requirements.txt",
 	})
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }

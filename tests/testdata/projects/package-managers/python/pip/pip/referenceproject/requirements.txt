@@ -1,1 +1,3 @@
--e ../requirementsproject
+-e file://../requriementsproject # git+https://github.com/ShiftLeftSecurity/flask-webgoat.git#egg=flask-webgoat
+
+# -r https://raw.githubusercontent.com/ShiftLeftSecurity/flask-webgoat/master/requirements.txt

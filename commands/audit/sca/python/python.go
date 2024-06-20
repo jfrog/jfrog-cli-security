@@ -285,7 +285,7 @@ func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName 
 	args := []string{"-m", "pip", "install"}
 	if requirementsFile == "" {
 		// Run 'pip install .'
-		// args = append(args, ".")
+		args = append(args, ".")
 	} else {
 		// Run pip 'install -r requirements <requirementsFile>'
 		args = append(args, "-r", requirementsFile)
