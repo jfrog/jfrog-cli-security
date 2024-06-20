@@ -37,7 +37,7 @@ import (
 
 func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
 	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
-		log.Debug("Skipping SCA scan...")
+		log.Debug("Skipping SCA scan as requested by input...")
 		return
 	}
 	// Prepare

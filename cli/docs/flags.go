@@ -48,6 +48,7 @@ const (
 	Iac     = "iac"
 	Sast    = "sast"
 	Secrets = "secrets"
+	NoContextualAnalysis = "without-contextual-analysis"
 )
 
 const (
@@ -231,6 +232,7 @@ var flagsMap = map[string]components.Flag{
 	Iac:              components.NewBoolFlag(Iac, "Set to true to request audit to only preform IAC sub scan."),
 	Sast:             components.NewBoolFlag(Sast, "Set to true to request audit to only preform SAST sub scan."),
 	Secrets:          components.NewBoolFlag(Secrets, "Set to true to request audit to only preform Secrets sub scan."),
+	NoContextualAnalysis: components.NewBoolFlag(NoContextualAnalysis, fmt.Sprintf("Set to true to skip the Contextual Analysis scan. This flag is only relevant when using the --%s flag.", Sca)),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {

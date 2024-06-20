@@ -37,25 +37,28 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SecretsScan) {
-				log.Debug("Skipping Secrets scan...")
+				log.Debug("Skipping secrets scan as requested by input...")
 			} else if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
-					log.Debug("Skipping Iac scan...")
+					log.Debug("Skipping Iac scan as requested by input...")
 				} else if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SastScan) {
-					log.Debug("Skipping Sast scan...")
+					log.Debug("Skipping Sast scan as requested by input...")
 				} else if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 			}
 		}
 	}
-
+	if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.ContextualAnalysisScan) {
+		log.Debug("Skipping contextual analysis scan as requested by input...")
+		return err
+	}
 	for _, module := range scanner.JFrogAppsConfig.Modules {
 		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
 			return

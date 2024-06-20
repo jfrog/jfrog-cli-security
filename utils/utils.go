@@ -1,6 +1,7 @@
 package utils
 
 const (
+	ContextualAnalysisScan SubScanType = "contextual_analysis"
 	ScaScan     SubScanType = "sca"
 	IacScan     SubScanType = "iac"
 	SastScan    SubScanType = "sast"
@@ -14,5 +15,5 @@ func (s SubScanType) String() string {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, IacScan, SastScan, SecretsScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
 }
