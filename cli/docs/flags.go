@@ -133,7 +133,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets,
+		Sca, Iac, Sast, Secrets, NoContextualAnalysis,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
