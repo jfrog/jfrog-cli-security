@@ -335,7 +335,7 @@ func AuditCmd(c *components.Context) error {
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
-		if subScan == utils.ContextualAnalysisScan { 
+		if subScan == utils.ContextualAnalysisScan {
 			if c.GetBoolFlagValue(flags.NoContextualAnalysis) {
 				if !c.GetBoolFlagValue(flags.Sca) {
 					// No CA flag provided but sca flag is not provided as well, error

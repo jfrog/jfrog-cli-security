@@ -2,10 +2,10 @@ package utils
 
 const (
 	ContextualAnalysisScan SubScanType = "contextual_analysis"
-	ScaScan     SubScanType = "sca"
-	IacScan     SubScanType = "iac"
-	SastScan    SubScanType = "sast"
-	SecretsScan SubScanType = "secrets"
+	ScaScan                SubScanType = "sca"
+	IacScan                SubScanType = "iac"
+	SastScan               SubScanType = "sast"
+	SecretsScan            SubScanType = "secrets"
 )
 
 type SubScanType string
