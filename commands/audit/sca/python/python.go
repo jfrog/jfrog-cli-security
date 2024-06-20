@@ -301,8 +301,45 @@ func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName 
 		args = append(args, "--ignore-installed")
 		args = append(args, "--report", reportFileName)
 	}
-	args = append(args, customArgs...)
+	args = append(args, parseCustomArgs(remoteUrl, cacheFolder, reportFileName, customArgs...)...)
 	return args
+}
+
+func parseCustomArgs(remoteUrl, cacheFolder, reportFileName string, customArgs ...string) (args []string) {
+	for i := 0; i < len(customArgs); i++ {
+		if strings.Contains(customArgs[i], "-r") {
+			log.Warn("The -r flag is not supported in the custom arguments list. use the 'PipRequirementsFile' instead.")
+			i++
+			continue
+		}
+		if strings.Contains(customArgs[i], "--cache-dir") {
+			if cacheFolder != "" {
+				log.Warn("The --cache-dir flag is not supported in the custom arguments list. skipping...")
+			} else if i+1 < len(customArgs) {
+				args = append(args, customArgs[i], customArgs[i+1])
+			}
+			i++
+			continue
+		}
+		if reportFileName != "" {
+			if strings.Contains(customArgs[i], "--report") {
+				log.Warn("The --report flag is not supported in the custom arguments list. skipping...")
+				i++
+				continue
+			}
+			if strings.Contains(customArgs[i], "--ignore-installed") {
+				// will be added by default
+				continue
+			}
+		}
+		if remoteUrl != "" && strings.Contains(customArgs[i], utils.GetPypiRemoteRegistryFlag(pythonutils.Pip)) {
+			log.Warn("The remote registry flag is not supported in the custom arguments list. skipping...")
+			i++
+			continue
+		}
+		args = append(args, customArgs[i])
+	}
+	return
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string) (err error) {
