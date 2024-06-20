@@ -1,11 +1,13 @@
 package python
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -38,6 +40,20 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
 	}
+}
+
+func TestPipDependencyListCustomInstallArgs(t *testing.T) {
+	// Create and change directory to test workspace
+	mainPath := filepath.Join("projects", "package-managers", "python", "pip", "pip")
+	actualMainPath, cleanUp := sca.CreateTestWorkspace(t, mainPath)
+	defer cleanUp()
+	os.Chdir(filepath.Join(actualMainPath, "referenceproject"))
+	// Run getModulesDependencyTrees
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Tool:          pythonutils.PythonTool(techutils.Pip),
+		InstallCommandArgs: []string{"-e", filepath.Join(actualMainPath,"requirementsproject")},
+	})
+	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
 func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
@@ -82,6 +98,10 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Tool: pythonutils.PythonTool(techutils.Pip),
 	})
+	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
+}
+
+func validatePipRequirementsProject(t *testing.T, err error, uniqueDeps []string, rootNode []*utils.GraphNode) {
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
