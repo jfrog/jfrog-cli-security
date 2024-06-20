@@ -10,6 +10,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
@@ -30,6 +31,15 @@ const (
 	CurationMavenSupport = "JFROG_CLI_CURATION_MAVEN"
 	CurationPipSupport   = "JFROG_CLI_CURATION_PIP"
 )
+
+var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
+
+func GetExcludePattern(isRecursive bool, exclusions ...string) string {
+	if len(exclusions) == 0 {
+		exclusions = append(exclusions, DefaultExcludePatterns...)
+	}
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, isRecursive)
+}
 
 type SubScanType string
 

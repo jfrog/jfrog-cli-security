@@ -504,7 +504,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	minSeverity, err := resultutils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}

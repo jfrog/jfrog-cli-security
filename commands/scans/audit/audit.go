@@ -223,7 +223,7 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.ScanCommandResults,
 
 	// Run scanners only if the user is entitled for Advanced Security
 	if cmdResults.EntitledForJas {
-		cmdResults.JasError = runner.RunJasScannersAndSetResults(cmdResults.ExtendedScanResults, cmdResults.GetTechnologies(), cmdResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
+		cmdResults.Errors = runner.RunJasScannersAndSetResults(cmdResults.ExtendedScanResults, cmdResults.GetTechnologies(), cmdResults.GetScaScansXrayResults(), auditParams.DirectDependencies(), serverDetails, auditParams.workingDirs, auditParams.Progress(), auditParams.thirdPartyApplicabilityScan, auditParams.XrayGraphScanParams().MultiScanId, applicability.ApplicabilityScannerType, secrets.SecretsScannerType)
 	}
 	return
 }
