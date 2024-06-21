@@ -272,14 +272,14 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 	})
 }
 
-func JfrogResearchInformationSort(JfrogResearchInformation1 *formats.JfrogResearchInformation, JfrogResearchInformation2 *formats.JfrogResearchInformation) (bool, bool) {
+func JfrogResearchInformationSort(jfrogResearchInformation1 *formats.JfrogResearchInformation, jfrogResearchInformation2 *formats.JfrogResearchInformation) (bool, bool) {
 	switch {
-	case JfrogResearchInformation1 == nil:
+	case jfrogResearchInformation1 == nil:
 		return true, true
-	case JfrogResearchInformation2 == nil:
+	case jfrogResearchInformation2 == nil:
 		return true, false
-	case JfrogResearchInformation1.SeverityNumValue != JfrogResearchInformation2.SeverityNumValue:
-		return true, JfrogResearchInformation1.SeverityNumValue > JfrogResearchInformation2.SeverityNumValue
+	case jfrogResearchInformation1.SeverityNumValue != jfrogResearchInformation2.SeverityNumValue:
+		return true, jfrogResearchInformation1.SeverityNumValue > jfrogResearchInformation2.SeverityNumValue
 	default:
 		return false, false
 	}
