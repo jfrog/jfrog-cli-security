@@ -255,23 +255,34 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 
 func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow) {
 	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
+		switch {
+		case rows[i].SeverityNumValue != rows[j].SeverityNumValue:
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
-		} else if rows[i].Applicable != rows[j].Applicable {
+		case rows[i].Applicable != rows[j].Applicable:
 			return convertApplicableToScore(rows[i].Applicable) > convertApplicableToScore(rows[j].Applicable)
-		} else if rows[i].JfrogResearchInformation != nil || rows[j].JfrogResearchInformation != nil {
-			if rows[i].JfrogResearchInformation == nil {
-				return false
+		case rows[i].JfrogResearchInformation != nil || rows[j].JfrogResearchInformation != nil:
+			ok, value := JfrogResearchInformationSort(rows[i].JfrogResearchInformation, rows[j].JfrogResearchInformation)
+			if ok {
+				return value
 			}
-			if rows[j].JfrogResearchInformation == nil {
-				return true
-			}
-			if rows[i].JfrogResearchInformation.SeverityNumValue != rows[j].JfrogResearchInformation.SeverityNumValue {
-				return rows[i].JfrogResearchInformation.SeverityNumValue > rows[j].JfrogResearchInformation.SeverityNumValue
-			}
+			return rows[i].IssueId > rows[j].IssueId
+		default:
+			return rows[i].IssueId > rows[j].IssueId
 		}
-		return rows[i].IssueId > rows[j].IssueId
 	})
+}
+
+func JfrogResearchInformationSort(JfrogResearchInformation1 *formats.JfrogResearchInformation, JfrogResearchInformation2 *formats.JfrogResearchInformation) (bool, bool) {
+	switch {
+	case JfrogResearchInformation1 == nil:
+		return true, true
+	case JfrogResearchInformation2 == nil:
+		return true, false
+	case JfrogResearchInformation1.SeverityNumValue != JfrogResearchInformation2.SeverityNumValue:
+		return true, JfrogResearchInformation1.SeverityNumValue > JfrogResearchInformation2.SeverityNumValue
+	default:
+		return false, false
+	}
 }
 
 // PrintLicensesTable prints the licenses in a table.
