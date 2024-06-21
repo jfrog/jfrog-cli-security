@@ -96,7 +96,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		}
 	}()
 	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *results.ScanCommandResults) (err error) {
-		if scanResults == nil {
+		if scanResults == nil || len(scanResults.ScaResults) == 0 {
 			return
 		}
 		for _, scan := range scanResults.Scans {

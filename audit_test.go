@@ -330,7 +330,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 25, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 25, 2)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
@@ -433,22 +433,27 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas"))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 7, 3, 0, 2, 2)
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas"), "3")
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+}
+
+func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas"), "1")
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("jas", "jas-config"))
+	output := testXrayAuditJas(t, filepath.Join("jas", "jas-config"), "3")
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, string(format.SimpleJson), filepath.Join("package-managers", "npm", "npm"))
+	output := testXrayAuditJas(t, filepath.Join("package-managers", "npm", "npm"), "3")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
 }
 
-func testXrayAuditJas(t *testing.T, format string, project string) string {
+func testXrayAuditJas(t *testing.T, project string, threads string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -462,7 +467,7 @@ func testXrayAuditJas(t *testing.T, format string, project string) string {
 	assert.NoError(t, err)
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
-	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+format)
+	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), "--threads="+threads)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
@@ -517,4 +522,22 @@ func TestXrayRecursiveScan(t *testing.T) {
 	assert.NoError(t, err)
 	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
 	assert.Len(t, results, 2)
+}
+
+func TestAuditOnEmptyProject(t *testing.T) {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps"))
+	// Copy the multi project from the testdata to a temp dir
+	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
+	// Configure a new server named "default"
+	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+	baseWd, err := os.Getwd()
+	assert.NoError(t, err)
+	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
+	defer chdirCallback()
+	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }

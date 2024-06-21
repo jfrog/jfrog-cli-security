@@ -1,6 +1,7 @@
 package java
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
@@ -236,10 +238,26 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	if err != nil {
 		return err
 	}
-	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
-	settingsXmlContent := fmt.Sprintf(settingsXmlTemplate, username, password, remoteRepositoryFullPath)
 
-	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, []byte(settingsXmlContent), 0600))
+	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
+	if err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	err = SettingsTemplate.Execute(buf, struct {
+		Username                 string
+		Password                 string
+		RemoteRepositoryFullPath string
+	}{
+		Username:                 username,
+		Password:                 password,
+		RemoteRepositoryFullPath: remoteRepositoryFullPath,
+	})
+	if err != nil {
+		return err
+	}
+	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
 }
 
 // Creates a temporary directory.

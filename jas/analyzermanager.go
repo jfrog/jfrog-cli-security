@@ -3,6 +3,7 @@ package jas
 import (
 	"errors"
 	"fmt"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"os/exec"
 	"path"
@@ -184,7 +185,7 @@ func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatE
 
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
-func DownloadAnalyzerManagerIfNeeded() error {
+func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
@@ -226,7 +227,7 @@ func DownloadAnalyzerManagerIfNeeded() error {
 		}
 	}
 	// Download & unzip the analyzer manager files
-	log.Debug("The 'Analyzer Manager' app is not cached locally. Downloading it now...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
 	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
 		return err
 	}

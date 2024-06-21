@@ -129,3 +129,20 @@ func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateScannerTempDirectory(t *testing.T) {
+	scanner := &JasScanner{TempDir: "path"}
+	tempDir, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	assert.NoError(t, err)
+	assert.NotEmpty(t, tempDir)
+
+	// Check directory exists.
+	_, err = os.Stat(tempDir)
+	assert.NoError(t, err)
+}
+
+func TestCreateScannerTempDirectory_baseDirIsEmpty(t *testing.T) {
+	scanner := &JasScanner{TempDir: ""}
+	_, err := CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	assert.Error(t, err)
+}

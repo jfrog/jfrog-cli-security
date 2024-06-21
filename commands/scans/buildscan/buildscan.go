@@ -139,7 +139,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	// scanResults := xrutils.NewAuditResults()
 	// scanResults.XrayVersion = xrayVersion
-	// scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
+	// scanResults.ScaResults = []*xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
 	resultsPrinter := output.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
