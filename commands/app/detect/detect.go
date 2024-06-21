@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -15,9 +16,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -25,12 +26,20 @@ import (
 
 // From user input
 type AppsDetectParams struct {
+	// File system information
 	WorkingDirs []string
 	Exclusions  []string
-
-	RequestedTechnologies []string // ?
-	RequestedDescriptorsCustomNames map[techutils.Technology][]string // ?
-	RequestedSubScans     []utils.SubScanType  // ?
+	// Control scans and technologies to detect and perform
+	RequestedTechnologies []string
+	RequestedDescriptorsCustomNames map[techutils.Technology][]string
+	RequestedSubScans     []utils.SubScanType
+	// Policy context information
+	Watches        []string           `json:"watches,omitempty"`
+	ProjectKey    string             `json:"project_key,omitempty"`
+	RepoPath 	 string             `json:"repo_path,omitempty"`
+	// Output information
+	MinSeverity    severityutils.Severity `json:"min_severity,omitempty"`
+	FixableOnly    bool               `json:"fixable_only,omitempty"`
 }
 
 type DetectAppsCommand struct {
@@ -96,14 +105,14 @@ func getLocalScanConfig() (jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, err
 			return nil, errorutils.CheckError(err)
 		}
 		module.SourceRoot = root
-		if module.Scanners.Iac {
+		if module.Scanners.Iac != nil {
 			module.Scanners.Iac.WorkingDirs = getLocalScannerRoots(root, module, module.Scanners.Iac)
 		}
-		if module.Scanners.Secrets {
+		if module.Scanners.Secrets != nil {
 			module.Scanners.Secrets.WorkingDirs = getLocalScannerRoots(root, module, module.Scanners.Secrets)
 		}
-		if module.Scanners.Sast {
-			module.Scanners.Sast.WorkingDirs = getLocalScannerRoots(root, module, module.Scanners.Sast)
+		if module.Scanners.Sast != nil {
+			module.Scanners.Sast.WorkingDirs = getLocalScannerRoots(root, module, &module.Scanners.Sast.Scanner)
 		}
 	}
 	return
@@ -121,7 +130,7 @@ func getLocalScannerRoots(root string, module jfrogappsconfig.Module, scanner *j
 }
 
 func GenerateAppsSecurityConfig(localConfiguration *jfrogappsconfig.JFrogAppsConfig, params *AppsDetectParams, entitledForJas bool, xrayVersion string) (appsConfig *scanconfig.AppsSecurityConfig, err error) {
-	appsConfig = &scanconfig.AppsSecurityConfig{XrayVersion: xrayVersion, EntitledForJas: entitledForJas}
+	appsConfig = GetEmptyAppsSecurityConfig(params, entitledForJas, xrayVersion)
 	// Get targets
 	scanTargets, err := GetTargets(localConfiguration, params)
 	if err != nil {
@@ -144,7 +153,7 @@ func GenerateAppsSecurityConfig(localConfiguration *jfrogappsconfig.JFrogAppsCon
 			log.Warn(fmt.Sprintf("Failed to get local scan configuration for target '%s'. Skipping...", potentialTarget.String()))
 			continue
 		}
-		fileSystemInfo, err := DetectWorkingDirectoryInformation(potentialTarget.Target, params, targetDetectionMode) 
+		fileSystemInfo, err := DetectWorkingDirectoryInformation(potentialTarget.Target, localModule, params, targetDetectionMode) 
 		if err != nil {
 			log.Warn(fmt.Sprintf("Failed to detect information from the file system in '%s'. Skipping...", potentialTarget.String()))
 			continue
@@ -157,6 +166,20 @@ func GenerateAppsSecurityConfig(localConfiguration *jfrogappsconfig.JFrogAppsCon
 		appsConfig.Targets = append(appsConfig.Targets, targetConfigs...)
 	}
 	return
+}
+
+func GetEmptyAppsSecurityConfig(params *AppsDetectParams, entitledForJas bool, xrayVersion string) (appsConfig *scanconfig.AppsSecurityConfig) {
+	return &scanconfig.AppsSecurityConfig{
+		XrayVersion: xrayVersion,
+		EntitledForJas: entitledForJas,
+		// Policy context information
+		Watches: params.Watches,
+		ProjectKey: params.ProjectKey,
+		RepoPath: params.RepoPath,
+		// Output information
+		MinSeverity: params.MinSeverity,
+		FixableOnly: params.FixableOnly,
+	}
 }
 
 func GetTargets(localConfig *jfrogappsconfig.JFrogAppsConfig, params *AppsDetectParams) (targets []scanconfig.ScanTarget, err error) {
@@ -187,11 +210,26 @@ func getLocalScanModule(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, target
 		return nil, nil
 	}
 	for _, m := range jfrogAppsConfig.Modules {
-		if moduleRoot == target {
+		if m.SourceRoot == target {
 			return &m, nil
 		}
 	}
 	return nil, nil
+}
+
+func getLocalScanner(module *jfrogappsconfig.Module, scannerType utils.SubScanType) *jfrogappsconfig.Scanner {
+	if module == nil {
+		return nil
+	}
+	switch scannerType {
+	case utils.SecretsScan:
+		return module.Scanners.Secrets
+	case utils.IacScan:
+		return module.Scanners.Iac
+	case utils.SastScan:
+		return &module.Scanners.Sast.Scanner
+	}
+	return nil
 }
 
 func DetectWorkingDirectoryInformation(requestedDirectory string, localModuleConfig *jfrogappsconfig.Module, params *AppsDetectParams, recursive bool) (techToTargetWorkingDirs map[techutils.Technology]map[string][]string, err error) {
@@ -223,32 +261,32 @@ func GetTargetScanConfigurations(target scanconfig.ScanTarget, localModule *jfro
 		}
 		if !targetDetectionMode {
 			// Create target configuration for the detected technology in the target
-			targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(target, localModule, params.RequestedSubScans, entitledForJas, &tech, workingDirs[target.Target]...))
+			targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(target, localModule, params, entitledForJas, &tech, workingDirs[target.Target]...))
 			continue
 		}
 		// Create target configuration for each detected working directory with a supported technology
 		for workingDir, descriptors := range workingDirs {
-			targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(scanconfig.ScanTarget{Target: workingDir}, localModule, params.RequestedSubScans, entitledForJas, &tech, descriptors...))
+			targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(scanconfig.ScanTarget{Target: workingDir}, localModule, params, entitledForJas, &tech, descriptors...))
 		}
 	}
 	if len (targetConfigs) > 0 {
 		return
 	}
-	if len(params.RequestedTechnologies) == 0 || slices.Contains(params.RequestedTechnologies, utils.ScaScan) {
+	if utils.ShouldPreformSubScan(params.RequestedSubScans, utils.ScaScan) {
 		log.Info(fmt.Sprintf("Couldn't determine a package manager or build tool used in '%s'. Skipping the SCA scan...", target.Target))
 	}
 	if !entitledForJas {
 		return
 	}
 	// Create target configuration for JAS scan
-	targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(target, localModule, params.RequestedSubScans, entitledForJas, nil))
+	targetConfigs = append(targetConfigs, CreateTargetScanConfigurations(target, localModule, params, entitledForJas, nil))
 	return
 }
 
-func CreateTargetScanConfigurations(target scanconfig.ScanTarget, localModule *jfrogappsconfig.Module, requestedSubScans []utils.SubScanType, entitledForJas bool, tech *techutils.Technology, descriptors ...string) (targetConfig scanconfig.ScanTargetConfig) {
+func CreateTargetScanConfigurations(target scanconfig.ScanTarget, localModule *jfrogappsconfig.Module, params *AppsDetectParams, entitledForJas bool, tech *techutils.Technology, descriptors ...string) (targetConfig scanconfig.ScanTargetConfig) {
 	targetConfig = scanconfig.ScanTargetConfig{ScanTarget: target}
 	// Create SCA scan configuration
-	if tech != nil && (len(requestedSubScans) == 0 || slices.Contains(requestedSubScans, utils.ScaScan)) {
+	if tech != nil && ShouldPreformScanner(params.RequestedSubScans, localModule, utils.ScaScan) {
 		targetConfig.Technology = *tech
 		targetConfig.ScaScanConfig = &scanconfig.ScaConfig{Descriptors: descriptors}
 	}
@@ -256,394 +294,75 @@ func CreateTargetScanConfigurations(target scanconfig.ScanTarget, localModule *j
 	if !entitledForJas {
 		return
 	}
-	targetConfig.JasScanConfigs = &scanconfig.ScannersConfig{
-		Secrets: convertScannerInfo(localModule.Scanners.Secrets),
+	targetConfig.JasScanConfigs = &scanconfig.ScannersConfig{}
+	if tech != nil && ShouldPreformScanner(params.RequestedSubScans, localModule, utils.ScaScan, utils.ContextualAnalysisScan) {
+		targetConfig.JasScanConfigs.Applicability = GetScannerConfig(target, nil, params, utils.ContextualAnalysisScan)
 	}
+	if ShouldPreformScanner(params.RequestedSubScans, localModule, utils.SecretsScan) {
+		targetConfig.JasScanConfigs.Secrets = GetScannerConfig(target, localModule, params, utils.SecretsScan)
+	}
+	if ShouldPreformScanner(params.RequestedSubScans, localModule, utils.IacScan) {
+		targetConfig.JasScanConfigs.Iac = GetScannerConfig(target, localModule, params, utils.IacScan)
+	}
+	if ShouldPreformScanner(params.RequestedSubScans, localModule, utils.SastScan) {
+		targetConfig.JasScanConfigs.Sast = GetSastScannerConfig(target, localModule, params)
+	}
+	
 	return
 }
 
-func GetScannerConfig(target scanconfig.ScanTarget, localScannerConfig *jfrogappsconfig.Scanner) (scannerConfig *scanconfig.ScannerConfig) {
-	if localScannerConfig == nil {
-		return
+func ShouldPreformScanner(requestedSubScans []utils.SubScanType, module *jfrogappsconfig.Module, relatedSubScans ...utils.SubScanType) bool {
+	if len(requestedSubScans) > 0 {
+		// If the user input requested to preform the scan, preform it
+		if utils.ShouldPreformSubScan(requestedSubScans, relatedSubScans...) {
+			return true
+		}
 	}
+	// If local configuration does not exist, preform the scan
+	if module == nil {
+		return true
+	}
+	// If the scanner is excluded in the local configuration, skip it
+	for _, scan := range relatedSubScans {
+		if ShouldSkipScanner(module, scan) {
+			return false
+		}
+	}
+	return true
+}
+
+func GetScannerConfig(target scanconfig.ScanTarget, localModule *jfrogappsconfig.Module, params *AppsDetectParams, scannerType utils.SubScanType) (scannerConfig *scanconfig.ScannerConfig) {
+	localScanner := getLocalScanner(localModule, scannerType)
+	if localScanner == nil {
+		// No local configuration, use user input (or default) in detected target
+		return &scanconfig.ScannerConfig{WorkingDirs: []string{target.Target}, ExcludePatterns: utils.GetExclusions(params.Exclusions...)}
+	}
+	// Use local configuration
 	return &scanconfig.ScannerConfig{
-		WorkingDirs: localScannerConfig.WorkingDirs,
-		ExcludePatterns: localScannerConfig.ExcludePatterns,
+		WorkingDirs: localScanner.WorkingDirs,
+		ExcludePatterns: utils.GetExclusions(localScanner.ExcludePatterns...),
 	}
 }
 
-func convertScannerInfo(localModule *jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) *scanconfig.ScannerConfig {
-	if scanner == nil {
-		return nil
+func GetSastScannerConfig(target scanconfig.ScanTarget, localModule *jfrogappsconfig.Module, params *AppsDetectParams) (sastScannerConfig *scanconfig.SastScannerConfig) {
+	if localModule == nil || localModule.Scanners.Sast == nil{
+		// No local configuration, use user input (or default) in detected target
+		return &scanconfig.SastScannerConfig{ScannerConfig: scanconfig.ScannerConfig{WorkingDirs: []string{target.Target}, ExcludePatterns: utils.GetExclusions()}}
 	}
-	scannerWorkingDirs, err := GetSourceRoots(localModule, scanner)
-	return &scanconfig.ScannerConfig{
-		WorkingDirs: ,
-		ExcludePatterns: scanner.ExcludePatterns,
+	return &scanconfig.SastScannerConfig{
+		ScannerConfig: *GetScannerConfig(target, localModule, params, utils.SastScan),
+		Language: localModule.Scanners.Sast.Language,
+		ExcludedRules: localModule.Scanners.Sast.ExcludedRules,
 	}
 }
 
-func convertSastScannerInfo(scanner *jfrogappsconfig.SastScanner) *scanconfig.SastScannerConfig {
-	if scanner == nil {
-		return nil
+func ShouldSkipScanner(module *jfrogappsconfig.Module, scanType utils.SubScanType) bool {
+	if module == nil {
+		return false
 	}
-	converted := &scanconfig.SastScannerConfig{
-		Language: scanner.Language,
-		ExcludedRules: scanner.ExcludedRules,
-	}
-	if baseConfig := convertScannerInfo(&scanner.Scanner); baseConfig != nil {
-		converted.ScannerConfig = *baseConfig
-	} 
-	return converted
-}
-
-
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
-	lowerScanType := strings.ToLower(string(scanType))
-	if slices.Contains(module.ExcludeScanners, lowerScanType) {
-		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
+	lowerScanType := strings.ToLower(scanType.String())
+	if slices.Contains((*module).ExcludeScanners, lowerScanType) {
 		return true
 	}
 	return false
-}
-
-func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) []string {
-	excludePatterns := module.ExcludePatterns
-	if scanner != nil {
-		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
-	}
-	if len(excludePatterns) == 0 {
-		return DefaultExcludePatterns
-	}
-	return excludePatterns
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-func DetectTargetsMetadata(appsConfig *scanconfig.AppsSecurityConfig, params *AppsDetectParams) (err error) {
-	detectedModules, techToWorkingDirs, err := DetectTargetsDescriptorsAndTechnologies(params)
-	if err != nil {
-		return
-	}
-	// Add detected modules metadata to the configuration
-	for _, module := range detectedModules {
-		configurationTarget := appsConfig.GetScanTarget(module.Target)
-		if configurationTarget == nil {
-			log.Warn(fmt.Sprintf("No configuration found for detected target '%s'. Skipping...", module.String()))
-			continue
-		}
-		log.Debug(fmt.Sprintf("Detected target '%s' with technology '%s'", module.String(), module.Technology.ToFormal()))
-		// Set technology and name if not provided and detected
-		if configurationTarget.Technology == "" {
-			configurationTarget.Technology = module.Technology
-		}
-		if configurationTarget.Name == "" {
-			configurationTarget.Name = module.Name
-		}
-	}
-	return
-}
-
-func GetTargetsScanConfigurations(params *AppsDetectParams, xrayVersion string, entitledForJas bool) (appsConfig *scanconfig.AppsSecurityConfig, err error) {
-	// Get remote security config (TODO: when API ready)
-
-	// Get local config (if exists)
-	appsConfig, err = tryLoadLocalScanConfig(xrayVersion, entitledForJas)
-	if err != nil {
-		return
-	}
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(params.WorkingDirs)
-	if err != nil {
-		return
-	}
-	if appsConfig != nil && len(appsConfig.Targets) > 0 {
-		if len(workingDirs) > 0 {
-			log.Warn("Local scan configuration found, but working directories were provided. Ignoring working directories.")
-		}
-		return
-	}
-	// Create scan profile based on user input (remote, local, flags, env...)
-	if appsConfig == nil {
-		appsConfig = &scanconfig.AppsSecurityConfig{ XrayVersion: xrayVersion, EntitledForJas: entitledForJas }
-	}
-	if len(workingDirs) == 0 {
-		// No working directories provided
-		return
-	}
-	for _, workingDir := range workingDirs {
-		appsConfig.Targets = append(appsConfig.Targets, scanconfig.ScanTargetConfig{
-			ScanTarget: scanconfig.ScanTarget{Target: module.SourceRoot, Name: module.Name},
-			ExcludePatterns: module.ExcludePatterns,
-			JasScanConfigs: jasConfig,
-		})
-	}
-
-	isRecursiveDetection := len(workingDirs) == 0
-
-	if appsConfig.AppsConfig, err = createJFrogAppsConfig(workingDirs); err != nil || appsConfig.AppsConfig != nil {
-		return
-	}
-
-	if appsConfig.AppsConfig == nil {
-		// Create default config based on workingDirs
-		appsConfig.AppsConfig = new(jfrogappsconfig.JFrogAppsConfig)
-		for _, workingDir := range workingDirs {
-			appsConfig.AppsConfig.Modules = append(appsConfig.AppsConfig.Modules, jfrogappsconfig.Module{SourceRoot: workingDir})
-		}
-	}
-
-	// Create scan profile based on user input (remote, local, flags, env...)
-
-	// Detect tech information and descriptors (+ detect modules if needed -> create config based on default profile)
-	isRecursiveDetection := len(params.WorkingDirs) == 0 // If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-}
-
-
-
-func tryLoadLocalScanConfig(xrayVersion string, entitledForJas bool) (appsConfig *scanconfig.AppsSecurityConfig, err error) {
-	jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist()
-	if err != nil {
-		return nil, errorutils.CheckError(err)
-	}
-	if jfrogAppsConfig == nil {
-		log.Debug("No local scan configuration found for the current workspace.")
-		return
-	}
-	appsConfig = &scanconfig.AppsSecurityConfig{XrayVersion: xrayVersion, EntitledForJas: entitledForJas}
-	// Convert loaded local scan config
-	for _, module := range jfrogAppsConfig.Modules {
-		var jasConfig *scanconfig.ScannersConfig
-		if entitledForJas {
-			jasConfig = &scanconfig.ScannersConfig{}
-			if module.Scanners.Secrets != nil && !slices.Contains(module.ExcludeScanners, utils.SecretsScan.String()) {
-				jasConfig.Secrets = convertScannerInfo(module.Scanners.Secrets)
-			}
-			if module.Scanners.Iac != nil && !slices.Contains(module.ExcludeScanners, utils.IacScan.String()) {
-				jasConfig.Iac = convertScannerInfo(module.Scanners.Iac)
-			}
-			if module.Scanners.Sast != nil && !slices.Contains(module.ExcludeScanners, utils.SastScan.String()) {
-				jasConfig.Sast = convertSastScannerInfo(module.Scanners.Sast)
-			}
-		}
-		appsConfig.Targets = append(appsConfig.Targets, scanconfig.ScanTargetConfig{
-			ScanTarget: scanconfig.ScanTarget{Target: module.SourceRoot, Name: module.Name},
-			ExcludePatterns: utils.GetExcludePattern(false, module.ExcludePatterns...),
-			JasScanConfigs: jasConfig,
-		})
-	}
-	localStr := "Loaded local scan configurations"
-	if str, err := utils.GetAsJsonString(appsConfig); err != nil {
-		localStr = fmt.Sprintf("%s\n%s", localStr, str)
-	}
-	log.Debug(localStr)
-	return
-}
-
-func getDefaultTargetConfig(workingDir string, entitledForJas bool) *scanconfig.ScanTargetConfig {
-	var jasConfig *scanconfig.ScannersConfig
-	if entitledForJas {
-		jasConfig = &scanconfig.ScannersConfig{
-			Secrets: &scanconfig.ScannerConfig{WorkingDirs: []string{workingDir}, ExcludePatterns: utils.GetExcludePattern(true)},
-			Iac: &scanconfig.ScannerConfig{WorkingDirs: []string{workingDir}, ExcludePatterns: utils.GetExcludePattern(true)},
-			Sast: &scanconfig.SastScannerConfig{ScannerConfig: scanconfig.ScannerConfig{WorkingDirs: []string{workingDir}, ExcludePatterns: utils.GetExcludePattern(true)}},
-		}
-	}
-	return &scanconfig.ScanTargetConfig{
-		ScanTarget: scanconfig.ScanTarget{Target: workingDir},
-		ExcludePatterns: utils.GetExcludePattern(true),
-		JasScanConfigs: jasConfig,
-	}
-}
-
-func generateTargetConfig(target, name string, technology techutils.Technology, excludePatterns []string, scaScanConfig *scanconfig.ScaConfig, jasScanConfigs *scanconfig.ScannersConfig) *scanconfig.ScanTargetConfig {
-	var jasConfig *scanconfig.ScannersConfig
-		if entitledForJas {
-			jasConfig = &scanconfig.ScannersConfig{}
-			if module.Scanners.Secrets != nil && !slices.Contains(module.ExcludeScanners, utils.SecretsScan.String()) {
-				jasConfig.Secrets = convertScannerInfo(module.Scanners.Secrets)
-			}
-			if module.Scanners.Iac != nil && !slices.Contains(module.ExcludeScanners, utils.IacScan.String()) {
-				jasConfig.Iac = convertScannerInfo(module.Scanners.Iac)
-			}
-			if module.Scanners.Sast != nil && !slices.Contains(module.ExcludeScanners, utils.SastScan.String()) {
-				jasConfig.Sast = convertSastScannerInfo(module.Scanners.Sast)
-			}
-		}
-		return &scanconfig.ScanTargetConfig{
-			ScanTarget: scanconfig.ScanTarget{Target: target, Name: name},
-			ExcludePatterns: module.ExcludePatterns,
-			JasScanConfigs: jasConfig,
-		}
-}
-
-func convertScannerInfo(scanner *jfrogappsconfig.Scanner) *scanconfig.ScannerConfig {
-	if scanner == nil {
-		return nil
-	}
-	return &scanconfig.ScannerConfig{
-		WorkingDirs: scanner.WorkingDirs,
-		ExcludePatterns: scanner.ExcludePatterns,
-	}
-}
-
-func convertSastScannerInfo(scanner *jfrogappsconfig.SastScanner) *scanconfig.SastScannerConfig {
-	if scanner == nil {
-		return nil
-	}
-	converted := &scanconfig.SastScannerConfig{
-		Language: scanner.Language,
-		ExcludedRules: scanner.ExcludedRules,
-	}
-	if baseConfig := convertScannerInfo(&scanner.Scanner); baseConfig != nil {
-		converted.ScannerConfig = *baseConfig
-	} 
-	return converted
-}
-
-func createModuleConfig()
-
-func createJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
-	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
-		return nil, errorutils.CheckError(err)
-	} else if jfrogAppsConfig != nil {
-		// jfrog-apps-config.yml exist in the workspace
-		return jfrogAppsConfig, nil
-	}
-
-	// jfrog-apps-config.yml does not exist in the workspace
-	fullPathsWorkingDirs, err := coreutils.GetFullPathsWorkingDirs(workingDirs)
-	if err != nil {
-		return nil, err
-	}
-	jfrogAppsConfig := new(jfrogappsconfig.JFrogAppsConfig)
-	for _, workingDir := range fullPathsWorkingDirs {
-		jfrogAppsConfig.Modules = append(jfrogAppsConfig.Modules, jfrogappsconfig.Module{SourceRoot: workingDir})
-	}
-	return jfrogAppsConfig, nil
-}
-
-func DetectTargetsDescriptorsAndTechnologies(params *AppsDetectParams) (targets []scanconfig.ScanTarget, techToWorkingDirs map[techutils.Technology]map[string][]string, err error) {
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(params.WorkingDirs)
-	if err != nil {
-		return
-	}
-	currentWorkingDir, err := os.Getwd()
-	if err != nil {
-		return
-	}
-	isRecursiveDetection := false
-	if len(workingDirs) == 0 {
-		// recursive from root
-		log.Debug(fmt.Sprintf("No working directories provided. Running recursive detection on '%s'", currentWorkingDir))
-		workingDirs = []string{currentWorkingDir}
-		isRecursiveDetection = true
-	}
-	for _, requestedWorkingDir := range workingDirs {
-		if !fileutils.IsPathExists(requestedWorkingDir, false) {
-			log.Warn("The provided working directory", requestedWorkingDir, "doesn't exist. Skipping detection...")
-			continue
-		}
-		// Detect descriptors and technologies in the requested directory.
-		currentTechToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedWorkingDir, isRecursiveDetection, params.RequestedTechnologies, params.RequestedDescriptorsCustomNames, utils.GetExcludePattern(isRecursiveDetection, params.Exclusions...))
-		if err != nil {
-			log.Warn("Couldn't detect technologies in", requestedWorkingDir, "directory.", err.Error())
-			continue
-		}
-		for tech, workingDirs := range currentTechToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			if _, ok := techToWorkingDirs[tech]; !ok {
-				techToWorkingDirs[tech] = map[string][]string{}
-			}
-			for workingDir, descriptors := range workingDirs {
-				if _, ok := techToWorkingDirs[tech][workingDir]; !ok {
-					techToWorkingDirs[tech][workingDir] = descriptors
-				} else {
-					techToWorkingDirs[tech][workingDir] = append(techToWorkingDirs[tech][workingDir], descriptors...)
-				}
-					
-				
-			}
-		}
-
-
-
-		// Create targets based on detected technologies and descriptors
-		for tech, workingDirs := range techToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				targets = append(targets, scanconfig.ScanTarget{Target: requestedWorkingDir, Technology: tech})
-			} 
-			for workingDir, descriptors := range workingDirs {
-				// Add scan for each detected working directory.
-				targets = append(targets, scanconfig.ScanTarget{Target: workingDir, Technology: tech, Descriptors: descriptors})
-			}
-		}
-	}
-
-	return
-}
-
-// Calculate the scans to preform
-func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
-	for _, requestedDirectory := range params.workingDirs {
-		if !fileutils.IsPathExists(requestedDirectory, false) {
-			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
-			continue
-		}
-		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
-		if err != nil {
-			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
-			continue
-		}
-		// Create scans to preform
-		for tech, workingDirs := range techToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: requestedDirectory, Technology: tech})
-			}
-			for workingDir, descriptors := range workingDirs {
-				// Add scan for each detected working directory.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
-			}
-		}
-	}
-	return
-}
-
-func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
-	requestedDescriptors := map[techutils.Technology][]string{}
-	if params.PipRequirementsFile() != "" {
-		requestedDescriptors[techutils.Pip] = []string{params.PipRequirementsFile()}
-	}
-	return requestedDescriptors
 }

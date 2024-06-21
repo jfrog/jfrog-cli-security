@@ -1,13 +1,23 @@
 package scanconfig
 
 import (
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 type AppsSecurityConfig struct {
+	// Platform information
 	XrayVersion    string             `json:"xray_version,omitempty"`
 	EntitledForJas bool               `json:"entitled_for_jas,omitempty"`
+	// Scan targets
 	Targets        []ScanTargetConfig `json:"targets,omitempty"`
+	// Policy context information
+	Watches        []string           `json:"watches,omitempty"`
+	ProjectKey    string             `json:"project_key,omitempty"`
+	RepoPath 	 string             `json:"repo_path,omitempty"`
+	// Output information
+	MinSeverity    severityutils.Severity             `json:"min_severity,omitempty"`
+	FixableOnly    bool               `json:"fixable_only,omitempty"`
 }
 
 func (c *AppsSecurityConfig) GetScanTarget(target string) *ScanTargetConfig {

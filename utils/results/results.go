@@ -169,8 +169,8 @@ func (r *ScanCommandResults) HasFindings() bool {
 
 // --- Scan on a target ---
 
-func (r *ScanCommandResults) NewScanResults(target string) *ScanResults {
-	scanResults := &ScanResults{Target: target}
+func (r *ScanCommandResults) NewScanResults(target scanconfig.ScanTarget) *ScanResults {
+	scanResults := &ScanResults{ScanTarget: target}
 	if r.EntitledForJas {
 		scanResults.JasResults = &JasScansResults{}
 	}
@@ -224,8 +224,8 @@ func (sr *ScanResults) NewScaScanResults(response *services.ScanResponse) *ScaSc
 	return scaScanResults
 }
 
-func (sr *ScanResults) NewScaScan(Target string, Technology techutils.Technology) *ScaScanResults {
-	scaScanResults := &ScaScanResults{ScanTarget: scanconfig.ScanTarget{Target: Target, Technology: Technology}}
+func (sr *ScanResults) NewScaScan(target string, technology techutils.Technology) *ScaScanResults {
+	scaScanResults := &ScaScanResults{ScanTarget: scanconfig.ScanTarget{Target: target, Technology: technology}}
 	sr.ScaResults = append(sr.ScaResults, *scaScanResults)
 	return scaScanResults
 }

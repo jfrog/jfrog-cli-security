@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/sync/errgroup"
@@ -151,7 +152,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		PrintScanResults(); err != nil {
 		return
 	}
-	err = auditResults.GetErrors()
+	if err = auditResults.GetErrors(); err != nil {
+		return
+	}
 	// if err = errors.Join(auditResults.ScaError, auditResults.JasError); err != nil {
 	// 	return
 	// }
@@ -204,7 +207,7 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.ScanCommandResults,
 	// 	return
 	// }
 	cmdResults = createCmdResults(appsConfig)
-
+	
 	// scans := getScaScansToPreform(params)
 	// if len(scans) == 0 {
 	// 	log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
@@ -228,12 +231,14 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.ScanCommandResults,
 	return
 }
 
-func createCmdResults(appsConfig *detect.AppsSecurityConfig) *results.ScanCommandResults {
+func createCmdResults(appsConfig *scanconfig.AppsSecurityConfig) *results.ScanCommandResults {
 	cmdResults := results.NewCommandResults(appsConfig.XrayVersion, appsConfig.EntitledForJas)
-	for _, moduleConfig := range appsConfig.Modules {
-		moduleScans := cmdResults.NewScanResults(moduleConfig.Module.SourceRoot)
-		for _, descriptor := range moduleConfig.Descriptors {
-			moduleScans.NewScaScan(descriptor, moduleConfig.Technology)
+	for _, targetConfig := range appsConfig.Targets {
+		targetScans := cmdResults.NewScanResults(targetConfig.ScanTarget)
+		if targetConfig.Technology != "" && targetConfig.ScaScanConfig != nil {
+			for _, descriptor := range targetConfig.ScaScanConfig.Descriptors {
+				targetScans.NewScaScan(descriptor, targetConfig.Technology)
+			}
 		}
 	}
 	return cmdResults

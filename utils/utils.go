@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	SecretsScan SubScanType = "secrets"
 	IacScan     SubScanType = "iac"
 	SastScan    SubScanType = "sast"
+	ContextualAnalysisScan SubScanType = "applicability"
 
 	JfrogCurationDirName = "curation"
 	CurationsDir         = "JFROG_CLI_CURATION_DIR"
@@ -34,17 +36,37 @@ const (
 
 var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
-func GetExcludePattern(isRecursive bool, exclusions ...string) string {
+
+func GetExclusions(exclusions ...string) []string {
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, DefaultExcludePatterns...)
 	}
-	return fspatterns.PrepareExcludePathPattern(exclusions, clientUtils.WildCardPattern, isRecursive)
+	return exclusions
+}
+
+func GetExcludePattern(isRecursive bool, exclusions ...string) string {
+	return fspatterns.PrepareExcludePathPattern(GetExclusions(exclusions...), clientUtils.WildCardPattern, isRecursive)
 }
 
 type SubScanType string
 
 func (s SubScanType) String() string {
 	return string(s)
+}
+
+func ShouldPreformSubScan(requestedSubScans []SubScanType, relatedSubScans ...SubScanType) bool {
+	if len(requestedSubScans) == 0 {
+		return true
+	}
+	if len(relatedSubScans) == 0 {
+		return false
+	}
+	for _, scan := range relatedSubScans {
+		if !slices.Contains(requestedSubScans, scan) {
+			return false
+		}
+	}
+	return true
 }
 
 // UniqueUnion returns a new slice of strings that contains elements from both input slices without duplicates
