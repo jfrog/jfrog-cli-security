@@ -119,4 +119,4 @@ require (
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-replace github.com/jfrog/froggit-go => github.com/gailazar300/froggit-go v0.0.0-20240604120028-0540a10853d0
+replace github.com/jfrog/froggit-go => github.com/gailazar300/froggit-go v0.0.0-20240618145213-329983144687
