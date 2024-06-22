@@ -38,7 +38,7 @@ type RepoLastCommit struct {
 
 type BasicContributor struct {
 	Email string `json:"email"`
-	Repo  string
+	Repo  string `json:"repo,omitempty"`
 }
 
 type Contributor struct {
