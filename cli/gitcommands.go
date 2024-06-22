@@ -9,8 +9,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
-const defaultContributionMonths = 3
-
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
@@ -49,24 +47,28 @@ func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
 	if params.Owner == "" {
 		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.Owner)
 	}
-
-	// Optional flags
 	// ScmApiUrl
 	params.ScamApiUrl = c.GetStringFlagValue(flags.ScmApiUrl)
 	if params.ScamApiUrl == "" {
-		params.ScamApiUrl = scmTypes.DefaultScmApiUrlMap[params.ScmType]
+		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.ScmApiUrl)
 	}
-	// Repository
+
+	// Optional flags
+	// Repository name
 	params.Repository = c.GetStringFlagValue(flags.RepoName)
 	// Months
-	months, err := c.GetIntFlagValue(flags.Months)
-	if err != nil {
-		return nil, err
+	if !c.IsFlagSet(flags.Months) {
+		params.MonthsNum = gitDocs.DefaultContributionMonths
+	} else {
+		months, err := c.GetIntFlagValue(flags.Months)
+		if err != nil {
+			return nil, err
+		}
+		if months <= 0 {
+			return nil, errorutils.CheckErrorf("invalid value for '--%s=%d'. If set, should be positive number.", flags.Months, months)
+		}
+		params.MonthsNum = months
 	}
-	if months <= 0 {
-		months = defaultContributionMonths
-	}
-	params.MonthsNum = months
 	// DetailedSummery
 	params.DetailedSummery = c.GetBoolFlagValue(flags.DetailedSummary)
 	return &params, nil

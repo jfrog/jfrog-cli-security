@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	git2 "github.com/jfrog/jfrog-cli-security/cli/docs/git"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
 
@@ -236,13 +237,12 @@ var flagsMap = map[string]components.Flag{
 	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	// Git flags
-	ScmType:   components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
-	ScmApiUrl: components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'."),
-	Token:     components.NewStringFlag(Token, "SCM API token.", components.SetMandatory()),
-	RepoName:  components.NewStringFlag(RepoName, "Specific repository name to analyze."),
-	// TODO: explain better the Owner flag
-	Owner:           components.NewStringFlag(Owner, "The owner of the repository. The owner can be either an individual username or an organization name."),
-	Months:          components.NewStringFlag(Months, "Number of months to analyze."),
+	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
+	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, "SCM API token.", components.SetMandatory()),
+	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depending on the git provider, the owner can be an individual, an organization, or a project.", components.SetMandatory()),
+	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
+	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git2.DefaultContributionMonths)),
 	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a detailed summary."),
 }
 
