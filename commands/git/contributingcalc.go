@@ -133,7 +133,6 @@ func (gc *GitContributingCommand) Run() error {
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
-	totalCommits := 0
 
 	repositories, err := gc.getRepositoriesListToScan()
 	if err != nil {
@@ -194,16 +193,17 @@ func (gc *GitContributingCommand) getRepositoriesListToScan() ([]string, error) 
 }
 
 func (gc *GitContributingCommand) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
-	retries := 20
+	retries := 5
 	for retries > 0 {
 		commits, err := gc.vcsClient.GetCommitsWithQueryOptions(context.Background(), gc.Owner, repo, options)
 		if err != nil {
 			var rateLimitError *github.RateLimitError
 			if errors.As(err, &rateLimitError) {
-				sleepDuration := rateLimitError.Rate.Reset.Sub(time.Now())
+				sleepDuration := time.Until(rateLimitError.Rate.Reset.Time)
 				log.Printf("Rate limit exceeded, sleeping for %v seconds", sleepDuration)
 				time.Sleep(sleepDuration)
 				retries--
+				continue
 			}
 			log.Printf("Error getting commits: %v", err)
 			return nil, err
@@ -272,10 +272,8 @@ func (gc *GitContributingCommand) aggregateUniqueContributors(uniqueContributors
 	for _, contributor := range uniqueContributors {
 		if _, exist := contributorsMap[contributor.Email]; !exist {
 			contributorsMap[contributor.Email] = contributor
-		} else {
-			if contributorsMap[contributor.Email].RepoLastCommit.Date < contributor.RepoLastCommit.Date {
-				contributorsMap[contributor.Email] = contributor
-			}
+		} else if contributorsMap[contributor.Email].RepoLastCommit.Date < contributor.RepoLastCommit.Date {
+			contributorsMap[contributor.Email] = contributor
 		}
 	}
 	// Convert map to array.
