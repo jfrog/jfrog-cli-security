@@ -46,7 +46,7 @@ type AuditBasicParams struct {
 	serverDetails                    *config.ServerDetails
 	outputFormat                     format.OutputFormat
 	progress                         ioUtils.ProgressMgr
-	useJas                       bool
+	useJas                           bool
 	excludeTestDependencies          bool
 	useWrapper                       bool
 	insecureTls                      bool

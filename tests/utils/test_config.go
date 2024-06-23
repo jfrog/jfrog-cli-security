@@ -13,12 +13,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/cli"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	commonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"

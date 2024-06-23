@@ -130,7 +130,6 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
 	return securityTestUtils.InitTestWithMockCommandOrParams(t, dockerScanMockCommand)
-	
 
 	// oldHomeDir := os.Getenv(coreutils.HomeDir)
 	// securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
