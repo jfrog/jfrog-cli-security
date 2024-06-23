@@ -397,6 +397,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetServerDetails(serverDetails).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
+		SetUseJas(true).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).

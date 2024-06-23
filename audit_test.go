@@ -28,6 +28,15 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
+// func TestXrayAuditNotEntitledForJas(t *testing.T) {
+// 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
+// 	defer cleanUp()
+// }
+
+// func getNoJasAuditMockCommand(t *testing.T) components.Command {
+
+// }
+
 func TestXrayAuditNpmJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)

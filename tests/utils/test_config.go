@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/cli"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -48,13 +49,17 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 }
 
 func InitTestCliDetails() {
-	creds := authenticateXray()
 	testApplication := cli.GetJfrogCliSecurityApp()
 
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(*configTests.TestApplication)() }, "", creds)
+		configTests.PlatformCli = GetTestCli(testApplication)
 	}
+}
+
+func GetTestCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
+	creds := authenticateXray()
+	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
 func authenticateXray() string {

@@ -35,7 +35,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	commonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-security/scangraph"
@@ -101,7 +100,7 @@ func TestDockerScanWithProgressBar(t *testing.T) {
 }
 
 func TestDockerScan(t *testing.T) {
-	cleanup := initNativeDockerWithXrayTest(t)
+	testCli, cleanup := initNativeDockerWithXrayTest(t)
 	defer cleanup()
 
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
@@ -115,7 +114,7 @@ func TestDockerScan(t *testing.T) {
 		"redhat/ubi8-micro:8.4",
 	}
 	for _, imageName := range imagesToScan {
-		runDockerScan(t, imageName, watchName, 3, 3, 3)
+		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3)
 	}
 
 	// On Xray 3.40.3 there is a bug whereby xray fails to scan docker image with 0 vulnerabilities,
@@ -123,27 +122,32 @@ func TestDockerScan(t *testing.T) {
 	securityTestUtils.ValidateXrayVersion(t, "3.41.0")
 
 	// Image with 0 vulnerabilities
-	runDockerScan(t, "busybox:1.35", "", 0, 0, 0)
+	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0)
 }
 
-func initNativeDockerWithXrayTest(t *testing.T) func() {
+func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
-	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
-	// Create server config to use with the command.
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
-	// Add docker scan mock command
-	securityTests.TestApplication.Commands = append(securityTests.TestApplication.Commands, dockerScanMockCommand(t))
-	return func() {
-		clientTestUtils.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
-		// remove docker scan mock command
-		securityTests.TestApplication.Commands = securityTests.TestApplication.Commands[:len(securityTests.TestApplication.Commands)-1]
-	}
+	return securityTestUtils.InitTestWithMockCommandOrParams(t, dockerScanMockCommand)
+	
+
+	// oldHomeDir := os.Getenv(coreutils.HomeDir)
+	// securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
+	// // Create server config to use with the command.
+	// securityTestUtils.CreateJfrogHomeConfig(t, true)
+	// // Add docker scan mock command
+	// securityTests.TestApplication.Commands = append(securityTests.TestApplication.Commands, dockerScanMockCommand(t))
+	// return func() {
+	// 	clientTestUtils.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
+	// 	// remove docker scan mock command
+	// 	securityTests.TestApplication.Commands = securityTests.TestApplication.Commands[:len(securityTests.TestApplication.Commands)-1]
+	// }
 }
 
 func dockerScanMockCommand(t *testing.T) components.Command {
+	// Mock how the CLI handles docker commands:
+	// https://github.com/jfrog/jfrog-cli/blob/v2/buildtools/cli.go#L691
 	return components.Command{
 		Name:  "docker",
 		Flags: docs.GetCommandFlags(docs.DockerScan),
@@ -167,7 +171,7 @@ func dockerScanMockCommand(t *testing.T) components.Command {
 	}
 }
 
-func runDockerScan(t *testing.T, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {
+func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
 	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
@@ -176,7 +180,7 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 		// Run docker scan on image
 		cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--format=json", "--fail=false", "--min-severity=low", "--fixable-only"}
-		output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
+		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
 		}
@@ -185,7 +189,7 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 			return
 		}
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
-		output = securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
+		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
 		}
@@ -195,12 +199,12 @@ func runDockerScan(t *testing.T, imageName, watchName string, minViolations, min
 // JAS docker scan tests
 
 func TestAdvancedSecurityDockerScan(t *testing.T) {
-	cleanup := initNativeDockerWithXrayTest(t)
+	testCli, cleanup := initNativeDockerWithXrayTest(t)
 	defer cleanup()
-	runAdvancedSecurityDockerScan(t, "jfrog/demo-security:latest")
+	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }
 
-func runAdvancedSecurityDockerScan(t *testing.T, imageName string) {
+func runAdvancedSecurityDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName string) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
 	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
@@ -210,7 +214,7 @@ func runAdvancedSecurityDockerScan(t *testing.T, imageName string) {
 		args := []string{"docker", "scan", imageTag, "--server-id=default", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
 
 		// Run docker scan on image
-		output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 		if assert.NotEmpty(t, output) {
 			verifyAdvancedSecurityScanResults(t, output)
 		}

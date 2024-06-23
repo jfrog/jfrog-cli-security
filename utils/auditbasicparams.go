@@ -46,6 +46,7 @@ type AuditBasicParams struct {
 	serverDetails                    *config.ServerDetails
 	outputFormat                     format.OutputFormat
 	progress                         ioUtils.ProgressMgr
+	useJas                       bool
 	excludeTestDependencies          bool
 	useWrapper                       bool
 	insecureTls                      bool
@@ -89,6 +90,15 @@ func (abp *AuditBasicParams) SetInstallCommandArgs(installCommandArgs []string) 
 func (abp *AuditBasicParams) SetInstallCommandName(installCommandName string) *AuditBasicParams {
 	abp.installCommandName = installCommandName
 	return abp
+}
+
+func (abp *AuditBasicParams) SetUseJas(useJas bool) *AuditBasicParams {
+	abp.useJas = useJas
+	return abp
+}
+
+func (abp *AuditBasicParams) UseJas() bool {
+	return abp.useJas
 }
 
 func (abp *AuditBasicParams) PipRequirementsFile() string {
