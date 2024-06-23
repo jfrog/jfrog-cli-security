@@ -75,7 +75,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
-	scaResults := []ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
+	scaResults := []*ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
 	auditResults := Results{
 		ScaResults: scaResults,
 		ExtendedScanResults: &ExtendedScanResults{
@@ -101,8 +101,8 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	}{
 		{name: "No audit results", auditResults: &Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
 		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed because sca errors.", auditResults: &Results{JasError: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because jas errors.", auditResults: &Results{ScansErr: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because sca errors.", auditResults: &Results{ScansErr: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
 	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()

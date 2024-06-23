@@ -1,0 +1,6 @@
+{
+  "key": "${MAVEN_REMOTE_SNAPSHOTS_REPO}",
+  "rclass": "remote",
+  "packageType": "maven",
+  "url": "https://repo.spring.io/snapshot"
+}

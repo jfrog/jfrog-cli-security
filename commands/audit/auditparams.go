@@ -1,35 +1,33 @@
 package audit
 
 import (
+	"github.com/jfrog/jfrog-cli-security/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 type AuditParams struct {
-	xrayGraphScanParams *services.XrayGraphScanParams
-	workingDirs         []string
-	installFunc         func(tech string) error
-	fixableOnly         bool
-	minSeverityFilter   string
+	// Common params to all scan routines
+	commonGraphScanParams *scangraph.CommonGraphScanParams
+	workingDirs           []string
+	installFunc           func(tech string) error
+	fixableOnly           bool
+	minSeverityFilter     string
 	*xrayutils.AuditBasicParams
 	xrayVersion string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
+	threads                     int
 }
 
 func NewAuditParams() *AuditParams {
 	return &AuditParams{
-		xrayGraphScanParams: &services.XrayGraphScanParams{},
-		AuditBasicParams:    &xrayutils.AuditBasicParams{},
+		AuditBasicParams: &xrayutils.AuditBasicParams{},
 	}
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {
 	return params.installFunc
-}
-
-func (params *AuditParams) XrayGraphScanParams() *services.XrayGraphScanParams {
-	return params.xrayGraphScanParams
 }
 
 func (params *AuditParams) WorkingDirs() []string {
@@ -38,11 +36,6 @@ func (params *AuditParams) WorkingDirs() []string {
 
 func (params *AuditParams) XrayVersion() string {
 	return params.xrayVersion
-}
-
-func (params *AuditParams) SetXrayGraphScanParams(xrayGraphScanParams *services.XrayGraphScanParams) *AuditParams {
-	params.xrayGraphScanParams = xrayGraphScanParams
-	return params
 }
 
 func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
@@ -86,4 +79,27 @@ func (params *AuditParams) SetThirdPartyApplicabilityScan(includeThirdPartyDeps 
 func (params *AuditParams) SetDepsRepo(depsRepo string) *AuditParams {
 	params.AuditBasicParams.SetDepsRepo(depsRepo)
 	return params
+}
+
+func (params *AuditParams) SetThreads(threads int) *AuditParams {
+	params.threads = threads
+	return params
+}
+
+func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.CommonGraphScanParams) *AuditParams {
+	params.commonGraphScanParams = commonParams
+	return params
+}
+
+func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
+	return &services.XrayGraphScanParams{
+		RepoPath:               params.commonGraphScanParams.RepoPath,
+		Watches:                params.commonGraphScanParams.Watches,
+		ScanType:               params.commonGraphScanParams.ScanType,
+		ProjectKey:             params.commonGraphScanParams.ProjectKey,
+		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
+		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
+		XscVersion:             params.commonGraphScanParams.XscVersion,
+		MultiScanId:            params.commonGraphScanParams.MultiScanId,
+	}
 }

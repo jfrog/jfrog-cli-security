@@ -21,9 +21,9 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 		{
 			name: "Sca scan result by target",
 			results: Results{
-				ScaResults: []ScaScanResult{
-					*target1,
-					*target2,
+				ScaResults: []*ScaScanResult{
+					target1,
+					target2,
 				},
 			},
 			target:   "target1",
@@ -32,9 +32,9 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 		{
 			name: "Sca scan result by target not found",
 			results: Results{
-				ScaResults: []ScaScanResult{
-					*target1,
-					*target2,
+				ScaResults: []*ScaScanResult{
+					target1,
+					target2,
 				},
 			},
 			target:   "target3",
@@ -80,7 +80,7 @@ func TestGetSummary(t *testing.T) {
 	}{
 		{
 			name:         "Empty results",
-			results:      Results{ScaResults: []ScaScanResult{}},
+			results:      Results{ScaResults: []*ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 			issueCount:   0,
@@ -88,7 +88,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name: "One module result",
 			results: Results{
-				ScaResults: []ScaScanResult{{
+				ScaResults: []*ScaScanResult{{
 					Target:      "target1",
 					XrayResults: getDummyScaTestResults(true, false),
 				}},
@@ -119,7 +119,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name: "Multiple module results",
 			results: Results{
-				ScaResults: []ScaScanResult{
+				ScaResults: []*ScaScanResult{
 					{
 						Target:      "target1",
 						XrayResults: getDummyScaTestResults(false, true),
