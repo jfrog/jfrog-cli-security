@@ -57,6 +57,7 @@ type AuditBasicParams struct {
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
+	scansToPreform                   []SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -144,6 +145,15 @@ func (abp *AuditBasicParams) Technologies() []string {
 func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicParams {
 	abp.technologies = technologies
 	return abp
+}
+
+func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
+	abp.scansToPreform = scansToPerform
+	return abp
+}
+
+func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
+	return abp.scansToPreform
 }
 
 func (abp *AuditBasicParams) Progress() ioUtils.ProgressMgr {
