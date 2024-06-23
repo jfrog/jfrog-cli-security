@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -331,6 +332,23 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
+
+	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
+		// No CA flag provided but sca flag is not provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+	}
+
+	allSubScans := utils.GetAllSupportedScans()
+	subScans := []utils.SubScanType{}
+	for _, subScan := range allSubScans {
+		if shouldAddSubScan(subScan, c) {
+			subScans = append(subScans, subScan)
+		}
+	}
+	if len(subScans) > 0 {
+		auditCmd.SetScansToPerform(subScans)
+	}
+
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
@@ -340,6 +358,11 @@ func AuditCmd(c *components.Context) error {
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err
+}
+
+func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
+	return c.GetBoolFlagValue(subScan.String()) ||
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
