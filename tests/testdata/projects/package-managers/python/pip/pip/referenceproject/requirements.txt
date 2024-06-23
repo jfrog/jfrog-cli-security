@@ -1,3 +1,2 @@
--e file://../requriementsproject # git+https://github.com/ShiftLeftSecurity/flask-webgoat.git#egg=flask-webgoat
-
-# -r https://raw.githubusercontent.com/ShiftLeftSecurity/flask-webgoat/master/requirements.txt
+python-pkgbuild @ git+https://github.com/z3ntu/python-pkgbuild@7afcd99050ba091e7bf1f2aa4bc87e83df3cdea2
+pexpect==4.7.0
