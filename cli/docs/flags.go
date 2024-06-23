@@ -7,7 +7,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 )
 
@@ -106,6 +107,9 @@ const (
 	// Unique curation flags
 	CurationOutput = "curation-format"
 )
+
+// TODO: create a func that gets all the flags that are used in: CreateServerDetailsFromFlags (from core)
+// -> set them in every cmd that uses it (make sure with password stdin flag first in audit that is not defined in here but in method)
 
 // Mapping between security commands (key) and their flags (key).
 var commandFlags = map[string][]string{

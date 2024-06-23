@@ -5,6 +5,32 @@ import (
 	"sync"
 )
 
+const (
+	maxTasks = 20000
+)
+
+type SecurityScansParallelRunner struct {
+	// 
+	TaskProducer parallel.Runner
+	TaskConsumer parallel.Runner
+}
+
+func NewSecurityScansParallelRunner(numOfParallelScans int) SecurityScansParallelRunner {
+	return SecurityScansParallelRunner{
+		TaskProducer: parallel.NewRunner(numOfParallelScans, maxTasks, false),
+		TaskConsumer: parallel.NewRunner(numOfParallelScans, maxTasks, false),
+	}
+}
+
+func (spr *SecurityScansParallelRunner) Run() {
+	go func() {
+		spr.TaskProducer.Run()
+		spr.TaskConsumer.Done()
+	}()
+	spr.TaskConsumer.Run()
+}
+
+
 type SecurityParallelRunner struct {
 	Runner        parallel.Runner
 	ErrorsQueue   chan error

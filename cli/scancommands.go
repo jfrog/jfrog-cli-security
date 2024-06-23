@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -26,11 +27,14 @@ import (
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	// appConfig "github.com/jfrog/jfrog-cli-security/commands/app/config"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/binaryscan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/buildscan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
 const auditScanCategory = "Audit & Scan"
@@ -151,6 +155,17 @@ func getAuditAndScansCommands() []components.Command {
 	}
 }
 
+// func ScanProfileCmd(c *components.Context) error {
+
+// 	serverDetails, err := createServerDetailsWithConfigOffer(c)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	getScanProfileCmd := appConfig.NewScanProfileCommand()
+
+// 	return commandsCommon.Exec(getScanProfileCmd)
+// }
+
 func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
@@ -185,11 +200,11 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}
-	scanCmd := scan.NewScanCommand().
+	scanCmd := binaryscan.NewScanCommand().
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
 		SetSpec(specFile).
@@ -295,7 +310,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	buildScanCmd := scan.NewBuildScanCommand().
+	buildScanCmd := buildscan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
 		SetBuildConfiguration(buildConfiguration).
@@ -352,7 +367,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
 		return
 	}
-	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
 }
@@ -371,11 +386,11 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return nil, err
 	}
-	auditCmd.SetAnalyticsMetricsService(utils.NewAnalyticsMetricsService(serverDetails))
+	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
@@ -383,7 +398,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetMinSeverityFilter(minSeverity).
+		SetMinSeverityFilter(minSeverity.String()).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
 
@@ -482,12 +497,12 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	containerScanCommand := scan.NewDockerScanCommand()
+	containerScanCommand := binaryscan.NewDockerScanCommand()
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}

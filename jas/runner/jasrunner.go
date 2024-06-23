@@ -10,13 +10,23 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies *[]string,
+func RunJasScannersOnModule(module *scanconfig.ScanTargetConfig, msi string) (*results.JasScansResults, error) {
+	return nil, nil
+}
+
+type JasScanParams struct {
+	// Working directory / binary to scan
+	Target []string
+}
+
+func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *jas.Results, technologiesList []techutils.Technology, directDependencies *[]string,
 	serverDetails *config.ServerDetails, thirdPartyApplicabilityScan bool, msi string, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error)) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")

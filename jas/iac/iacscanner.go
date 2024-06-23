@@ -3,10 +3,11 @@ package iac
 import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"path/filepath"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -40,7 +41,7 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
 	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
 	results = iacScanManager.iacScannerResults
@@ -99,7 +100,7 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module) error
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, utils.IaC)
+	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, jasutils.IaC)
 }
 
 func (iac *IacScanManager) runAnalyzerManager() error {

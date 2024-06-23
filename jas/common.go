@@ -17,6 +17,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -37,14 +40,14 @@ const (
 var (
 	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
 
-	mapSeverityToScore = map[string]string{
-		"":         "0.0",
-		"unknown":  "0.0",
-		"low":      "3.9",
-		"medium":   "6.9",
-		"high":     "8.9",
-		"critical": "10",
-	}
+	// mapSeverityToScore = map[string]string{
+	// 	"":         "0.0",
+	// 	"unknown":  "0.0",
+	// 	"low":      "3.9",
+	// 	"medium":   "6.9",
+	// 	"high":     "8.9",
+	// 	"critical": "10",
+	// }
 )
 
 type JasScanner struct {
@@ -114,7 +117,7 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 }
 
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
-	if sarifRuns, err = utils.ReadScanRunsFromFile(fileName); err != nil {
+	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
 	for _, sarifRun := range sarifRuns {
@@ -123,7 +126,7 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Also used to calculate relative paths if needed with it
 		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
 		// Process runs values
-		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, utils.GetAnalyzerManagerVersion(), sarifRun)
+		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
 		addScoreToRunRules(sarifRun)
 	}
@@ -164,25 +167,21 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	for _, sarifResult := range sarifRun.Results {
 		if rule, err := sarifRun.GetRuleById(*sarifResult.RuleID); err == nil {
 			// Add to the rule security-severity score based on results severity
-			score := convertToScore(utils.GetResultSeverity(sarifResult))
-			if score != utils.MissingCveScore {
-				if rule.Properties == nil {
-					rule.WithProperties(sarif.NewPropertyBag().Properties)
-				}
-				rule.Properties["security-severity"] = score
+			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+				severity = severityutils.Unknown
 			}
+			score := severityutils.GetSeverityScore(severity, jasutils.Applicable)
+			if rule.Properties == nil {
+				rule.WithProperties(sarif.NewPropertyBag().Properties)
+			}
+			rule.Properties["security-severity"] = score
 		}
 	}
 }
 
-func convertToScore(severity string) string {
-	if level, ok := mapSeverityToScore[strings.ToLower(severity)]; ok {
-		return level
-	}
-	return ""
-}
-
-func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType utils.JasScanType) error {
+func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType jasutils.JasScanType) error {
 	yamlData, err := yaml.Marshal(&fileContent)
 	if errorutils.CheckError(err) != nil {
 		return err
@@ -230,7 +229,7 @@ func GetTestDataPath() string {
 	return filepath.Join("..", "..", "tests", "testdata", "other")
 }
 
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType) bool {
+func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
 	lowerScanType := strings.ToLower(string(scanType))
 	if slices.Contains(module.ExcludeScanners, lowerScanType) {
 		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
@@ -267,50 +266,50 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 
 func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
 	errMsg := "failed %s %s environment variable. Cause: %s"
-	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
+	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(JfMsiEnvVariable, msi)
 	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfMsiEnvVariable, err.Error()))
+		log.Debug(fmt.Sprintf(errMsg, "setting", JfMsiEnvVariable, err.Error()))
 	}
 	if len(technologies) != 1 {
 		// Only report analytics for one technology at a time.
 		return func() {
 			err = resetAnalyzerManageJfMsiVar()
 			if err != nil {
-				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+				log.Debug(fmt.Sprintf(errMsg, "restoring", JfMsiEnvVariable, err.Error()))
 			}
 		}
 	}
 	technology := technologies[0]
-	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
+	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(JfPackageManagerEnvVariable, technology.String())
 	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
+		log.Debug(fmt.Sprintf(errMsg, "setting", JfPackageManagerEnvVariable, err.Error()))
 	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
+	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
 	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
+		log.Debug(fmt.Sprintf(errMsg, "setting", JfLanguageEnvVariable, err.Error()))
 	}
 	return func() {
 		err = resetAnalyzerManageJfMsiVar()
 		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
+			log.Debug(fmt.Sprintf(errMsg, "restoring", JfMsiEnvVariable, err.Error()))
 		}
 		err = resetAnalyzerManagerPackageManagerVar()
 		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfPackageManagerEnvVariable, err.Error()))
+			log.Debug(fmt.Sprintf(errMsg, "restoring", JfPackageManagerEnvVariable, err.Error()))
 		}
 		err = resetAnalyzerManagerLanguageVar()
 		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
+			log.Debug(fmt.Sprintf(errMsg, "restoring", JfLanguageEnvVariable, err.Error()))
 		}
 	}
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, EntitlementsMinVersion); e != nil {
 		log.Debug(e)
 		return
 	}
-	entitled, err = xrayManager.IsEntitled(utils.ApplicabilityFeatureId)
+	entitled, err = xrayManager.IsEntitled(ApplicabilityFeatureId)
 	return
 }
 

@@ -4,7 +4,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -58,7 +58,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
 	results = applicabilityScanManager.applicabilityScanResults
@@ -182,7 +182,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(asm.configFileName, configFileContent, utils.Applicability)
+	return jas.CreateScannersConfigFile(asm.configFileName, configFileContent, jasutils.Applicability)
 }
 
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for

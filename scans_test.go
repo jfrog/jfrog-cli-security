@@ -3,11 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,10 +12,16 @@ import (
 	"sync"
 	"testing"
 
+	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/binaryscan"
+	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 
@@ -38,7 +39,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -76,7 +77,7 @@ func testXrayBinaryScan(t *testing.T, format string) string {
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
+	securityTestUtils.InitSecurityTest(t, binaryscan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
@@ -131,7 +132,7 @@ func initNativeDockerWithXrayTest(t *testing.T) func() {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	securityTestUtils.ValidateXrayVersion(t, scan.DockerScanMinXrayVersion)
+	securityTestUtils.ValidateXrayVersion(t, binaryscan.DockerScanMinXrayVersion)
 	// Create server config to use with the command.
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	// Add docker scan mock command
@@ -224,7 +225,7 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 	// Verify that the scan succeeded, and that at least one "Applicable" status was received.
 	applicableStatusExists := false
 	for _, vulnerability := range results.Vulnerabilities {
-		if vulnerability.Applicable == string(utils.Applicable) {
+		if vulnerability.Applicable == string(jasutils.Applicable) {
 			applicableStatusExists = true
 			break
 		}

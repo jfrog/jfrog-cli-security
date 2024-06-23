@@ -4,7 +4,8 @@ import (
 	"fmt"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -99,7 +100,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, utils.Sast)
+	return jas.CreateScannersConfigFile(ssm.configFileName, configFileContent, jasutils.Sast)
 }
 
 func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
@@ -130,11 +131,11 @@ func getResultLocationStr(result *sarif.Result) string {
 	}
 	location := result.Locations[0]
 	return fmt.Sprintf("%s%d%d%d%d",
-		utils.GetLocationFileName(location),
-		utils.GetLocationStartLine(location),
-		utils.GetLocationStartColumn(location),
-		utils.GetLocationEndLine(location),
-		utils.GetLocationEndColumn(location))
+		sarifutils.GetLocationFileName(location),
+		sarifutils.GetLocationStartLine(location),
+		sarifutils.GetLocationStartColumn(location),
+		sarifutils.GetLocationEndLine(location),
+		sarifutils.GetLocationEndColumn(location))
 }
 
 func getResultRuleId(result *sarif.Result) string {
@@ -145,5 +146,5 @@ func getResultRuleId(result *sarif.Result) string {
 }
 
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + utils.GetResultSeverity(result) + utils.GetResultMsgText(result) + getResultLocationStr(result)
+	return getResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }

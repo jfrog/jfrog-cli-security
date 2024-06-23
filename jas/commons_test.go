@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -58,11 +58,11 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogappsconfig.Module{}
-	assert.False(t, ShouldSkipScanner(module, utils.IaC))
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
 
 	module = jfrogappsconfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(module, utils.IaC))
-	assert.True(t, ShouldSkipScanner(module, utils.Sast))
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
 }
 
 var getSourceRootsCases = []struct {
