@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -332,9 +333,9 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetTechnologies(technologies)
 
-	if c.GetBoolFlagValue(flags.NoContextualAnalysis) && !c.GetBoolFlagValue(flags.Sca) {
+	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.NoContextualAnalysis, flags.Sca), c)
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
 	}
 
 	allSubScans := utils.GetAllSupportedScans()
@@ -361,7 +362,7 @@ func AuditCmd(c *components.Context) error {
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.NoContextualAnalysis))
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {

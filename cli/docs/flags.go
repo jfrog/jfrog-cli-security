@@ -44,11 +44,11 @@ const (
 )
 
 const (
-	Sca                  = "sca"
-	Iac                  = "iac"
-	Sast                 = "sast"
-	Secrets              = "secrets"
-	NoContextualAnalysis = "without-contextual-analysis"
+	Sca       = "sca"
+	Iac       = "iac"
+	Sast      = "sast"
+	Secrets   = "secrets"
+	WithoutCA = "without-contextual-analysis"
 )
 
 const (
@@ -133,7 +133,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, NoContextualAnalysis,
+		Sca, Iac, Sast, Secrets, WithoutCA,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -226,13 +226,13 @@ var flagsMap = map[string]components.Flag{
 		"[npm] when set, the Contextual Analysis scan also uses the code of the project dependencies to determine the applicability of the vulnerability.",
 		components.SetHiddenBoolFlag(),
 	),
-	RequirementsFile:     components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
-	CurationOutput:       components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
-	Sca:                  components.NewBoolFlag(Sca, "Set to true to request audit to only preform SCA sub scan."),
-	Iac:                  components.NewBoolFlag(Iac, "Set to true to request audit to only preform IAC sub scan."),
-	Sast:                 components.NewBoolFlag(Sast, "Set to true to request audit to only preform SAST sub scan."),
-	Secrets:              components.NewBoolFlag(Secrets, "Set to true to request audit to only preform Secrets sub scan."),
-	NoContextualAnalysis: components.NewBoolFlag(NoContextualAnalysis, fmt.Sprintf("Set to true to skip the Contextual Analysis scan. This flag is only relevant when using the --%s flag.", Sca)),
+	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
+	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	Sca:              components.NewBoolFlag(Sca, "Set to true to request audit to only preform SCA sub scan."),
+	Iac:              components.NewBoolFlag(Iac, "Set to true to request audit to only preform IAC sub scan."),
+	Sast:             components.NewBoolFlag(Sast, "Set to true to request audit to only preform SAST sub scan."),
+	Secrets:          components.NewBoolFlag(Secrets, "Set to true to request audit to only preform Secrets sub scan."),
+	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Set to true to skip the Contextual Analysis scan. This flag is only relevant when using the --%s flag.", Sca)),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {
