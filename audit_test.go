@@ -437,7 +437,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 	assert.NoError(t, dummyFile.Close())
 }
 
-//
+// JAS
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
