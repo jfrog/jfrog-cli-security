@@ -444,7 +444,7 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3")
 	// Verify that scan results are printed
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	// Verify that JAS results are not printed
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }
@@ -467,11 +467,13 @@ func getNoJasAuditMockCommand(t *testing.T) components.Command {
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3")
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1")
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
