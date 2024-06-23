@@ -1,4 +1,4 @@
-package technologies
+package sca
 
 import (
 	"errors"

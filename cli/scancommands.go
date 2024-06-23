@@ -43,12 +43,6 @@ const dockerScanCmdHiddenName = "dockerscan"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
-		// {
-		// 	Name:   "scan-profile",
-		// 	Flags:  flags.GetCommandFlags(flags.ScanProfile),
-		// 	Hidden: true,
-		// 	Action: ScanProfileCmd,
-		// },
 		{
 			Name:        "scan",
 			Aliases:     []string{"s"},

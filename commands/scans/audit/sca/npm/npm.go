@@ -8,7 +8,7 @@ import (
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/npm"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/sca/dependencytree"
+	"github.com/jfrog/jfrog-cli-security/sca/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -107,7 +107,7 @@ func addIgnoreScriptsFlag(npmArgs []string) []string {
 
 // Parse the dependencies into an Xray dependency tree format
 func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *biutils.PackageInfo) (*xrayUtils.GraphNode, []string) {
-	treeMap := make(map[string]dependencytree.DepTreeNode)
+	treeMap := make(map[string]technologies.DepTreeNode)
 	for _, dependency := range dependencies {
 		dependencyId := results.NpmPackageTypeIdentifier + dependency.Id
 		for _, requestedByNode := range dependency.RequestedBy {
@@ -121,7 +121,7 @@ func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *
 			treeMap[parent] = depTreeNode
 		}
 	}
-	graph, nodeMapTypes := dependencytree.BuildXrayDependencyTree(treeMap, results.NpmPackageTypeIdentifier+packageInfo.BuildInfoModuleId())
+	graph, nodeMapTypes := technologies.BuildXrayDependencyTree(treeMap, results.NpmPackageTypeIdentifier+packageInfo.BuildInfoModuleId())
 	return graph, maps.Keys(nodeMapTypes)
 }
 

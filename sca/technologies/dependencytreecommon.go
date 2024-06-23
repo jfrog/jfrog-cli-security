@@ -1,8 +1,23 @@
-package dependencytree
+package technologies
 
 import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
+
+type DependencyTreeResult struct {
+	FlatTree     *xrayClientUtils.GraphNode
+	DownloadUrls map[string]string
+
+	FullDepTrees []*xrayClientUtils.GraphNode
+}
+
+type techTreeGenerationFunc func(params DetectDependencyTreeParams) (DependencyTreeResult, error)
+
+type DepTreeNode struct {
+	Classifier *string   `json:"classifier"`
+	Types      *[]string `json:"types"`
+	Children   []string  `json:"children"`
+}
 
 const maxUniqueAppearances = 10
 

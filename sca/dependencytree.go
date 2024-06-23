@@ -1,4 +1,4 @@
-package dependencytree
+package sca
 
 import (
 	"encoding/json"
@@ -59,20 +59,7 @@ type DependencyTreeParams struct {
 	CustomPipDependenciesFilePath string `json:"customPipDependenciesFilePath,omitempty"`
 }
 
-type DependencyTreeResult struct {
-	FlatTree     *xrayClientUtils.GraphNode
-	DownloadUrls map[string]string
 
-	FullDepTrees []*xrayClientUtils.GraphNode
-}
-
-type techTreeGenerationFunc func(params DetectDependencyTreeParams) (DependencyTreeResult, error)
-
-type DepTreeNode struct {
-	Classifier *string   `json:"classifier"`
-	Types      *[]string `json:"types"`
-	Children   []string  `json:"children"`
-}
 
 // Detect and return the dependency tree of a technology in the current directory
 // func GetTechDependencyTree(tech techutils.Technology, params DependencyTreeParams) (depTreeResult DependencyTreeResult, err error) {
