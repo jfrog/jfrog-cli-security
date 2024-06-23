@@ -2,7 +2,6 @@ package docs
 
 import (
 	"fmt"
-	git2 "github.com/jfrog/jfrog-cli-security/cli/docs/git"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
 
@@ -15,14 +14,14 @@ import (
 
 const (
 	// Security Commands Keys
-	XrCurl          = "xr-curl"
-	OfflineUpdate   = "offline-update"
-	XrScan          = "xr-scan"
-	BuildScan       = "build-scan"
-	DockerScan      = "docker scan"
-	Audit           = "audit"
-	CurationAudit   = "curation-audit"
-	GitContributing = "contributing"
+	XrCurl               = "xr-curl"
+	OfflineUpdate        = "offline-update"
+	XrScan               = "xr-scan"
+	BuildScan            = "build-scan"
+	DockerScan           = "docker scan"
+	Audit                = "audit"
+	CurationAudit        = "curation-audit"
+	GitCountContributors = "count-contributors"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -107,7 +106,7 @@ const (
 	WorkingDirs                  = "working-dirs"
 
 	// Unique curation flags
-	CurationOutput  = "curation-format"
+	CurationOutput = "curation-format"
 
 	// Unique git flags
 	ScmType         = "scm-type"
@@ -141,7 +140,7 @@ var commandFlags = map[string][]string{
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
-	GitContributing: {
+	GitCountContributors: {
 		ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
@@ -237,11 +236,11 @@ var flagsMap = map[string]components.Flag{
 	// Git flags
 	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
 	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
-	Token:           components.NewStringFlag(Token, "SCM API token.", components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. The token can also be provided in the environment variable '%s'.", git.TokenEnvVar), components.SetMandatory()),
 	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depending on the git provider, the owner can be an individual, an organization, or a project.", components.SetMandatory()),
 	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
-	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git2.DefaultContributionMonths)),
-	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a detailed summary."),
+	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
+	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {

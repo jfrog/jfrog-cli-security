@@ -11,24 +11,24 @@ func getCommitsListForTest(t *testing.T) []vcsclient.CommitInfo {
 	return []vcsclient.CommitInfo{
 		{
 			AuthorEmail: "email1@gmail.com",
-			Timestamp:   convertToTimestamp(t, "2023-05-21T10:00:00Z"),
+			Timestamp:   convertDateStrToTimestamp(t, "2023-05-21T10:00:00Z"),
 		},
 		{
 			AuthorEmail: "email2@gmail.com",
-			Timestamp:   convertToTimestamp(t, "2023-06-21T10:00:00Z"),
+			Timestamp:   convertDateStrToTimestamp(t, "2023-06-21T10:00:00Z"),
 		},
 		{
 			AuthorEmail: "email1@gmail.com",
-			Timestamp:   convertToTimestamp(t, "2023-03-21T10:00:00Z"),
+			Timestamp:   convertDateStrToTimestamp(t, "2023-03-21T10:00:00Z"),
 		},
 		{
 			AuthorEmail: "email2@gmail.com",
-			Timestamp:   convertToTimestamp(t, "2023-02-21T10:00:00Z"),
+			Timestamp:   convertDateStrToTimestamp(t, "2023-02-21T10:00:00Z"),
 		},
 	}
 }
 
-func TestGitContributingCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
+func TestCountContributorsCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
 	type args struct {
 		repoName                             string
 		commits                              []vcsclient.CommitInfo
@@ -47,7 +47,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
 				commits:  []vcsclient.CommitInfo{},
 				uniqueContributorsVerificationFunc: func(t *testing.T, uniqueContributors map[BasicContributor]Contributor) {
 					assert.Equal(t, 0, len(uniqueContributors))
-
 				},
 				detailedContributorsVerificationFunc: func(t *testing.T, detailedContributors map[string]map[string]ContributorDetailedSummary) {
 					assert.Equal(t, 0, len(detailedContributors))
@@ -79,7 +78,7 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
 			},
 		},
 	}
-	gc := &GitContributingCommand{GitCountParams: GitCountParams{DetailedSummery: true}}
+	gc := &CountContributorsCommand{CountContributorsParams: CountContributorsParams{DetailedSummery: true}}
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
@@ -93,7 +92,7 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
 	}
 }
 
-func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T) {
+func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T) {
 	type commitsRepo struct {
 		repoName string
 		commits  []vcsclient.CommitInfo
@@ -114,7 +113,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				commitsRepo: []commitsRepo{{repoName: "repo1", commits: []vcsclient.CommitInfo{}}, {repoName: "repo2", commits: []vcsclient.CommitInfo{}}},
 				uniqueContributorsVerificationFunc: func(t *testing.T, uniqueContributors []Contributor) {
 					assert.Equal(t, 0, len(uniqueContributors))
-
 				},
 				detailedContributorsVerificationFunc: func(t *testing.T, detailedContributors map[string][]ContributorDetailedSummary) {
 					assert.Equal(t, 0, len(detailedContributors))
@@ -124,7 +122,7 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				},
 			},
 		},
-		{name: "1 repo with 2 authors with 2 commits each, and 1 repo with no commits",
+		{name: "1 repo with commits and one without",
 			args: args{
 				commitsRepo: []commitsRepo{{repoName: "repo1", commits: []vcsclient.CommitInfo{}}, {repoName: "repo2", commits: getCommitsListForTest(t)}},
 				uniqueContributorsVerificationFunc: func(t *testing.T, uniqueContributors []Contributor) {
@@ -160,7 +158,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				},
 				detailedContributorsVerificationFunc: func(t *testing.T, detailedContributors map[string][]ContributorDetailedSummary) {
 					assert.Equal(t, 2, len(detailedContributors))
-
 					expectedContributors := map[string]ContributorDetailedSummary{
 						"email1@gmail.com": {
 							RepoPath: "repo2",
@@ -175,7 +172,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 							},
 						},
 					}
-
 					for email, expectedContributor := range expectedContributors {
 						assert.Contains(t, detailedContributors, email)
 						assert.Contains(t, detailedContributors[email], expectedContributor)
@@ -183,7 +179,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				},
 				detailedReposVerificationFunc: func(t *testing.T, detailedRepos map[string][]RepositoryDetailedSummary) {
 					assert.Equal(t, 1, len(detailedRepos))
-
 					expectedRepos := map[string]RepositoryDetailedSummary{
 						"email1@gmail.com": {
 							Email: "email1@gmail.com",
@@ -198,7 +193,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 							},
 						},
 					}
-
 					for _, expectedRepo := range expectedRepos {
 						assert.Contains(t, detailedRepos["repo2"], expectedRepo)
 					}
@@ -212,7 +206,7 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 					{repoName: "repo2", commits: []vcsclient.CommitInfo{
 						{
 							AuthorEmail: "email2@gmail.com",
-							Timestamp:   convertToTimestamp(t, "2023-07-21T10:00:00Z"),
+							Timestamp:   convertDateStrToTimestamp(t, "2023-07-21T10:00:00Z"),
 						},
 					}},
 				},
@@ -249,7 +243,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				},
 				detailedContributorsVerificationFunc: func(t *testing.T, detailedContributors map[string][]ContributorDetailedSummary) {
 					assert.Equal(t, 2, len(detailedContributors))
-
 					expectedContributors := map[string]ContributorDetailedSummary{
 						"email1@gmail.com": {
 							RepoPath: "repo1",
@@ -264,7 +257,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 							},
 						},
 					}
-
 					for email, expectedContributor := range expectedContributors {
 						assert.Contains(t, detailedContributors, email)
 						assert.Contains(t, detailedContributors[email], expectedContributor)
@@ -272,7 +264,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 				},
 				detailedReposVerificationFunc: func(t *testing.T, detailedRepos map[string][]RepositoryDetailedSummary) {
 					assert.Equal(t, 2, len(detailedRepos))
-
 					expectedRepos := map[string]RepositoryDetailedSummary{
 						"email1@gmail.com": {
 							Email: "email1@gmail.com",
@@ -287,11 +278,9 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 							},
 						},
 					}
-
 					for _, expectedRepo := range expectedRepos {
 						assert.Contains(t, detailedRepos["repo1"], expectedRepo)
 					}
-
 					expectedRepos = map[string]RepositoryDetailedSummary{
 						"email2@gmail.com": {
 							Email: "email2@gmail.com",
@@ -300,7 +289,6 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 							},
 						},
 					}
-
 					for _, expectedRepo := range expectedRepos {
 						assert.Contains(t, detailedRepos["repo2"], expectedRepo)
 					}
@@ -308,16 +296,18 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 			},
 		},
 	}
-	gc := &GitContributingCommand{GitCountParams: GitCountParams{DetailedSummery: true}}
+
+	cc := &CountContributorsCommand{CountContributorsParams: CountContributorsParams{DetailedSummery: true}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			uniqueContributors := make(map[BasicContributor]Contributor)
 			detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 			detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
+
 			for _, it := range tt.args.commitsRepo {
-				gc.saveCommitsInfoInMaps(it.repoName, it.commits, uniqueContributors, detailedContributors, detailedRepos)
+				cc.saveCommitsInfoInMaps(it.repoName, it.commits, uniqueContributors, detailedContributors, detailedRepos)
 			}
-			report := gc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
+			report := cc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
 			tt.args.uniqueContributorsVerificationFunc(t, report.UniqueContributorsList)
 			tt.args.detailedContributorsVerificationFunc(t, report.DetailedContributorsList)
 			tt.args.detailedReposVerificationFunc(t, report.DetailedReposList)
@@ -325,7 +315,7 @@ func TestGitContributingCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing.T
 	}
 }
 
-func convertToTimestamp(t *testing.T, dateStr string) int64 {
+func convertDateStrToTimestamp(t *testing.T, dateStr string) int64 {
 	date, err := time.Parse(time.RFC3339, dateStr)
 	assert.NoError(t, err)
 	return date.Unix()

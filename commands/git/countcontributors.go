@@ -2,16 +2,16 @@ package git
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/google/go-github/v56/github"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -20,21 +20,13 @@ import (
 type scmTypeName string
 
 const (
-	Github          = scmTypeName("github")
-	Gitlab          = scmTypeName("gitlab")
-	BitbucketServer = scmTypeName("bitbucket")
-	Azure           = scmTypeName("azure")
+	Github                        = scmTypeName("github")
+	Gitlab                        = scmTypeName("gitlab")
+	BitbucketServer               = scmTypeName("bitbucket")
+	DefaultContContributorsMonths = 3
+	getCommitsRetryNumber         = 5
+	TokenEnvVar                   = "JFROG_CLI_GIT_TOKEN"
 )
-
-type LastCommit struct {
-	Date string `json:"date"`
-	Hash string `json:"hash"`
-}
-
-type RepoLastCommit struct {
-	LastCommit
-	Repo string `json:"repo,omitempty"`
-}
 
 type BasicContributor struct {
 	Email string `json:"email"`
@@ -57,6 +49,16 @@ type RepositoryDetailedSummary struct {
 	LastCommit LastCommit `json:"last_commit"`
 }
 
+type LastCommit struct {
+	Date string `json:"date"`
+	Hash string `json:"hash"`
+}
+
+type RepoLastCommit struct {
+	Repo string `json:"repo,omitempty"`
+	LastCommit
+}
+
 type Report struct {
 	TotalUniqueContributors  int                                     `json:"total_unique_contributors"`
 	TotalCommits             int                                     `json:"total_commits"`
@@ -69,12 +71,12 @@ type Report struct {
 	DetailedReposList        map[string][]RepositoryDetailedSummary  `json:"detailed_repos_list,omitempty"`
 }
 
-type GitContributingCommand struct {
+type CountContributorsCommand struct {
 	vcsClient vcsclient.VcsClient
-	GitCountParams
+	CountContributorsParams
 }
 
-type GitCountParams struct {
+type CountContributorsParams struct {
 	ScmType         vcsutils.VcsProvider
 	ScamApiUrl      string
 	Token           string
@@ -85,19 +87,19 @@ type GitCountParams struct {
 	Progress        ioUtils.ProgressMgr
 }
 
-func NewGitContributingCommand(params *GitCountParams) (*GitContributingCommand, error) {
+func NewCountContributorsCommand(params *CountContributorsParams) (*CountContributorsCommand, error) {
 	client, err := vcsclient.NewClientBuilder(params.ScmType).ApiEndpoint(params.ScamApiUrl).Token(params.Token).Build()
 	if err != nil {
 		return nil, err
 	}
-	return &GitContributingCommand{
-		vcsClient:      client,
-		GitCountParams: *params,
+	return &CountContributorsCommand{
+		vcsClient:               client,
+		CountContributorsParams: *params,
 	}, nil
 }
 
-func (g *GitCountParams) SetProgress(progress ioUtils.ProgressMgr) {
-	g.Progress = progress
+func (ccp *CountContributorsParams) SetProgress(progress ioUtils.ProgressMgr) {
+	ccp.Progress = progress
 }
 
 // ScmType represents the valid values that can be provided to the 'scmTypeName' flag.
@@ -110,7 +112,6 @@ func NewScmType() *ScmType {
 	scmType.ScmTypeMap[string(Github)] = vcsutils.GitHub
 	scmType.ScmTypeMap[string(Gitlab)] = vcsutils.GitLab
 	scmType.ScmTypeMap[string(BitbucketServer)] = vcsutils.BitbucketServer
-	scmType.ScmTypeMap[string(Azure)] = vcsutils.AzureRepos
 	return scmType
 }
 
@@ -121,42 +122,42 @@ func (vs *ScmType) GetValidScmTypeString() string {
 	return fmt.Sprintf("%s and %s", streamsStr, scmTypes[len(scmTypes)-1])
 }
 
-func (gc *GitContributingCommand) Run() error {
-	commitsListOptions := vcsclient.GitCommitsQueryOptions{
-		Since: time.Now().AddDate(0, -1*gc.MonthsNum, 0),
-		Until: time.Now(),
-		ListOptions: vcsclient.ListOptions{
-			Page: 1,
-		},
+func (cc *CountContributorsCommand) Run() error {
+	if cc.Progress != nil {
+		cc.Progress.SetHeadlineMsg("Calculating Git contributors information")
 	}
 
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
 
-	repositories, err := gc.getRepositoriesListToScan()
+	repositories, err := cc.getRepositoriesListToScan()
 	if err != nil {
 		return err
 	}
-	scannedRepos, skippedRepos, totalCommits := gc.scanAndCollectCommitsInfo(repositories, commitsListOptions, &uniqueContributors, &detailedContributors, &detailedRepos)
+	scannedRepos, skippedRepos, totalCommits := cc.scanAndCollectCommitsInfo(repositories, uniqueContributors, detailedContributors, detailedRepos)
 
-	report := gc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
+	// Create the report.
+	report := cc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
 	report.TotalCommits = totalCommits
 	report.ScannedRepos = scannedRepos
 	report.SkippedRepos = skippedRepos
 
-	reportJSON, err := json.MarshalIndent(report, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(reportJSON))
-	return nil
+	return utils.PrintJson(report)
 }
 
-func (gc *GitContributingCommand) scanAndCollectCommitsInfo(repositories []string, commitsListOptions vcsclient.GitCommitsQueryOptions, uniqueContributors *map[BasicContributor]Contributor, detailedContributors *map[string]map[string]ContributorDetailedSummary, detailedRepos *map[string]map[string]RepositoryDetailedSummary) (scannedRepos, skippedRepos []string, totalCommits int) {
+func (cc *CountContributorsCommand) scanAndCollectCommitsInfo(repositories []string, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) (scannedRepos, skippedRepos []string, totalCommits int) {
+	// initialize commits query options.
+	commitsListOptions := vcsclient.GitCommitsQueryOptions{
+		Since: time.Now().AddDate(0, -1*cc.MonthsNum, 0),
+		Until: time.Now(),
+		ListOptions: vcsclient.ListOptions{
+			Page: 1,
+		},
+	}
 	for _, repo := range repositories {
 		// Get repository's commits using pagination until there are no more commits.
-		commits, getCommitsErr := gc.GetCommitsWithQueryOptions(repo, commitsListOptions)
+		commits, getCommitsErr := cc.GetCommitsWithQueryOptions(repo, commitsListOptions)
 		for {
 			if getCommitsErr != nil {
 				skippedRepos = append(skippedRepos, repo)
@@ -165,11 +166,11 @@ func (gc *GitContributingCommand) scanAndCollectCommitsInfo(repositories []strin
 			if len(commits) == 0 {
 				break
 			}
-			gc.saveCommitsInfoInMaps(repo, commits, *uniqueContributors, *detailedContributors, *detailedRepos)
+			cc.saveCommitsInfoInMaps(repo, commits, uniqueContributors, detailedContributors, detailedRepos)
 
 			commitsListOptions.Page++
 			totalCommits += len(commits)
-			commits, getCommitsErr = gc.GetCommitsWithQueryOptions(repo, commitsListOptions)
+			commits, getCommitsErr = cc.GetCommitsWithQueryOptions(repo, commitsListOptions)
 		}
 		if getCommitsErr == nil {
 			scannedRepos = append(scannedRepos, repo)
@@ -181,31 +182,30 @@ func (gc *GitContributingCommand) scanAndCollectCommitsInfo(repositories []strin
 // getRepositoriesListToScan returns a list of repositories to scan.
 // If a specific repository was provided by the user, return it.
 // otherwise, return the list of all the repositories related to the group/project.
-func (gc *GitContributingCommand) getRepositoriesListToScan() ([]string, error) {
-	if gc.Repository != "" {
-		return []string{gc.Repository}, nil
+func (cc *CountContributorsCommand) getRepositoriesListToScan() ([]string, error) {
+	if cc.Repository != "" {
+		return []string{cc.Repository}, nil
 	}
-	reposMap, err := gc.vcsClient.ListRepositories(context.Background())
+	reposMap, err := cc.vcsClient.ListRepositories(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	return reposMap[gc.Owner], nil
+	return reposMap[cc.Owner], nil
 }
 
-func (gc *GitContributingCommand) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
-	retries := 5
-	for retries > 0 {
-		commits, err := gc.vcsClient.GetCommitsWithQueryOptions(context.Background(), gc.Owner, repo, options)
+func (cc *CountContributorsCommand) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
+	for i := 0; i < getCommitsRetryNumber; i++ {
+		commits, err := cc.vcsClient.GetCommitsWithQueryOptions(context.Background(), cc.Owner, repo, options)
 		if err != nil {
+			// Handling a possible known GitHub rate limit error.
 			var rateLimitError *github.RateLimitError
 			if errors.As(err, &rateLimitError) {
 				sleepDuration := time.Until(rateLimitError.Rate.Reset.Time)
-				log.Printf("Rate limit exceeded, sleeping for %v seconds", sleepDuration)
+				log.Warn("Rate limit exceeded, sleeping for %v seconds", sleepDuration)
 				time.Sleep(sleepDuration)
-				retries--
 				continue
 			}
-			log.Printf("Error getting commits: %v", err)
+			log.Error("Error getting commits: %v", err)
 			return nil, err
 		} else {
 			return commits, nil
@@ -214,13 +214,13 @@ func (gc *GitContributingCommand) GetCommitsWithQueryOptions(repo string, option
 	return nil, errors.New("GetCommitsWithQueryOptions retries exceeded")
 }
 
-func (gc *GitContributingCommand) saveCommitsInfoInMaps(repoName string, commits []vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
+func (cc *CountContributorsCommand) saveCommitsInfoInMaps(repoName string, commits []vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
 	for _, commit := range commits {
-		gc.saveCommitInfoInMaps(repoName, commit, uniqueContributors, detailedContributors, detailedRepos)
+		cc.saveCommitInfoInMaps(repoName, commit, uniqueContributors, detailedContributors, detailedRepos)
 	}
 }
 
-func (gc *GitContributingCommand) saveCommitInfoInMaps(repoName string, commit vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
+func (cc *CountContributorsCommand) saveCommitInfoInMaps(repoName string, commit vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
 	authorName := commit.AuthorName
 	authorEmail := commit.AuthorEmail
 	lastCommit := LastCommit{
@@ -229,7 +229,7 @@ func (gc *GitContributingCommand) saveCommitInfoInMaps(repoName string, commit v
 	}
 
 	contributorId := BasicContributor{Email: authorEmail, Repo: repoName}
-	// Save author's first commit information in the contributors map.
+	// Save author's first commit information in the contributors map for each repository.
 	if _, exists := uniqueContributors[contributorId]; !exists {
 		uniqueContributors[contributorId] = Contributor{
 			BasicContributor: BasicContributor{
@@ -240,7 +240,7 @@ func (gc *GitContributingCommand) saveCommitInfoInMaps(repoName string, commit v
 		}
 	}
 
-	if gc.DetailedSummery {
+	if cc.DetailedSummery {
 		// Save the last commit of every contributor in every repository where he has contributed.
 		if detailedContributors[authorEmail] == nil {
 			detailedContributors[authorEmail] = make(map[string]ContributorDetailedSummary)
@@ -251,7 +251,7 @@ func (gc *GitContributingCommand) saveCommitInfoInMaps(repoName string, commit v
 				LastCommit: lastCommit,
 			}
 		}
-		// Make a list of the repository's contributors and their most recent commits for each repository.
+		// For each repository, make a list of contributors and their most recent commits.
 		if detailedRepos[repoName] == nil {
 			detailedRepos[repoName] = make(map[string]RepositoryDetailedSummary)
 		}
@@ -265,8 +265,8 @@ func (gc *GitContributingCommand) saveCommitInfoInMaps(repoName string, commit v
 }
 
 // aggregateUniqueContributors returns a list of unique contributors.
-// If a contributor has committed to multiple repositories, the contributor with the most recent commit is chosen.
-func (gc *GitContributingCommand) aggregateUniqueContributors(uniqueContributors map[BasicContributor]Contributor) []Contributor {
+// If a contributor has committed to multiple repositories, the most recent commit will be chosen.
+func (cc *CountContributorsCommand) aggregateUniqueContributors(uniqueContributors map[BasicContributor]Contributor) []Contributor {
 	// Choose the contributor with the most recent commit.
 	contributorsMap := make(map[string]Contributor)
 	for _, contributor := range uniqueContributors {
@@ -276,7 +276,7 @@ func (gc *GitContributingCommand) aggregateUniqueContributors(uniqueContributors
 			contributorsMap[contributor.Email] = contributor
 		}
 	}
-	// Convert map to array.
+	// Convert map into array.
 	var uniqueContributorsList []Contributor
 	for _, contributor := range contributorsMap {
 		uniqueContributorsList = append(uniqueContributorsList, contributor)
@@ -284,7 +284,7 @@ func (gc *GitContributingCommand) aggregateUniqueContributors(uniqueContributors
 	return uniqueContributorsList
 }
 
-func (gc *GitContributingCommand) aggregateDetailedContributors(detailedContributors map[string]map[string]ContributorDetailedSummary) map[string][]ContributorDetailedSummary {
+func (cc *CountContributorsCommand) aggregateDetailedContributors(detailedContributors map[string]map[string]ContributorDetailedSummary) map[string][]ContributorDetailedSummary {
 	detailedContributorsList := make(map[string][]ContributorDetailedSummary)
 	for email, repos := range detailedContributors {
 		for _, detail := range repos {
@@ -294,7 +294,7 @@ func (gc *GitContributingCommand) aggregateDetailedContributors(detailedContribu
 	return detailedContributorsList
 }
 
-func (gc *GitContributingCommand) aggregateDetailedRepos(detailedRepos map[string]map[string]RepositoryDetailedSummary) map[string][]RepositoryDetailedSummary {
+func (cc *CountContributorsCommand) aggregateDetailedRepos(detailedRepos map[string]map[string]RepositoryDetailedSummary) map[string][]RepositoryDetailedSummary {
 	detailedReposList := make(map[string][]RepositoryDetailedSummary)
 	for repo, authors := range detailedRepos {
 		for _, detail := range authors {
@@ -304,28 +304,28 @@ func (gc *GitContributingCommand) aggregateDetailedRepos(detailedRepos map[strin
 	return detailedReposList
 }
 
-func (gc *GitContributingCommand) aggregateReportResults(uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) Report {
+func (cc *CountContributorsCommand) aggregateReportResults(uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) Report {
 	report := Report{
 		TotalUniqueContributors: len(uniqueContributors),
 		ReportDate:              time.Now().Format(time.RFC3339),
-		NumberOfMonths:          fmt.Sprintf("%d", gc.MonthsNum),
-		UniqueContributorsList:  gc.aggregateUniqueContributors(uniqueContributors),
+		NumberOfMonths:          fmt.Sprintf("%d", cc.MonthsNum),
+		UniqueContributorsList:  cc.aggregateUniqueContributors(uniqueContributors),
 	}
 
-	if gc.DetailedSummery {
-		report.DetailedContributorsList = gc.aggregateDetailedContributors(detailedContributors)
-		report.DetailedReposList = gc.aggregateDetailedRepos(detailedRepos)
+	if cc.DetailedSummery {
+		report.DetailedContributorsList = cc.aggregateDetailedContributors(detailedContributors)
+		report.DetailedReposList = cc.aggregateDetailedRepos(detailedRepos)
 	}
 
 	return report
 }
 
 // Returns the Server details. The usage report is sent to this server.
-func (gc *GitContributingCommand) ServerDetails() (*config.ServerDetails, error) {
+func (cc *CountContributorsCommand) ServerDetails() (*config.ServerDetails, error) {
 	return nil, nil
 }
 
 // The command name for the usage report.
-func (gc *GitContributingCommand) CommandName() string {
+func (cc *CountContributorsCommand) CommandName() string {
 	return ""
 }

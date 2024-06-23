@@ -7,23 +7,24 @@ import (
 	gitDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"os"
 )
 
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
-			Name:        "contributing",
-			Aliases:     []string{"cont"},
-			Flags:       flags.GetCommandFlags(flags.GitContributing),
-			Description: gitDocs.GetContributingDescription(),
+			Name:        "count-contributors",
+			Aliases:     []string{"cc"},
+			Flags:       flags.GetCommandFlags(flags.GitCountContributors),
+			Description: gitDocs.GetContContributorsDescription(),
 			Hidden:      true,
-			Action:      GitContributingCmd,
+			Action:      GitCountContributorsCmd,
 		},
 	}
 }
 
-func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
-	params := git.GitCountParams{}
+func GetCountContributorsParams(c *components.Context) (*git.CountContributorsParams, error) {
+	params := git.CountContributorsParams{}
 	// Mandatory flags
 	scmTypes := git.NewScmType()
 	// ScmType
@@ -34,13 +35,18 @@ func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
 		if scmTypeVal, ok := scmTypes.ScmTypeMap[scmType]; ok {
 			params.ScmType = scmTypeVal
 		} else {
-			return nil, errorutils.CheckErrorf("Unsupported scm type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
+			return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
 		}
 	}
 	// Token
 	params.Token = c.GetStringFlagValue(flags.Token)
 	if params.Token == "" {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.Token)
+		envVarToken := os.Getenv(git.TokenEnvVar)
+		if envVarToken != "" {
+			params.Token = envVarToken
+		} else {
+			return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.Token)
+		}
 	}
 	// Owner
 	params.Owner = c.GetStringFlagValue(flags.Owner)
@@ -58,7 +64,7 @@ func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
 	params.Repository = c.GetStringFlagValue(flags.RepoName)
 	// Months
 	if !c.IsFlagSet(flags.Months) {
-		params.MonthsNum = gitDocs.DefaultContributionMonths
+		params.MonthsNum = git.DefaultContContributorsMonths
 	} else {
 		months, err := c.GetIntFlagValue(flags.Months)
 		if err != nil {
@@ -74,12 +80,12 @@ func GetGitCountParams(c *components.Context) (*git.GitCountParams, error) {
 	return &params, nil
 }
 
-func GitContributingCmd(c *components.Context) error {
-	gitContrParams, err := GetGitCountParams(c)
+func GitCountContributorsCmd(c *components.Context) error {
+	gitContrParams, err := GetCountContributorsParams(c)
 	if err != nil {
 		return err
 	}
-	gitContributionCommand, err := git.NewGitContributingCommand(gitContrParams)
+	gitContributionCommand, err := git.NewCountContributorsCommand(gitContrParams)
 	if err != nil {
 		return err
 	}
