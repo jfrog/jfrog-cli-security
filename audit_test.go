@@ -443,7 +443,10 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3")
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+	// Verify that scan results are printed
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
+	// Verify that JAS results are not printed
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }
 
 func getNoJasAuditMockCommand(t *testing.T) components.Command {
