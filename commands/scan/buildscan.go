@@ -140,8 +140,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
 		SetScanType(services.Binary).
-		SetExtraMessages(nil).
-		SetSubScansPreformed(utils.GetAllSupportedScans())
+		SetExtraMessages(nil)
 
 	if bsc.outputFormat != outputFormat.Table {
 		// Print the violations and/or vulnerabilities as part of one JSON.

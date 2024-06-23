@@ -129,7 +129,7 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if slices.Contains(rw.subScansPreformed, ScaScan) {
+	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
 		if rw.includeVulnerabilities {
 			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
 		} else {
@@ -144,20 +144,27 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 			}
 		}
 	}
-	if slices.Contains(rw.subScansPreformed, SecretsScan) {
+	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.scanType) {
 		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if slices.Contains(rw.subScansPreformed, IacScan) {
+	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
 		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if !slices.Contains(rw.subScansPreformed, SastScan) {
+	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.scanType) {
 		return nil
 	}
 	return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
+}
+
+func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType services.ScanType) bool {
+	if scanType == services.Binary && (subScan == IacScan || subScan == SastScan) {
+		return false
+	}
+	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
 
 func printMessages(messages []string) {

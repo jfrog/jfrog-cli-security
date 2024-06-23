@@ -332,27 +332,20 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetTechnologies(technologies)
 
+	if c.GetBoolFlagValue(flags.NoContextualAnalysis) && !c.GetBoolFlagValue(flags.Sca) {
+		// No CA flag provided but sca flag is not provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.NoContextualAnalysis, flags.Sca), c)
+	}
+
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
-		if subScan == utils.ContextualAnalysisScan {
-			if c.GetBoolFlagValue(flags.NoContextualAnalysis) {
-				if !c.GetBoolFlagValue(flags.Sca) {
-					// No CA flag provided but sca flag is not provided as well, error
-					return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.NoContextualAnalysis, flags.Sca), c)
-				}
-				continue
-			}
-		} else if !c.GetBoolFlagValue(subScan.String()) {
-			continue
+		if shouldAddSubScan(subScan, c) {
+			subScans = append(subScans, subScan)
 		}
-		subScans = append(subScans, subScan)
 	}
 	if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
-	} else {
-		// If no specific sub-scan was provided, default to all sub-scans
-		auditCmd.SetScansToPerform(allSubScans)
 	}
 
 	threads, err := pluginsCommon.GetThreadsCount(c)
@@ -364,6 +357,11 @@ func AuditCmd(c *components.Context) error {
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err
+}
+
+func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
+	return c.GetBoolFlagValue(subScan.String()) ||
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.NoContextualAnalysis))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {

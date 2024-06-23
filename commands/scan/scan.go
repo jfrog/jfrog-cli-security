@@ -305,7 +305,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(true).
 		SetScanType(services.Binary).
-		SetSubScansPreformed(utils.GetAllSupportedScans()).
 		PrintScanResults(); err != nil {
 		return
 	}
