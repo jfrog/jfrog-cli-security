@@ -25,7 +25,7 @@ const (
 	BitbucketServer               = scmTypeName("bitbucket")
 	DefaultContContributorsMonths = 3
 	getCommitsRetryNumber         = 5
-	TokenEnvVar                   = "JFROG_CLI_GIT_TOKEN"
+	TokenEnvVar                   = "JFROG_CLI_GIT_TOKEN" // #nosec G101
 )
 
 type BasicContributor struct {
