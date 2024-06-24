@@ -47,7 +47,7 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	mainPath := filepath.Join("projects", "package-managers", "python", "pip", "pip")
 	actualMainPath, cleanUp := sca.CreateTestWorkspace(t, mainPath)
 	defer cleanUp()
-	os.Chdir(filepath.Join(actualMainPath, "referenceproject"))
+	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Tool:               pythonutils.PythonTool(techutils.Pip),
