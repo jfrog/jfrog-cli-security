@@ -311,7 +311,7 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -380,7 +380,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 	}
 }
 
-func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
@@ -420,6 +420,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetServerDetails(serverDetails).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
+		SetUseJas(true).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
@@ -441,7 +442,7 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 
 func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
