@@ -262,7 +262,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err = xrayutils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails)
+	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, auditParams.Exclusions()...)
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
