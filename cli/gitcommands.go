@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
@@ -41,11 +42,18 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	// Token
 	params.Token = c.GetStringFlagValue(flags.Token)
 	if params.Token == "" {
-		envVarToken := os.Getenv(git.TokenEnvVar)
+		var envVarToken string
+		if params.ScmType == vcsutils.BitbucketServer {
+			envVarToken = os.Getenv(git.BitbucketTokenEnvVar)
+		} else if params.ScmType == vcsutils.GitLab {
+			envVarToken = os.Getenv(git.GitlabTokenEnvVar)
+		} else if params.ScmType == vcsutils.GitHub {
+			envVarToken = os.Getenv(git.GithubTokenEnvVar)
+		}
 		if envVarToken != "" {
 			params.Token = envVarToken
 		} else {
-			return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.Token)
+			return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag or coresponding enviromment variable %s.", flags.Token, scmTypes.GetOptionalScmTypeTokenEnvVars())
 		}
 	}
 	// Owner

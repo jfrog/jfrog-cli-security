@@ -25,7 +25,9 @@ const (
 	BitbucketServer               = scmTypeName("bitbucket")
 	DefaultContContributorsMonths = 3
 	getCommitsRetryNumber         = 5
-	TokenEnvVar                   = "JFROG_CLI_GIT_TOKEN" // #nosec G101
+	GithubTokenEnvVar             = "JFROG_CLI_GITHUB_TOKEN"    // #nosec G101
+	GitlabTokenEnvVar             = "JFROG_CLI_GITLAB_TOKEN"    // #nosec G101
+	BitbucketTokenEnvVar          = "JFROG_CLI_BITBUCKET_TOKEN" // #nosec G101
 )
 
 type BasicContributor struct {
@@ -120,6 +122,13 @@ func (vs *ScmType) GetValidScmTypeString() string {
 	sort.Sort(sort.Reverse(sort.StringSlice(scmTypes)))
 	streamsStr := strings.Join(scmTypes[0:len(scmTypes)-1], ", ")
 	return fmt.Sprintf("%s and %s", streamsStr, scmTypes[len(scmTypes)-1])
+}
+
+func (vs *ScmType) GetOptionalScmTypeTokenEnvVars() string {
+	envVars := []string{GithubTokenEnvVar, GitlabTokenEnvVar, BitbucketTokenEnvVar}
+	sort.Sort(sort.Reverse(sort.StringSlice(envVars)))
+	streamsStr := strings.Join(envVars[0:len(envVars)-1], ", ")
+	return fmt.Sprintf("%s or %s", streamsStr, envVars[len(envVars)-1])
 }
 
 func (cc *CountContributorsCommand) Run() error {
