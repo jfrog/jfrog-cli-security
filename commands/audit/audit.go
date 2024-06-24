@@ -192,7 +192,7 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		return
 	}
 	results.XrayVersion = auditParams.xrayVersion
-	results.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
+	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams)
 	if err != nil {
 		return
 	}
@@ -225,7 +225,9 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 		// Wait for all jas scanners to complete before cleaning up scanners temp dir
 		auditParallelRunner.JasScannersWg.Wait()
 		cleanup := jasScanner.ScannerDirCleanupFunc
-		auditParallelRunner.AddErrorToChan(cleanup())
+		if cleanup != nil {
+			auditParallelRunner.AddErrorToChan(cleanup())
+		}
 		close(auditParallelRunner.ErrorsQueue)
 		auditParallelRunner.Runner.Done()
 	}()
@@ -242,6 +244,14 @@ func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) 
 	auditParallelRunner.Runner.Run()
 	auditParallelRunner.ErrWg.Wait()
 	return
+}
+
+func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditParams) (entitled bool, err error) {
+	if !auditParams.UseJas() {
+		// Dry run without JAS
+		return false, nil
+	}
+	return jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
 }
 
 func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results,
