@@ -1,6 +1,8 @@
 package applicability
 
 import (
+	"path/filepath"
+
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -11,7 +13,6 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
-	"path/filepath"
 )
 
 const (
@@ -63,7 +64,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	}
 	results = applicabilityScanManager.applicabilityScanResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetApplicableResultCountFromRule(results...), "applicable cves")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
 	}
 	return
 }

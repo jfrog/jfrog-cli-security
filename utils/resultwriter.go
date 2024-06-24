@@ -199,14 +199,6 @@ func GenereateSarifReportFromResults(results *Results, isMultipleRoots, includeL
 	return
 }
 
-func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
-	out, err := json.Marshal(report)
-	if err != nil {
-		return "", errorutils.CheckError(err)
-	}
-	return clientUtils.IndentJson(out), nil
-}
-
 func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
 	xrayJson, err := ConvertXrayScanToSimpleJson(results, isMultipleRoots, includeLicenses, true, allowedLicenses)
 	if err != nil {

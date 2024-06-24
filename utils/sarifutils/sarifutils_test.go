@@ -551,7 +551,7 @@ func TestIsApplicableResult(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, IsApplicableResult(test.sarifResult))
+		assert.Equal(t, test.expectedOutput, IsResultKindNotPass(test.sarifResult))
 	}
 }
 
