@@ -54,7 +54,7 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = ssm.createConfigFile(module); err != nil {
+	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -81,7 +81,7 @@ type scanConfiguration struct {
 	ExcludedRules   []string `yaml:"excluded-rules,omitempty"`
 }
 
-func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module) error {
+func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -97,7 +97,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 				Roots:           roots,
 				Language:        sastScanner.Language,
 				ExcludedRules:   sastScanner.ExcludedRules,
-				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner),
+				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, exclusions...),
 			},
 		},
 	}

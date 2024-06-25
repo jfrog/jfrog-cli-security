@@ -61,7 +61,7 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager 
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = iac.createConfigFile(module); err != nil {
+	if err = iac.createConfigFile(module, iac.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
@@ -86,7 +86,7 @@ type iacScanConfiguration struct {
 	SkippedDirs []string `yaml:"skipped-folders"`
 }
 
-func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module) error {
+func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Iac)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module) error
 				Roots:       roots,
 				Output:      iac.resultsFileName,
 				Type:        iacScannerType,
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Iac),
+				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
 			},
 		},
 	}

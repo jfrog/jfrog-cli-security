@@ -129,7 +129,7 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = asm.createConfigFile(module); err != nil {
+	if err = asm.createConfigFile(module, asm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
@@ -162,12 +162,12 @@ type scanConfiguration struct {
 	ScanType             string   `yaml:"scantype"`
 }
 
-func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module) error {
+func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, nil)
 	if err != nil {
 		return err
 	}
-	excludePatterns := jas.GetExcludePatterns(module, nil)
+	excludePatterns := jas.GetExcludePatterns(module, nil, exclusions...)
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
 		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)
