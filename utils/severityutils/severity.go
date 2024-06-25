@@ -185,7 +185,7 @@ func ParseSeverity(severity string, sarifSeverity bool) (parsed Severity, err er
 	if err != nil {
 		parsed = SeverityDefaultValue
 	} else {
-		parsed = SarifSeverityLevelToSeverity(sarifLevel)
+		parsed = sarifSeverityLevelToSeverity(sarifLevel)
 	}
 	return
 }
@@ -266,7 +266,7 @@ func SeverityToSarifSeverityLevel(severity Severity) SarifSeverityLevel {
 	}
 }
 
-func SarifSeverityLevelToSeverity(level SarifSeverityLevel) Severity {
+func sarifSeverityLevelToSeverity(level SarifSeverityLevel) Severity {
 	switch level {
 	case LevelError:
 		return High

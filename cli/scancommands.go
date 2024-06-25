@@ -188,7 +188,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
+	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return err
 	}
@@ -233,6 +233,18 @@ func validateXrayContext(c *components.Context, serverDetails *coreConfig.Server
 		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
 	}
 	return nil
+}
+
+func getMinimumSeverity(c *components.Context) (severity severityutils.Severity, err error) {
+	flagSeverity := c.GetStringFlagValue(flags.MinSeverity)
+	if flagSeverity == "" {
+		return
+	}
+	severity, err = severityutils.ParseSeverity(flagSeverity, false)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func isProjectProvided(c *components.Context) bool {
@@ -396,7 +408,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
+	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return nil, err
 	}
@@ -513,7 +525,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
+	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return err
 	}

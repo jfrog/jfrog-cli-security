@@ -28,7 +28,8 @@ func TestParseSeverity(t *testing.T) {
 		{input: "none", isSarifFormat: true, expectedOutput: "Unknown", expectedError: nil},
 		{input: "", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
 		// Test unsupported severity
-		{input: "invalid_severity", expectedOutput: "", expectedError: errors.New("only the following severities are supported")},
+		{input: "", isSarifFormat: false, expectedOutput: "", expectedError: errors.New("is not supported, only the following severities are supported")},
+		{input: "invalid_severity", isSarifFormat: false, expectedOutput: "", expectedError: errors.New("only the following severities are supported")},
 	}
 
 	for _, tc := range testCases {
