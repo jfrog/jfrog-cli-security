@@ -2,14 +2,16 @@ package sca
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"reflect"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -278,49 +280,57 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	mvnOutput1 := "status code: 403, reason phrase: Forbidden (403)"
 	mvnOutput2 := "status code: 500, reason phrase: Server Error (500)"
 	pipOutput := "because of HTTP error 403 Client Error: Forbidden for url"
+	goOutput := "Failed running Go command: 403 Forbidden"
 
 	tests := []struct {
 		name          string
 		isCurationCmd bool
-		tech          coreutils.Technology
+		tech          techutils.Technology
 		output        string
 		expect        string
 	}{
 		{
 			name:          "mvn 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput1,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "mvn 500 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        mvnOutput2,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven),
 		},
 		{
 			name:          "pip 403 error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Pip,
 			output:        pipOutput,
-			expect:        fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip),
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Pip),
 		},
 		{
 			name:          "pip not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Pip,
+			tech:          techutils.Pip,
 			output:        "http error 401",
 		},
 		{
 			name:          "maven not pass through error",
 			isCurationCmd: true,
-			tech:          coreutils.Maven,
+			tech:          techutils.Maven,
 			output:        "http error 401",
 		},
 		{
-			name:          "nota supported tech",
+			name:          "golang 403 error",
+			isCurationCmd: true,
+			tech:          techutils.Go,
+			output:        goOutput,
+			expect:        fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go),
+		},
+		{
+			name:          "not a supported tech",
 			isCurationCmd: true,
 			tech:          coreutils.CI,
 			output:        pipOutput,
@@ -328,7 +338,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output)
+			assert.Equal(t, SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output), tt.expect)
 		})
 	}
 }

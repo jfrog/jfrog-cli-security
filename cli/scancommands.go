@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -28,6 +31,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const auditScanCategory = "Audit & Scan"
@@ -91,7 +95,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditMvn),
 			Description: auditSpecificDocs.GetMvnDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Maven)
+				return AuditSpecificCmd(c, techutils.Maven)
 			},
 			Hidden: true,
 		},
@@ -101,7 +105,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGradle),
 			Description: auditSpecificDocs.GetGradleDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Gradle)
+				return AuditSpecificCmd(c, techutils.Gradle)
 			},
 			Hidden: true,
 		},
@@ -111,7 +115,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditNpm),
 			Description: auditSpecificDocs.GetNpmDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Npm)
+				return AuditSpecificCmd(c, techutils.Npm)
 			},
 			Hidden: true,
 		},
@@ -121,7 +125,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditGo),
 			Description: auditSpecificDocs.GetGoDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Go)
+				return AuditSpecificCmd(c, techutils.Go)
 			},
 			Hidden: true,
 		},
@@ -131,7 +135,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditPip),
 			Description: auditSpecificDocs.GetPipDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Pip)
+				return AuditSpecificCmd(c, techutils.Pip)
 			},
 			Hidden: true,
 		},
@@ -141,7 +145,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.AuditPipenv),
 			Description: auditSpecificDocs.GetPipenvDescription(),
 			Action: func(c *components.Context) error {
-				return AuditSpecificCmd(c, coreutils.Pipenv)
+				return AuditSpecificCmd(c, techutils.Pipenv)
 			},
 			Hidden: true,
 		},
@@ -307,17 +311,17 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
 
 	// Check if user used specific technologies flags
-	allTechnologies := coreutils.GetAllTechnologiesList()
+	allTechnologies := techutils.GetAllTechnologiesList()
 	technologies := []string{}
 	for _, tech := range allTechnologies {
 		var techExists bool
-		if tech == coreutils.Maven {
+		if tech == techutils.Maven {
 			// On Maven we use '--mvn' flag
 			techExists = c.GetBoolFlagValue(flags.Mvn)
 		} else {
@@ -329,14 +333,54 @@ func AuditCmd(c *components.Context) error {
 	}
 	auditCmd.SetTechnologies(technologies)
 
-	return utils.ReportErrorIfExists(progressbar.ExecWithProgress(auditCmd), auditCmd.ServerDetails)
+	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
+		// No CA flag provided but sca flag is not provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+	}
+
+	allSubScans := utils.GetAllSupportedScans()
+	subScans := []utils.SubScanType{}
+	for _, subScan := range allSubScans {
+		if shouldAddSubScan(subScan, c) {
+			subScans = append(subScans, subScan)
+		}
+	}
+	if len(subScans) > 0 {
+		auditCmd.SetScansToPerform(subScans)
+	}
+
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	auditCmd.SetThreads(threads)
+	err = progressbar.ExecWithProgress(auditCmd)
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
+	return err
 }
 
-func createAuditParams(c *components.Context) (*audit.AuditParams, error) {
-	return nil, nil
+func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
+	return c.GetBoolFlagValue(subScan.String()) ||
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
 }
 
-func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
+	if err == nil || !usage.ShouldReportUsage() {
+		return
+	}
+	var serverDetails *coreConfig.ServerDetails
+	serverDetails, innerError := auditCmd.ServerDetails()
+	if innerError != nil {
+		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
+		return
+	}
+	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+		log.Debug("failed to report error log:" + reportError.Error())
+	}
+}
+
+func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
@@ -376,6 +420,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetServerDetails(serverDetails).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
+		SetUseJas(true).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
@@ -395,9 +440,9 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 	}
 }
 
-func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) error {
+func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -407,11 +452,7 @@ func AuditSpecificCmd(c *components.Context, technology coreutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
-	if err != nil {
-		return err
-	}
-	threads, err := curation.DetectNumOfThreads(threadsFlag)
+	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
@@ -449,6 +490,10 @@ func DockerScan(c *components.Context, image string) error {
 		return printHelp()
 	}
 	// Run the command
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
 		return err
@@ -477,7 +522,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetThreads(threads)
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

@@ -2,19 +2,18 @@ package utils
 
 import (
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
 type Results struct {
-	ScaResults  []ScaScanResult
+	ScaResults  []*ScaScanResult
 	XrayVersion string
-	ScaError    error
+	ScansErr    error
 
 	ExtendedScanResults *ExtendedScanResults
-	JasError            error
 
 	MultiScanId string
 }
@@ -30,8 +29,8 @@ func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
 	return
 }
 
-func (r *Results) GetScaScannedTechnologies() []coreutils.Technology {
-	technologies := datastructures.MakeSet[coreutils.Technology]()
+func (r *Results) GetScaScannedTechnologies() []techutils.Technology {
+	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scaResult := range r.ScaResults {
 		technologies.Add(scaResult.Technology)
 	}
@@ -63,7 +62,7 @@ func (r *Results) IsScaIssuesFound() bool {
 func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
 	for _, scan := range r.ScaResults {
 		if scan.Target == target {
-			return &scan
+			return scan
 		}
 	}
 	return nil
@@ -84,7 +83,6 @@ func (r *Results) IsIssuesFound() bool {
 func (r *Results) CountScanResultsFindings() (total int) {
 	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
-
 func (r *Results) GetSummary() (summary formats.SummaryResults) {
 	if len(r.ScaResults) <= 1 {
 		summary.Scans = r.getScanSummaryByTargets()
@@ -105,9 +103,9 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 	}
 	for _, target := range targets {
 		// Get target sca results
-		targetScaResults := []ScaScanResult{}
+		targetScaResults := []*ScaScanResult{}
 		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
-			targetScaResults = append(targetScaResults, *targetScaResult)
+			targetScaResults = append(targetScaResults, targetScaResult)
 		}
 		// Get target extended results
 		targetExtendedResults := r.ExtendedScanResults
@@ -122,7 +120,7 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
 	Target                string                  `json:"Target"`
-	Technology            coreutils.Technology    `json:"Technology,omitempty"`
+	Technology            techutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`
 	IsMultipleRootProject *bool                   `json:"IsMultipleRootProject,omitempty"`

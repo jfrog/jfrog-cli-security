@@ -7,14 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -22,7 +21,7 @@ import (
 
 var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
-var curationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
+var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
 func GetExcludePattern(params utils.AuditParams) string {
@@ -33,16 +32,13 @@ func GetExcludePattern(params utils.AuditParams) string {
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology coreutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
-	scanGraphParams.XrayGraphScanParams().DependenciesGraph = dependencyTree
+func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {
 		xscGitInfoContext.Technologies = []string{technology.String()}
 	}
 	scanMessage := fmt.Sprintf("Scanning %d %s dependencies", len(dependencyTree.Nodes), technology)
-	if progress != nil {
-		progress.SetHeadlineMsg(scanMessage)
-	}
 	log.Info(scanMessage + "...")
 	var scanResults *services.ScanResponse
 	xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
@@ -172,19 +168,23 @@ func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map
 	}
 }
 
-func SuspectCurationBlockedError(isCurationCmd bool, tech coreutils.Technology, cmdOutput string) (msgToUser string) {
+func SuspectCurationBlockedError(isCurationCmd bool, tech techutils.Technology, cmdOutput string) (msgToUser string) {
 	if !isCurationCmd {
 		return
 	}
 	switch tech {
-	case coreutils.Maven:
+	case techutils.Maven:
 		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
 			strings.Contains(cmdOutput, "status code: 500") {
-			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Maven)
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven)
 		}
-	case coreutils.Pip:
+	case techutils.Pip:
 		if strings.Contains(strings.ToLower(cmdOutput), "http error 403") {
-			msgToUser = fmt.Sprintf(curationErrorMsgToUserTemplate, coreutils.Pip)
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Pip)
+		}
+	case techutils.Go:
+		if strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") {
+			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go)
 		}
 	}
 	return

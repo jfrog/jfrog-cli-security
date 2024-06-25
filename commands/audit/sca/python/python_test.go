@@ -1,14 +1,17 @@
 package python
 
 import (
-	"github.com/jfrog/build-info-go/utils/pythonutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-client-go/xray/services/utils"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,7 +22,7 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Server: nil,
-		Tool:   pythonutils.PythonTool(coreutils.Pip),
+		Tool:   pythonutils.PythonTool(techutils.Pip),
 	})
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
@@ -39,6 +42,20 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	}
 }
 
+func TestPipDependencyListCustomInstallArgs(t *testing.T) {
+	// Create and change directory to test workspace
+	mainPath := filepath.Join("projects", "package-managers", "python", "pip", "pip")
+	actualMainPath, cleanUp := sca.CreateTestWorkspace(t, mainPath)
+	defer cleanUp()
+	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
+	// Run getModulesDependencyTrees
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
+		Tool:               pythonutils.PythonTool(techutils.Pip),
+		InstallCommandArgs: []string{"--break-system-packages"},
+	})
+	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
+}
+
 func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
@@ -46,7 +63,7 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&AuditPython{
 		Server:        nil,
-		Tool:          pythonutils.PythonTool(coreutils.Pip),
+		Tool:          pythonutils.PythonTool(techutils.Pip),
 		IsCurationCmd: true,
 	})
 	assert.NoError(t, err)
@@ -79,8 +96,12 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Tool: pythonutils.PythonTool(coreutils.Pip),
+		Tool: pythonutils.PythonTool(techutils.Pip),
 	})
+	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
+}
+
+func validatePipRequirementsProject(t *testing.T, err error, uniqueDeps []string, rootNode []*utils.GraphNode) {
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -101,7 +122,7 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Server:              nil,
-		Tool:                pythonutils.PythonTool(coreutils.Pip),
+		Tool:                pythonutils.PythonTool(techutils.Pip),
 		PipRequirementsFile: "requirements.txt",
 	})
 	assert.NoError(t, err)
@@ -131,7 +152,7 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
 		Server: nil,
-		Tool:   pythonutils.PythonTool(coreutils.Pipenv),
+		Tool:   pythonutils.PythonTool(techutils.Pipenv),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +189,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Tool: pythonutils.PythonTool(coreutils.Poetry),
+		Tool: pythonutils.PythonTool(techutils.Poetry),
 	})
 	if err != nil {
 		t.Fatal(err)

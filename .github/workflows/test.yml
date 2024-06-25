@@ -23,12 +23,14 @@ jobs:
     env:
       GOPROXY: direct
       GRADLE_OPTS: -Dorg.gradle.daemon=false
+      CI: true
+      JFROG_CLI_LOG_LEVEL: DEBUG
     steps:
       # Install dependencies
       - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.21.x
+          go-version: 1.22.x
       - name: Install npm
         uses: actions/setup-node@v3
         with:

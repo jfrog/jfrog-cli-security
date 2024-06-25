@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
@@ -12,6 +13,7 @@ import (
 	utils "github.com/jfrog/jfrog-cli-core/v2/utils/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -34,6 +36,7 @@ type AuditPython struct {
 	Tool                pythonutils.PythonTool
 	RemotePypiRepo      string
 	PipRequirementsFile string
+	InstallCommandArgs  []string
 	IsCurationCmd       bool
 }
 
@@ -245,11 +248,11 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		reportFileName = pythonReportFile
 	}
 
-	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName)
+	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
 	var reqErr error
 	err = executeCommand("python", pipInstallArgs...)
 	if err != nil && auditPython.PipRequirementsFile == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName)
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
 		reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
@@ -259,7 +262,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, coreutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := sca.SuspectCurationBlockedError(auditPython.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}
@@ -278,7 +281,7 @@ func executeCommand(executable string, args ...string) error {
 	return nil
 }
 
-func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder string, reportFileName string) []string {
+func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName string, customArgs ...string) []string {
 	args := []string{"-m", "pip", "install"}
 	if requirementsFile == "" {
 		// Run 'pip install .'
@@ -297,9 +300,46 @@ func getPipInstallArgs(requirementsFile string, remoteUrl string, cacheFolder st
 		// For report to include download urls, pip should ignore installed packages.
 		args = append(args, "--ignore-installed")
 		args = append(args, "--report", reportFileName)
-
 	}
+	args = append(args, parseCustomArgs(remoteUrl, cacheFolder, reportFileName, customArgs...)...)
 	return args
+}
+
+func parseCustomArgs(remoteUrl, cacheFolder, reportFileName string, customArgs ...string) (args []string) {
+	for i := 0; i < len(customArgs); i++ {
+		if strings.Contains(customArgs[i], "-r") {
+			log.Warn("The -r flag is not supported in the custom arguments list. use the 'PipRequirementsFile' instead.")
+			i++
+			continue
+		}
+		if strings.Contains(customArgs[i], "--cache-dir") {
+			if cacheFolder != "" {
+				log.Warn("The --cache-dir flag is not supported in the custom arguments list. skipping...")
+			} else if i+1 < len(customArgs) {
+				args = append(args, customArgs[i], customArgs[i+1])
+			}
+			i++
+			continue
+		}
+		if reportFileName != "" {
+			if strings.Contains(customArgs[i], "--report") {
+				log.Warn("The --report flag is not supported in the custom arguments list. skipping...")
+				i++
+				continue
+			}
+			if strings.Contains(customArgs[i], "--ignore-installed") {
+				// will be added by default
+				continue
+			}
+		}
+		if remoteUrl != "" && strings.Contains(customArgs[i], utils.GetPypiRemoteRegistryFlag(pythonutils.Pip)) {
+			log.Warn("The remote registry flag is not supported in the custom arguments list. skipping...")
+			i++
+			continue
+		}
+		args = append(args, customArgs[i])
+	}
+	return
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string) (err error) {

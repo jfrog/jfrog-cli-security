@@ -10,12 +10,20 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/jas/applicability"
+	"github.com/jfrog/jfrog-cli-security/jas/runner"
+	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -35,8 +43,9 @@ type FileContext func(string) parallel.TaskFunc
 type indexFileHandlerFunc func(file string)
 
 type ScanInfo struct {
-	Target string
-	Result *services.ScanResponse
+	Target              string
+	Result              *services.ScanResponse
+	ExtendedScanResults *utils.ExtendedScanResults
 }
 
 const (
@@ -52,7 +61,7 @@ type ScanCommand struct {
 	// The location of the downloaded Xray indexer binary on the local file system.
 	indexerPath            string
 	indexerTempDir         string
-	outputFormat           outputFormat.OutputFormat
+	outputFormat           format.OutputFormat
 	projectKey             string
 	minSeverityFilter      string
 	watches                []string
@@ -63,6 +72,7 @@ type ScanCommand struct {
 	bypassArchiveLimits    bool
 	fixableOnly            bool
 	progress               ioUtils.ProgressMgr
+	commandSupportsJAS     bool
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter string) *ScanCommand {
@@ -75,6 +85,11 @@ func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetRunJasScans(run bool) *ScanCommand {
+	scanCmd.commandSupportsJAS = run
+	return scanCmd
+}
+
 func (scanCmd *ScanCommand) SetProgress(progress ioUtils.ProgressMgr) {
 	scanCmd.progress = progress
 }
@@ -84,7 +99,7 @@ func (scanCmd *ScanCommand) SetThreads(threads int) *ScanCommand {
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetOutputFormat(format outputFormat.OutputFormat) *ScanCommand {
+func (scanCmd *ScanCommand) SetOutputFormat(format format.OutputFormat) *ScanCommand {
 	scanCmd.outputFormat = format
 	return scanCmd
 }
@@ -167,6 +182,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
+	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	})
+}
+
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -180,6 +201,18 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	xrayManager, xrayVersion, err := xrutils.CreateXrayServiceManagerAndGetVersion(scanCmd.serverDetails)
 	if err != nil {
 		return err
+	}
+
+	scanResults := xrutils.NewAuditResults()
+	scanResults.XrayVersion = xrayVersion
+
+	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
+	errGroup := new(errgroup.Group)
+	if scanResults.ExtendedScanResults.EntitledForJas {
+		// Download (if needed) the analyzer manager in a background routine.
+		errGroup.Go(func() error {
+			return xrutils.DownloadAnalyzerManagerIfNeeded(0)
+		})
 	}
 
 	// Validate Xray minimum version for graph scan command
@@ -224,16 +257,22 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	indexedFileProducerConsumer := parallel.NewRunner(scanCmd.threads, 20000, false)
 	indexedFileProducerErrors := make([][]formats.SimpleJsonError, threads)
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)
+	// Parallel security runner for JAS scans
+	JasScanProducerConsumer := utils.NewSecurityParallelRunner(scanCmd.threads)
+	jasScanProducerErrors := make([][]formats.SimpleJsonError, threads)
 	// Start walking on the filesystem to "produce" files that match the given pattern
 	// while the consumer uses the indexer to index those files.
-	scanCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, resultsArr, fileProducerErrors, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
-	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
+	scanCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer, scanResults.ExtendedScanResults.EntitledForJas, resultsArr, fileProducerErrors, indexedFileProducerErrors, jasScanProducerErrors, fileCollectingErrorsQueue, xrayVersion)
+	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer)
 
 	// Handle results
-	flatResults := []xrutils.ScaScanResult{}
+	flatResults := []*xrutils.ScaScanResult{}
+
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
+			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
+			scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, res.ExtendedScanResults.ApplicabilityScanResults...)
+			scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, res.ExtendedScanResults.SecretsScanResults...)
 		}
 	}
 	if scanCmd.progress != nil {
@@ -250,10 +289,14 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	}
 	scanErrors = appendErrorSlice(scanErrors, fileProducerErrors)
 	scanErrors = appendErrorSlice(scanErrors, indexedFileProducerErrors)
+	scanErrors = appendErrorSlice(scanErrors, jasScanProducerErrors)
 
-	scanResults := xrutils.NewAuditResults()
-	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = flatResults
+
+	// Wait for the Download of the AnalyzerManager to complete.
+	if err = errGroup.Wait(); err != nil {
+		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
+	}
 
 	if err = xrutils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
@@ -270,7 +313,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 		return err
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
+	if err = recordResFunc(scanResults); err != nil {
 		return err
 	}
 
@@ -296,14 +339,14 @@ func (scanCmd *ScanCommand) CommandName() string {
 	return "xr_scan"
 }
 
-func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
+func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, jasFileProducerConsumer *utils.SecurityParallelRunner, entitledForJas bool, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors, jasErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
 	go func() {
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
 		specFiles := scanCmd.spec.Files
 		for i := range specFiles {
-			artifactHandlerFunc := scanCmd.createIndexerHandlerFunc(&specFiles[i], indexedFileProducer, resultsArr, fileErrors, indexedFileErrors, xrayVersion)
+			artifactHandlerFunc := scanCmd.createIndexerHandlerFunc(&specFiles[i], entitledForJas, indexedFileProducer, jasFileProducerConsumer, resultsArr, fileErrors, indexedFileErrors, jasErrors, xrayVersion)
 			taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
 			err := collectFilesForIndexing(specFiles[i], taskHandler)
@@ -315,7 +358,7 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 	}()
 }
 
-func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledForJas bool, indexedFileProducer parallel.Runner, jasFileProducerConsumer *utils.SecurityParallelRunner, resultsArr [][]*ScanInfo, fileErrors, indexedFileErrors, jasErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			logMsgPrefix := clientutils.GetLogMsgPrefix(threadId, false)
@@ -359,13 +402,42 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, indexedFil
 				if err != nil {
 					return err
 				}
-				scanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
+				graphScanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
 					log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
 				}
-				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults})
+
+				scanResults := utils.Results{
+					ScaResults:          []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{*graphScanResults}}},
+					ExtendedScanResults: &utils.ExtendedScanResults{},
+				}
+				if entitledForJas && scanCmd.commandSupportsJAS {
+					// Run Jas scans
+					jasErrHandlerFunc := func(err error) {
+						jasErrors[threadId] = append(jasErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					}
+					workingDirs := []string{filePath}
+					depsList := depsListFromVulnerabilities(*graphScanResults)
+					jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(workingDirs)
+					if err != nil {
+						log.Error(fmt.Sprintf("failed to create JFrogAppsConfig: %s", err.Error()))
+						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					}
+					scanner := &jas.JasScanner{}
+					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails)
+					if err != nil {
+						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
+						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					}
+					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, []techutils.Technology{techutils.Technology(graphScanResults.ScannedPackageType)}, &depsList, scanCmd.serverDetails, false, "", scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans())
+					if err != nil {
+						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
+						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					}
+				}
+				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: graphScanResults, ExtendedScanResults: scanResults.ExtendedScanResults})
 				return
 			}
 
@@ -382,15 +454,20 @@ func getAddTaskToProducerFunc(producer parallel.Runner, fileHandlerFunc FileCont
 	}
 }
 
-func (scanCmd *ScanCommand) performScanTasks(fileConsumer parallel.Runner, indexedFileConsumer parallel.Runner) {
+func (scanCmd *ScanCommand) performScanTasks(fileConsumer parallel.Runner, indexedFileConsumer parallel.Runner, jasScanProducerConsumer *utils.SecurityParallelRunner) {
 	go func() {
 		// Blocking until consuming is finished.
 		fileConsumer.Run()
 		// After all files have been indexed, The second producer notifies that no more tasks will be produced.
 		indexedFileConsumer.Done()
 	}()
-	// Blocking until consuming is finished.
-	indexedFileConsumer.Run()
+	go func() {
+		// Blocking until consuming is finished.
+		indexedFileConsumer.Run()
+		// Wait for all jas scans to finish
+		jasScanProducerConsumer.Runner.Done()
+	}()
+	jasScanProducerConsumer.Runner.Run()
 }
 
 func collectFilesForIndexing(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) error {
@@ -467,6 +544,20 @@ func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]form
 		scanErrors = append(scanErrors, errorSlice...)
 	}
 	return scanErrors
+}
+
+func depsListFromVulnerabilities(scanResult ...services.ScanResponse) (depsList []string) {
+	for _, result := range scanResult {
+		for _, vulnerability := range result.Vulnerabilities {
+			dependencies := maps.Keys(vulnerability.Components)
+			for _, dependency := range dependencies {
+				if !slices.Contains(depsList, dependency) {
+					depsList = append(depsList, dependency)
+				}
+			}
+		}
+	}
+	return
 }
 
 func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {

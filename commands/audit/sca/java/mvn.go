@@ -1,18 +1,21 @@
 package java
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
+
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -177,7 +180,7 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 		if len(cmdOutput) > 0 {
 			log.Info(stringOutput)
 		}
-		if msg := sca.SuspectCurationBlockedError(mdt.isCurationCmd, coreutils.Maven, stringOutput); msg != "" {
+		if msg := sca.SuspectCurationBlockedError(mdt.isCurationCmd, techutils.Maven, stringOutput); msg != "" {
 			err = fmt.Errorf("failed running command 'mvn %s\n\n%s", strings.Join(goals, " "), msg)
 		} else {
 			err = fmt.Errorf("failed running command 'mvn %s': %s", strings.Join(goals, " "), err.Error())
@@ -228,10 +231,26 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	if err != nil {
 		return err
 	}
-	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
-	settingsXmlContent := fmt.Sprintf(settingsXmlTemplate, username, password, remoteRepositoryFullPath)
 
-	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, []byte(settingsXmlContent), 0600))
+	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
+	if err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	err = SettingsTemplate.Execute(buf, struct {
+		Username                 string
+		Password                 string
+		RemoteRepositoryFullPath string
+	}{
+		Username:                 username,
+		Password:                 password,
+		RemoteRepositoryFullPath: remoteRepositoryFullPath,
+	})
+	if err != nil {
+		return err
+	}
+	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
 }
 
 // Creates a temporary directory.

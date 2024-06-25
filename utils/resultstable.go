@@ -15,6 +15,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/gookit/color"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -89,7 +90,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 			return nil, nil, nil, err
 		}
 		switch violation.ViolationType {
-		case "security":
+		case formats.ViolationTypeSecurity.String():
 			cves := convertCves(violation.Cves)
 			if results.ExtendedScanResults.EntitledForJas {
 				for i := range cves {
@@ -116,12 +117,12 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 						References:               violation.References,
 						JfrogResearchInformation: jfrogResearchInfo,
 						ImpactPaths:              impactPaths[compIndex],
-						Technology:               coreutils.Technology(violation.Technology),
+						Technology:               techutils.Technology(violation.Technology),
 						Applicable:               printApplicabilityCveValue(applicabilityStatus, isTable),
 					},
 				)
 			}
-		case "license":
+		case formats.ViolationTypeLicense.String():
 			currSeverity := GetSeverity(violation.Severity, ApplicabilityUndetermined)
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				licenseViolationsRows = append(licenseViolationsRows,
@@ -137,7 +138,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					},
 				)
 			}
-		case "operational_risk":
+		case formats.ViolationTypeOperationalRisk.String():
 			currSeverity := GetSeverity(violation.Severity, ApplicabilityUndetermined)
 			violationOpRiskData := getOperationalRiskViolationReadableData(violation)
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
@@ -241,7 +242,7 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 					References:               vulnerability.References,
 					JfrogResearchInformation: jfrogResearchInfo,
 					ImpactPaths:              impactPaths[compIndex],
-					Technology:               coreutils.Technology(vulnerability.Technology),
+					Technology:               techutils.Technology(vulnerability.Technology),
 					Applicable:               printApplicabilityCveValue(applicabilityStatus, isTable),
 				},
 			)

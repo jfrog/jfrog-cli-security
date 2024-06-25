@@ -1,6 +1,6 @@
 package formats
 
-import "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+import "github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 // Structs in this file should NOT be changed!
 // The structs are used as an API for the simple-json format, thus changing their structure or the 'json' annotation will break the API.
@@ -43,7 +43,7 @@ type VulnerabilityOrViolationRow struct {
 	References               []string                  `json:"references"`
 	ImpactPaths              [][]ComponentRow          `json:"impactPaths"`
 	JfrogResearchInformation *JfrogResearchInformation `json:"jfrogResearchInformation"`
-	Technology               coreutils.Technology      `json:"-"`
+	Technology               techutils.Technology      `json:"-"`
 }
 
 type LicenseRow struct {

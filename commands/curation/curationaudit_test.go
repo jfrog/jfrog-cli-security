@@ -3,16 +3,6 @@ package curation
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/gofrog/datastructures"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,6 +15,18 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jfrog/gofrog/datastructures"
+	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
@@ -144,7 +146,7 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 			componentId:     "npm://test:1.0.0",
 			artiUrl:         "http://localhost:8000/artifactory",
 			repo:            "npm",
-			tech:            coreutils.Npm.String(),
+			tech:            techutils.Npm.String(),
 			wantDownloadUrl: "http://localhost:8000/artifactory/api/npm/npm/test/-/test-1.0.0.tgz",
 			wantName:        "test",
 			wantVersion:     "1.0.0",
@@ -154,7 +156,7 @@ func TestGetNameScopeAndVersion(t *testing.T) {
 			componentId:     "npm://dev/test:1.0.0",
 			artiUrl:         "http://localhost:8000/artifactory",
 			repo:            "npm",
-			tech:            coreutils.Npm.String(),
+			tech:            techutils.Npm.String(),
 			wantDownloadUrl: "http://localhost:8000/artifactory/api/npm/npm/dev/test/-/test-1.0.0.tgz",
 			wantName:        "test",
 			wantVersion:     "1.0.0",
@@ -406,42 +408,54 @@ func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Set configuration for test
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
 			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
-			callbackMaven := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationMavenSupport, "true")
-			defer callbackMaven()
-			callbackPip := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationPipSupport, "true")
-			defer callbackPip()
+			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
+			defer callbackCurationFlag()
+			// Golang option to disable the use of the checksum database
+			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
+			defer callbackNoSum()
+
+			// Create Mock server and write configuration file
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
-			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir)
+			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
-			curationCmd := NewCurationAuditCommand()
-			curationCmd.SetIsCurationCmd(true)
-			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			rootDir, err := os.Getwd()
 			assert.NoError(t, err)
-			// Set the working dir for npm project.
-			require.NoError(t, err)
+
+			// Run pre-test command
 			if tt.preTestExec != "" {
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
 				output, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
 				assert.NoErrorf(t, err, string(output))
 				callbackPreTest()
 			}
+
+			// Set the working dir for project.
 			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
 			defer func() {
 				cacheFolder, err := utils.GetCurationCacheFolder()
 				require.NoError(t, err)
-				assert.NoError(t, fileutils.RemoveTempDir(cacheFolder))
+				err = fileutils.RemoveTempDir(cacheFolder)
+				if err != nil {
+					// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+					assert.ErrorIs(t, err, os.ErrPermission)
+				}
 				callback3()
 			}()
+
+			// Create audit command, and run it
+			curationCmd := NewCurationAuditCommand()
+			curationCmd.SetIsCurationCmd(true)
+			curationCmd.parallelRequests = 3
+			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			results := map[string][]*PackageStatus{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
@@ -459,6 +473,7 @@ func TestDoCurationAudit(t *testing.T) {
 					assert.NoError(t, tt.cleanDependencies())
 				}
 			}()
+
 			// Add the mock server to the expected blocked message url
 			for key := range tt.expectedResp {
 				for index := range tt.expectedResp[key] {
@@ -477,24 +492,81 @@ func TestDoCurationAudit(t *testing.T) {
 }
 
 type testCase struct {
-	name                   string
-	pathToTest             string
-	pathToPreTest          string
-	preTestExec            string
-	serveResources         map[string]string
-	funcToGetGoals         func(t *testing.T) []string
-	shouldIgnoreConfigFile bool
-	expectedBuildRequest   map[string]bool
-	expectedRequest        map[string]bool
-	requestToFail          map[string]bool
-	expectedResp           map[string][]*PackageStatus
-	requestToError         map[string]bool
-	expectedError          string
-	cleanDependencies      func() error
+	name                     string
+	pathToTest               string
+	pathToPreTest            string
+	preTestExec              string
+	serveResources           map[string]string
+	funcToGetGoals           func(t *testing.T) []string
+	shouldIgnoreConfigFile   bool
+	expectedBuildRequest     map[string]bool
+	expectedRequest          map[string]bool
+	requestToFail            map[string]bool
+	expectedResp             map[string][]*PackageStatus
+	requestToError           map[string]bool
+	expectedError            string
+	cleanDependencies        func() error
+	createServerWithoutCreds bool
 }
 
 func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
+		{
+			name:                     "go tree - one blocked package",
+			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "curation-project", ".jfrog"),
+			createServerWithoutCreds: true,
+			serveResources: map[string]string{
+				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
+				"v1.5.2.zip":                              filepath.Join("resources", "quote-v1.5.2.zip"),
+				"v1.5.2.info":                             filepath.Join("resources", "quote-v1.5.2.info"),
+				"v1.3.0.mod":                              filepath.Join("resources", "sampler-v1.3.0.mod"),
+				"v1.3.0.zip":                              filepath.Join("resources", "sampler-v1.3.0.zip"),
+				"v1.3.0.info":                             filepath.Join("resources", "sampler-v1.3.0.info"),
+				"v0.0.0-20170915032832-14c0d48ead0c.mod":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.mod"),
+				"v0.0.0-20170915032832-14c0d48ead0c.zip":  filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.zip"),
+				"v0.0.0-20170915032832-14c0d48ead0c.info": filepath.Join("resources", "text-v0.0.0-20170915032832-14c0d48ead0c.info"),
+			},
+			requestToFail: map[string]bool{
+				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
+			},
+			expectedResp: map[string][]*PackageStatus{
+				"github.com/you/hello": {{
+					Action:            "blocked",
+					ParentName:        "rsc.io/quote",
+					ParentVersion:     "v1.5.2",
+					BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+					BlockingReason:    "Policy violations",
+					DepRelation:       "indirect",
+					PkgType:           "go",
+					Policy: []Policy{
+						{
+							Policy:    "pol1",
+							Condition: "cond1",
+						},
+					},
+				},
+					{
+						Action:            "blocked",
+						ParentName:        "rsc.io/sampler",
+						ParentVersion:     "v1.3.0",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "direct",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name:       "python tree - one blocked package",
 			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
@@ -539,7 +611,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				assert.NoError(t, err)
 				// set the cache to test project dir, in order to fill its cache with dependencies
 				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join("..", "test"))
-				curationCache, err := utils.GetCurationMavenCacheFolder()
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
 				callbackPreTest()
 				require.NoError(t, err)
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
@@ -698,13 +770,18 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 	return serverMock, config
 }
 
-func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string) string {
+func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
+	var username, password string
+	if !withoutCreds {
+		username = "admin"
+		password = "password"
+	}
 	serverDetails := config.ConfigV5{
 		Servers: []*config.ServerDetails{
 			{
-				User:           "admin",
-				Password:       "password",
 				ServerId:       "test",
+				User:           username,
+				Password:       password,
 				Url:            url,
 				ArtifactoryUrl: url,
 			},
@@ -717,4 +794,34 @@ func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath stri
 	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
 	return confFilePath
+}
+
+func Test_getGoNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name         string
+		compId       string
+		rtUrl        string
+		downloadUrls []string
+		repo         string
+		compName     string
+		version      string
+	}{
+		{
+			name:         "valid go component id",
+			compId:       "go://github.com/kennygrant/sanitize:v1.2.4",
+			rtUrl:        "http://test/artifactory",
+			repo:         "test",
+			downloadUrls: []string{"http://test/artifactory/api/go/test/github.com/kennygrant/sanitize/@v/v1.2.4.zip"},
+			compName:     "github.com/kennygrant/sanitize",
+			version:      "v1.2.4",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, _, gotVersion := getGoNameScopeAndVersion(tt.compId, tt.rtUrl, tt.repo)
+			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
+			assert.Equal(t, tt.compName, gotName)
+			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
 }

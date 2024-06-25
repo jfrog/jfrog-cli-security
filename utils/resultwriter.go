@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -43,6 +44,8 @@ type ResultsWriter struct {
 	printExtended bool
 	// The scanType (binary,dependency)
 	scanType services.ScanType
+	// For table format - show table only for the given subScansPreformed
+	subScansPreformed []SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
 }
@@ -91,6 +94,11 @@ func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 	return rw
 }
 
+func (rw *ResultsWriter) SetSubScansPreformed(subScansPreformed []SubScanType) *ResultsWriter {
+	rw.subScansPreformed = subScansPreformed
+	return rw
+}
+
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
@@ -121,26 +129,42 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if rw.includeVulnerabilities {
-		err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
-	} else {
-		err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
+		if rw.includeVulnerabilities {
+			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+		} else {
+			err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+		}
+		if err != nil {
+			return
+		}
+		if rw.includeLicenses {
+			if err = PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
+				return
+			}
+		}
 	}
-	if err != nil {
-		return
-	}
-	if rw.includeLicenses {
-		if err = PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
+	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.scanType) {
+		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-		return
+	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
+		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
+			return
+		}
 	}
-	if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-		return
+	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.scanType) {
+		return nil
 	}
 	return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
+}
+
+func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType services.ScanType) bool {
+	if scanType == services.Binary && (subScan == IacScan || subScan == SastScan) {
+		return false
+	}
+	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
 
 func printMessages(messages []string) {
@@ -286,7 +310,7 @@ func addXrayIssueToSarifRun(issueId, impactedDependencyName, impactedDependencyV
 
 }
 
-func getDescriptorFullPath(tech coreutils.Technology, run *sarif.Run) (string, error) {
+func getDescriptorFullPath(tech techutils.Technology, run *sarif.Run) (string, error) {
 	descriptors := tech.GetPackageDescriptor()
 	if len(descriptors) == 1 {
 		// Generate the full path
@@ -305,7 +329,7 @@ func getDescriptorFullPath(tech coreutils.Technology, run *sarif.Run) (string, e
 }
 
 // Get the descriptor location with the Xray issues if exists.
-func getXrayIssueLocationIfValidExists(tech coreutils.Technology, run *sarif.Run) (location *sarif.Location, err error) {
+func getXrayIssueLocationIfValidExists(tech techutils.Technology, run *sarif.Run) (location *sarif.Location, err error) {
 	descriptorPath, err := getDescriptorFullPath(tech, run)
 	if err != nil {
 		return
@@ -483,7 +507,7 @@ func findMaxCVEScore(cves []formats.CveRow) (string, error) {
 }
 
 // Splits scan responses into aggregated lists of violations, vulnerabilities and licenses.
-func SplitScanResults(results []ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScanResults(results []*ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
