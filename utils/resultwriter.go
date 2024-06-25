@@ -10,6 +10,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -181,7 +183,7 @@ func printMessage(message string) {
 }
 
 func GenereateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
-	report, err = NewReport()
+	report, err = sarifutils.NewReport()
 	if err != nil {
 		return
 	}
@@ -306,11 +308,11 @@ func getDescriptorFullPath(tech techutils.Technology, run *sarif.Run) (string, e
 	descriptors := tech.GetPackageDescriptor()
 	if len(descriptors) == 1 {
 		// Generate the full path
-		return GetFullLocationFileName(strings.TrimSpace(descriptors[0]), run.Invocations), nil
+		return sarifutils.GetFullLocationFileName(strings.TrimSpace(descriptors[0]), run.Invocations), nil
 	}
 	for _, descriptor := range descriptors {
 		// If multiple options return first to match
-		absolutePath := GetFullLocationFileName(strings.TrimSpace(descriptor), run.Invocations)
+		absolutePath := sarifutils.GetFullLocationFileName(strings.TrimSpace(descriptor), run.Invocations)
 		if exists, err := fileutils.IsFileExists(absolutePath, false); err != nil {
 			return "", err
 		} else if exists {
@@ -467,7 +469,7 @@ func getSarifTableDescription(formattedDirectDependencies, maxCveScore, applicab
 	if len(fixedVersions) > 0 {
 		descriptionFixVersions = strings.Join(fixedVersions, ", ")
 	}
-	if applicable == NotScanned.String() {
+	if applicable == jasutils.NotScanned.String() {
 		return fmt.Sprintf("| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| %s      | %s       | %s   |",
 			maxCveScore, formattedDirectDependencies, descriptionFixVersions)
 	}
@@ -555,7 +557,7 @@ func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
 	if err != nil {
 		return err
 	}
-	sarifFile, err := ConvertSarifReportToString(sarifReport)
+	sarifFile, err := sarifutils.ConvertSarifReportToString(sarifReport)
 	if err != nil {
 		return err
 	}

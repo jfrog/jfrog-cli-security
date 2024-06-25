@@ -10,11 +10,9 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/owenrumney/go-sarif/v2/sarif"
-	"golang.org/x/exp/maps"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/gookit/color"
@@ -98,14 +96,17 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 				}
 			}
 			applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
-			currSeverity := GetSeverity(violation.Severity, applicabilityStatus)
+			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 			jfrogResearchInfo := convertJfrogResearchInformation(violation.ExtendedInformation)
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				securityViolationsRows = append(securityViolationsRows,
 					formats.VulnerabilityOrViolationRow{
 						Summary: violation.Summary,
 						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-							SeverityDetails:           formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+							SeverityDetails:           severityutils.GetAsDetails(currSeverity, applicabilityStatus), // formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
 							ImpactedDependencyName:    impactedPackagesNames[compIndex],
 							ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 							ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -632,85 +633,85 @@ func getDirectComponentsAndImpactPaths(impactPaths [][]services.ImpactPathNode) 
 	return
 }
 
-type TableSeverity struct {
-	formats.SeverityDetails
-	style color.Style
-	emoji string
-}
+// type TableSeverity struct {
+// 	formats.SeverityDetails
+// 	style color.Style
+// 	emoji string
+// }
 
-func (s *TableSeverity) printableTitle(isTable bool) string {
-	if isTable && (log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != "") {
-		return s.style.Render(s.emoji + s.Severity)
-	}
-	return s.Severity
-}
+// func (s *TableSeverity) printableTitle(isTable bool) string {
+// 	if isTable && (log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != "") {
+// 		return s.style.Render(s.emoji + s.Severity)
+// 	}
+// 	return s.Severity
+// }
 
-var Severities = map[string]map[ApplicabilityStatus]*TableSeverity{
-	"Critical": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 20}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 19}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 18}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 5}, emoji: "💀", style: color.New(color.Gray)},
-	},
-	"High": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 17}, emoji: "🔥", style: color.New(color.Red)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 16}, emoji: "🔥", style: color.New(color.Red)},
-		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 15}, emoji: "🔥", style: color.New(color.Red)},
-		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 4}, emoji: "🔥", style: color.New(color.Gray)},
-	},
-	"Medium": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 14}, emoji: "🎃", style: color.New(color.Yellow)},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 13}, emoji: "🎃", style: color.New(color.Yellow)},
-		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 12}, emoji: "🎃", style: color.New(color.Yellow)},
-		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 3}, emoji: "🎃", style: color.New(color.Gray)},
-	},
-	"Low": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11}, emoji: "👻"},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10}, emoji: "👻"},
-		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9}, emoji: "👻"},
-		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 2}, emoji: "👻", style: color.New(color.Gray)},
-	},
-	"Unknown": {
-		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 8}, emoji: "😐"},
-		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 7}, emoji: "😐"},
-		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 6}, emoji: "😐"},
-		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 1}, emoji: "😐", style: color.New(color.Gray)},
-	},
-}
+// var Severities = map[string]map[ApplicabilityStatus]*TableSeverity{
+// 	"Critical": {
+// 		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 20}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+// 		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 19}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+// 		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 18}, emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+// 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Critical", SeverityNumValue: 5}, emoji: "💀", style: color.New(color.Gray)},
+// 	},
+// 	"High": {
+// 		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 17}, emoji: "🔥", style: color.New(color.Red)},
+// 		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 16}, emoji: "🔥", style: color.New(color.Red)},
+// 		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 15}, emoji: "🔥", style: color.New(color.Red)},
+// 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "High", SeverityNumValue: 4}, emoji: "🔥", style: color.New(color.Gray)},
+// 	},
+// 	"Medium": {
+// 		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 14}, emoji: "🎃", style: color.New(color.Yellow)},
+// 		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 13}, emoji: "🎃", style: color.New(color.Yellow)},
+// 		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 12}, emoji: "🎃", style: color.New(color.Yellow)},
+// 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Medium", SeverityNumValue: 3}, emoji: "🎃", style: color.New(color.Gray)},
+// 	},
+// 	"Low": {
+// 		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11}, emoji: "👻"},
+// 		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10}, emoji: "👻"},
+// 		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9}, emoji: "👻"},
+// 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 2}, emoji: "👻", style: color.New(color.Gray)},
+// 	},
+// 	"Unknown": {
+// 		Applicable:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 8}, emoji: "😐"},
+// 		ApplicabilityUndetermined: {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 7}, emoji: "😐"},
+// 		NotCovered:                {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 6}, emoji: "😐"},
+// 		NotApplicable:             {SeverityDetails: formats.SeverityDetails{Severity: "Unknown", SeverityNumValue: 1}, emoji: "😐", style: color.New(color.Gray)},
+// 	},
+// }
 
-func (s *TableSeverity) NumValue() int {
-	return s.SeverityNumValue
-}
+// func (s *TableSeverity) NumValue() int {
+// 	return s.SeverityNumValue
+// }
 
-func (s *TableSeverity) Emoji() string {
-	return s.emoji
-}
+// func (s *TableSeverity) Emoji() string {
+// 	return s.emoji
+// }
 
-func GetSeveritiesFormat(severity string) (string, error) {
-	formattedSeverity := cases.Title(language.Und).String(severity)
-	if formattedSeverity != "" && Severities[formattedSeverity][Applicable] == nil {
-		return "", errorutils.CheckErrorf("only the following severities are supported: " + coreutils.ListToText(maps.Keys(Severities)))
-	}
+// func GetSeveritiesFormat(severity string) (string, error) {
+// 	formattedSeverity := cases.Title(language.Und).String(severity)
+// 	if formattedSeverity != "" && Severities[formattedSeverity][Applicable] == nil {
+// 		return "", errorutils.CheckErrorf("only the following severities are supported: " + coreutils.ListToText(maps.Keys(Severities)))
+// 	}
 
-	return formattedSeverity, nil
-}
+// 	return formattedSeverity, nil
+// }
 
-func GetSeverity(severityTitle string, applicable ApplicabilityStatus) *TableSeverity {
-	if Severities[severityTitle] == nil {
-		return &TableSeverity{SeverityDetails: formats.SeverityDetails{Severity: severityTitle}}
-	}
+// func GetSeverity(severityTitle string, applicable ApplicabilityStatus) *TableSeverity {
+// 	if Severities[severityTitle] == nil {
+// 		return &TableSeverity{SeverityDetails: formats.SeverityDetails{Severity: severityTitle}}
+// 	}
 
-	switch applicable {
-	case NotApplicable:
-		return Severities[severityTitle][NotApplicable]
-	case Applicable:
-		return Severities[severityTitle][Applicable]
-	case ApplicabilityUndetermined:
-		return Severities[severityTitle][ApplicabilityUndetermined]
-	default:
-		return Severities[severityTitle][NotCovered]
-	}
-}
+// 	switch applicable {
+// 	case NotApplicable:
+// 		return Severities[severityTitle][NotApplicable]
+// 	case Applicable:
+// 		return Severities[severityTitle][Applicable]
+// 	case ApplicabilityUndetermined:
+// 		return Severities[severityTitle][ApplicabilityUndetermined]
+// 	default:
+// 		return Severities[severityTitle][NotCovered]
+// 	}
+// }
 
 type operationalRiskViolationReadableData struct {
 	isEol         string

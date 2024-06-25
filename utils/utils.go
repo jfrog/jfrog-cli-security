@@ -1,6 +1,15 @@
 package utils
 
 const (
+	NodeModulesPattern = "**/*node_modules*/**"
+	JfMsiEnvVariable                          = "JF_MSI"
+)
+
+var (
+	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
+)
+
+const (
 	ContextualAnalysisScan SubScanType = "contextual_analysis"
 	ScaScan                SubScanType = "sca"
 	IacScan                SubScanType = "iac"

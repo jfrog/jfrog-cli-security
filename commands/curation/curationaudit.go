@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -86,7 +87,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 		return false, err
 	}
 
-	_, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
 		return false, err
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetSeveritiesFormat(t *testing.T) {
+func TestParseSeverity(t *testing.T) {
 	testCases := []struct {
 		input          string
 		isSarifFormat  bool

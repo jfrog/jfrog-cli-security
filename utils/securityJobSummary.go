@@ -9,6 +9,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
@@ -288,8 +291,8 @@ var (
 		"Medium":                               `🟠 <span style="color:orange">%d Medium</span>`,
 		"Low":                                  `🟡 <span style="color:yellow">%d Low</span>`,
 		"Unknown":                              `⚪️ <span style="color:white">%d Unknown</span>`,
-		Applicable.String():                    "%d " + Applicable.String(),
-		NotApplicable.String():                 "%d " + NotApplicable.String(),
+		jasutils.Applicable.String():                    "%d " + jasutils.Applicable.String(),
+		jasutils.NotApplicable.String():                 "%d " + jasutils.NotApplicable.String(),
 		formats.ViolationTypeSecurity.String(): "%d Security",
 		formats.ViolationTypeLicense.String():  "%d License",
 		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
@@ -297,7 +300,7 @@ var (
 	// AllowedSorted is the order of the keys to display in the summary
 	allowedSorted = []string{
 		"Critical", "High", "Medium", "Low", "Unknown",
-		Applicable.String(), NotApplicable.String(),
+		jasutils.Applicable.String(), jasutils.NotApplicable.String(),
 		formats.ViolationTypeSecurity.String(), formats.ViolationTypeLicense.String(), formats.ViolationTypeOperationalRisk.String(),
 	}
 )
@@ -375,7 +378,7 @@ func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, violation := range xrayResult.Violations {
-				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: GetSeverity(violation.Severity, NotScanned).Severity}
+				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: severityutils.GetSeverity(violation.Severity, NotScanned).Severity}
 				for compId := range violation.Components {
 					if violation.ViolationType == formats.ViolationTypeSecurity.String() {
 						for _, cve := range violation.Cves {
@@ -485,7 +488,7 @@ func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
 	for _, run := range runs {
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
-				issueToSeverity[GetLocationId(location)] = GetResultSeverity(result)
+				issueToSeverity[sarifutils.GetLocationId(location)] = GetResultSeverity(result)
 			}
 		}
 	}

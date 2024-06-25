@@ -7,8 +7,6 @@ import (
 )
 
 const (
-	EntitlementsMinVersion    = "3.66.5"
-	ApplicabilityFeatureId    = "contextual_analysis"
 	ApplicabilityRuleIdPrefix = "applic_"
 )
 

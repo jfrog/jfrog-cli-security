@@ -31,7 +31,9 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
 const auditScanCategory = "Audit & Scan"
@@ -186,7 +188,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}
@@ -375,7 +377,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
 		return
 	}
-	if reportError := utils.ReportError(serverDetails, err, "cli"); reportError != nil {
+	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
 }
@@ -394,11 +396,11 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return nil, err
 	}
-	auditCmd.SetAnalyticsMetricsService(utils.NewAnalyticsMetricsService(serverDetails))
+	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
@@ -511,7 +513,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	minSeverity, err := utils.GetSeveritiesFormat(c.GetStringFlagValue(flags.MinSeverity))
+	minSeverity, err := severityutils.ParseSeverity(c.GetStringFlagValue(flags.MinSeverity), false)
 	if err != nil {
 		return err
 	}

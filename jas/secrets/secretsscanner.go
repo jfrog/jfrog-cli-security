@@ -1,13 +1,15 @@
 package secrets
 
 import (
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"path/filepath"
 	"strings"
 
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -39,18 +41,18 @@ type SecretScanManager struct {
 // error: An error object (if any).
 func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Secrets)); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
 	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Secrets, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
 	results = secretScanManager.secretsScannerResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(results...), "secrets vulnerabilities")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(results...), "secrets vulnerabilities")
 	}
 	return
 }
@@ -106,7 +108,7 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(s.configFileName, configFileContent, utils.Secrets)
+	return jas.CreateScannersConfigFile(s.configFileName, configFileContent, jasutils.Secrets)
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
@@ -125,7 +127,7 @@ func processSecretScanRuns(sarifRuns []*sarif.Run) []*sarif.Run {
 		// Hide discovered secrets value
 		for _, secretResult := range secretRun.Results {
 			for _, location := range secretResult.Locations {
-				utils.SetLocationSnippet(location, maskSecret(utils.GetLocationSnippet(location)))
+				sarifutils.SetLocationSnippet(location, maskSecret(sarifutils.GetLocationSnippet(location)))
 			}
 		}
 	}

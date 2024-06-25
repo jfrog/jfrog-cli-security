@@ -1,4 +1,4 @@
-package utils
+package sarifutils
 
 import (
 	"encoding/json"

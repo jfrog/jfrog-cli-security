@@ -1,14 +1,17 @@
-package utils
+package jas
 
 import (
 	"errors"
 	"fmt"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -37,7 +40,6 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
-	JfMsiEnvVariable                          = "JF_MSI"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 )
@@ -71,26 +73,6 @@ func convertToApplicabilityStatus(status string) ApplicabilityStatus {
 	}
 }
 
-type JasScanType string
-
-const (
-	Applicability JasScanType = "Applicability"
-	Secrets       JasScanType = "Secrets"
-	IaC           JasScanType = "IaC"
-	Sast          JasScanType = "Sast"
-)
-
-func (jst JasScanType) String() string {
-	return string(jst)
-}
-
-func (jst JasScanType) FormattedError(err error) error {
-	if err != nil {
-		return fmt.Errorf(ErrFailedScannerRun, jst, err.Error())
-	}
-	return nil
-}
-
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
 	unsupportedCommandExitCode: "got unsupported scan command error from analyzer manager",
@@ -111,7 +93,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		return
 	}
 	var cmd *exec.Cmd
-	multiScanId := os.Getenv(JfMsiEnvVariable)
+	multiScanId := os.Getenv(utils.JfMsiEnvVariable)
 	if len(outputFile) > 0 {
 		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
 		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)
@@ -216,7 +198,7 @@ func SetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) error {
 	return nil
 }
 
-func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
+func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
 		exitCode := exitError.ExitCode()
@@ -225,7 +207,10 @@ func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
 			return nil
 		}
 	}
-	return scanner.FormattedError(err)
+	if err != nil {
+		return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+	}
+	return
 }
 
 // Download the latest AnalyzerManager executable if not cached locally.
