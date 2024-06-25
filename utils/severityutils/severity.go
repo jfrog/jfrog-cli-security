@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	MinCveScore float32 = 0.0
-	MaxCveScore         = 10.0
+	MinCveScore = 0.0
+	MaxCveScore = 10.0
 	// When parsing Sarif level to severity,
 	// If the level is not provided, the value is defaulted to be 'Medium'
 	SeverityDefaultValue      = Medium
@@ -193,6 +193,7 @@ func ParseSeverity(severity string, sarifSeverity bool) (parsed Severity, err er
 func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus jasutils.ApplicabilityStatus) (details *SeverityDetails, err error) {
 	if applicabilityStatus == jasutils.NotScanned {
 		err = errorutils.CheckErrorf("only the following severities are supported: " + coreutils.ListToText(supportedApplicabilityStatuses()))
+		return
 	}
 	parsed, err := ParseSeverity(severity, sarifSeverity)
 	if err != nil {
