@@ -11,14 +11,14 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	
+
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-	"github.com/jfrog/jfrog-cli-security/formats"
 
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )

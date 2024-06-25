@@ -44,35 +44,6 @@ const (
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 )
 
-type ApplicabilityStatus string
-
-const (
-	Applicable                ApplicabilityStatus = "Applicable"
-	NotApplicable             ApplicabilityStatus = "Not Applicable"
-	ApplicabilityUndetermined ApplicabilityStatus = "Undetermined"
-	NotCovered                ApplicabilityStatus = "Not Covered"
-	NotScanned                ApplicabilityStatus = ""
-)
-
-func (as ApplicabilityStatus) String() string {
-	return string(as)
-}
-
-func convertToApplicabilityStatus(status string) ApplicabilityStatus {
-	switch status {
-	case Applicable.String():
-		return Applicable
-	case NotApplicable.String():
-		return NotApplicable
-	case ApplicabilityUndetermined.String():
-		return ApplicabilityUndetermined
-	case NotCovered.String():
-		return NotCovered
-	default:
-		return NotScanned
-	}
-}
-
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
 	unsupportedCommandExitCode: "got unsupported scan command error from analyzer manager",

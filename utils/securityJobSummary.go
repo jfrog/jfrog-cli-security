@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
@@ -291,8 +292,8 @@ var (
 		"Medium":                               `🟠 <span style="color:orange">%d Medium</span>`,
 		"Low":                                  `🟡 <span style="color:yellow">%d Low</span>`,
 		"Unknown":                              `⚪️ <span style="color:white">%d Unknown</span>`,
-		jasutils.Applicable.String():                    "%d " + jasutils.Applicable.String(),
-		jasutils.NotApplicable.String():                 "%d " + jasutils.NotApplicable.String(),
+		jasutils.Applicable.String():           "%d " + jasutils.Applicable.String(),
+		jasutils.NotApplicable.String():        "%d " + jasutils.NotApplicable.String(),
 		formats.ViolationTypeSecurity.String(): "%d Security",
 		formats.ViolationTypeLicense.String():  "%d License",
 		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
@@ -378,7 +379,7 @@ func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, violation := range xrayResult.Violations {
-				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: severityutils.GetSeverity(violation.Severity, NotScanned).Severity}
+				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: severityutils.GetSeverity(violation.Severity).String()}
 				for compId := range violation.Components {
 					if violation.ViolationType == formats.ViolationTypeSecurity.String() {
 						for _, cve := range violation.Cves {
@@ -422,17 +423,17 @@ func getCveId(cve services.Cve, defaultIssueId string) string {
 	return cve.Id
 }
 
-func getSecurityIssueFindings(cves []services.Cve, issueId, severity string, components map[string]services.Component, applicableRuns ...*sarif.Run) (findings, uniqueFindings map[string]IssueDetails) {
+func getSecurityIssueFindings(cves []services.Cve, issueId string, severity severityutils.Severity, components map[string]services.Component, applicableRuns ...*sarif.Run) (findings, uniqueFindings map[string]IssueDetails) {
 	findings = map[string]IssueDetails{}
 	uniqueFindings = map[string]IssueDetails{}
 	for _, cve := range cves {
 		cveId := getCveId(cve, issueId)
-		applicableStatus := NotScanned
+		applicableStatus := jasutils.NotScanned
 		if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
-			applicableStatus = convertToApplicabilityStatus(applicableInfo.Status)
+			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
 		}
 		uniqueFindings[cveId] = IssueDetails{
-			FirstLevelValue:  GetSeverity(severity, applicableStatus).Severity,
+			FirstLevelValue:  severity.String(),
 			SecondLevelValue: applicableStatus.String(),
 		}
 		for compId := range components {
@@ -452,7 +453,7 @@ func getScaSummaryResults(scaScanResults []*ScaScanResult, applicableRuns ...*sa
 	for _, scaResult := range scaScanResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			for _, vulnerability := range xrayResult.Vulnerabilities {
-				vulFinding, vulUniqueFinding := getSecurityIssueFindings(vulnerability.Cves, vulnerability.IssueId, vulnerability.Severity, vulnerability.Components, applicableRuns...)
+				vulFinding, vulUniqueFinding := getSecurityIssueFindings(vulnerability.Cves, vulnerability.IssueId, severityutils.GetSeverity(vulnerability.Severity), vulnerability.Components, applicableRuns...)
 				for key, value := range vulFinding {
 					vulFindings[key] = value
 				}
@@ -488,7 +489,14 @@ func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
 	for _, run := range runs {
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
-				issueToSeverity[sarifutils.GetLocationId(location)] = GetResultSeverity(result)
+				resultLevel := sarifutils.GetResultLevel(result)
+				severity, err := severityutils.ParseSeverity(resultLevel, true)
+				if err != nil {
+					log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", resultLevel, err.Error()))
+					severity = severityutils.Unknown
+				}
+				severityutils.GetSeverity(sarifutils.GetResultLevel(result))
+				issueToSeverity[sarifutils.GetLocationId(location)] = severity.String()
 			}
 		}
 	}

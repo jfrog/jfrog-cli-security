@@ -10,13 +10,12 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	
+
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	
+
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	
 
 	"github.com/stretchr/testify/assert"
 

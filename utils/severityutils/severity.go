@@ -18,7 +18,8 @@ const (
 	MaxCveScore         = 10.0
 	// When parsing Sarif level to severity,
 	// If the level is not provided, the value is defaulted to be 'Medium'
-	SeverityDefaultValue = Medium
+	SeverityDefaultValue      = Medium
+	SarifSeverityRuleProperty = "security-severity"
 )
 
 const (
@@ -149,7 +150,7 @@ func ParseToSeverity(severity string) (parsed Severity, err error) {
 	case Unknown.String():
 		parsed = Unknown
 	default:
-		err = errorutils.CheckErrorf("severity '%s' is not supported, only the following severities are supported: ", severity, coreutils.ListToText(supportedSeverities()))
+		err = errorutils.CheckErrorf("severity '%s' is not supported, only the following severities are supported: %s", severity, coreutils.ListToText(supportedSeverities()))
 	}
 	return
 }

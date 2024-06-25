@@ -7,6 +7,7 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -169,7 +170,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 	excludePatterns := jas.GetExcludePatterns(module, nil)
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
-		excludePatterns = removeElementFromSlice(excludePatterns, jas.NodeModulesPattern)
+		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)
 	}
 	configFileContent := applicabilityScanConfig{
 		Scans: []scanConfiguration{

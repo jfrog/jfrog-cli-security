@@ -2,7 +2,7 @@ package utils
 
 const (
 	NodeModulesPattern = "**/*node_modules*/**"
-	JfMsiEnvVariable                          = "JF_MSI"
+	JfMsiEnvVariable   = "JF_MSI"
 )
 
 var (

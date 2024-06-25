@@ -12,6 +12,8 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
@@ -106,7 +108,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					formats.VulnerabilityOrViolationRow{
 						Summary: violation.Summary,
 						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-							SeverityDetails:           severityutils.GetAsDetails(currSeverity, applicabilityStatus), // formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+							SeverityDetails:           severityutils.GetAsDetails(currSeverity, applicabilityStatus, isTable),
 							ImpactedDependencyName:    impactedPackagesNames[compIndex],
 							ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 							ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -124,13 +126,16 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 				)
 			}
 		case formats.ViolationTypeLicense.String():
-			currSeverity := GetSeverity(violation.Severity, ApplicabilityUndetermined)
+			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				licenseViolationsRows = append(licenseViolationsRows,
 					formats.LicenseRow{
 						LicenseKey: violation.LicenseKey,
 						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-							SeverityDetails:           formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+							SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.ApplicabilityUndetermined, isTable),
 							ImpactedDependencyName:    impactedPackagesNames[compIndex],
 							ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 							ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -140,12 +145,15 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 				)
 			}
 		case formats.ViolationTypeOperationalRisk.String():
-			currSeverity := GetSeverity(violation.Severity, ApplicabilityUndetermined)
+			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 			violationOpRiskData := getOperationalRiskViolationReadableData(violation)
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:           formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+						SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.ApplicabilityUndetermined, isTable),
 						ImpactedDependencyName:    impactedPackagesNames[compIndex],
 						ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 						ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -224,14 +232,17 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 			}
 		}
 		applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
-		currSeverity := GetSeverity(vulnerability.Severity, applicabilityStatus)
+		currSeverity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
+		if err != nil {
+			return nil, err
+		}
 		jfrogResearchInfo := convertJfrogResearchInformation(vulnerability.ExtendedInformation)
 		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 			vulnerabilitiesRows = append(vulnerabilitiesRows,
 				formats.VulnerabilityOrViolationRow{
 					Summary: vulnerability.Summary,
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:           formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+						SeverityDetails:           severityutils.GetAsDetails(currSeverity, applicabilityStatus, isTable),
 						ImpactedDependencyName:    impactedPackagesNames[compIndex],
 						ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 						ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -314,19 +325,23 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 	var secretsRows []formats.SourceCodeRow
 	for _, secretRun := range secrets {
 		for _, secretResult := range secretRun.Results {
-			currSeverity := GetSeverity(GetResultSeverity(secretResult), Applicable)
+			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(secretResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse severity `%s` for secret result: %s", sarifutils.GetResultLevel(secretResult), *secretResult.RuleID))
+				currSeverity = severityutils.Unknown
+			}
 			for _, location := range secretResult.Locations {
 				secretsRows = append(secretsRows,
 					formats.SourceCodeRow{
-						SeverityDetails: formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
-						Finding:         GetResultMsgText(secretResult),
+						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
+						Finding:         sarifutils.GetResultMsgText(secretResult),
 						Location: formats.Location{
-							File:        GetRelativeLocationFileName(location, secretRun.Invocations),
-							StartLine:   GetLocationStartLine(location),
-							StartColumn: GetLocationStartColumn(location),
-							EndLine:     GetLocationEndLine(location),
-							EndColumn:   GetLocationEndColumn(location),
-							Snippet:     GetLocationSnippet(location),
+							File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
+							StartLine:   sarifutils.GetLocationStartLine(location),
+							StartColumn: sarifutils.GetLocationStartColumn(location),
+							EndLine:     sarifutils.GetLocationEndLine(location),
+							EndColumn:   sarifutils.GetLocationEndColumn(location),
+							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
 					},
 				)
@@ -362,22 +377,26 @@ func prepareIacs(iacs []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, iacResult := range iacRun.Results {
 			scannerDescription := ""
 			if rule, err := iacRun.GetRuleById(*iacResult.RuleID); err == nil {
-				scannerDescription = GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescription(rule)
 			}
-			currSeverity := GetSeverity(GetResultSeverity(iacResult), Applicable)
+			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(iacResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse severity `%s` for iac result: %s", sarifutils.GetResultLevel(iacResult), *iacResult.RuleID))
+				currSeverity = severityutils.Unknown
+			}
 			for _, location := range iacResult.Locations {
 				iacRows = append(iacRows,
 					formats.SourceCodeRow{
-						SeverityDetails:    formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
-						Finding:            GetResultMsgText(iacResult),
+						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
+						Finding:            sarifutils.GetResultMsgText(iacResult),
 						ScannerDescription: scannerDescription,
 						Location: formats.Location{
-							File:        GetRelativeLocationFileName(location, iacRun.Invocations),
-							StartLine:   GetLocationStartLine(location),
-							StartColumn: GetLocationStartColumn(location),
-							EndLine:     GetLocationEndLine(location),
-							EndColumn:   GetLocationEndColumn(location),
-							Snippet:     GetLocationSnippet(location),
+							File:        sarifutils.GetRelativeLocationFileName(location, iacRun.Invocations),
+							StartLine:   sarifutils.GetLocationStartLine(location),
+							StartColumn: sarifutils.GetLocationStartColumn(location),
+							EndLine:     sarifutils.GetLocationEndLine(location),
+							EndColumn:   sarifutils.GetLocationEndColumn(location),
+							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
 					},
 				)
@@ -412,24 +431,27 @@ func prepareSast(sasts []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, sastResult := range sastRun.Results {
 			scannerDescription := ""
 			if rule, err := sastRun.GetRuleById(*sastResult.RuleID); err == nil {
-				scannerDescription = GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescription(rule)
 			}
-			currSeverity := GetSeverity(GetResultSeverity(sastResult), Applicable)
-
+			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sastResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse severity `%s` for sast result: %s", sarifutils.GetResultLevel(sastResult), *sastResult.RuleID))
+				currSeverity = severityutils.Unknown
+			}
 			for _, location := range sastResult.Locations {
-				codeFlows := GetLocationRelatedCodeFlowsFromResult(location, sastResult)
+				codeFlows := sarifutils.GetLocationRelatedCodeFlowsFromResult(location, sastResult)
 				sastRows = append(sastRows,
 					formats.SourceCodeRow{
-						SeverityDetails:    formats.SeverityDetails{Severity: currSeverity.printableTitle(isTable), SeverityNumValue: currSeverity.NumValue()},
+						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						ScannerDescription: scannerDescription,
-						Finding:            GetResultMsgText(sastResult),
+						Finding:            sarifutils.GetResultMsgText(sastResult),
 						Location: formats.Location{
-							File:        GetRelativeLocationFileName(location, sastRun.Invocations),
-							StartLine:   GetLocationStartLine(location),
-							StartColumn: GetLocationStartColumn(location),
-							EndLine:     GetLocationEndLine(location),
-							EndColumn:   GetLocationEndColumn(location),
-							Snippet:     GetLocationSnippet(location),
+							File:        sarifutils.GetRelativeLocationFileName(location, sastRun.Invocations),
+							StartLine:   sarifutils.GetLocationStartLine(location),
+							StartColumn: sarifutils.GetLocationStartColumn(location),
+							EndLine:     sarifutils.GetLocationEndLine(location),
+							EndColumn:   sarifutils.GetLocationEndColumn(location),
+							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
 						CodeFlow: codeFlowToLocationFlow(codeFlows, sastRun.Invocations, isTable),
 					},
@@ -455,12 +477,12 @@ func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invoca
 			rowFlow := []formats.Location{}
 			for _, stackTraceEntry := range stackTrace.Locations {
 				rowFlow = append(rowFlow, formats.Location{
-					File:        GetRelativeLocationFileName(stackTraceEntry.Location, invocations),
-					StartLine:   GetLocationStartLine(stackTraceEntry.Location),
-					StartColumn: GetLocationStartColumn(stackTraceEntry.Location),
-					EndLine:     GetLocationEndLine(stackTraceEntry.Location),
-					EndColumn:   GetLocationEndColumn(stackTraceEntry.Location),
-					Snippet:     GetLocationSnippet(stackTraceEntry.Location),
+					File:        sarifutils.GetRelativeLocationFileName(stackTraceEntry.Location, invocations),
+					StartLine:   sarifutils.GetLocationStartLine(stackTraceEntry.Location),
+					StartColumn: sarifutils.GetLocationStartColumn(stackTraceEntry.Location),
+					EndLine:     sarifutils.GetLocationEndLine(stackTraceEntry.Location),
+					EndColumn:   sarifutils.GetLocationEndColumn(stackTraceEntry.Location),
+					Snippet:     sarifutils.GetLocationSnippet(stackTraceEntry.Location),
 				})
 			}
 			flowRows = append(flowRows, rowFlow)
@@ -937,17 +959,17 @@ func convertCves(cves []services.Cve) []formats.CveRow {
 	return cveRows
 }
 
-func getApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves []formats.CveRow) ApplicabilityStatus {
+func getApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves []formats.CveRow) jasutils.ApplicabilityStatus {
 	if !entitledForJas || len(applicabilityScanResults) == 0 {
-		return NotScanned
+		return jasutils.NotScanned
 	}
 	if len(cves) == 0 {
-		return NotCovered
+		return jasutils.NotCovered
 	}
-	var applicableStatuses []ApplicabilityStatus
+	var applicableStatuses []jasutils.ApplicabilityStatus
 	for _, cve := range cves {
 		if cve.Applicability != nil {
-			applicableStatuses = append(applicableStatuses, ApplicabilityStatus(cve.Applicability.Status))
+			applicableStatuses = append(applicableStatuses, jasutils.ApplicabilityStatus(cve.Applicability.Status))
 		}
 	}
 	return getFinalApplicabilityStatus(applicableStatuses)
@@ -960,57 +982,57 @@ func getCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 
 	applicability := formats.Applicability{}
 	resultFound := false
-	var applicabilityStatuses []ApplicabilityStatus
+	var applicabilityStatuses []jasutils.ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
-		if rule, _ := applicabilityRun.GetRuleById(CveToApplicabilityRuleId(cveId)); rule != nil {
-			applicability.ScannerDescription = GetRuleFullDescription(rule)
+		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
+			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
 			status := getApplicabilityStatusFromRule(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
 		}
-		result, _ := applicabilityRun.GetResultByRuleId(CveToApplicabilityRuleId(cveId))
+		result, _ := applicabilityRun.GetResultByRuleId(jasutils.CveToApplicabilityRuleId(cveId))
 		if result == nil {
 			continue
 		}
 		resultFound = true
 		// Add new evidences from locations
 		for _, location := range result.Locations {
-			fileName := GetRelativeLocationFileName(location, applicabilityRun.Invocations)
+			fileName := sarifutils.GetRelativeLocationFileName(location, applicabilityRun.Invocations)
 			if shouldDisqualifyEvidence(components, fileName) {
 				continue
 			}
 			applicability.Evidence = append(applicability.Evidence, formats.Evidence{
 				Location: formats.Location{
 					File:        fileName,
-					StartLine:   GetLocationStartLine(location),
-					StartColumn: GetLocationStartColumn(location),
-					EndLine:     GetLocationEndLine(location),
-					EndColumn:   GetLocationEndColumn(location),
-					Snippet:     GetLocationSnippet(location),
+					StartLine:   sarifutils.GetLocationStartLine(location),
+					StartColumn: sarifutils.GetLocationStartColumn(location),
+					EndLine:     sarifutils.GetLocationEndLine(location),
+					EndColumn:   sarifutils.GetLocationEndColumn(location),
+					Snippet:     sarifutils.GetLocationSnippet(location),
 				},
-				Reason: GetResultMsgText(result),
+				Reason: sarifutils.GetResultMsgText(result),
 			})
 		}
 	}
 	switch {
 	case len(applicabilityStatuses) > 0:
-		applicability.Status = string(getFinalApplicabilityStatus(applicabilityStatuses))
+		applicability.Status = getFinalApplicabilityStatus(applicabilityStatuses).String()
 	case !resultFound:
-		applicability.Status = string(ApplicabilityUndetermined)
+		applicability.Status = jasutils.ApplicabilityUndetermined.String()
 	case len(applicability.Evidence) == 0:
-		applicability.Status = string(NotApplicable)
+		applicability.Status = jasutils.NotApplicable.String()
 	default:
-		applicability.Status = string(Applicable)
+		applicability.Status = jasutils.Applicable.String()
 	}
 	return &applicability
 }
 
-func printApplicabilityCveValue(applicabilityStatus ApplicabilityStatus, isTable bool) string {
+func printApplicabilityCveValue(applicabilityStatus jasutils.ApplicabilityStatus, isTable bool) string {
 	if isTable && (log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != "") {
-		if applicabilityStatus == Applicable {
+		if applicabilityStatus == jasutils.Applicable {
 			return color.New(color.Red).Render(applicabilityStatus)
-		} else if applicabilityStatus == NotApplicable {
+		} else if applicabilityStatus == jasutils.NotApplicable {
 			return color.New(color.Green).Render(applicabilityStatus)
 		}
 	}
@@ -1053,7 +1075,7 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 	return
 }
 
-func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) ApplicabilityStatus {
+func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
 	if rule.Properties["applicability"] != nil {
 		status, ok := rule.Properties["applicability"].(string)
 		if !ok {
@@ -1061,13 +1083,13 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) Applicabili
 		}
 		switch status {
 		case "not_covered":
-			return NotCovered
+			return jasutils.NotCovered
 		case "undetermined":
-			return ApplicabilityUndetermined
+			return jasutils.ApplicabilityUndetermined
 		case "not_applicable":
-			return NotApplicable
+			return jasutils.NotApplicable
 		case "applicable":
-			return Applicable
+			return jasutils.Applicable
 		}
 	}
 	return ""
@@ -1078,28 +1100,28 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) Applicabili
 // Else if at least one cve is undetermined -> final value is undetermined
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
-func getFinalApplicabilityStatus(applicabilityStatuses []ApplicabilityStatus) ApplicabilityStatus {
+func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
 	if len(applicabilityStatuses) == 0 {
-		return NotScanned
+		return jasutils.NotScanned
 	}
 	foundUndetermined := false
 	foundNotCovered := false
 	for _, status := range applicabilityStatuses {
-		if status == Applicable {
-			return Applicable
+		if status == jasutils.Applicable {
+			return jasutils.Applicable
 		}
-		if status == ApplicabilityUndetermined {
+		if status == jasutils.ApplicabilityUndetermined {
 			foundUndetermined = true
 		}
-		if status == NotCovered {
+		if status == jasutils.NotCovered {
 			foundNotCovered = true
 		}
 	}
 	if foundUndetermined {
-		return ApplicabilityUndetermined
+		return jasutils.ApplicabilityUndetermined
 	}
 	if foundNotCovered {
-		return NotCovered
+		return jasutils.NotCovered
 	}
-	return NotApplicable
+	return jasutils.NotApplicable
 }

@@ -45,7 +45,7 @@ func NewDepTreeManager(params *DepTreeParams) DepTreeManager {
 
 // The structure of a dependency tree of a module in a Gradle/Maven project, as created by the gradle-dep-tree and maven-dep-tree plugins.
 type moduleDepTree struct {
-	Root  string                       `json:"root"`
+	Root  string                      `json:"root"`
 	Nodes map[string]xray.DepTreeNode `json:"nodes"`
 }
 

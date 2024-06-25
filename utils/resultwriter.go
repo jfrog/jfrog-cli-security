@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -255,7 +256,7 @@ func addXrayCveIssueToSarifRun(issue formats.VulnerabilityOrViolationRow, run *s
 		cveId,
 		issue.ImpactedDependencyName,
 		issue.ImpactedDependencyVersion,
-		issue.Severity,
+		severityutils.GetSeverity(issue.Severity),
 		maxCveScore,
 		issue.Summary,
 		getXrayIssueSarifHeadline(issue.ImpactedDependencyName, issue.ImpactedDependencyVersion, cveId),
@@ -276,7 +277,7 @@ func addXrayLicenseViolationToSarifRun(license formats.LicenseRow, run *sarif.Ru
 		license.LicenseKey,
 		license.ImpactedDependencyName,
 		license.ImpactedDependencyVersion,
-		license.Severity,
+		severityutils.GetSeverity(license.Severity),
 		MissingCveScore,
 		getLicenseViolationSummary(license.ImpactedDependencyName, license.ImpactedDependencyVersion, license.LicenseKey),
 		getXrayLicenseSarifHeadline(license.ImpactedDependencyName, license.ImpactedDependencyVersion, license.LicenseKey),
@@ -288,16 +289,17 @@ func addXrayLicenseViolationToSarifRun(license formats.LicenseRow, run *sarif.Ru
 	return
 }
 
-func addXrayIssueToSarifRun(issueId, impactedDependencyName, impactedDependencyVersion, severity, severityScore, summary, title, markdownDescription string, components []formats.ComponentRow, location *sarif.Location, run *sarif.Run) {
+func addXrayIssueToSarifRun(issueId, impactedDependencyName, impactedDependencyVersion string, severity severityutils.Severity, severityScore, summary, title, markdownDescription string, components []formats.ComponentRow, location *sarif.Location, run *sarif.Run) {
 	// Add rule if not exists
 	ruleId := getXrayIssueSarifRuleId(impactedDependencyName, impactedDependencyVersion, issueId)
 	if rule, _ := run.GetRuleById(ruleId); rule == nil {
 		addXrayRule(ruleId, title, severityScore, summary, markdownDescription, run)
 	}
 	// Add result for each component
+
 	for _, directDependency := range components {
 		msg := getXrayIssueSarifHeadline(directDependency.Name, directDependency.Version, issueId)
-		if result := run.CreateResultForRule(ruleId).WithMessage(sarif.NewTextMessage(msg)).WithLevel(ConvertToSarifLevel(severity)); location != nil {
+		if result := run.CreateResultForRule(ruleId).WithMessage(sarif.NewTextMessage(msg)).WithLevel(severityutils.SeverityToSarifSeverityLevel(severity).String()); location != nil {
 			result.AddLocation(location)
 		}
 	}
@@ -343,7 +345,7 @@ func addXrayRule(ruleId, ruleDescription, maxCveScore, summary, markdownDescript
 
 	if maxCveScore != MissingCveScore {
 		cveRuleProperties := sarif.NewPropertyBag()
-		cveRuleProperties.Add("security-severity", maxCveScore)
+		cveRuleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
 		rule.WithProperties(cveRuleProperties.Properties)
 	}
 
