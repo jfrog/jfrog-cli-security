@@ -11,6 +11,7 @@ require (
 	github.com/jfrog/jfrog-client-go v1.41.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
+	github.com/sourcegraph/go-diff v0.7.0
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20240604190554-fc45aab8b7f8
 	golang.org/x/sync v0.7.0

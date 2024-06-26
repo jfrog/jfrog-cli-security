@@ -113,13 +113,17 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
+	_, err = auditCmd.RunAuditCommand(true)
+	return
+}
+
+func (auditCmd *AuditCommand) RunAuditCommand(printResults bool) (auditResults *xrayutils.Results, err error) {
 	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
 	isRecursiveScan := len(auditCmd.workingDirs) == 0
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
 	}
-
 	// Should be called before creating the audit params, so the params will contain XSC information.
 	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	auditParams := NewAuditParams().
@@ -132,7 +136,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThreads(auditCmd.Threads)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
-	auditResults, err := RunAudit(auditParams)
+	auditResults, err = RunAudit(auditParams)
 	if err != nil {
 		return
 	}
@@ -142,29 +146,39 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return
 		}
 	}
+	if !printResults {
+		return
+	}
+	if err = auditCmd.PrintAuditResults(auditResults); err != nil {
+		return
+	}
+	err = auditCmd.GetResultsError(auditResults)
+	return
+}
+
+func (auditCmd *AuditCommand) PrintAuditResults(auditResults *xrayutils.Results) (err error) {
 	var messages []string
 	if !auditResults.ExtendedScanResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
 	}
-	if err = xrayutils.NewResultsWriter(auditResults).
-		SetIsMultipleRootProject(auditResults.IsMultipleProject()).
-		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
-		SetIncludeLicenses(auditCmd.IncludeLicenses).
-		SetOutputFormat(auditCmd.OutputFormat()).
-		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
-		SetExtraMessages(messages).
-		SetScanType(services.Dependency).
-		SetSubScansPreformed(auditCmd.ScansToPerform()).
-		PrintScanResults(); err != nil {
-		return
-	}
+	return xrayutils.NewResultsWriter(auditResults).
+	SetIsMultipleRootProject(auditResults.IsMultipleProject()).
+	SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
+	SetIncludeLicenses(auditCmd.IncludeLicenses).
+	SetOutputFormat(auditCmd.OutputFormat()).
+	SetPrintExtendedTable(auditCmd.PrintExtendedTable).
+	SetExtraMessages(messages).
+	SetScanType(services.Dependency).
+	SetSubScansPreformed(auditCmd.ScansToPerform()).
+	PrintScanResults()
+}
 
-	if auditResults.ScansErr != nil {
-		return auditResults.ScansErr
+func (auditCmd *AuditCommand) GetResultsError(results *xrayutils.Results) (err error) {
+	if results.ScansErr != nil {
+		return results.ScansErr
 	}
-
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && xrayutils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && xrayutils.CheckIfFailBuild(results.GetScaScansXrayResults()) {
 		err = xrayutils.NewFailBuildError()
 	}
 	return

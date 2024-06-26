@@ -448,11 +448,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
-
-	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+	return utils.ReportErrorIfExists(progressbar.ExecWithProgress(auditCmd), auditCmd.ServerDetails)
 }
 
 func CurationCmd(c *components.Context) error {

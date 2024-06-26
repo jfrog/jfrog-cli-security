@@ -20,6 +20,7 @@ const (
 	DockerScan    = "docker scan"
 	Audit         = "audit"
 	CurationAudit = "curation-audit"
+	GitAudit 	= "git-audit"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -81,6 +82,7 @@ const (
 	To        = "to"
 	Version   = "version"
 	Target    = "target"
+	Source    = "source"
 	Stream    = "stream"
 	Periodic  = "periodic"
 
@@ -129,15 +131,11 @@ var commandFlags = map[string][]string{
 	DockerScan: {
 		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
 	},
-	Audit: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
-		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
-		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA,
-	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
+	Audit: getAuditFlags(),
+	GitAudit: getAuditFlags(),
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
@@ -157,6 +155,15 @@ var commandFlags = map[string][]string{
 	AuditPipenv: {
 		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
+}
+
+func getAuditFlags() []string {
+	return []string{
+		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
+		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Sca, Iac, Sast, Secrets, WithoutCA,
+	}
 }
 
 // Security Flag keys mapped to their corresponding components.Flag definition.
