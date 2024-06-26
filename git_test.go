@@ -32,7 +32,7 @@ func TestCountContributorsFlags(t *testing.T) {
 	assert.NotContains(t, err.Error(), "Providing a token is mandatory")
 	githubCallback()
 
-	// Test supported scm type
+	// Test unsupported scm type
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "bad-type", "--token", "token", "--owner", "owner", "--scm-api-url", "url")
 	assert.ErrorContains(t, err, "Unsupported SCM type")
 }

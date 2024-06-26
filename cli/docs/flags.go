@@ -236,8 +236,8 @@ var flagsMap = map[string]components.Flag{
 	// Git flags
 	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
 	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
-	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the corresponding environment variables '%s'.", git.NewScmType().GetOptionalScmTypeTokenEnvVars())),
-	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depending on the git provider, the owner can be an individual, an organization, or a project.", components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars())),
+	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depends on the git provider - on github and gitlab the owner is usually an individual or an organization, on bitbucket it is a project.", components.SetMandatory()),
 	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
 	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
 	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),

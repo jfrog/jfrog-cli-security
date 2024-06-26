@@ -23,11 +23,12 @@ const (
 	Github                        = scmTypeName("github")
 	Gitlab                        = scmTypeName("gitlab")
 	BitbucketServer               = scmTypeName("bitbucket")
-	DefaultContContributorsMonths = 3
+	DefaultContContributorsMonths = 1
 	getCommitsRetryNumber         = 5
 	GithubTokenEnvVar             = "JFROG_CLI_GITHUB_TOKEN"    // #nosec G101
 	GitlabTokenEnvVar             = "JFROG_CLI_GITLAB_TOKEN"    // #nosec G101
 	BitbucketTokenEnvVar          = "JFROG_CLI_BITBUCKET_TOKEN" // #nosec G101
+	GenericGitTokenEnvVar         = "JF_GIT_TOKEN"              // #nosec G101
 )
 
 type BasicContributor struct {
@@ -36,7 +37,7 @@ type BasicContributor struct {
 }
 
 type Contributor struct {
-	BasicContributor
+	Email          string         `json:"email"`
 	Name           string         `json:"name"`
 	RepoLastCommit RepoLastCommit `json:"last_commit"`
 }
@@ -79,18 +80,26 @@ type CountContributorsCommand struct {
 }
 
 type CountContributorsParams struct {
-	ScmType         vcsutils.VcsProvider
-	ScamApiUrl      string
-	Token           string
-	Owner           string
-	Repository      string
-	MonthsNum       int
+	// SCM type.
+	ScmType vcsutils.VcsProvider
+	// SCM API URL. For example: 'https://api.github.com'.
+	ScmApiUrl string
+	// SCM API token.
+	Token string
+	// Depends on the git provider - on GitHub and GitLab the owner is usually an individual or an organization, on bitbucket it is a project.
+	Owner string
+	// Specific repository name to analyze, If not provided all repositories in the project will be analyzed.
+	Repository string
+	// Number of months to analyze.
+	MonthsNum int
+	// Detailed summery flag.
 	DetailedSummery bool
-	Progress        ioUtils.ProgressMgr
+	// Progress bar.
+	Progress ioUtils.ProgressMgr
 }
 
 func NewCountContributorsCommand(params *CountContributorsParams) (*CountContributorsCommand, error) {
-	client, err := vcsclient.NewClientBuilder(params.ScmType).ApiEndpoint(params.ScamApiUrl).Token(params.Token).Build()
+	client, err := vcsclient.NewClientBuilder(params.ScmType).ApiEndpoint(params.ScmApiUrl).Token(params.Token).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +168,9 @@ func (cc *CountContributorsCommand) scanAndCollectCommitsInfo(repositories []str
 	// initialize commits query options.
 	commitsListOptions := vcsclient.GitCommitsQueryOptions{
 		Since: time.Now().AddDate(0, -1*cc.MonthsNum, 0),
-		Until: time.Now(),
 		ListOptions: vcsclient.ListOptions{
-			Page: 1,
+			Page:    1,
+			PerPage: vcsutils.NumberOfCommitsToFetch,
 		},
 	}
 	for _, repo := range repositories {
@@ -238,12 +247,11 @@ func (cc *CountContributorsCommand) saveCommitInfoInMaps(repoName string, commit
 	}
 
 	contributorId := BasicContributor{Email: authorEmail, Repo: repoName}
-	// Save author's first commit information in the contributors map for each repository.
+	// Save author's latest commit information in the contributors map for each repository.
+	// All commits are in chronological order - so the first commit we get is the latest.
 	if _, exists := uniqueContributors[contributorId]; !exists {
 		uniqueContributors[contributorId] = Contributor{
-			BasicContributor: BasicContributor{
-				Email: authorEmail,
-			},
+			Email:          authorEmail,
 			Name:           authorName,
 			RepoLastCommit: RepoLastCommit{LastCommit: lastCommit, Repo: repoName},
 		}
@@ -336,5 +344,5 @@ func (cc *CountContributorsCommand) ServerDetails() (*config.ServerDetails, erro
 
 // The command name for the usage report.
 func (cc *CountContributorsCommand) CommandName() string {
-	return ""
+	return "git_count_contributors"
 }

@@ -31,7 +31,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	// ScmType
 	scmType := c.GetStringFlagValue(flags.ScmType)
 	if scmType == "" {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.ScmType)
+		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmType)
 	} else {
 		if scmTypeVal, ok := scmTypes.ScmTypeMap[scmType]; ok {
 			params.ScmType = scmTypeVal
@@ -43,28 +43,36 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	params.Token = c.GetStringFlagValue(flags.Token)
 	if params.Token == "" {
 		var envVarToken string
-		if params.ScmType == vcsutils.BitbucketServer {
+		switch params.ScmType {
+		case vcsutils.BitbucketServer:
 			envVarToken = os.Getenv(git.BitbucketTokenEnvVar)
-		} else if params.ScmType == vcsutils.GitLab {
+		case vcsutils.GitLab:
 			envVarToken = os.Getenv(git.GitlabTokenEnvVar)
-		} else if params.ScmType == vcsutils.GitHub {
+		case vcsutils.GitHub:
 			envVarToken = os.Getenv(git.GithubTokenEnvVar)
+		default:
+			return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
 		}
 		if envVarToken != "" {
 			params.Token = envVarToken
 		} else {
-			return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag or coresponding enviromment variable %s.", flags.Token, scmTypes.GetOptionalScmTypeTokenEnvVars())
+			envVarToken = os.Getenv(git.GenericGitTokenEnvVar)
+			if envVarToken != "" {
+				params.Token = envVarToken
+			} else {
+				return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token enviromment variable %s, or coresponding provider enviromment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
+			}
 		}
 	}
 	// Owner
 	params.Owner = c.GetStringFlagValue(flags.Owner)
 	if params.Owner == "" {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.Owner)
+		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.Owner)
 	}
 	// ScmApiUrl
-	params.ScamApiUrl = c.GetStringFlagValue(flags.ScmApiUrl)
-	if params.ScamApiUrl == "" {
-		return nil, errorutils.CheckErrorf("the --%s option is mandatory", flags.ScmApiUrl)
+	params.ScmApiUrl = c.GetStringFlagValue(flags.ScmApiUrl)
+	if params.ScmApiUrl == "" {
+		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmApiUrl)
 	}
 
 	// Optional flags
@@ -79,7 +87,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 			return nil, err
 		}
 		if months <= 0 {
-			return nil, errorutils.CheckErrorf("invalid value for '--%s=%d'. If set, should be positive number.", flags.Months, months)
+			return nil, errorutils.CheckErrorf("Invalid value for '--%s=%d'. If set, should be positive number.", flags.Months, months)
 		}
 		params.MonthsNum = months
 	}
