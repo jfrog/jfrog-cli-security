@@ -5,15 +5,33 @@
     <servers>
         <server>
             <id>artifactory</id>
-            <username>%s</username>
-            <password>%s</password>
+            <username>{{.Username}}</username>
+            <password>{{.Password}}</password>
         </server>
     </servers>
     <mirrors>
         <mirror>
             <id>artifactory</id>
-            <url>%s</url>
+            <url>{{.RemoteRepositoryFullPath}}</url>
             <mirrorOf>*</mirrorOf>
         </mirror>
     </mirrors>
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                    <id>artifactory</id>
+                    <name>mavenRepo</name>
+                    <url>{{.RemoteRepositoryFullPath}}</url>
+                </repository>
+            </repositories>
+            <id>artifactory</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>artifactory</activeProfile>
+    </activeProfiles>
 </settings>

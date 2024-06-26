@@ -35,6 +35,24 @@ const (
             <mirrorOf>*</mirrorOf>
         </mirror>
     </mirrors>
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                    <id>artifactory</id>
+                    <name>mavenRepo</name>
+                    <url>https://myartifactory.com/artifactory/testRepo</url>
+                </repository>
+            </repositories>
+            <id>artifactory</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>artifactory</activeProfile>
+    </activeProfiles>
 </settings>`
 	//#nosec G101 - dummy token for testing
 	settingsXmlWithUsernameAndPasswordAndCurationDedicatedAPi = `<?xml version="1.0" encoding="UTF-8"?>
@@ -55,6 +73,24 @@ const (
             <mirrorOf>*</mirrorOf>
         </mirror>
     </mirrors>
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                    <id>artifactory</id>
+                    <name>mavenRepo</name>
+                    <url>https://myartifactory.com/artifactory/api/curation/audit/testRepo</url>
+                </repository>
+            </repositories>
+            <id>artifactory</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>artifactory</activeProfile>
+    </activeProfiles>
 </settings>`
 	//#nosec G101 - dummy token for testing
 	settingsXmlWithUsernameAndToken = `<?xml version="1.0" encoding="UTF-8"?>
@@ -75,6 +111,24 @@ const (
             <mirrorOf>*</mirrorOf>
         </mirror>
     </mirrors>
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                    <id>artifactory</id>
+                    <name>mavenRepo</name>
+                    <url>https://myartifactory.com/artifactory/testRepo</url>
+                </repository>
+            </repositories>
+            <id>artifactory</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>artifactory</activeProfile>
+    </activeProfiles>
 </settings>`
 	//#nosec G101 - dummy token for testing
 	settingsXmlWithAccessToken = `<?xml version="1.0" encoding="UTF-8"?>
@@ -95,6 +149,24 @@ const (
             <mirrorOf>*</mirrorOf>
         </mirror>
     </mirrors>
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                    <id>artifactory</id>
+                    <name>mavenRepo</name>
+                    <url>https://myartifactory.com/artifactory/testRepo</url>
+                </repository>
+            </repositories>
+            <id>artifactory</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>artifactory</activeProfile>
+    </activeProfiles>
 </settings>`
 )
 

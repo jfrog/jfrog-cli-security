@@ -33,34 +33,38 @@ var (
 	RtRepo1       = "cli-rt1"
 	RtVirtualRepo = "cli-rt-virtual"
 
-	DockerVirtualRepo = "cli-docker-virtual"
-	DockerLocalRepo   = "cli-docker-local"
-	DockerRemoteRepo  = "cli-docker-remote"
-	NpmRemoteRepo     = "cli-npm-remote"
-	NugetRemoteRepo   = "cli-nuget-remote"
-	YarnRemoteRepo    = "cli-yarn-remote"
-	GradleRemoteRepo  = "cli-gradle-remote"
-	MvnRemoteRepo     = "cli-mvn-remote"
-	GoVirtualRepo     = "cli-go-virtual"
-	GoRemoteRepo      = "cli-go-remote"
-	GoRepo            = "cli-go"
-	PypiRemoteRepo    = "cli-pypi-remote"
+	DockerVirtualRepo      = "cli-docker-virtual"
+	DockerLocalRepo        = "cli-docker-local"
+	DockerRemoteRepo       = "cli-docker-remote"
+	NpmRemoteRepo          = "cli-npm-remote"
+	NugetRemoteRepo        = "cli-nuget-remote"
+	YarnRemoteRepo         = "cli-yarn-remote"
+	GradleRemoteRepo       = "cli-gradle-remote"
+	MvnRemoteRepo          = "cli-mvn-remote"
+	MvnRemoteSnapshotsRepo = "cli-mvn-snapshots-remote"
+	MvnVirtualRepo         = "cli-mvn-virtual"
+	GoVirtualRepo          = "cli-go-virtual"
+	GoRemoteRepo           = "cli-go-remote"
+	GoRepo                 = "cli-go"
+	PypiRemoteRepo         = "cli-pypi-remote"
 )
 
 // Integration tests - Artifactory repositories creation templates
 const (
-	DockerVirtualRepositoryConfig = "docker_virtual_repository_config.json"
-	DockerLocalRepositoryConfig   = "docker_local_repository_config.json"
-	DockerRemoteRepositoryConfig  = "docker_remote_repository_config.json"
-	NpmRemoteRepositoryConfig     = "npm_remote_repository_config.json"
-	NugetRemoteRepositoryConfig   = "nuget_remote_repository_config.json"
-	YarnRemoteRepositoryConfig    = "yarn_remote_repository_config.json"
-	GradleRemoteRepositoryConfig  = "gradle_remote_repository_config.json"
-	MavenRemoteRepositoryConfig   = "maven_remote_repository_config.json"
-	GoVirtualRepositoryConfig     = "go_virtual_repository_config.json"
-	GoRemoteRepositoryConfig      = "go_remote_repository_config.json"
-	GoLocalRepositoryConfig       = "go_local_repository_config.json"
-	PypiRemoteRepositoryConfig    = "pypi_remote_repository_config.json"
+	DockerVirtualRepositoryConfig        = "docker_virtual_repository_config.json"
+	DockerLocalRepositoryConfig          = "docker_local_repository_config.json"
+	DockerRemoteRepositoryConfig         = "docker_remote_repository_config.json"
+	NpmRemoteRepositoryConfig            = "npm_remote_repository_config.json"
+	NugetRemoteRepositoryConfig          = "nuget_remote_repository_config.json"
+	YarnRemoteRepositoryConfig           = "yarn_remote_repository_config.json"
+	GradleRemoteRepositoryConfig         = "gradle_remote_repository_config.json"
+	MavenRemoteRepositoryConfig          = "maven_remote_repository_config.json"
+	MavenRemoteSnapshotsRepositoryConfig = "maven_remote_snapshots_repository_config.json"
+	MavenVirtualRepositoryConfig         = "maven_virtual_repository_config.json"
+	GoVirtualRepositoryConfig            = "go_virtual_repository_config.json"
+	GoRemoteRepositoryConfig             = "go_remote_repository_config.json"
+	GoLocalRepositoryConfig              = "go_local_repository_config.json"
+	PypiRemoteRepositoryConfig           = "pypi_remote_repository_config.json"
 
 	Repo1RepositoryConfig   = "repo1_repository_config.json"
 	VirtualRepositoryConfig = "specs_virtual_repository_config.json"
@@ -70,25 +74,27 @@ var reposConfigMap = map[*string]string{
 	&RtRepo1:       Repo1RepositoryConfig,
 	&RtVirtualRepo: VirtualRepositoryConfig,
 
-	&DockerVirtualRepo: DockerVirtualRepositoryConfig,
-	&DockerLocalRepo:   DockerLocalRepositoryConfig,
-	&DockerRemoteRepo:  DockerRemoteRepositoryConfig,
-	&NpmRemoteRepo:     NpmRemoteRepositoryConfig,
-	&NugetRemoteRepo:   NugetRemoteRepositoryConfig,
-	&YarnRemoteRepo:    YarnRemoteRepositoryConfig,
-	&GradleRemoteRepo:  GradleRemoteRepositoryConfig,
-	&MvnRemoteRepo:     MavenRemoteRepositoryConfig,
-	&GoVirtualRepo:     GoVirtualRepositoryConfig,
-	&GoRemoteRepo:      GoRemoteRepositoryConfig,
-	&GoRepo:            GoLocalRepositoryConfig,
-	&PypiRemoteRepo:    PypiRemoteRepositoryConfig,
+	&DockerVirtualRepo:      DockerVirtualRepositoryConfig,
+	&DockerLocalRepo:        DockerLocalRepositoryConfig,
+	&DockerRemoteRepo:       DockerRemoteRepositoryConfig,
+	&NpmRemoteRepo:          NpmRemoteRepositoryConfig,
+	&NugetRemoteRepo:        NugetRemoteRepositoryConfig,
+	&YarnRemoteRepo:         YarnRemoteRepositoryConfig,
+	&GradleRemoteRepo:       GradleRemoteRepositoryConfig,
+	&MvnRemoteRepo:          MavenRemoteRepositoryConfig,
+	&MvnRemoteSnapshotsRepo: MavenRemoteSnapshotsRepositoryConfig,
+	&MvnVirtualRepo:         MavenVirtualRepositoryConfig,
+	&GoVirtualRepo:          GoVirtualRepositoryConfig,
+	&GoRemoteRepo:           GoRemoteRepositoryConfig,
+	&GoRepo:                 GoLocalRepositoryConfig,
+	&PypiRemoteRepo:         PypiRemoteRepositoryConfig,
 }
 
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
 		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
-		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -97,7 +103,7 @@ func GetNonVirtualRepositories() map[*string]string {
 func GetVirtualRepositories() map[*string]string {
 	virtualReposMap := map[*bool][]*string{
 		TestDockerScan: {&DockerVirtualRepo},
-		TestSecurity:   {&GoVirtualRepo},
+		TestSecurity:   {&GoVirtualRepo, &MvnVirtualRepo},
 	}
 	return getNeededRepositories(virtualReposMap)
 }
@@ -151,6 +157,8 @@ func AddTimestampToGlobalVars() {
 	DockerVirtualRepo += uniqueSuffix
 	GradleRemoteRepo += uniqueSuffix
 	MvnRemoteRepo += uniqueSuffix
+	MvnRemoteSnapshotsRepo += uniqueSuffix
+	MvnVirtualRepo += uniqueSuffix
 	NpmRemoteRepo += uniqueSuffix
 	NugetRemoteRepo += uniqueSuffix
 	YarnRemoteRepo += uniqueSuffix
@@ -170,14 +178,16 @@ func GetSubstitutionMap() map[string]string {
 		"${DOCKER_REMOTE_REPO}":  DockerRemoteRepo,
 		"${DOCKER_VIRTUAL_REPO}": DockerVirtualRepo,
 
-		"${GO_REPO}":            GoRepo,
-		"${GO_REMOTE_REPO}":     GoRemoteRepo,
-		"${GO_VIRTUAL_REPO}":    GoVirtualRepo,
-		"${GRADLE_REMOTE_REPO}": GradleRemoteRepo,
-		"${MAVEN_REMOTE_REPO}":  MvnRemoteRepo,
-		"${NPM_REMOTE_REPO}":    NpmRemoteRepo,
-		"${NUGET_REMOTE_REPO}":  NugetRemoteRepo,
-		"${PYPI_REMOTE_REPO}":   PypiRemoteRepo,
-		"${YARN_REMOTE_REPO}":   YarnRemoteRepo,
+		"${GO_REPO}":                     GoRepo,
+		"${GO_REMOTE_REPO}":              GoRemoteRepo,
+		"${GO_VIRTUAL_REPO}":             GoVirtualRepo,
+		"${GRADLE_REMOTE_REPO}":          GradleRemoteRepo,
+		"${MAVEN_REMOTE_REPO}":           MvnRemoteRepo,
+		"${MAVEN_REMOTE_SNAPSHOTS_REPO}": MvnRemoteSnapshotsRepo,
+		"${MAVEN_VIRTUAL_REPO}":          MvnVirtualRepo,
+		"${NPM_REMOTE_REPO}":             NpmRemoteRepo,
+		"${NUGET_REMOTE_REPO}":           NugetRemoteRepo,
+		"${PYPI_REMOTE_REPO}":            PypiRemoteRepo,
+		"${YARN_REMOTE_REPO}":            YarnRemoteRepo,
 	}
 }

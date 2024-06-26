@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"os"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -310,7 +311,7 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -331,11 +332,37 @@ func AuditCmd(c *components.Context) error {
 		}
 	}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
 
+	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
+		// No CA flag provided but sca flag is not provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+	}
+
+	allSubScans := utils.GetAllSupportedScans()
+	subScans := []utils.SubScanType{}
+	for _, subScan := range allSubScans {
+		if shouldAddSubScan(subScan, c) {
+			subScans = append(subScans, subScan)
+		}
+	}
+	if len(subScans) > 0 {
+		auditCmd.SetScansToPerform(subScans)
+	}
+
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	auditCmd.SetThreads(threads)
+	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err
+}
+
+func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
+	return c.GetBoolFlagValue(subScan.String()) ||
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
@@ -353,7 +380,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 	}
 }
 
-func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
@@ -393,6 +420,7 @@ func createAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetServerDetails(serverDetails).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
+		SetUseJas(true).
 		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
@@ -414,7 +442,7 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 
 func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := createAuditCmd(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -428,11 +456,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threadsFlag, err := c.GetIntFlagValue(flags.Threads)
-	if err != nil {
-		return err
-	}
-	threads, err := curation.DetectNumOfThreads(threadsFlag)
+	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
@@ -470,6 +494,10 @@ func DockerScan(c *components.Context, image string) error {
 		return printHelp()
 	}
 	// Run the command
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
 		return err
@@ -498,7 +526,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
+		SetMinSeverityFilter(minSeverity).
+		SetThreads(threads)
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

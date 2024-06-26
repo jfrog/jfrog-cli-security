@@ -45,6 +45,8 @@ type ResultsWriter struct {
 	printExtended bool
 	// The scanType (binary,dependency)
 	scanType services.ScanType
+	// For table format - show table only for the given subScansPreformed
+	subScansPreformed []SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
 }
@@ -97,6 +99,11 @@ func (rw *ResultsWriter) SetPrintExtendedTable(extendedTable bool) *ResultsWrite
 
 func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 	rw.messages = messages
+	return rw
+}
+
+func (rw *ResultsWriter) SetSubScansPreformed(subScansPreformed []SubScanType) *ResultsWriter {
+	rw.subScansPreformed = subScansPreformed
 	return rw
 }
 
@@ -181,26 +188,42 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if rw.includeVulnerabilities {
-		err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
-	} else {
-		err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
+		if rw.includeVulnerabilities {
+			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+		} else {
+			err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+		}
+		if err != nil {
+			return
+		}
+		if rw.includeLicenses {
+			if err = PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
+				return
+			}
+		}
 	}
-	if err != nil {
-		return
-	}
-	if rw.includeLicenses {
-		if err = PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
+	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.scanType) {
+		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-		return
+	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
+		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
+			return
+		}
 	}
-	if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
-		return
+	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.scanType) {
+		return nil
 	}
 	return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
+}
+
+func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType services.ScanType) bool {
+	if scanType == services.Binary && (subScan == IacScan || subScan == SastScan) {
+		return false
+	}
+	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
 
 func printMessages(messages []string) {
@@ -543,7 +566,7 @@ func findMaxCVEScore(cves []formats.CveRow) (string, error) {
 }
 
 // Splits scan responses into aggregated lists of violations, vulnerabilities and licenses.
-func SplitScanResults(results []ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScanResults(results []*ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
