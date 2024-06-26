@@ -66,7 +66,7 @@ type Report struct {
 	TotalUniqueContributors  int                                     `json:"total_unique_contributors"`
 	TotalCommits             int                                     `json:"total_commits"`
 	ScannedRepos             []string                                `json:"scanned_repos"`
-	SkippedRepos             []string                                `json:"skipped_repos"`
+	SkippedRepos             []string                                `json:"skipped_repos,omitempty"`
 	ReportDate               string                                  `json:"report_date"`
 	NumberOfMonths           string                                  `json:"number_of_months"`
 	UniqueContributorsList   []Contributor                           `json:"unique_contributors_list"`

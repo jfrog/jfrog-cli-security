@@ -129,9 +129,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 					assert.Equal(t, 2, len(uniqueContributors))
 					expectedContributors := []Contributor{
 						{
-							BasicContributor: BasicContributor{
-								Email: "email1@gmail.com",
-							},
+							Email: "email1@gmail.com",
 							RepoLastCommit: RepoLastCommit{
 								LastCommit: LastCommit{
 									Date: "2023-05-21T10:00:00Z",
@@ -140,9 +138,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 							},
 						},
 						{
-							BasicContributor: BasicContributor{
-								Email: "email2@gmail.com",
-							},
+							Email: "email2@gmail.com",
 							RepoLastCommit: RepoLastCommit{
 								LastCommit: LastCommit{
 									Date: "2023-06-21T10:00:00Z",
@@ -214,9 +210,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 					assert.Equal(t, 2, len(uniqueContributors))
 					expectedContributors := []Contributor{
 						{
-							BasicContributor: BasicContributor{
-								Email: "email1@gmail.com",
-							},
+							Email: "email1@gmail.com",
 							RepoLastCommit: RepoLastCommit{
 								LastCommit: LastCommit{
 									Date: "2023-05-21T10:00:00Z",
@@ -225,9 +219,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 							},
 						},
 						{
-							BasicContributor: BasicContributor{
-								Email: "email2@gmail.com",
-							},
+							Email: "email2@gmail.com",
 							RepoLastCommit: RepoLastCommit{
 								LastCommit: LastCommit{
 									Date: "2023-07-21T10:00:00Z",
