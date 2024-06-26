@@ -232,7 +232,7 @@ func (tech Technology) GetPackageInstallationCommand() string {
 	return technologiesData[tech].packageInstallationCommand
 }
 
-func (tech Technology) isDescriptor(path string) bool {
+func (tech Technology) IsDescriptor(path string) bool {
 	for _, descriptor := range technologiesData[tech].packageDescriptors {
 		if strings.HasSuffix(path, descriptor) {
 			return true
@@ -241,7 +241,7 @@ func (tech Technology) isDescriptor(path string) bool {
 	return false
 }
 
-func (tech Technology) isIndicator(path string) (bool, error) {
+func (tech Technology) IsIndicator(path string) (bool, error) {
 	for _, suffix := range technologiesData[tech].indicators {
 		if strings.HasSuffix(path, suffix) {
 			return checkPotentialIndicator(path, technologiesData[tech].validators[suffix])
@@ -314,12 +314,12 @@ func mapFilesToRelevantWorkingDirectories(files []string, requestedDescriptors m
 
 		for tech, techData := range technologiesData {
 			// Check if the working directory contains indicators/descriptors for the technology
-			indicator, e := tech.isIndicator(path)
+			indicator, e := tech.IsIndicator(path)
 			if e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, tech, e))
 				continue
 			}
-			relevant := indicator || tech.isDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech])
+			relevant := indicator || tech.IsDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech])
 			if relevant {
 				if _, exist := workingDirectoryToIndicatorsSet[directory]; !exist {
 					workingDirectoryToIndicatorsSet[directory] = datastructures.MakeSet[string]()
@@ -411,10 +411,10 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 		}
 		// Check if the working directory contains indicators/descriptors for the technology
 		for _, path := range indicators {
-			if tech.isDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech]) {
+			if tech.IsDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech]) {
 				descriptorsAtWd = append(descriptorsAtWd, path)
 			}
-			if indicator, e := tech.isIndicator(path); e != nil {
+			if indicator, e := tech.IsIndicator(path); e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, tech, e))
 				continue
 			} else if indicator || isRequestedDescriptor(path, requestedDescriptors[tech]) {

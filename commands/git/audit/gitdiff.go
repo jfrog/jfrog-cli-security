@@ -1,4 +1,4 @@
-package auditgit
+package audit
 
 import (
 	"github.com/sourcegraph/go-diff/diff"
@@ -14,7 +14,7 @@ func (e *Edits) GetFilesToChange() []string {
 
 type FileEdit struct {
 	MetaDataEdit FileChange
-	ContentEdits []ContentEdit
+	// ContentEdits []ContentEdit
 }
 
 const (

@@ -6,7 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/auditgit"
+	"github.com/jfrog/jfrog-cli-security/commands/git/audit"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -29,11 +29,11 @@ func GitAuditCmd(c *components.Context) error {
 	if len(c.Arguments) < 2 {
 		return pluginsCommon.WrongNumberOfArgumentsHandler(c)
 	}
-	auditParams, err := createAuditParams(c)
+	auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
-	cmd := auditgit.NewGitAuditCommand(auditParams)
+	cmd := audit.NewGitAuditCommand(auditCmd)
 	cmd.SetSource(c.Arguments[0]).SetTarget(c.Arguments[1])
 	return utils.ReportErrorIfExists(progressbar.ExecWithProgress(cmd), cmd.ServerDetails)
 }
