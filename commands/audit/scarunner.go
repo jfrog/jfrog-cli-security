@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -35,6 +36,10 @@ import (
 )
 
 func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
+	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
+		log.Debug("Skipping SCA scan as requested by input...")
+		return
+	}
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
@@ -254,6 +259,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
 			PipRequirementsFile: params.PipRequirementsFile(),
+			InstallCommandArgs:  params.InstallCommandArgs(),
 			IsCurationCmd:       params.IsCurationCmd(),
 		})
 	case techutils.Nuget:

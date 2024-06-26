@@ -66,7 +66,7 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 }
 
 func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = ssm.createConfigFile(module); err != nil {
+	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
@@ -91,7 +91,7 @@ type secretsScanConfiguration struct {
 	SkippedDirs []string `yaml:"skipped-folders"`
 }
 
-func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) error {
+func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
 	roots, err := jas.GetSourceRoots(module, module.Scanners.Secrets)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 				Roots:       roots,
 				Output:      s.resultsFileName,
 				Type:        string(s.scanType),
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets),
+				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),
 			},
 		},
 	}
