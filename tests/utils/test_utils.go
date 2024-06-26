@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -23,6 +25,41 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
+
+type Vulnerability struct {
+	BomRef string `json:"bom-ref"`
+	Id     string `json:"id"`
+}
+
+type EnrichJson struct {
+	Vulnerability []struct {
+		BomRef string `json:"bom-ref,"`
+		Id     string `json:"id"`
+	} `json:"vulnerabilities"`
+}
+
+type Bom struct {
+	Vulnerabilities struct {
+		Vulnerability []struct {
+			BomRef string `xml:"bom-ref,attr"`
+			Id     string `xml:"id"`
+		} `xml:"vulnerability"`
+	} `xml:"vulnerabilities"`
+}
+
+func UnmarshalJson(t *testing.T, output string) EnrichJson {
+	var jsonMap EnrichJson
+	err := json.Unmarshal([]byte(output), &jsonMap)
+	assert.NoError(t, err)
+	return jsonMap
+}
+
+func UnmarshalXML(t *testing.T, output string) Bom {
+	var xmlMap Bom
+	err := xml.Unmarshal([]byte(output), &xmlMap)
+	assert.NoError(t, err)
+	return xmlMap
+}
 
 func InitSecurityTest(t *testing.T, xrayMinVersion string) {
 	if !*configTests.TestSecurity {

@@ -20,7 +20,7 @@ func GetJfrogCliSecurityApp() components.App {
 		Name:        string(cliutils.Sbom),
 		Description: "Sbom commands.",
 		Commands:    getSbomCommands(),
-		Category:    "sbom Namespaces",
+		Category:    "Command Namespaces",
 	})
 	return app
 }

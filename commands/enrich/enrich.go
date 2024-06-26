@@ -7,7 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/enrichgraph"
+	enrichgraph2 "github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -31,19 +31,11 @@ type ScanInfo struct {
 	Result *services.ScanResponse
 }
 
-const (
-	BypassArchiveLimitsMinXrayVersion = "3.59.0"
-	indexingCommand                   = "graph"
-	fileNotSupportedExitCode          = 3
-)
-
 type EnrichCommand struct {
 	serverDetails *config.ServerDetails
 	spec          *spec.SpecFiles
 	threads       int
-	fail          bool
-	// The location of the downloaded Xray indexer binary on the local file system.
-	progress ioUtils.ProgressMgr
+	progress      ioUtils.ProgressMgr
 }
 
 func (enrichCmd *EnrichCommand) SetProgress(progress ioUtils.ProgressMgr) {
@@ -69,11 +61,6 @@ func (enrichCmd *EnrichCommand) ServerDetails() (*config.ServerDetails, error) {
 	return enrichCmd.serverDetails, nil
 }
 
-func (enrichCmd *EnrichCommand) SetFail(fail bool) *EnrichCommand {
-	enrichCmd.fail = fail
-	return enrichCmd
-}
-
 func isXML(scaResults []utils.ScaScanResult) (bool, error) {
 	if len(scaResults) == 0 {
 		return false, errors.New("unable to retrieve file")
@@ -93,7 +80,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 			var e *exec.ExitError
 			if errors.As(err, &e) {
 				if e.ExitCode() != coreutils.ExitCodeVulnerableBuild.Code {
-					err = errors.New("Scan command failed. " + err.Error())
+					err = errors.New("Enrich command failed. " + err.Error())
 				}
 			}
 		}
@@ -174,17 +161,6 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		return err
 	}
 
-	if err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary}); err != nil {
-		return err
-	}
-
-	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
-	// If user provided --fail=false, don't fail the build.
-	if enrichCmd.fail {
-		if xrutils.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
-			return xrutils.NewFailBuildError()
-		}
-	}
 	if len(scanErrors) > 0 {
 		return errorutils.CheckErrorf(scanErrors[0].ErrorMessage)
 	}
@@ -209,7 +185,7 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, indexedFileErrors, xrayVersion)
 		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
-		err := FileForIndexing(specFiles[0], taskHandler)
+		err := FileForEnriching(specFiles[0], taskHandler)
 		if err != nil {
 			log.Error(err)
 			fileCollectingErrorsQueue.AddError(err)
@@ -231,10 +207,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SBOMInput: fileContent,
 					ScanType:  services.Binary,
 				}
-				if enrichCmd.progress != nil {
-					enrichCmd.progress.SetHeadlineMsg("Scanning 🔍")
-				}
-				importGraphParams := enrichgraph.NewEnrichGraphParams().
+				importGraphParams := enrichgraph2.NewEnrichGraphParams().
 					SetServerDetails(enrichCmd.serverDetails).
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(xrayVersion)
@@ -242,7 +215,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return err
 				}
-				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
+				scanResults, err := enrichgraph2.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
@@ -275,7 +248,7 @@ func (enrichCmd *EnrichCommand) performScanTasks(fileConsumer parallel.Runner, i
 	indexedFileConsumer.Run()
 }
 
-func FileForIndexing(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) error {
+func FileForEnriching(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) error {
 	fileData.Pattern = clientutils.ReplaceTildeWithUserHome(fileData.Pattern)
 	patternType := fileData.GetPatternType()
 	rootPath, err := fspatterns.GetRootPath(fileData.Pattern, fileData.Target, "", patternType, false)

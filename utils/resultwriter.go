@@ -49,24 +49,11 @@ type ResultsWriter struct {
 	messages []string
 }
 
-type Vulnerability struct {
-	BomRef string `json:"bom-ref" xml:"bom-ref,attr"`
-	ID     string `json:"id" xml:"id"`
-}
-
-type XMLVulnerability struct {
-	Vulnerability []Vulnerability `xml:"vulnerability"`
-}
-
-type Vulnerabilities struct {
-	Vulnerabilities XMLVulnerability `xml:"vulnerabilities"`
-}
-
 func NewResultsWriter(scanResults *Results) *ResultsWriter {
 	return &ResultsWriter{results: scanResults}
 }
 
-func (r *Results) getScaScanFileName() string {
+func getScaScanFileName(r *Results) string {
 	if len(r.ScaResults) > 0 {
 		return r.ScaResults[0].Target
 	}
@@ -134,7 +121,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 }
 
 func (rw *ResultsWriter) AppendVulnsToJson() error {
-	fileName := rw.results.getScaScanFileName()
+	fileName := getScaScanFileName(rw.results)
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -159,7 +146,7 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 }
 
 func (rw *ResultsWriter) AppendVulnsToXML() error {
-	fileName := rw.results.getScaScanFileName()
+	fileName := getScaScanFileName(rw.results)
 	result := etree.NewDocument()
 	err := result.ReadFromFile(fileName)
 	if err != nil {

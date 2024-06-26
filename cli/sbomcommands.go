@@ -37,13 +37,11 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateXrayContext(c, serverDetails); err != nil {
 		return err
 	}
 	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
-	err = spec.ValidateSpec(specFile.Files, false, false)
-	if err != nil {
+	if err = spec.ValidateSpec(specFile.Files, false, false); err != nil {
 		return err
 	}
 	threads, err := pluginsCommon.GetThreadsCount(c)
