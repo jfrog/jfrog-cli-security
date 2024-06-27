@@ -20,15 +20,13 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
-
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
 func GetExcludePattern(params utils.AuditParams) string {
 	exclusions := params.Exclusions()
 	if len(exclusions) == 0 {
-		exclusions = append(exclusions, DefaultExcludePatterns...)
+		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }

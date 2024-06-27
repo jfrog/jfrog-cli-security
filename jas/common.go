@@ -240,16 +240,24 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 
 func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
 	if len(exclusions) > 0 {
-		return exclusions
+		return convertToFilesExcludePatterns(exclusions)
 	}
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
 	}
 	if len(excludePatterns) == 0 {
-		return utils.DefaultExcludePatterns
+		return utils.DefaultJasExcludePatterns
 	}
 	return excludePatterns
+}
+
+func convertToFilesExcludePatterns(excludePatterns []string) []string {
+	patterns := []string{}
+	for _, excludePattern := range excludePatterns {
+		patterns = append(patterns, "**/"+excludePattern+"/**")
+	}
+	return patterns
 }
 
 func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
