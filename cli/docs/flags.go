@@ -208,7 +208,7 @@ var flagsMap = map[string]components.Flag{
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
-		components.WithStrDefaultValue(strings.Join(sca.DefaultExcludePatterns, ";")),
+		components.WithStrDefaultValue(strings.Join(sca.DefaultScaExcludePatterns, ";")),
 	),
 	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
 	Gradle:  components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),

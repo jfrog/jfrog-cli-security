@@ -35,7 +35,8 @@ const (
 )
 
 var (
-	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
+	// Exclude pattern for files.
+	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
 
 	mapSeverityToScore = map[string]string{
 		"":         "0.0",
@@ -258,16 +259,24 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 
 func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
 	if len(exclusions) > 0 {
-		return exclusions
+		return convertToFilesExcludePatterns(exclusions)
 	}
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
 	}
 	if len(excludePatterns) == 0 {
-		return DefaultExcludePatterns
+		return DefaultJasExcludePatterns
 	}
 	return excludePatterns
+}
+
+func convertToFilesExcludePatterns(excludePatterns []string) []string {
+	patterns := []string{}
+	for _, excludePattern := range excludePatterns {
+		patterns = append(patterns, "**/"+excludePattern+"/**")
+	}
+	return patterns
 }
 
 func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {

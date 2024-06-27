@@ -91,6 +91,27 @@ func TestAddScoreToRunRules(t *testing.T) {
 	}
 }
 
+func TestConvertToFilesExcludePatterns(t *testing.T) {
+	tests := []struct {
+		name            string
+		excludePatterns []string
+		expectedOutput  []string
+	}{
+		{
+			excludePatterns: []string{},
+			expectedOutput:  []string{},
+		},
+		{
+			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
+			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*venv*/**", "**/*test*/**"},
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expectedOutput, convertToFilesExcludePatterns(test.excludePatterns))
+	}
+}
+
 func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
 	type args struct {
 		msi          string
