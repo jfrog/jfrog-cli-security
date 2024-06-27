@@ -274,19 +274,7 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	patterns := []string{}
 	for _, excludePattern := range excludePatterns {
-		bracketOpeningIndex := strings.Index(excludePattern, "{")
-		bracketClosingIndex := strings.Index(excludePattern, "}")
-		if bracketOpeningIndex >= 0 && bracketClosingIndex > bracketOpeningIndex {
-			// Convert <PREFIX>{option1,option2,...}<SUFFIX> to [<PREFIX>option1<SUFFIX>/** ,<PREFIX>option2<SUFFIX>/**, ...]
-			prefix := excludePattern[:bracketOpeningIndex]
-			suffix := excludePattern[bracketClosingIndex+1:]
-			options := strings.Split(excludePattern[bracketOpeningIndex+1:bracketClosingIndex], ",")
-			for _, option := range options {
-				patterns = append(patterns, prefix+option+suffix+"/**")
-			}
-		} else {
-			patterns = append(patterns, excludePattern+"/**")
-		}
+		patterns = append(patterns, excludePattern+"/**")
 	}
 	return patterns
 }
