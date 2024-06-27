@@ -61,7 +61,7 @@ func (enrichCmd *EnrichCommand) ServerDetails() (*config.ServerDetails, error) {
 	return enrichCmd.serverDetails, nil
 }
 
-func isXML(scaResults []utils.ScaScanResult) (bool, error) {
+func isXML(scaResults []*utils.ScaScanResult) (bool, error) {
 	if len(scaResults) == 0 {
 		return false, errors.New("unable to retrieve file")
 	}
@@ -116,10 +116,10 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	enrichCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
 	// Handle results
-	flatResults := []xrutils.ScaScanResult{}
+	var flatResults []*xrutils.ScaScanResult
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
+			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
 		}
 	}
 	if enrichCmd.progress != nil {
