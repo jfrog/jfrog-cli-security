@@ -1,0 +1,868 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:664daadd-2c58-ff42-d21d-a25d00000000",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2024-05-22T08:20:45Z",
+    "component": {
+      "bom-ref": "pypi://services/web@main",
+      "type": "library",
+      "name": "pypi://services/web@main",
+      "version": "main",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0533c92d84bb439b537363b82396e4855af094afc5433ac55e6262e9ac854b99"
+        }
+      ],
+      "purl": "pkg:pypi/services/web@main"
+    },
+    "supplier": {
+      "name": "",
+      "url": [],
+      "contact": []
+    },
+    "licenses": []
+  },
+  "components": [
+    {
+      "bom-ref": "pypi://bidict@0.23.1",
+      "type": "library",
+      "name": "bidict",
+      "version": "0.23.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "Mozilla Public License 2.0 (MPL 2.0)"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/bidict@0.23.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jab/bidict.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://blinker@1.8.2",
+      "type": "library",
+      "name": "blinker",
+      "version": "1.8.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/blinker@1.8.2",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets-eco/blinker.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://cffi@1.16.0",
+      "type": "library",
+      "name": "cffi",
+      "version": "1.16.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/cffi@1.16.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python-cffi/cffi.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://click@8.1.7",
+      "type": "library",
+      "name": "click",
+      "version": "8.1.7",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/click@8.1.7",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/click.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://colorama@0.4.6",
+      "type": "library",
+      "name": "colorama",
+      "version": "0.4.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "externalReferences": [
+        {
+          "url": "https://github.com/tartley/colorama.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://flask-socketio@5.3.6",
+      "type": "library",
+      "name": "flask-socketio",
+      "version": "5.3.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/flask-socketio@5.3.6",
+      "externalReferences": [
+        {
+          "url": "https://github.com/miguelgrinberg/flask-socketio.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://flask-sqlalchemy@3.0.3",
+      "type": "library",
+      "name": "flask-sqlalchemy",
+      "version": "3.0.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/flask-sqlalchemy@3.0.3",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets-eco/flask-sqlalchemy.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://flask@2.3.1",
+      "type": "library",
+      "name": "flask",
+      "version": "2.3.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/flask@2.3.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/flask.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://gevent-websocket@0.10.1",
+      "type": "library",
+      "name": "gevent-websocket",
+      "version": "0.10.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "Copyright 2011-2017 Jeffrey Gelens \u003cjeffrey@noppo.pro\u003e"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/gevent-websocket@0.10.1",
+      "externalReferences": [
+        {
+          "url": "",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://gevent@24.2.1",
+      "type": "library",
+      "name": "gevent",
+      "version": "24.2.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/gevent@24.2.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/gevent/gevent.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://greenlet@3.0.3",
+      "type": "library",
+      "name": "greenlet",
+      "version": "3.0.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/greenlet@3.0.3",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python-greenlet/greenlet.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://gunicorn@20.1.0",
+      "type": "library",
+      "name": "gunicorn",
+      "version": "20.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/gunicorn@20.1.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/benoitc/gunicorn.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://h11@0.14.0",
+      "type": "library",
+      "name": "h11",
+      "version": "0.14.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/h11@0.14.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python-hyper/h11.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://importlib-metadata@7.1.0",
+      "type": "library",
+      "name": "importlib-metadata",
+      "version": "7.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Software License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/importlib-metadata@7.1.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python/importlib_metadata.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://itsdangerous@2.2.0",
+      "type": "library",
+      "name": "itsdangerous",
+      "version": "2.2.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/itsdangerous@2.2.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/itsdangerous.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://jinja2@3.1.4",
+      "type": "library",
+      "name": "jinja2",
+      "version": "3.1.4",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/jinja2@3.1.4",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/jinja.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://markupsafe@2.1.5",
+      "type": "library",
+      "name": "markupsafe",
+      "version": "2.1.5",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/markupsafe@2.1.5",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/markupsafe.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://pillow@8.4.0",
+      "type": "library",
+      "name": "pillow",
+      "version": "8.4.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Historical Permission Notice and Disclaimer (HPND)"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/pillow@8.4.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python-pillow/pillow.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://psycopg2-binary@2.9.6",
+      "type": "library",
+      "name": "psycopg2-binary",
+      "version": "2.9.6",
+      "licenses": [
+        {
+          "license": {
+            "name": "GNU Library or Lesser General Public License (LGPL)"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/psycopg2-binary@2.9.6",
+      "externalReferences": [
+        {
+          "url": "https://github.com/psycopg/psycopg2.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://pycparser@2.22",
+      "type": "library",
+      "name": "pycparser",
+      "version": "2.22",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/pycparser@2.22",
+      "externalReferences": [
+        {
+          "url": "https://github.com/eliben/pycparser.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://pycryptodomex@3.20.0",
+      "type": "library",
+      "name": "pycryptodomex",
+      "version": "3.20.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Software License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/pycryptodomex@3.20.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/legrandin/pycryptodome.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://python-engineio@4.9.0",
+      "type": "library",
+      "name": "python-engineio",
+      "version": "4.9.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/python-engineio@4.9.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/miguelgrinberg/python-engineio.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://python-socketio@5.11.2",
+      "type": "library",
+      "name": "python-socketio",
+      "version": "5.11.2",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/python-socketio@5.11.2",
+      "externalReferences": [
+        {
+          "url": "https://github.com/miguelgrinberg/python-socketio.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://setuptools@59.6.0",
+      "type": "library",
+      "name": "setuptools",
+      "version": "59.6.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/setuptools@59.6.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pypa/setuptools.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://simple-websocket@1.0.0",
+      "type": "library",
+      "name": "simple-websocket",
+      "version": "1.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/simple-websocket@1.0.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/miguelgrinberg/simple-websocket.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://sqlalchemy@2.0.28",
+      "type": "library",
+      "name": "sqlalchemy",
+      "version": "2.0.28",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/sqlalchemy@2.0.28",
+      "externalReferences": [
+        {
+          "url": "https://github.com/sqlalchemy/sqlalchemy.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://typing-extensions@4.11.0",
+      "type": "library",
+      "name": "typing-extensions",
+      "version": "4.11.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Python Software Foundation License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/typing-extensions@4.11.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python/typing_extensions.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://werkzeug@3.0.3",
+      "type": "library",
+      "name": "werkzeug",
+      "version": "3.0.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/werkzeug@3.0.3",
+      "externalReferences": [
+        {
+          "url": "https://github.com/pallets/werkzeug.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://wsproto@1.2.0",
+      "type": "library",
+      "name": "wsproto",
+      "version": "1.2.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/wsproto@1.2.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/python-hyper/wsproto.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://zipp@3.18.1",
+      "type": "library",
+      "name": "zipp",
+      "version": "3.18.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/zipp@3.18.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jaraco/zipp.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://zope-event@5.0",
+      "type": "library",
+      "name": "zope-event",
+      "version": "5.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Zope Public License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/zope-event@5.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/zopefoundation/zope.event.git",
+          "type": "vcs"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pypi://zope-interface@6.3",
+      "type": "library",
+      "name": "zope-interface",
+      "version": "6.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "Zope Public License"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/zope-interface@6.3",
+      "externalReferences": [
+        {
+          "url": "https://github.com/zopefoundation/zope.interface.git",
+          "type": "vcs"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pypi://bidict@0.23.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://blinker@1.8.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://cffi@1.16.0",
+      "dependsOn": [
+        "pypi://pycparser@2.22"
+      ]
+    },
+    {
+      "ref": "pypi://click@8.1.7",
+      "dependsOn": [
+        "pypi://colorama@0.4.6",
+        "pypi://importlib-metadata@7.1.0"
+      ]
+    },
+    {
+      "ref": "pypi://colorama@0.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://flask-socketio@5.3.6",
+      "dependsOn": [
+        "pypi://flask@2.3.1",
+        "pypi://python-socketio@5.11.2"
+      ]
+    },
+    {
+      "ref": "pypi://flask-sqlalchemy@3.0.3",
+      "dependsOn": [
+        "pypi://flask@2.3.1",
+        "pypi://sqlalchemy@2.0.28"
+      ]
+    },
+    {
+      "ref": "pypi://flask@2.3.1",
+      "dependsOn": [
+        "pypi://werkzeug@3.0.3",
+        "pypi://jinja2@3.1.4",
+        "pypi://itsdangerous@2.2.0",
+        "pypi://click@8.1.7",
+        "pypi://blinker@1.8.2",
+        "pypi://importlib-metadata@7.1.0"
+      ]
+    },
+    {
+      "ref": "pypi://gevent-websocket@0.10.1",
+      "dependsOn": [
+        "pypi://gevent@24.2.1"
+      ]
+    },
+    {
+      "ref": "pypi://gevent@24.2.1",
+      "dependsOn": [
+        "pypi://zope-event@5.0",
+        "pypi://zope-interface@6.3",
+        "pypi://greenlet@3.0.3",
+        "pypi://cffi@1.16.0"
+      ]
+    },
+    {
+      "ref": "pypi://greenlet@3.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://gunicorn@20.1.0",
+      "dependsOn": [
+        "pypi://setuptools@59.6.0"
+      ]
+    },
+    {
+      "ref": "pypi://h11@0.14.0",
+      "dependsOn": [
+        "pypi://typing-extensions@4.11.0"
+      ]
+    },
+    {
+      "ref": "pypi://importlib-metadata@7.1.0",
+      "dependsOn": [
+        "pypi://zipp@3.18.1",
+        "pypi://typing-extensions@4.11.0"
+      ]
+    },
+    {
+      "ref": "pypi://itsdangerous@2.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://jinja2@3.1.4",
+      "dependsOn": [
+        "pypi://markupsafe@2.1.5"
+      ]
+    },
+    {
+      "ref": "pypi://markupsafe@2.1.5",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://pillow@8.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://psycopg2-binary@2.9.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://pycparser@2.22",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://pycryptodomex@3.20.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://python-engineio@4.9.0",
+      "dependsOn": [
+        "pypi://simple-websocket@1.0.0"
+      ]
+    },
+    {
+      "ref": "pypi://python-socketio@5.11.2",
+      "dependsOn": [
+        "pypi://bidict@0.23.1",
+        "pypi://python-engineio@4.9.0"
+      ]
+    },
+    {
+      "ref": "pypi://services/web@main",
+      "dependsOn": [
+        "pypi://psycopg2-binary@2.9.6",
+        "pypi://pillow@8.4.0",
+        "pypi://gunicorn@20.1.0",
+        "pypi://flask@2.3.1",
+        "pypi://flask-socketio@5.3.6",
+        "pypi://gevent-websocket@0.10.1",
+        "pypi://flask-sqlalchemy@3.0.3",
+        "pypi://pycryptodomex@3.20.0",
+        "pypi://sqlalchemy@2.0.28"
+      ]
+    },
+    {
+      "ref": "pypi://setuptools@59.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://simple-websocket@1.0.0",
+      "dependsOn": [
+        "pypi://wsproto@1.2.0"
+      ]
+    },
+    {
+      "ref": "pypi://sqlalchemy@2.0.28",
+      "dependsOn": [
+        "pypi://typing-extensions@4.11.0",
+        "pypi://greenlet@3.0.3",
+        "pypi://importlib-metadata@7.1.0"
+      ]
+    },
+    {
+      "ref": "pypi://typing-extensions@4.11.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://werkzeug@3.0.3",
+      "dependsOn": [
+        "pypi://markupsafe@2.1.5"
+      ]
+    },
+    {
+      "ref": "pypi://wsproto@1.2.0",
+      "dependsOn": [
+        "pypi://h11@0.14.0"
+      ]
+    },
+    {
+      "ref": "pypi://zipp@3.18.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "pypi://zope-event@5.0",
+      "dependsOn": [
+        "pypi://setuptools@59.6.0"
+      ]
+    },
+    {
+      "ref": "pypi://zope-interface@6.3",
+      "dependsOn": [
+        "pypi://setuptools@59.6.0"
+      ]
+    }
+  ]
+}
+

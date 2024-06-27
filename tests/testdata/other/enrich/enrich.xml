@@ -1,0 +1,1473 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bom xmlns="http://cyclonedx.org/schema/bom/1.4" serialNumber="urn:uuid:ee456c26-d1ed-415e-72dc-4cf58d3c244f" version="1">
+    <metadata>
+        <timestamp>2024-06-17T13:15:34Z</timestamp>
+        <tools>
+            <tool>
+                <vendor>JFrog Inc.</vendor>
+                <name>Xray</name>
+                <version>3.96.1</version>
+            </tool>
+        </tools>
+        <component type="container">
+            <name>jfrog/jfrog-cli-v2-jf</name>
+            <version>2.58.2</version>
+        </component>
+    </metadata>
+    <components>
+        <component bom-ref="pkg:alpine/3.20:alpine-baselayout@3.6.5-r0" type="application">
+            <name>3.20:alpine-baselayout</name>
+            <version>3.6.5-r0</version>
+            <hashes>
+                <hash alg="SHA-256">6b666dcbe0117c8c13245a8e9858d38853052819f7b01778f15049c8ac9eb73f</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:alpine-baselayout@3.6.5-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:alpine-baselayout-data@3.6.5-r0" type="application">
+            <name>3.20:alpine-baselayout-data</name>
+            <version>3.6.5-r0</version>
+            <hashes>
+                <hash alg="SHA-256">36f305ace93c0f019e415001f930893019e6b73a183052ec5f52e68846a95d76</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:alpine-baselayout-data@3.6.5-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:alpine-keys@2.4-r1" type="application">
+            <name>3.20:alpine-keys</name>
+            <version>2.4-r1</version>
+            <hashes>
+                <hash alg="SHA-256">c5cc621e8566b309e72573ba32b500fff863b48c959c08b9c44fa86ae475707e</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:alpine-keys@2.4-r1</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:apk-tools@2.14.4-r0" type="application">
+            <name>3.20:apk-tools</name>
+            <version>2.14.4-r0</version>
+            <hashes>
+                <hash alg="SHA-256">2e62f92a319ff72fb88d4caa187f35e4d5d3bd21a7042bfd76efbf7641f06e8e</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:apk-tools@2.14.4-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:bash@5.2.26-r0" type="application">
+            <name>3.20:bash</name>
+            <version>5.2.26-r0</version>
+            <hashes>
+                <hash alg="SHA-256">3e80857bccc5ca1ad57106796c532b314b6c574b55d2639a4b82703c34b2ac8c</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-3.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/gpl-3.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:bash@5.2.26-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:brotli-libs@1.1.0-r2" type="application">
+            <name>3.20:brotli-libs</name>
+            <version>1.1.0-r2</version>
+            <hashes>
+                <hash alg="SHA-256">b463a832baaba0e403a71f2814db98f7f21aa226486293f7629567e9425946bf</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:brotli-libs@1.1.0-r2</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:busybox@1.36.1-r28" type="application">
+            <name>3.20:busybox</name>
+            <version>1.36.1-r28</version>
+            <hashes>
+                <hash alg="SHA-256">f2f7db28b183e2d0fd0c13d2f9919074ccfd9fbada85cc22528c98adff0b5691</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:busybox@1.36.1-r28</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:busybox-binsh@1.36.1-r28" type="application">
+            <name>3.20:busybox-binsh</name>
+            <version>1.36.1-r28</version>
+            <hashes>
+                <hash alg="SHA-256">bbb43c4b213b47b184991c06c6e5e6a0b1ece73c5bb1c0553c7cd903f4e79f41</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:busybox-binsh@1.36.1-r28</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:c-ares@1.28.1-r0" type="application">
+            <name>3.20:c-ares</name>
+            <version>1.28.1-r0</version>
+            <hashes>
+                <hash alg="SHA-256">9e01a28a920e9a743538a15d529f36bafdaac8aea9c8aa94294eaba623ac4469</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:c-ares@1.28.1-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:ca-certificates@20240226-r0" type="application">
+            <name>3.20:ca-certificates</name>
+            <version>20240226-r0</version>
+            <hashes>
+                <hash alg="SHA-256">acbd298d093ad87dc471443c7c94981fa7d952dbc19d20efa3617f52760ab7c2</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+                <license>
+                    <id>MPL-2.0</id>
+                    <url>http://opensource.org/licenses/MPL-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:ca-certificates@20240226-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:ca-certificates-bundle@20240226-r0" type="application">
+            <name>3.20:ca-certificates-bundle</name>
+            <version>20240226-r0</version>
+            <hashes>
+                <hash alg="SHA-256">5dfba5c4e80616d5770b83583b9faa3118c955402aa5f7205fc470efc9bc134d</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+                <license>
+                    <id>MPL-2.0</id>
+                    <url>http://opensource.org/licenses/MPL-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:ca-certificates-bundle@20240226-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:curl@8.7.1-r0" type="application">
+            <name>3.20:curl</name>
+            <version>8.7.1-r0</version>
+            <hashes>
+                <hash alg="SHA-256">a2992763146907128e607d5223487fc16c5040931150a8aa174af28699247955</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>curl</id>
+                    <url>https://github.com/bagder/curl/blob/master/COPYING</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:curl@8.7.1-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:jq@1.7.1-r0" type="application">
+            <name>3.20:jq</name>
+            <version>1.7.1-r0</version>
+            <hashes>
+                <hash alg="SHA-256">6670448b471ecf62680777189e886e71fe56673f191327c755162013298d4b20</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:jq@1.7.1-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libcrypto3@3.3.0-r2" type="application">
+            <name>3.20:libcrypto3</name>
+            <version>3.3.0-r2</version>
+            <hashes>
+                <hash alg="SHA-256">31c92fea489b54d40d96f4878815fa80849fa80f332c70abf22d9ad58ba263a9</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libcrypto3@3.3.0-r2</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libcurl@8.7.1-r0" type="application">
+            <name>3.20:libcurl</name>
+            <version>8.7.1-r0</version>
+            <hashes>
+                <hash alg="SHA-256">9ab4513bb017d3b6dfe0fd22e6334fb40355a4be022d3de349eaff54b3750997</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>curl</id>
+                    <url>https://github.com/bagder/curl/blob/master/COPYING</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libcurl@8.7.1-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libidn2@2.3.7-r0" type="application">
+            <name>3.20:libidn2</name>
+            <version>2.3.7-r0</version>
+            <hashes>
+                <hash alg="SHA-256">60e4cb0fc0766388a8863803b01d5259643f93d2653ba0ad2bb1fe883e7a331d</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+                <license>
+                    <id>LGPL-3.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/lgpl-3.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libidn2@2.3.7-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libncursesw@6.4_p20240420-r0" type="application">
+            <name>3.20:libncursesw</name>
+            <version>6.4_p20240420-r0</version>
+            <hashes>
+                <hash alg="SHA-256">07639180ea04863756d864f542c0e15e1238c1d4ad0e33c10635f684ceb7b942</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>X11</id>
+                    <url>http://www.xfree86.org/3.3.6/COPYRIGHT2.html#3</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libncursesw@6.4_p20240420-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libpsl@0.21.5-r1" type="application">
+            <name>3.20:libpsl</name>
+            <version>0.21.5-r1</version>
+            <hashes>
+                <hash alg="SHA-256">900522f4392c5a8d9564623d2a96023dbafdb6e0d8e8f6e926047e6191b357c5</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libpsl@0.21.5-r1</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libssl3@3.3.0-r2" type="application">
+            <name>3.20:libssl3</name>
+            <version>3.3.0-r2</version>
+            <hashes>
+                <hash alg="SHA-256">d0324419e9efac6a0c430d9a2f1370ae101b41dadefe6a6806ac7ab3942da633</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libssl3@3.3.0-r2</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:libunistring@1.2-r0" type="application">
+            <name>3.20:libunistring</name>
+            <version>1.2-r0</version>
+            <hashes>
+                <hash alg="SHA-256">c4053742bbc7a4e10ffeb69cea5cc2e3a4f12e33a93c83bd5034faae2f25b08a</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+                <license>
+                    <id>LGPL-3.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/lgpl-3.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:libunistring@1.2-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:musl@1.2.5-r0" type="application">
+            <name>3.20:musl</name>
+            <version>1.2.5-r0</version>
+            <hashes>
+                <hash alg="SHA-256">6844b689522a48af1a921a51720b8e56c689ed44f05864278ab1d7eccd1b1e4a</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:musl@1.2.5-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:musl-utils@1.2.5-r0" type="application">
+            <name>3.20:musl-utils</name>
+            <version>1.2.5-r0</version>
+            <hashes>
+                <hash alg="SHA-256">4cc7271e4c28281d5e89517512c7c8afee8b97589cd5f7254959818fec519014</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+                <license>
+                    <id>GPL-2.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:musl-utils@1.2.5-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:ncurses-terminfo-base@6.4_p20240420-r0" type="application">
+            <name>3.20:ncurses-terminfo-base</name>
+            <version>6.4_p20240420-r0</version>
+            <hashes>
+                <hash alg="SHA-256">911596ac00ff138fe8f7e9ddff1b74c4112206f20710e9087736a85013ca966f</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>X11</id>
+                    <url>http://www.xfree86.org/3.3.6/COPYRIGHT2.html#3</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:ncurses-terminfo-base@6.4_p20240420-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:nghttp2-libs@1.62.0-r0" type="application">
+            <name>3.20:nghttp2-libs</name>
+            <version>1.62.0-r0</version>
+            <hashes>
+                <hash alg="SHA-256">b8129d43e335f1eed40012353a3d69cad37a98fcf0279df19b65a4efd675ce90</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:nghttp2-libs@1.62.0-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:oniguruma@6.9.9-r0" type="application">
+            <name>3.20:oniguruma</name>
+            <version>6.9.9-r0</version>
+            <hashes>
+                <hash alg="SHA-256">4ed2ccc6e503b20eb7ea82167d73f6c22fcaa1579c3684ed482dc63b74c89f29</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:oniguruma@6.9.9-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:readline@8.2.10-r0" type="application">
+            <name>3.20:readline</name>
+            <version>8.2.10-r0</version>
+            <hashes>
+                <hash alg="SHA-256">70fc1f52b0bc587fc7e44f9abef3ec3ebea09adaa5678f159fcc0acc2ad6dfb8</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-3.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/gpl-3.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:readline@8.2.10-r0</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:scanelf@1.3.7-r2" type="application">
+            <name>3.20:scanelf</name>
+            <version>1.3.7-r2</version>
+            <hashes>
+                <hash alg="SHA-256">6ebb9a49243a2414378a6a3ba3cc44c69d53375470b07f91c8aa109298338294</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:scanelf@1.3.7-r2</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:ssl_client@1.36.1-r28" type="application">
+            <name>3.20:ssl_client</name>
+            <version>1.36.1-r28</version>
+            <hashes>
+                <hash alg="SHA-256">9cca97be35a3247dd4093020d47f61aff44f50b0beb60ffb28c652fc9410cb51</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>GPL-2.0-only</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:ssl_client@1.36.1-r28</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:tzdata@2024a-r1" type="application">
+            <name>3.20:tzdata</name>
+            <version>2024a-r1</version>
+            <hashes>
+                <hash alg="SHA-256">d3697a4fe432c7d75e11fa6433beb5de0ea28cc86af9f7855d9301af1299b9c8</hash>
+            </hashes>
+            <purl>pkg:alpine/3.20:tzdata@2024a-r1</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:zlib@1.3.1-r1" type="application">
+            <name>3.20:zlib</name>
+            <version>1.3.1-r1</version>
+            <hashes>
+                <hash alg="SHA-256">72012e56c9daf3b4e929392e39a931a54f5975921f10fb23f3354aeff22f29b6</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>Zlib</id>
+                    <url>http://www.opensource.org/licenses/Zlib</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:zlib@1.3.1-r1</purl>
+        </component>
+        <component bom-ref="pkg:alpine/3.20:zstd-libs@1.5.6-r0" type="application">
+            <name>3.20:zstd-libs</name>
+            <version>1.5.6-r0</version>
+            <hashes>
+                <hash alg="SHA-256">54defd69b1c660eeed53040be20dff3511591b64a5eaf63902210752fdcf7318</hash>
+            </hashes>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+                <license>
+                    <id>GPL-2.0-or-later</id>
+                    <url>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</url>
+                </license>
+            </licenses>
+            <purl>pkg:alpine/3.20:zstd-libs@1.5.6-r0</purl>
+        </component>
+        <component bom-ref="pkg:go/dario.cat%2Fmergo@1.0.0" type="application">
+            <name>dario.cat/mergo</name>
+            <version>1.0.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/dario.cat%2Fmergo@1.0.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2FBurntSushi%2Ftoml@1.3.2" type="application">
+            <name>github.com/BurntSushi/toml</name>
+            <version>1.3.2</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2FBurntSushi%2Ftoml@1.3.2</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2FCycloneDX%2Fcyclonedx-go@0.8.0" type="application">
+            <name>github.com/CycloneDX/cyclonedx-go</name>
+            <version>0.8.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2FCycloneDX%2Fcyclonedx-go@0.8.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2FProtonMail%2Fgo-crypto@1.0.0" type="application">
+            <name>github.com/ProtonMail/go-crypto</name>
+            <version>1.0.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2FProtonMail%2Fgo-crypto@1.0.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2FVividCortex%2Fewma@1.2.0" type="application">
+            <name>github.com/VividCortex/ewma</name>
+            <version>1.2.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2FVividCortex%2Fewma@1.2.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Facarl005%2Fstripansi@0.0.0-20180116102854-5a71ef0e047d" type="application">
+            <name>github.com/acarl005/stripansi</name>
+            <version>0.0.0-20180116102854-5a71ef0e047d</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Facarl005%2Fstripansi@0.0.0-20180116102854-5a71ef0e047d</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fagnivade%2Flevenshtein@1.1.1" type="application">
+            <name>github.com/agnivade/levenshtein</name>
+            <version>1.1.1</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fagnivade%2Flevenshtein@1.1.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fandybalholm%2Fbrotli@1.1.0" type="application">
+            <name>github.com/andybalholm/brotli</name>
+            <version>1.1.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fandybalholm%2Fbrotli@1.1.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fbuger%2Fjsonparser@1.1.1" type="application">
+            <name>github.com/buger/jsonparser</name>
+            <version>1.1.1</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fbuger%2Fjsonparser@1.1.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fc-bata%2Fgo-prompt@0.2.5" type="application">
+            <name>github.com/c-bata/go-prompt</name>
+            <version>0.2.5</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fc-bata%2Fgo-prompt@0.2.5</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fchzyer%2Freadline@1.5.1" type="application">
+            <name>github.com/chzyer/readline</name>
+            <version>1.5.1</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fchzyer%2Freadline@1.5.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fcloudflare%2Fcircl@1.3.7" type="application">
+            <name>github.com/cloudflare/circl</name>
+            <version>1.3.7</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fcloudflare%2Fcircl@1.3.7</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fcpuguy83%2Fgo-md2man%2Fv2@2.0.4" type="application">
+            <name>github.com/cpuguy83/go-md2man/v2</name>
+            <version>2.0.4</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fcpuguy83%2Fgo-md2man%2Fv2@2.0.4</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fcyphar%2Ffilepath-securejoin@0.2.4" type="application">
+            <name>github.com/cyphar/filepath-securejoin</name>
+            <version>0.2.4</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fcyphar%2Ffilepath-securejoin@0.2.4</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fdavecgh%2Fgo-spew@1.1.2-0.20180830191138-d8f796af33cc" type="application">
+            <name>github.com/davecgh/go-spew</name>
+            <version>1.1.2-0.20180830191138-d8f796af33cc</version>
+            <licenses>
+                <license>
+                    <id>ISC</id>
+                    <url>http://www.opensource.org/licenses/ISC</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fdavecgh%2Fgo-spew@1.1.2-0.20180830191138-d8f796af33cc</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fdsnet%2Fcompress@0.0.2-0.20230904184137-39efe44ab707" type="application">
+            <name>github.com/dsnet/compress</name>
+            <version>0.0.2-0.20230904184137-39efe44ab707</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fdsnet%2Fcompress@0.0.2-0.20230904184137-39efe44ab707</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Femirpasic%2Fgods@1.18.1" type="application">
+            <name>github.com/emirpasic/gods</name>
+            <version>1.18.1</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+                <license>
+                    <id>ISC</id>
+                    <url>http://www.opensource.org/licenses/ISC</url>
+                </license>
+                <license>
+                    <id>Mup</id>
+                    <url>https://fedoraproject.org/wiki/Licensing/Mup</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Femirpasic%2Fgods@1.18.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2FforPelevin%2Fgomoji@1.2.0" type="application">
+            <name>github.com/forPelevin/gomoji</name>
+            <version>1.2.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2FforPelevin%2Fgomoji@1.2.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Ffsnotify%2Ffsnotify@1.7.0" type="application">
+            <name>github.com/fsnotify/fsnotify</name>
+            <version>1.7.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Ffsnotify%2Ffsnotify@1.7.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgo-git%2Fgcfg@1.5.1-0.20230307220236-3a3c6141e376" type="application">
+            <name>github.com/go-git/gcfg</name>
+            <version>1.5.1-0.20230307220236-3a3c6141e376</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgo-git%2Fgcfg@1.5.1-0.20230307220236-3a3c6141e376</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgo-git%2Fgo-billy%2Fv5@5.5.0" type="application">
+            <name>github.com/go-git/go-billy/v5</name>
+            <version>5.5.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgo-git%2Fgo-billy%2Fv5@5.5.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgo-git%2Fgo-git%2Fv5@5.12.0" type="application">
+            <name>github.com/go-git/go-git/v5</name>
+            <version>5.12.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgo-git%2Fgo-git%2Fv5@5.12.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgocarina%2Fgocsv@0.0.0-20240520201108-78e41c74b4b1" type="application">
+            <name>github.com/gocarina/gocsv</name>
+            <version>0.0.0-20240520201108-78e41c74b4b1</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgocarina%2Fgocsv@0.0.0-20240520201108-78e41c74b4b1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgolang-jwt%2Fjwt%2Fv4@4.5.0" type="application">
+            <name>github.com/golang-jwt/jwt/v4</name>
+            <version>4.5.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgolang-jwt%2Fjwt%2Fv4@4.5.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgolang%2Fgo@1.22.4" type="application">
+            <name>github.com/golang/go</name>
+            <version>1.22.4</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgolang%2Fgo@1.22.4</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgolang%2Fgroupcache@0.0.0-20210331224755-41bb18bfe9da" type="application">
+            <name>github.com/golang/groupcache</name>
+            <version>0.0.0-20210331224755-41bb18bfe9da</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgolang%2Fgroupcache@0.0.0-20210331224755-41bb18bfe9da</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgolang%2Fsnappy@0.0.4" type="application">
+            <name>github.com/golang/snappy</name>
+            <version>0.0.4</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgolang%2Fsnappy@0.0.4</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgoogle%2Fuuid@1.6.0" type="application">
+            <name>github.com/google/uuid</name>
+            <version>1.6.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgoogle%2Fuuid@1.6.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fgookit%2Fcolor@1.5.4" type="application">
+            <name>github.com/gookit/color</name>
+            <version>1.5.4</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fgookit%2Fcolor@1.5.4</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fhashicorp%2Fhcl@1.0.0" type="application">
+            <name>github.com/hashicorp/hcl</name>
+            <version>1.0.0</version>
+            <licenses>
+                <license>
+                    <id>MPL-2.0</id>
+                    <url>http://opensource.org/licenses/MPL-2.0</url>
+                </license>
+                <license>
+                    <id>MPL-2.0-no-copyleft-exception</id>
+                    <url>http://opensource.org/licenses/MPL-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fhashicorp%2Fhcl@1.0.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjbenet%2Fgo-context@0.0.0-20150711004518-d14ea06fba99" type="application">
+            <name>github.com/jbenet/go-context</name>
+            <version>0.0.0-20150711004518-d14ea06fba99</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjbenet%2Fgo-context@0.0.0-20150711004518-d14ea06fba99</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjedib0t%2Fgo-pretty%2Fv6@6.5.9" type="application">
+            <name>github.com/jedib0t/go-pretty/v6</name>
+            <version>6.5.9</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjedib0t%2Fgo-pretty%2Fv6@6.5.9</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Farchiver%2Fv3@3.6.0" type="application">
+            <name>github.com/jfrog/archiver/v3</name>
+            <version>3.6.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Farchiver%2Fv3@3.6.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fbuild-info-go@1.9.29" type="application">
+            <name>github.com/jfrog/build-info-go</name>
+            <version>1.9.29</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fbuild-info-go@1.9.29</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fgofrog@1.7.2" type="application">
+            <name>github.com/jfrog/gofrog</name>
+            <version>1.7.2</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fgofrog@1.7.2</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-apps-config@1.0.1" type="application">
+            <name>github.com/jfrog/jfrog-apps-config</name>
+            <version>1.0.1</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-apps-config@1.0.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-cli@%28devel%29" type="application">
+            <name>github.com/jfrog/jfrog-cli</name>
+            <version>(devel)</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-cli@%28devel%29</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-cli-core%2Fv2@2.53.1" type="application">
+            <name>github.com/jfrog/jfrog-cli-core/v2</name>
+            <version>2.53.1</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-cli-core%2Fv2@2.53.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-cli-platform-services@1.3.0" type="application">
+            <name>github.com/jfrog/jfrog-cli-platform-services</name>
+            <version>1.3.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-cli-platform-services@1.3.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-cli-security@1.3.0" type="application">
+            <name>github.com/jfrog/jfrog-cli-security</name>
+            <version>1.3.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-cli-security@1.3.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjfrog%2Fjfrog-client-go@1.41.0" type="application">
+            <name>github.com/jfrog/jfrog-client-go</name>
+            <version>1.41.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjfrog%2Fjfrog-client-go@1.41.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fjszwec%2Fcsvutil@1.10.0" type="application">
+            <name>github.com/jszwec/csvutil</name>
+            <version>1.10.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fjszwec%2Fcsvutil@1.10.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fkevinburke%2Fssh_config@1.2.0" type="application">
+            <name>github.com/kevinburke/ssh_config</name>
+            <version>1.2.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fkevinburke%2Fssh_config@1.2.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fklauspost%2Fcompress@1.17.7" type="application">
+            <name>github.com/klauspost/compress</name>
+            <version>1.17.7</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fklauspost%2Fcompress@1.17.7</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fklauspost%2Fcpuid%2Fv2@2.2.7" type="application">
+            <name>github.com/klauspost/cpuid/v2</name>
+            <version>2.2.7</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fklauspost%2Fcpuid%2Fv2@2.2.7</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fklauspost%2Fpgzip@1.2.6" type="application">
+            <name>github.com/klauspost/pgzip</name>
+            <version>1.2.6</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fklauspost%2Fpgzip@1.2.6</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fmagiconair%2Fproperties@1.8.7" type="application">
+            <name>github.com/magiconair/properties</name>
+            <version>1.8.7</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+                <license>
+                    <id>Mup</id>
+                    <url>https://fedoraproject.org/wiki/Licensing/Mup</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fmagiconair%2Fproperties@1.8.7</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fmanifoldco%2Fpromptui@0.9.0" type="application">
+            <name>github.com/manifoldco/promptui</name>
+            <version>0.9.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fmanifoldco%2Fpromptui@0.9.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fmattn%2Fgo-runewidth@0.0.15" type="application">
+            <name>github.com/mattn/go-runewidth</name>
+            <version>0.0.15</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fmattn%2Fgo-runewidth@0.0.15</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fminio%2Fsha256-simd@1.0.1" type="application">
+            <name>github.com/minio/sha256-simd</name>
+            <version>1.0.1</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fminio%2Fsha256-simd@1.0.1</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fmitchellh%2Fmapstructure@1.5.0" type="application">
+            <name>github.com/mitchellh/mapstructure</name>
+            <version>1.5.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fmitchellh%2Fmapstructure@1.5.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fnwaples%2Frardecode@1.1.3" type="application">
+            <name>github.com/nwaples/rardecode</name>
+            <version>1.1.3</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+                <license>
+                    <id>Mup</id>
+                    <url>https://fedoraproject.org/wiki/Licensing/Mup</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fnwaples%2Frardecode@1.1.3</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fowenrumney%2Fgo-sarif%2Fv2@2.3.0" type="application">
+            <name>github.com/owenrumney/go-sarif/v2</name>
+            <version>2.3.0</version>
+            <licenses>
+                <license>
+                    <id>Unlicense</id>
+                    <url>http://unlicense.org/</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fowenrumney%2Fgo-sarif%2Fv2@2.3.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpelletier%2Fgo-toml%2Fv2@2.2.0" type="application">
+            <name>github.com/pelletier/go-toml/v2</name>
+            <version>2.2.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpelletier%2Fgo-toml%2Fv2@2.2.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpierrec%2Flz4%2Fv4@4.1.21" type="application">
+            <name>github.com/pierrec/lz4/v4</name>
+            <version>4.1.21</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpierrec%2Flz4%2Fv4@4.1.21</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpjbgf%2Fsha1cd@0.3.0" type="application">
+            <name>github.com/pjbgf/sha1cd</name>
+            <version>0.3.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpjbgf%2Fsha1cd@0.3.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpkg%2Fbrowser@0.0.0-20240102092130-5ac0b6a4141c" type="application">
+            <name>github.com/pkg/browser</name>
+            <version>0.0.0-20240102092130-5ac0b6a4141c</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+                <license>
+                    <id>Mup</id>
+                    <url>https://fedoraproject.org/wiki/Licensing/Mup</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpkg%2Fbrowser@0.0.0-20240102092130-5ac0b6a4141c</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpkg%2Fterm@1.1.0" type="application">
+            <name>github.com/pkg/term</name>
+            <version>1.1.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpkg%2Fterm@1.1.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fpmezard%2Fgo-difflib@1.0.1-0.20181226105442-5d4384ee4fb2" type="application">
+            <name>github.com/pmezard/go-difflib</name>
+            <version>1.0.1-0.20181226105442-5d4384ee4fb2</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fpmezard%2Fgo-difflib@1.0.1-0.20181226105442-5d4384ee4fb2</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Frivo%2Funiseg@0.4.7" type="application">
+            <name>github.com/rivo/uniseg</name>
+            <version>0.4.7</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Frivo%2Funiseg@0.4.7</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Frussross%2Fblackfriday%2Fv2@2.1.0" type="application">
+            <name>github.com/russross/blackfriday/v2</name>
+            <version>2.1.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Frussross%2Fblackfriday%2Fv2@2.1.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fsagikazarmark%2Fslog-shim@0.1.0" type="application">
+            <name>github.com/sagikazarmark/slog-shim</name>
+            <version>0.1.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fsagikazarmark%2Fslog-shim@0.1.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fsergi%2Fgo-diff@1.3.2-0.20230802210424-5b0b94c5c0d3" type="application">
+            <name>github.com/sergi/go-diff</name>
+            <version>1.3.2-0.20230802210424-5b0b94c5c0d3</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fsergi%2Fgo-diff@1.3.2-0.20230802210424-5b0b94c5c0d3</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fskeema%2Fknownhosts@1.2.2" type="application">
+            <name>github.com/skeema/knownhosts</name>
+            <version>1.2.2</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fskeema%2Fknownhosts@1.2.2</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fspf13%2Fafero@1.11.0" type="application">
+            <name>github.com/spf13/afero</name>
+            <version>1.11.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fspf13%2Fafero@1.11.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fspf13%2Fcast@1.6.0" type="application">
+            <name>github.com/spf13/cast</name>
+            <version>1.6.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fspf13%2Fcast@1.6.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fspf13%2Fpflag@1.0.5" type="application">
+            <name>github.com/spf13/pflag</name>
+            <version>1.0.5</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fspf13%2Fpflag@1.0.5</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fspf13%2Fviper@1.18.2" type="application">
+            <name>github.com/spf13/viper</name>
+            <version>1.18.2</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fspf13%2Fviper@1.18.2</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fstretchr%2Ftestify@1.9.0" type="application">
+            <name>github.com/stretchr/testify</name>
+            <version>1.9.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fstretchr%2Ftestify@1.9.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fsubosito%2Fgotenv@1.6.0" type="application">
+            <name>github.com/subosito/gotenv</name>
+            <version>1.6.0</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fsubosito%2Fgotenv@1.6.0</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fulikunitz%2Fxz@0.5.12" type="application">
+            <name>github.com/ulikunitz/xz</name>
+            <version>0.5.12</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fulikunitz%2Fxz@0.5.12</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Furfave%2Fcli@1.22.15" type="application">
+            <name>github.com/urfave/cli</name>
+            <version>1.22.15</version>
+            <licenses>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Furfave%2Fcli@1.22.15</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fvbauerster%2Fmpb%2Fv7@7.5.3" type="application">
+            <name>github.com/vbauerster/mpb/v7</name>
+            <version>7.5.3</version>
+            <licenses>
+                <license>
+                    <id>Unlicense</id>
+                    <url>http://unlicense.org/</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fvbauerster%2Fmpb%2Fv7@7.5.3</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fxanzy%2Fssh-agent@0.3.3" type="application">
+            <name>github.com/xanzy/ssh-agent</name>
+            <version>0.3.3</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/github.com%2Fxanzy%2Fssh-agent@0.3.3</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fxi2%2Fxz@0.0.0-20171230120015-48954b6210f8" type="application">
+            <name>github.com/xi2/xz</name>
+            <version>0.0.0-20171230120015-48954b6210f8</version>
+            <purl>pkg:go/github.com%2Fxi2%2Fxz@0.0.0-20171230120015-48954b6210f8</purl>
+        </component>
+        <component bom-ref="pkg:go/github.com%2Fxo%2Fterminfo@0.0.0-20220910002029-abceb7e1c41e" type="application">
+            <name>github.com/xo/terminfo</name>
+            <version>0.0.0-20220910002029-abceb7e1c41e</version>
+            <purl>pkg:go/github.com%2Fxo%2Fterminfo@0.0.0-20220910002029-abceb7e1c41e</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fcrypto@0.24.0" type="application">
+            <name>golang.org/x/crypto</name>
+            <version>0.24.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fcrypto@0.24.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fexp@0.0.0-20240604190554-fc45aab8b7f8" type="application">
+            <name>golang.org/x/exp</name>
+            <version>0.0.0-20240604190554-fc45aab8b7f8</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fexp@0.0.0-20240604190554-fc45aab8b7f8</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fmod@0.18.0" type="application">
+            <name>golang.org/x/mod</name>
+            <version>0.18.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fmod@0.18.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fnet@0.26.0" type="application">
+            <name>golang.org/x/net</name>
+            <version>0.26.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fnet@0.26.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fsync@0.7.0" type="application">
+            <name>golang.org/x/sync</name>
+            <version>0.7.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fsync@0.7.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fsys@0.21.0" type="application">
+            <name>golang.org/x/sys</name>
+            <version>0.21.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fsys@0.21.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Fterm@0.21.0" type="application">
+            <name>golang.org/x/term</name>
+            <version>0.21.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Fterm@0.21.0</purl>
+        </component>
+        <component bom-ref="pkg:go/golang.org%2Fx%2Ftext@0.16.0" type="application">
+            <name>golang.org/x/text</name>
+            <version>0.16.0</version>
+            <licenses>
+                <license>
+                    <id>BSD-3-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-3-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/golang.org%2Fx%2Ftext@0.16.0</purl>
+        </component>
+        <component bom-ref="pkg:go/gopkg.in%2Fini.v1@1.67.0" type="application">
+            <name>gopkg.in/ini.v1</name>
+            <version>1.67.0</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/gopkg.in%2Fini.v1@1.67.0</purl>
+        </component>
+        <component bom-ref="pkg:go/gopkg.in%2Fwarnings.v0@0.1.2" type="application">
+            <name>gopkg.in/warnings.v0</name>
+            <version>0.1.2</version>
+            <licenses>
+                <license>
+                    <id>BSD-2-Clause</id>
+                    <url>http://opensource.org/licenses/BSD-2-Clause</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/gopkg.in%2Fwarnings.v0@0.1.2</purl>
+        </component>
+        <component bom-ref="pkg:go/gopkg.in%2Fyaml.v3@3.0.1" type="application">
+            <name>gopkg.in/yaml.v3</name>
+            <version>3.0.1</version>
+            <licenses>
+                <license>
+                    <id>Apache-2.0</id>
+                    <url>http://licenses.nuget.org/Apache-2.0</url>
+                </license>
+                <license>
+                    <id>MIT</id>
+                    <url>http://www.opensource.org/licenses/MIT</url>
+                </license>
+            </licenses>
+            <purl>pkg:go/gopkg.in%2Fyaml.v3@3.0.1</purl>
+        </component>
+        <component bom-ref="pkg:docker/jfrog%2Fjfrog-cli-v2-jf@2.58.2" type="container">
+            <name>jfrog/jfrog-cli-v2-jf</name>
+            <version>2.58.2</version>
+            <hashes>
+                <hash alg="SHA-256">556377977a536a9fb653940d7e18b96b531a3e20ce8901773fea90a704224f28</hash>
+            </hashes>
+            <purl>pkg:docker/jfrog%2Fjfrog-cli-v2-jf@2.58.2</purl>
+        </component>
+    </components>
+    <dependencies></dependencies>
+</bom>
