@@ -241,7 +241,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -249,7 +249,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -257,7 +257,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-2",
 			IssueId: "XRAY-2",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -287,7 +287,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -295,7 +295,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -304,7 +304,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 		{
 			LicenseKey: "license-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
 				ImpactedDependencyName: "component-B",
 			},
 		},

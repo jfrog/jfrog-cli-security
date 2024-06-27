@@ -77,7 +77,7 @@ type SeverityDetails struct {
 
 func (sd SeverityDetails) ToString(severity Severity, pretty bool) string {
 	if !pretty {
-		return strings.ToLower(severity.String())
+		return severity.String()
 	}
 	return sd.style.Render(sd.Emoji + severity.String())
 }
