@@ -35,7 +35,8 @@ const (
 )
 
 var (
-	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
+	// Exclude pattern for files.
+	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
 
 	mapSeverityToScore = map[string]string{
 		"":         "0.0",
@@ -258,16 +259,36 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 
 func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
 	if len(exclusions) > 0 {
-		return exclusions
+		return convertToFilesExcludePatterns(exclusions)
 	}
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
 	}
 	if len(excludePatterns) == 0 {
-		return DefaultExcludePatterns
+		return DefaultJasExcludePatterns
 	}
 	return excludePatterns
+}
+
+func convertToFilesExcludePatterns(excludePatterns []string) []string {
+	patterns := []string{}
+	for _, excludePattern := range excludePatterns {
+		bracketOpeningIndex := strings.Index(excludePattern, "{")
+		bracketClosingIndex := strings.Index(excludePattern, "}")
+		if bracketOpeningIndex >= 0 && bracketClosingIndex > bracketOpeningIndex {
+			// Convert <PREFIX>{option1,option2,...}<SUFFIX> to [<PREFIX>option1<SUFFIX>/** ,<PREFIX>option2<SUFFIX>/**, ...]
+			prefix := excludePattern[:bracketOpeningIndex]
+			suffix := excludePattern[bracketClosingIndex+1:]
+			options := strings.Split(excludePattern[bracketOpeningIndex+1:bracketClosingIndex], ",")
+			for _, option := range options {
+				patterns = append(patterns, prefix+option+suffix+"/**")
+			}
+		} else {
+			patterns = append(patterns, excludePattern+"/**")
+		}
+	}
+	return patterns
 }
 
 func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
