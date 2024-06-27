@@ -274,7 +274,7 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	patterns := []string{}
 	for _, excludePattern := range excludePatterns {
-		patterns = append(patterns, excludePattern+"/**")
+		patterns = append(patterns, "**/"+excludePattern+"/**")
 	}
 	return patterns
 }
