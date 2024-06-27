@@ -2,6 +2,7 @@ package severityutils
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ func TestParseSeverity(t *testing.T) {
 	testCases := []struct {
 		input          string
 		isSarifFormat  bool
-		expectedOutput string
+		expectedOutput Severity
 		expectedError  error
 	}{
 		// Test supported severity
@@ -19,7 +20,6 @@ func TestParseSeverity(t *testing.T) {
 		{input: "hiGH", isSarifFormat: false, expectedOutput: "High", expectedError: nil},
 		{input: "Low", isSarifFormat: false, expectedOutput: "Low", expectedError: nil},
 		{input: "MedIum", isSarifFormat: false, expectedOutput: "Medium", expectedError: nil},
-		{input: "", isSarifFormat: false, expectedOutput: "", expectedError: nil},
 		// Test supported sarif level
 		{input: "error", isSarifFormat: true, expectedOutput: "High", expectedError: nil},
 		{input: "warning", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
@@ -33,12 +33,14 @@ func TestParseSeverity(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		output, err := ParseSeverity(tc.input, false)
-		if err != nil {
-			assert.Contains(t, err.Error(), tc.expectedError.Error())
-		} else {
-			assert.Equal(t, tc.expectedError, err)
-		}
-		assert.Equal(t, tc.expectedOutput, output)
+		t.Run(fmt.Sprintf("%s (isSarifInput=%t)", tc.input, tc.isSarifFormat), func(t *testing.T) {
+			output, err := ParseSeverity(tc.input, tc.isSarifFormat)
+			if tc.expectedError != nil {
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.expectedOutput, output)
+		})
 	}
 }
