@@ -9,10 +9,6 @@ type DetectTargetsParams struct {
 	// File system information
 	WorkingDirs []string
 	Exclusions  []string
-	// Control target technologies configuration
-	RequestedTechnologies           []string
-	RequestedDescriptorsCustomNames map[techutils.Technology][]string
-	RequestedInstallCommands        map[techutils.Technology]string
 }
 
 // Configuration for scan target
@@ -74,12 +70,12 @@ func (c *AppsSecurityConfig) GetScanTargets() []string {
 }
 
 func (t *ScanTarget) String() string {
-	str := t.Target
+	str := ""
 	if t.Name != "" {
 		str += " (" + t.Name + ")"
 	}
 	if t.Technology != "" {
 		str += " [" + t.Technology.ToFormal() + "]"
 	}
-	return str
+	return str + t.Target
 }

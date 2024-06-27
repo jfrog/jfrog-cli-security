@@ -27,6 +27,8 @@ import (
 type AppsDetectParams struct {
 	// Target configurations
 	configs.DetectTargetsParams
+	// Technology configurations
+	configs.DetectTechParams
 	// Scan configurations
 	configs.DetectScanConfigParams
 }
@@ -88,7 +90,7 @@ func getLocalScanConfig() (jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, err
 		return
 	}
 	for _, module := range jfrogAppsConfig.Modules {
-		// Get absolute path from the source root
+		// Convert relative paths to absolute
 		root, err := filepath.Abs(module.SourceRoot)
 		if err != nil {
 			return nil, errorutils.CheckError(err)
@@ -182,7 +184,7 @@ func GetTargets(localConfig *jfrogappsconfig.JFrogAppsConfig, params *AppsDetect
 		return
 	}
 	if len(workingDirs) > 0 {
-		log.Info(fmt.Sprintf("Using the provided working directories from the command line: %v", workingDirs))
+		log.Debug(fmt.Sprintf("Using the provided working directories from the command line: %v", workingDirs))
 		for _, workingDir := range workingDirs {
 			targets = append(targets, configs.ScanTarget{Target: workingDir})
 		}
@@ -190,7 +192,7 @@ func GetTargets(localConfig *jfrogappsconfig.JFrogAppsConfig, params *AppsDetect
 	}
 	// If local configuration exists, use it
 	if localConfig != nil {
-		log.Info("Using the modules from the local scan configuration")
+		log.Debug("Using the modules from the local scan configuration")
 		for _, module := range localConfig.Modules {
 			targets = append(targets, configs.ScanTarget{Target: module.SourceRoot, Name: module.Name})
 		}

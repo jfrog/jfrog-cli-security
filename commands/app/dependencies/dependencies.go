@@ -6,6 +6,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils/configs"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	// "github.com/jfrog/jfrog-client-go/utils/log"
 )
 
@@ -52,7 +53,7 @@ func (ddCmd *DetectDependenciesCommand) Run() (err error) {
 		return errorutils.CheckError(err)
 	}
 	if err := os.Chdir(ddCmd.params.Target.Target); err != nil {
-		return nil, errorutils.CheckError(err)
+		return errorutils.CheckError(err)
 	}
 	defer func() {
 		err = errorutils.CheckError(os.Chdir(currentWorkingDir))

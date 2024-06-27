@@ -43,6 +43,7 @@ type ScanOutput struct {
 	MinSeverity  severityutils.Severity `json:"min_severity,omitempty"`
 	FixableOnly  bool                   `json:"fixable_only,omitempty"`
 	OutputFormat format.OutputFormat    `json:"output_format,omitempty"`
+	ExtendedTable bool                  `json:"extended_table,omitempty"`
 }
 
 // Configuration for Jas scans on target
