@@ -52,7 +52,6 @@ func TestExcludeSuppressResults(t *testing.T) {
 }
 
 func TestAddScoreToRunRules(t *testing.T) {
-
 	tests := []struct {
 		name           string
 		sarifRun       *sarif.Run
@@ -65,8 +64,8 @@ func TestAddScoreToRunRules(t *testing.T) {
 				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "warning"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
-				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": "6.9"}),
-				sarif.NewRule("rule2").WithProperties(sarif.Properties{"security-severity": "6.9"}),
+				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": float32(6.9)}),
+				sarif.NewRule("rule2").WithProperties(sarif.Properties{"security-severity": float32(6.9)}),
 			},
 		},
 		{
@@ -78,11 +77,11 @@ func TestAddScoreToRunRules(t *testing.T) {
 				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule5", "error"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
-				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": "0.0"}),
-				sarif.NewRule("rule2").WithProperties(sarif.Properties{"security-severity": "3.9"}),
-				sarif.NewRule("rule3").WithProperties(sarif.Properties{"security-severity": "6.9"}),
-				sarif.NewRule("rule4").WithProperties(sarif.Properties{"security-severity": "6.9"}),
-				sarif.NewRule("rule5").WithProperties(sarif.Properties{"security-severity": "8.9"}),
+				sarif.NewRule("rule1").WithProperties(sarif.Properties{"security-severity": float32(0.0)}),
+				sarif.NewRule("rule2").WithProperties(sarif.Properties{"security-severity": float32(3.9)}),
+				sarif.NewRule("rule3").WithProperties(sarif.Properties{"security-severity": float32(6.9)}),
+				sarif.NewRule("rule4").WithProperties(sarif.Properties{"security-severity": float32(6.9)}),
+				sarif.NewRule("rule5").WithProperties(sarif.Properties{"security-severity": float32(8.9)}),
 			},
 		},
 	}

@@ -474,28 +474,28 @@ func TestExtractRelativePath(t *testing.T) {
 }
 
 func TestGetResultLevel(t *testing.T) {
-	levelValueErr := string("error")
-	levelValueWarn := string("warning")
-	levelValueInfo := string("info")
-	levelValueNote := string("note")
-	levelValueNone := string("none")
+	levelValueErr := "error"
+	levelValueWarn := "warning"
+	levelValueInfo := "info"
+	levelValueNote := "note"
+	levelValueNone := "none"
 
 	tests := []struct {
 		result           *sarif.Result
-		expectedSeverity severityutils.SarifSeverityLevel
+		expectedSeverity string
 	}{
 		{result: &sarif.Result{Level: &levelValueErr},
-			expectedSeverity: severityutils.LevelError},
+			expectedSeverity: severityutils.LevelError.String()},
 		{result: &sarif.Result{Level: &levelValueWarn},
-			expectedSeverity: severityutils.LevelWarning},
+			expectedSeverity: severityutils.LevelWarning.String()},
 		{result: &sarif.Result{Level: &levelValueInfo},
-			expectedSeverity: severityutils.LevelInfo},
+			expectedSeverity: severityutils.LevelInfo.String()},
 		{result: &sarif.Result{Level: &levelValueNote},
-			expectedSeverity: severityutils.LevelNote},
+			expectedSeverity: severityutils.LevelNote.String()},
 		{result: &sarif.Result{Level: &levelValueNone},
-			expectedSeverity: severityutils.LevelNone},
+			expectedSeverity: severityutils.LevelNone.String()},
 		{result: &sarif.Result{},
-			expectedSeverity: severityutils.LevelNone},
+			expectedSeverity: ""},
 	}
 
 	for _, test := range tests {

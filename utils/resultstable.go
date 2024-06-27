@@ -135,7 +135,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					formats.LicenseRow{
 						LicenseKey: violation.LicenseKey,
 						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-							SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.ApplicabilityUndetermined, isTable),
+							SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.NotScanned, isTable),
 							ImpactedDependencyName:    impactedPackagesNames[compIndex],
 							ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 							ImpactedDependencyType:    impactedPackagesTypes[compIndex],
@@ -153,7 +153,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.ApplicabilityUndetermined, isTable),
+						SeverityDetails:           severityutils.GetAsDetails(currSeverity, jasutils.NotScanned, isTable),
 						ImpactedDependencyName:    impactedPackagesNames[compIndex],
 						ImpactedDependencyVersion: impactedPackagesVersions[compIndex],
 						ImpactedDependencyType:    impactedPackagesTypes[compIndex],
