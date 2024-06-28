@@ -73,10 +73,10 @@ func convertToApplicabilityStatus(status string) ApplicabilityStatus {
 // for sorting
 var applicableMapToScore = map[string]int{
 	"Applicable":                4,
-	"NotApplicable":             3,
-	"ApplicabilityUndetermined": 2,
+	"ApplicabilityUndetermined": 3,
+	"NotScanned":                2,
 	"NotCovered":                1,
-	"NotScanned":                0,
+	"NotApplicable":             0,
 }
 
 func convertApplicableToScore(applicability string) int {
