@@ -255,34 +255,38 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 
 func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow) {
 	sort.Slice(rows, func(i, j int) bool {
-		switch {
-		case rows[i].SeverityNumValue != rows[j].SeverityNumValue:
+		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
-		case rows[i].Applicable != rows[j].Applicable:
-			return convertApplicableToScore(rows[i].Applicable) > convertApplicableToScore(rows[j].Applicable)
-		case rows[i].JfrogResearchInformation != nil || rows[j].JfrogResearchInformation != nil:
-			ok, value := JfrogResearchInformationSort(rows[i].JfrogResearchInformation, rows[j].JfrogResearchInformation)
-			if ok {
-				return value
-			}
-			return rows[i].IssueId > rows[j].IssueId
-		default:
-			return rows[i].IssueId > rows[j].IssueId
 		}
+		if rows[i].Applicable != rows[j].Applicable {
+			return convertApplicableToScore(rows[i].Applicable) > convertApplicableToScore(rows[j].Applicable)
+		}
+		if ok, compareResult := CompareJfrogResearchInformation(rows[i].JfrogResearchInformation, rows[j].JfrogResearchInformation); ok {
+			return compareResult
+		}
+		return rows[i].IssueId > rows[j].IssueId
 	})
 }
 
-func JfrogResearchInformationSort(jfrogResearchInformation1 *formats.JfrogResearchInformation, jfrogResearchInformation2 *formats.JfrogResearchInformation) (bool, bool) {
-	switch {
-	case jfrogResearchInformation1 == nil:
-		return true, true
-	case jfrogResearchInformation2 == nil:
-		return true, false
-	case jfrogResearchInformation1.SeverityNumValue != jfrogResearchInformation2.SeverityNumValue:
-		return true, jfrogResearchInformation1.SeverityNumValue > jfrogResearchInformation2.SeverityNumValue
-	default:
+// CompareJfrogResearchInformation compares between two JFrog Research imformation pointers
+// It returns two boolean values: First to validate if comparison is needed and second is the comparison result
+// If both values don't exist return false in first value no need to compare
+// If one of them exist and the other not return true if only the first exist and false if only the second
+// If both exist check if the value is different and compare the values
+// If values are equal return false in the first value
+func CompareJfrogResearchInformation(jfrogResearchInformation1 *formats.JfrogResearchInformation, jfrogResearchInformation2 *formats.JfrogResearchInformation) (bool, bool) {
+	if jfrogResearchInformation1 == nil && jfrogResearchInformation2 == nil {
 		return false, false
 	}
+	if jfrogResearchInformation1 == nil || jfrogResearchInformation2 == nil {
+		return true, jfrogResearchInformation1 == nil
+	}
+	if jfrogResearchInformation1.SeverityNumValue != jfrogResearchInformation2.SeverityNumValue {
+		return true, jfrogResearchInformation1.SeverityNumValue > jfrogResearchInformation2.SeverityNumValue
+	}
+
+	return false, false
+
 }
 
 // PrintLicensesTable prints the licenses in a table.
