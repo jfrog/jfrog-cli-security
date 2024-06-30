@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
@@ -125,7 +125,7 @@ func TestGetScaScansToPreform(t *testing.T) {
 		name     string
 		wd       string
 		params   func() *AuditParams
-		expected []*xrayutils.ScaScanResult
+		expected []*results.ScaScanResult
 	}{
 		{
 			name: "Test specific technologies",
@@ -135,7 +135,7 @@ func TestGetScaScansToPreform(t *testing.T) {
 				param.SetTechnologies([]string{"maven", "npm", "go"}).SetIsRecursiveScan(true)
 				return param
 			},
-			expected: []*xrayutils.ScaScanResult{
+			expected: []*results.ScaScanResult{
 				{
 					Technology: techutils.Maven,
 					Target:     filepath.Join(dir, "dir", "maven"),
@@ -165,7 +165,7 @@ func TestGetScaScansToPreform(t *testing.T) {
 				param.SetIsRecursiveScan(true)
 				return param
 			},
-			expected: []*xrayutils.ScaScanResult{
+			expected: []*results.ScaScanResult{
 				{
 					Technology: techutils.Maven,
 					Target:     filepath.Join(dir, "dir", "maven"),

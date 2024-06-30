@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -412,7 +411,7 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func SplitScaScanResults(results *utils.ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScaScanResults(results *ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License

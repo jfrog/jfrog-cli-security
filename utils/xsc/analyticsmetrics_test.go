@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -77,10 +78,10 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
-	scaResults := []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
-	auditResults := utils.Results{
+	scaResults := []*results.ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
+	auditResults := results.ScanCommandResults{
 		ScaResults: scaResults,
-		ExtendedScanResults: &utils.ExtendedScanResults{
+		ExtendedScanResults: &results.ExtendedScanResults{
 			ApplicabilityScanResults: []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))},
 			SecretsScanResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
@@ -98,13 +99,13 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	}
 	testStruct := []struct {
 		name         string
-		auditResults *utils.Results
+		auditResults *results.ScanCommandResults
 		want         xscservices.XscAnalyticsBasicGeneralEvent
 	}{
-		{name: "No audit results", auditResults: &utils.Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+		{name: "No audit results", auditResults: &results.ScanCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
 		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-		{name: "Scan failed because jas errors.", auditResults: &utils.Results{ScansErr: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed because sca errors.", auditResults: &utils.Results{ScansErr: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because jas errors.", auditResults: &results.ScanCommandResults{ScansErr: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because sca errors.", auditResults: &results.ScanCommandResults{ScansErr: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
 	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()

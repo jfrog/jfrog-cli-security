@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -46,7 +47,7 @@ type indexFileHandlerFunc func(file string)
 type ScanInfo struct {
 	Target              string
 	Result              *services.ScanResponse
-	ExtendedScanResults *utils.ExtendedScanResults
+	ExtendedScanResults *results.ExtendedScanResults
 }
 
 const (
@@ -183,12 +184,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+	return scanCmd.RunAndRecordResults(func(scanResults *results.ScanCommandResults) error {
 		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *results.ScanCommandResults) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -204,7 +205,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		return err
 	}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := results.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
@@ -267,11 +268,11 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer)
 
 	// Handle results
-	flatResults := []*utils.ScaScanResult{}
+	flatResults := []*results.ScaScanResult{}
 
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, &utils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
+			flatResults = append(flatResults, &results.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
 			scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, res.ExtendedScanResults.ApplicabilityScanResults...)
 			scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, res.ExtendedScanResults.SecretsScanResults...)
 		}
@@ -410,7 +411,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					return
 				}
 
-				scanResults := utils.Results{
+				scanResults := utils.ScanCommandResults{
 					ScaResults:          []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{*graphScanResults}}},
 					ExtendedScanResults: &utils.ExtendedScanResults{},
 				}

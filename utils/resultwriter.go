@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
@@ -31,8 +32,8 @@ const MissingCveScore = "0"
 const maxPossibleCve = 10.0
 
 type ResultsWriter struct {
-	// The scan results.
-	results *Results
+	// The scan cmdResults.
+	cmdResults *results.ScanCommandResults
 	// SimpleJsonError  Errors to be added to output of the SimpleJson format.
 	simpleJsonError []formats.SimpleJsonError
 	// Format  The output format.
@@ -53,8 +54,8 @@ type ResultsWriter struct {
 	messages []string
 }
 
-func NewResultsWriter(scanResults *Results) *ResultsWriter {
-	return &ResultsWriter{results: scanResults}
+func NewResultsWriter(scanResults *results.ScanCommandResults) *ResultsWriter {
+	return &ResultsWriter{cmdResults: scanResults}
 }
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
@@ -115,18 +116,18 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		}
 		return PrintJson(jsonTable)
 	case format.Json:
-		return PrintJson(rw.results.GetScaScansXrayResults())
+		return PrintJson(rw.cmdResults.GetScaScansXrayResults())
 	case format.Sarif:
-		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses)
+		return PrintSarif(rw.cmdResults, rw.isMultipleRoots, rw.includeLicenses)
 	}
 	return nil
 }
 func (rw *ResultsWriter) printScanResultsTables() (err error) {
 	printMessages(rw.messages)
-	violations, vulnerabilities, licenses := SplitScanResults(rw.results.ScaResults)
-	if rw.results.IsIssuesFound() {
+	violations, vulnerabilities, licenses := SplitScanResults(rw.cmdResults.ScaResults)
+	if rw.cmdResults.IsIssuesFound() {
 		var resultsPath string
-		if resultsPath, err = writeJsonResults(rw.results); err != nil {
+		if resultsPath, err = writeJsonResults(rw.cmdResults); err != nil {
 			return
 		}
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
@@ -134,9 +135,9 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 	log.Output()
 	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
 		if rw.includeVulnerabilities {
-			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+			err = PrintVulnerabilitiesTable(vulnerabilities, rw.cmdResults, rw.isMultipleRoots, rw.printExtended, rw.scanType)
 		} else {
-			err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+			err = PrintViolationsTable(violations, rw.cmdResults, rw.isMultipleRoots, rw.printExtended, rw.scanType)
 		}
 		if err != nil {
 			return
@@ -148,19 +149,19 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		}
 	}
 	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.scanType) {
-		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
+		if err = PrintSecretsTable(rw.cmdResults.ExtendedScanResults.SecretsScanResults, rw.cmdResults.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
 	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
-		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
+		if err = PrintIacTable(rw.cmdResults.ExtendedScanResults.IacScanResults, rw.cmdResults.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
 	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.scanType) {
 		return nil
 	}
-	return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
+	return PrintSastTable(rw.cmdResults.ExtendedScanResults.SastScanResults, rw.cmdResults.ExtendedScanResults.EntitledForJas)
 }
 
 func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType services.ScanType) bool {
@@ -183,32 +184,32 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func GenereateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
+func GenereateSarifReportFromResults(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
 	report, err = sarifutils.NewReport()
 	if err != nil {
 		return
 	}
-	xrayRun, err := convertXrayResponsesToSarifRun(results, isMultipleRoots, includeLicenses, allowedLicenses)
+	xrayRun, err := convertXrayResponsesToSarifRun(cmdResults, isMultipleRoots, includeLicenses, allowedLicenses)
 	if err != nil {
 		return
 	}
 
 	report.Runs = append(report.Runs, xrayRun)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.ApplicabilityScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.IacScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.SecretsScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.SastScanResults...)
+	report.Runs = append(report.Runs, cmdResults.ExtendedScanResults.ApplicabilityScanResults...)
+	report.Runs = append(report.Runs, cmdResults.ExtendedScanResults.IacScanResults...)
+	report.Runs = append(report.Runs, cmdResults.ExtendedScanResults.SecretsScanResults...)
+	report.Runs = append(report.Runs, cmdResults.ExtendedScanResults.SastScanResults...)
 
 	return
 }
 
-func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
-	xrayJson, err := ConvertXrayScanToSimpleJson(results, isMultipleRoots, includeLicenses, true, allowedLicenses)
+func convertXrayResponsesToSarifRun(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
+	xrayJson, err := ConvertXrayScanToSimpleJson(cmdResults, isMultipleRoots, includeLicenses, true, allowedLicenses)
 	if err != nil {
 		return
 	}
 	xrayRun := sarif.NewRunWithInformationURI("JFrog Xray SCA", BaseDocumentationURL+"sca")
-	xrayRun.Tool.Driver.Version = &results.XrayVersion
+	xrayRun.Tool.Driver.Version = &cmdResults.XrayVersion
 	if len(xrayJson.Vulnerabilities) > 0 || len(xrayJson.SecurityViolations) > 0 || len(xrayJson.LicensesViolations) > 0 {
 		if err = extractXrayIssuesToSarifRun(xrayRun, xrayJson); err != nil {
 			return
@@ -356,11 +357,11 @@ func addXrayRule(ruleId, ruleDescription, maxCveScore, summary, markdownDescript
 	})
 }
 
-func ConvertXrayScanToSimpleJson(results *Results, isMultipleRoots, includeLicenses, simplifiedOutput bool, allowedLicenses []string) (formats.SimpleJsonResults, error) {
-	violations, vulnerabilities, licenses := SplitScanResults(results.ScaResults)
+func ConvertXrayScanToSimpleJson(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses, simplifiedOutput bool, allowedLicenses []string) (formats.SimpleJsonResults, error) {
+	violations, vulnerabilities, licenses := SplitScanResults(cmdResults.ScaResults)
 	jsonTable := formats.SimpleJsonResults{}
 	if len(vulnerabilities) > 0 {
-		vulJsonTable, err := PrepareVulnerabilities(vulnerabilities, results, isMultipleRoots, simplifiedOutput)
+		vulJsonTable, err := PrepareVulnerabilities(vulnerabilities, cmdResults, isMultipleRoots, simplifiedOutput)
 		if err != nil {
 			return formats.SimpleJsonResults{}, err
 		}
@@ -377,7 +378,7 @@ func ConvertXrayScanToSimpleJson(results *Results, isMultipleRoots, includeLicen
 		jsonTable.LicensesViolations = GetViolatedLicenses(allowedLicenses, licJsonTable)
 	}
 	if len(violations) > 0 {
-		secViolationsJsonTable, licViolationsJsonTable, opRiskViolationsJsonTable, err := PrepareViolations(violations, results, isMultipleRoots, simplifiedOutput)
+		secViolationsJsonTable, licViolationsJsonTable, opRiskViolationsJsonTable, err := PrepareViolations(violations, cmdResults, isMultipleRoots, simplifiedOutput)
 		if err != nil {
 			return formats.SimpleJsonResults{}, err
 		}
@@ -385,7 +386,7 @@ func ConvertXrayScanToSimpleJson(results *Results, isMultipleRoots, includeLicen
 		jsonTable.LicensesViolations = licViolationsJsonTable
 		jsonTable.OperationalRiskViolations = opRiskViolationsJsonTable
 	}
-	jsonTable.MultiScanId = results.MultiScanId
+	jsonTable.MultiScanId = cmdResults.MultiScanId
 	return jsonTable, nil
 }
 
@@ -402,18 +403,18 @@ func GetViolatedLicenses(allowedLicenses []string, licenses []formats.LicenseRow
 }
 
 func (rw *ResultsWriter) convertScanToSimpleJson() (formats.SimpleJsonResults, error) {
-	jsonTable, err := ConvertXrayScanToSimpleJson(rw.results, rw.isMultipleRoots, rw.includeLicenses, false, nil)
+	jsonTable, err := ConvertXrayScanToSimpleJson(rw.cmdResults, rw.isMultipleRoots, rw.includeLicenses, false, nil)
 	if err != nil {
 		return formats.SimpleJsonResults{}, err
 	}
-	if len(rw.results.ExtendedScanResults.SecretsScanResults) > 0 {
-		jsonTable.Secrets = PrepareSecrets(rw.results.ExtendedScanResults.SecretsScanResults)
+	if len(rw.cmdResults.ExtendedScanResults.SecretsScanResults) > 0 {
+		jsonTable.Secrets = PrepareSecrets(rw.cmdResults.ExtendedScanResults.SecretsScanResults)
 	}
-	if len(rw.results.ExtendedScanResults.IacScanResults) > 0 {
-		jsonTable.Iacs = PrepareIacs(rw.results.ExtendedScanResults.IacScanResults)
+	if len(rw.cmdResults.ExtendedScanResults.IacScanResults) > 0 {
+		jsonTable.Iacs = PrepareIacs(rw.cmdResults.ExtendedScanResults.IacScanResults)
 	}
-	if len(rw.results.ExtendedScanResults.SastScanResults) > 0 {
-		jsonTable.Sast = PrepareSast(rw.results.ExtendedScanResults.SastScanResults)
+	if len(rw.cmdResults.ExtendedScanResults.SastScanResults) > 0 {
+		jsonTable.Sast = PrepareSast(rw.cmdResults.ExtendedScanResults.SastScanResults)
 	}
 	jsonTable.Errors = rw.simpleJsonError
 
@@ -503,7 +504,7 @@ func findMaxCVEScore(cves []formats.CveRow) (string, error) {
 }
 
 // Splits scan responses into aggregated lists of violations, vulnerabilities and licenses.
-func SplitScanResults(results []*ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScanResults(results []*results.ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
@@ -517,7 +518,7 @@ func SplitScanResults(results []*ScaScanResult) ([]services.Violation, []service
 	return violations, vulnerabilities, licenses
 }
 
-func writeJsonResults(results *Results) (resultsPath string, err error) {
+func writeJsonResults(cmdResults *results.ScanCommandResults) (resultsPath string, err error) {
 	out, err := fileutils.CreateTempFile()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -528,7 +529,7 @@ func writeJsonResults(results *Results) (resultsPath string, err error) {
 			err = e
 		}
 	}()
-	bytesRes, err := json.Marshal(&results)
+	bytesRes, err := json.Marshal(&cmdResults)
 	if errorutils.CheckError(err) != nil {
 		return
 	}
@@ -554,8 +555,8 @@ func PrintJson(output interface{}) error {
 	return nil
 }
 
-func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
-	sarifReport, err := GenereateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil)
+func PrintSarif(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool) error {
+	sarifReport, err := GenereateSarifReportFromResults(cmdResults, isMultipleRoots, includeLicenses, nil)
 	if err != nil {
 		return err
 	}

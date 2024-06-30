@@ -1,4 +1,4 @@
-package utils
+package results
 
 import (
 	"testing"
@@ -15,13 +15,13 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 	target2 := &ScaScanResult{Target: "target2"}
 	testCases := []struct {
 		name     string
-		results  Results
+		cmdResults  ScanCommandResults
 		target   string
 		expected *ScaScanResult
 	}{
 		{
 			name: "Sca scan result by target",
-			results: Results{
+			cmdResults: ScanCommandResults{
 				ScaResults: []*ScaScanResult{
 					target1,
 					target2,
@@ -32,7 +32,7 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 		},
 		{
 			name: "Sca scan result by target not found",
-			results: Results{
+			cmdResults: ScanCommandResults{
 				ScaResults: []*ScaScanResult{
 					target1,
 					target2,
@@ -44,7 +44,7 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			result := testCase.results.getScaScanResultByTarget(testCase.target)
+			result := testCase.cmdResults.getScaScanResultByTarget(testCase.target)
 			assert.Equal(t, testCase.expected, result)
 		})
 	}
@@ -74,21 +74,21 @@ func TestGetSummary(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		results      Results
+		cmdResults      ScanCommandResults
 		expected     formats.SummaryResults
 		findingCount int
 		issueCount   int
 	}{
 		{
 			name:         "Empty results",
-			results:      Results{ScaResults: []*ScaScanResult{}},
+			cmdResults:      ScanCommandResults{ScaResults: []*ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 			issueCount:   0,
 		},
 		{
 			name: "One module result",
-			results: Results{
+			cmdResults: ScanCommandResults{
 				ScaResults: []*ScaScanResult{{
 					Target:      "target1",
 					XrayResults: getDummyScaTestResults(true, false),
@@ -119,7 +119,7 @@ func TestGetSummary(t *testing.T) {
 		},
 		{
 			name: "Multiple module results",
-			results: Results{
+			cmdResults: ScanCommandResults{
 				ScaResults: []*ScaScanResult{
 					{
 						Target:      "target1",
@@ -165,10 +165,10 @@ func TestGetSummary(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			result := testCase.results.GetSummary()
+			result := testCase.cmdResults.GetSummary()
 			assert.Equal(t, testCase.expected, result)
-			assert.Equal(t, testCase.findingCount, testCase.results.CountScanResultsFindings())
-			assert.Equal(t, testCase.issueCount, testCase.results.GetSummary().GetTotalIssueCount())
+			assert.Equal(t, testCase.findingCount, testCase.cmdResults.CountScanResultsFindings())
+			assert.Equal(t, testCase.issueCount, testCase.cmdResults.GetSummary().GetTotalIssueCount())
 		})
 	}
 }

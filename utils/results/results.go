@@ -1,4 +1,4 @@
-package utils
+package results
 
 import (
 	"github.com/jfrog/gofrog/datastructures"
@@ -9,7 +9,7 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
-type Results struct {
+type ScanCommandResults struct {
 	ScaResults  []*ScaScanResult
 	XrayVersion string
 	ScansErr    error
@@ -19,18 +19,18 @@ type Results struct {
 	MultiScanId string
 }
 
-func NewAuditResults() *Results {
-	return &Results{ExtendedScanResults: &ExtendedScanResults{}}
+func NewAuditResults() *ScanCommandResults {
+	return &ScanCommandResults{ExtendedScanResults: &ExtendedScanResults{}}
 }
 
-func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
+func (r *ScanCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scaResult := range r.ScaResults {
 		results = append(results, scaResult.XrayResults...)
 	}
 	return
 }
 
-func (r *Results) GetScaScannedTechnologies() []techutils.Technology {
+func (r *ScanCommandResults) GetScaScannedTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scaResult := range r.ScaResults {
 		technologies.Add(scaResult.Technology)
@@ -38,7 +38,7 @@ func (r *Results) GetScaScannedTechnologies() []techutils.Technology {
 	return technologies.ToSlice()
 }
 
-func (r *Results) IsMultipleProject() bool {
+func (r *ScanCommandResults) IsMultipleProject() bool {
 	if len(r.ScaResults) == 0 {
 		return false
 	}
@@ -51,7 +51,7 @@ func (r *Results) IsMultipleProject() bool {
 	return true
 }
 
-func (r *Results) IsScaIssuesFound() bool {
+func (r *ScanCommandResults) IsScaIssuesFound() bool {
 	for _, scan := range r.ScaResults {
 		if scan.HasInformation() {
 			return true
@@ -60,7 +60,7 @@ func (r *Results) IsScaIssuesFound() bool {
 	return false
 }
 
-func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
+func (r *ScanCommandResults) getScaScanResultByTarget(target string) *ScaScanResult {
 	for _, scan := range r.ScaResults {
 		if scan.Target == target {
 			return scan
@@ -69,7 +69,7 @@ func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
 	return nil
 }
 
-func (r *Results) IsIssuesFound() bool {
+func (r *ScanCommandResults) IsIssuesFound() bool {
 	if r.IsScaIssuesFound() {
 		return true
 	}
@@ -81,10 +81,10 @@ func (r *Results) IsIssuesFound() bool {
 
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
-func (r *Results) CountScanResultsFindings() (total int) {
+func (r *ScanCommandResults) CountScanResultsFindings() (total int) {
 	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
-func (r *Results) GetSummary() (summary formats.SummaryResults) {
+func (r *ScanCommandResults) GetSummary() (summary formats.SummaryResults) {
 	if len(r.ScaResults) <= 1 {
 		summary.Scans = r.getScanSummaryByTargets()
 		return
@@ -96,7 +96,7 @@ func (r *Results) GetSummary() (summary formats.SummaryResults) {
 }
 
 // Returns a summary for the provided targets. If no targets are provided, a summary for all targets is returned.
-func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
+func (r *ScanCommandResults) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
 	if len(targets) == 0 {
 		// No filter, one scan summary for all targets
 		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))

@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -37,7 +38,7 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, cmdResults *results.ScanCommandResults) (err error) {
 	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
@@ -84,14 +85,14 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 		// Add the scan to the results
 		auditParallelRunner.ResultsMu.Lock()
-		results.ScaResults = append(results.ScaResults, scan)
+		cmdResults.ScaResults = append(cmdResults.ScaResults, scan)
 		auditParallelRunner.ResultsMu.Unlock()
 	}
 	return
 }
 
 // Calculate the scans to preform
-func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
+func getScaScansToPreform(params *AuditParams) (scansToPreform []*results.ScaScanResult) {
 	for _, requestedDirectory := range params.workingDirs {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
@@ -112,11 +113,11 @@ func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaS
 			}
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: requestedDirectory, Technology: tech})
+				scansToPreform = append(scansToPreform, &results.ScaScanResult{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
+				scansToPreform = append(scansToPreform, &results.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
 			}
 		}
 	}
@@ -133,7 +134,7 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 
 // Preform the SCA scan for the given scan information.
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
-	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
+	scan *results.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
 		defer func() {
@@ -411,7 +412,7 @@ func logDeps(uniqueDeps any) (err error) {
 }
 
 // This method will change the working directory to the scan's working directory.
-func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
+func buildDependencyTree(scan *results.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}

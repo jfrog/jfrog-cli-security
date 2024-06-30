@@ -38,8 +38,8 @@ const (
 // In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintViolationsTable(violations []services.Violation, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
-	securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err := prepareViolations(violations, results, multipleRoots, true, true)
+func PrintViolationsTable(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, printExtended bool, scanType services.ScanType) error {
+	securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err := prepareViolations(violations, cmdResults, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
@@ -73,11 +73,11 @@ func PrintViolationsTable(violations []services.Violation, results *Results, mul
 }
 
 // Prepare violations for all non-table formats (without style or emoji)
-func PrepareViolations(violations []services.Violation, results *Results, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
-	return prepareViolations(violations, results, multipleRoots, false, simplifiedOutput)
+func PrepareViolations(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+	return prepareViolations(violations, cmdResults, multipleRoots, false, simplifiedOutput)
 }
 
-func prepareViolations(violations []services.Violation, results *Results, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+func prepareViolations(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
 	if simplifiedOutput {
 		violations = simplifyViolations(violations, multipleRoots)
 	}
@@ -92,12 +92,12 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 		switch violation.ViolationType {
 		case formats.ViolationTypeSecurity.String():
 			cves := convertCves(violation.Cves)
-			if results.ExtendedScanResults.EntitledForJas {
+			if cmdResults.ExtendedScanResults.EntitledForJas {
 				for i := range cves {
-					cves[i].Applicability = getCveApplicabilityField(cves[i].Id, results.ExtendedScanResults.ApplicabilityScanResults, violation.Components)
+					cves[i].Applicability = getCveApplicabilityField(cves[i].Id, cmdResults.ExtendedScanResults.ApplicabilityScanResults, violation.Components)
 				}
 			}
-			applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
+			applicabilityStatus := getApplicableCveStatus(cmdResults.ExtendedScanResults.EntitledForJas, cmdResults.ExtendedScanResults.ApplicabilityScanResults, cves)
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
@@ -192,8 +192,8 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
-	vulnerabilitiesRows, err := prepareVulnerabilities(vulnerabilities, results, multipleRoots, true, true)
+func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, printExtended bool, scanType services.ScanType) error {
+	vulnerabilitiesRows, err := prepareVulnerabilities(vulnerabilities, cmdResults, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results
 		return coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(vulnerabilitiesRows), "Vulnerable Components", "✨ No vulnerable components were found ✨", printExtended)
 	}
 	var emptyTableMessage string
-	if len(results.ScaResults) > 0 {
+	if len(cmdResults.ScaResults) > 0 {
 		emptyTableMessage = "✨ No vulnerable dependencies were found ✨"
 	} else {
 		emptyTableMessage = coreutils.PrintYellow("🔧 Couldn't determine a package manager or build tool used by this project 🔧")
@@ -211,11 +211,11 @@ func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results
 }
 
 // Prepare vulnerabilities for all non-table formats (without style or emoji)
-func PrepareVulnerabilities(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
-	return prepareVulnerabilities(vulnerabilities, results, multipleRoots, false, simplifiedOutput)
+func PrepareVulnerabilities(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
+	return prepareVulnerabilities(vulnerabilities, cmdResults, multipleRoots, false, simplifiedOutput)
 }
 
-func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
+func prepareVulnerabilities(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
 	if simplifiedOutput {
 		vulnerabilities = simplifyVulnerabilities(vulnerabilities, multipleRoots)
 	}
@@ -226,12 +226,12 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 			return nil, err
 		}
 		cves := convertCves(vulnerability.Cves)
-		if results.ExtendedScanResults.EntitledForJas {
+		if cmdResults.ExtendedScanResults.EntitledForJas {
 			for i := range cves {
-				cves[i].Applicability = getCveApplicabilityField(cves[i].Id, results.ExtendedScanResults.ApplicabilityScanResults, vulnerability.Components)
+				cves[i].Applicability = getCveApplicabilityField(cves[i].Id, cmdResults.ExtendedScanResults.ApplicabilityScanResults, vulnerability.Components)
 			}
 		}
-		applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
+		applicabilityStatus := getApplicableCveStatus(cmdResults.ExtendedScanResults.EntitledForJas, cmdResults.ExtendedScanResults.ApplicabilityScanResults, cves)
 		currSeverity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
 		if err != nil {
 			return nil, err
