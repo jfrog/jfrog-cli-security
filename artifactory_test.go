@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -220,6 +221,13 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	defer createTempDirCallback()
 	setEnvCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempDirPath)
 	defer setEnvCallBack()
+
+	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
+	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
+	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
+		securityTestUtils.CreateJfrogHomeConfig(t, true)
+		defer securityTestUtils.CleanTestsHomeEnv()
+	}
 
 	// Download
 	err := jas.DownloadAnalyzerManagerIfNeeded(0)
