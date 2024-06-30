@@ -17,6 +17,12 @@ import (
 	"sync"
 	"testing"
 
+	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
@@ -37,7 +43,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -215,7 +221,7 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 	// Verify that the scan succeeded, and that at least one "Applicable" status was received.
 	applicableStatusExists := false
 	for _, vulnerability := range results.Vulnerabilities {
-		if vulnerability.Applicable == string(utils.Applicable) {
+		if vulnerability.Applicable == string(jasutils.Applicable) {
 			applicableStatusExists = true
 			break
 		}

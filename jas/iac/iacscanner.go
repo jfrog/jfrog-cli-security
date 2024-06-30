@@ -1,12 +1,14 @@
 package iac
 
 import (
-	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/jas"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"path/filepath"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -34,18 +36,18 @@ type IacScanManager struct {
 // error: An error object (if any).
 func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.IaC)); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
 		return
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
 	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.IaC, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
 	results = iacScanManager.iacScannerResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
 	}
 	return
 }
@@ -99,7 +101,7 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclu
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, utils.IaC)
+	return jas.CreateScannersConfigFile(iac.configFileName, configFileContent, jasutils.IaC)
 }
 
 func (iac *IacScanManager) runAnalyzerManager() error {

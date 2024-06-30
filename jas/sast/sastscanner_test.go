@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/stretchr/testify/assert"
@@ -75,76 +75,76 @@ func TestGroupResultsByLocation(t *testing.T) {
 		expectedOutput *sarif.Run
 	}{
 		{
-			run:            utils.CreateRunWithDummyResults(),
-			expectedOutput: utils.CreateRunWithDummyResults(),
+			run:            sarifutils.CreateRunWithDummyResults(),
+			expectedOutput: sarifutils.CreateRunWithDummyResults(),
 		},
 		{
 			// No similar groups at all
-			run: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
-				utils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						utils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+			run: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
-				utils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
-						utils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
 			),
-			expectedOutput: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
-				utils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						utils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+			expectedOutput: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "note"),
+				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
-				utils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
-						utils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
+				sarifutils.CreateResultWithOneLocation("file2", 1, 2, 3, 4, "snippet", "rule2", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet2"),
+						sarifutils.CreateLocation("file2", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
 			),
 		},
 		{
 			// With similar groups
-			run: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						utils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
+			run: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
-						utils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
-				utils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info"),
 			),
-			expectedOutput: utils.CreateRunWithDummyResults(
-				utils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
-						utils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
+			expectedOutput: sarifutils.CreateRunWithDummyResults(
+				sarifutils.CreateResultWithOneLocation("file", 1, 2, 3, 4, "snippet", "rule1", "info").WithCodeFlows([]*sarif.CodeFlow{
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other", 0, 0, 0, 0, "other-snippet"),
+						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
 					)),
-					utils.CreateCodeFlow(utils.CreateThreadFlow(
-						utils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
-						utils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
+					sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+						sarifutils.CreateLocation("other2", 1, 1, 1, 1, "other-snippet"),
+						sarifutils.CreateLocation("file", 1, 2, 3, 4, "snippet"),
 					)),
 				}),
-				utils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file", 5, 6, 7, 8, "snippet", "rule1", "info"),
 			),
 		},
 	}

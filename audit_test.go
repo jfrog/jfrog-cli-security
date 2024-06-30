@@ -10,13 +10,12 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
+
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/stretchr/testify/assert"
 
@@ -26,9 +25,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
@@ -557,39 +556,6 @@ func TestXrayRecursiveScan(t *testing.T) {
 	assert.NoError(t, err)
 	// We anticipate receiving an array with a length of 2 to confirm that we have obtained results from two distinct inner projects.
 	assert.Len(t, results, 2)
-}
-
-func TestXscAnalyticsForAudit(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	securityTestUtils.ValidateXscVersion(t, xscservices.AnalyticsMetricsMinXscVersion)
-	reportUsageCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-	defer reportUsageCallBack()
-	// Scan npm project and verify that analytics general event were sent to XSC.
-	output := testAuditNpm(t, string(format.SimpleJson))
-	validateAnalyticsBasicEvent(t, output)
-}
-
-func validateAnalyticsBasicEvent(t *testing.T, output string) {
-	// Get MSI.
-	var results formats.SimpleJsonResults
-	err := json.Unmarshal([]byte(output), &results)
-	assert.NoError(t, err)
-
-	// Verify analytics metrics.
-	am := utils.NewAnalyticsMetricsService(securityTests.XscDetails)
-	assert.NotNil(t, am)
-	assert.NotEmpty(t, results.MultiScanId)
-	event, err := am.GetGeneralEvent(results.MultiScanId)
-	assert.NoError(t, err)
-
-	// Event creation and addition information.
-	assert.Equal(t, xscservices.CliProduct, event.Product)
-	assert.Equal(t, xscservices.CliEventType, event.EventType)
-	assert.NotEmpty(t, event.AnalyzerManagerVersion)
-	assert.NotEmpty(t, event.EventStatus)
-	// The information that was added after updating the event with the scan's results.
-	assert.NotEmpty(t, event.TotalScanDuration)
-	assert.True(t, event.TotalFindings > 0)
 }
 
 func TestAuditOnEmptyProject(t *testing.T) {

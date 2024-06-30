@@ -3,6 +3,7 @@ package utils
 import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -144,17 +145,17 @@ type ExtendedScanResults struct {
 }
 
 func (e *ExtendedScanResults) IsIssuesFound() bool {
-	return GetResultsLocationCount(e.ApplicabilityScanResults...) > 0 ||
-		GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
-		GetResultsLocationCount(e.IacScanResults...) > 0 ||
-		GetResultsLocationCount(e.SastScanResults...) > 0
+	return sarifutils.GetResultsLocationCount(e.ApplicabilityScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.IacScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.SastScanResults...) > 0
 }
 
 func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *ExtendedScanResults) {
 	return &ExtendedScanResults{
-		ApplicabilityScanResults: GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
-		SecretsScanResults:       GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
-		IacScanResults:           GetRunsByWorkingDirectory(target, e.IacScanResults...),
-		SastScanResults:          GetRunsByWorkingDirectory(target, e.SastScanResults...),
+		ApplicabilityScanResults: sarifutils.GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
+		SecretsScanResults:       sarifutils.GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
+		IacScanResults:           sarifutils.GetRunsByWorkingDirectory(target, e.IacScanResults...),
+		SastScanResults:          sarifutils.GetRunsByWorkingDirectory(target, e.SastScanResults...),
 	}
 }

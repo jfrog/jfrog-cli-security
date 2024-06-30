@@ -10,7 +10,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -44,7 +44,7 @@ func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanComm
 
 func (dsc *DockerScanCommand) Run() (err error) {
 	// Validate Xray minimum version
-	_, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
+	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
 	if err != nil {
 		return err
 	}

@@ -1,11 +1,12 @@
 package secrets
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/stretchr/testify/require"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -29,7 +30,7 @@ func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(utils.Secrets))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
 	require.NoError(t, err)
 	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir)
 

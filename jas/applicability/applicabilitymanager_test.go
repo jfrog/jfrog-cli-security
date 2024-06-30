@@ -1,15 +1,16 @@
 package applicability
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
@@ -244,7 +245,7 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability))
 	require.NoError(t, err)
 	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, scanner, false, ApplicabilityScannerType, scannerTempDir)
 
@@ -300,7 +301,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(utils.Applicability))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability))
 	require.NoError(t, err)
 	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, mockDirectDependencies, scanner, false, ApplicabilityScannerType, scannerTempDir)
 

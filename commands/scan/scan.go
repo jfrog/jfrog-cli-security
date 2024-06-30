@@ -17,8 +17,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -29,7 +31,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	xrutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -63,7 +64,7 @@ type ScanCommand struct {
 	indexerTempDir         string
 	outputFormat           format.OutputFormat
 	projectKey             string
-	minSeverityFilter      string
+	minSeverityFilter      severityutils.Severity
 	watches                []string
 	includeVulnerabilities bool
 	includeLicenses        bool
@@ -75,7 +76,7 @@ type ScanCommand struct {
 	commandSupportsJAS     bool
 }
 
-func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter string) *ScanCommand {
+func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
 	scanCmd.minSeverityFilter = minSeverityFilter
 	return scanCmd
 }
@@ -198,12 +199,12 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 			}
 		}
 	}()
-	xrayManager, xrayVersion, err := xrutils.CreateXrayServiceManagerAndGetVersion(scanCmd.serverDetails)
+	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(scanCmd.serverDetails)
 	if err != nil {
 		return err
 	}
 
-	scanResults := xrutils.NewAuditResults()
+	scanResults := utils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
@@ -211,7 +212,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	if scanResults.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
 		errGroup.Go(func() error {
-			return xrutils.DownloadAnalyzerManagerIfNeeded(0)
+			return jas.DownloadAnalyzerManagerIfNeeded(0)
 		})
 	}
 
@@ -266,11 +267,11 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer)
 
 	// Handle results
-	flatResults := []*xrutils.ScaScanResult{}
+	flatResults := []*utils.ScaScanResult{}
 
 	for _, arr := range resultsArr {
 		for _, res := range arr {
-			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
+			flatResults = append(flatResults, &utils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
 			scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, res.ExtendedScanResults.ApplicabilityScanResults...)
 			scanResults.ExtendedScanResults.SecretsScanResults = append(scanResults.ExtendedScanResults.SecretsScanResults, res.ExtendedScanResults.SecretsScanResults...)
 		}
@@ -298,7 +299,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
 	}
 
-	if err = xrutils.NewResultsWriter(scanResults).
+	if err = utils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
@@ -320,8 +321,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
 	if scanCmd.fail && !scanCmd.includeVulnerabilities {
-		if xrutils.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
-			return xrutils.NewFailBuildError()
+		if utils.CheckIfFailBuild(scanResults.GetScaScansXrayResults()) {
+			return utils.NewFailBuildError()
 		}
 	}
 	if len(scanErrors) > 0 {
@@ -397,8 +398,8 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(xrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
-					SetSeverityLevel(scanCmd.minSeverityFilter)
-				xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+					SetSeverityLevel(scanCmd.minSeverityFilter.String())
+				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {
 					return err
 				}
