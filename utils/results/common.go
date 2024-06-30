@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -411,16 +412,17 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func SplitScaScanResults(results *ScanCommandResults) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScaScanResults(results *utils.ScaScanResult) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
-	for _, scan := range results.Scans {
-		for _, scaScan := range scan.ScaResults {
-			violations = append(violations, scaScan.XrayResult.Violations...)
-			vulnerabilities = append(vulnerabilities, scaScan.XrayResult.Vulnerabilities...)
-			licenses = append(licenses, scaScan.XrayResult.Licenses...)
-		}
+	for _, scan := range results.XrayResults {
+		licenses = append(licenses, scan.Licenses...)
+		// for _, scaScan := range scan.ScaResults {
+		// 	violations = append(violations, scaScan.XrayResult.Violations...)
+		// 	vulnerabilities = append(vulnerabilities, scaScan.XrayResult.Vulnerabilities...)
+		// 	licenses = append(licenses, scaScan.XrayResult.Licenses...)
+		// }
 	}
 	return violations, vulnerabilities, licenses
 }

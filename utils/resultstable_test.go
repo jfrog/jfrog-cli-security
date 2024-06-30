@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -58,7 +59,7 @@ func TestSplitComponentId(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actualCompName, actualCompVersion, actualCompType := SplitComponentId(test.componentId)
+		actualCompName, actualCompVersion, actualCompType := techutils.SplitComponentId(test.componentId)
 		assert.Equal(t, test.expectedCompName, actualCompName)
 		assert.Equal(t, test.expectedCompVersion, actualCompVersion)
 		assert.Equal(t, test.expectedCompType, actualCompType)

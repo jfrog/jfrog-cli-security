@@ -11,8 +11,8 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -528,7 +528,7 @@ func splitComponents(impactedPackages map[string]services.Component) (impactedPa
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currCompType := SplitComponentId(currCompId)
+		currCompName, currCompVersion, currCompType := techutils.SplitComponentId(currCompId)
 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
 		impactedPackagesTypes = append(impactedPackagesTypes, currCompType)
@@ -539,8 +539,6 @@ func splitComponents(impactedPackages map[string]services.Component) (impactedPa
 	}
 	return
 }
-
-
 
 // Gets a slice of the direct dependencies or packages of the scanned component, that depends on the vulnerable package, and converts the impact paths.
 func getDirectComponentsAndImpactPaths(impactPaths [][]services.ImpactPathNode) (components []formats.ComponentRow, impactPathsRows [][]formats.ComponentRow) {
@@ -555,14 +553,14 @@ func getDirectComponentsAndImpactPaths(impactPaths [][]services.ImpactPathNode) 
 		}
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
-			compName, compVersion, _ := SplitComponentId(componentId)
+			compName, compVersion, _ := techutils.SplitComponentId(componentId)
 			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion}
 		}
 
 		// Convert the impact path
 		var compImpactPathRows []formats.ComponentRow
 		for _, pathNode := range impactPath {
-			nodeCompName, nodeCompVersion, _ := SplitComponentId(pathNode.ComponentId)
+			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentId(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
 				Name:    nodeCompName,
 				Version: nodeCompVersion,
@@ -626,7 +624,7 @@ func simplifyVulnerabilities(scanVulnerabilities []services.Vulnerability, multi
 	var uniqueVulnerabilities = make(map[string]*services.Vulnerability)
 	for _, vulnerability := range scanVulnerabilities {
 		for vulnerableComponentId := range vulnerability.Components {
-			vulnerableDependency, vulnerableVersion, _ := SplitComponentId(vulnerableComponentId)
+			vulnerableDependency, vulnerableVersion, _ := techutils.SplitComponentId(vulnerableComponentId)
 			packageKey := GetUniqueKey(vulnerableDependency, vulnerableVersion, vulnerability.IssueId, len(vulnerability.Components[vulnerableComponentId].FixedVersions) > 0)
 			if uniqueVulnerability, exist := uniqueVulnerabilities[packageKey]; exist {
 				fixedVersions := appendUniqueFixVersions(uniqueVulnerability.Components[vulnerableComponentId].FixedVersions, vulnerability.Components[vulnerableComponentId].FixedVersions...)
@@ -662,7 +660,7 @@ func simplifyViolations(scanViolations []services.Violation, multipleRoots bool)
 	var uniqueViolations = make(map[string]*services.Violation)
 	for _, violation := range scanViolations {
 		for vulnerableComponentId := range violation.Components {
-			vulnerableDependency, vulnerableVersion, _ := SplitComponentId(vulnerableComponentId)
+			vulnerableDependency, vulnerableVersion, _ := techutils.SplitComponentId(vulnerableComponentId)
 			packageKey := GetUniqueKey(vulnerableDependency, vulnerableVersion, violation.IssueId, len(violation.Components[vulnerableComponentId].FixedVersions) > 0)
 			if uniqueVulnerability, exist := uniqueViolations[packageKey]; exist {
 				fixedVersions := appendUniqueFixVersions(uniqueVulnerability.Components[vulnerableComponentId].FixedVersions, violation.Components[vulnerableComponentId].FixedVersions...)

@@ -82,8 +82,8 @@ type Location struct {
 }
 
 type ComponentRow struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name     string    `json:"name"`
+	Version  string    `json:"version"`
 	Location *Location `json:"location,omitempty"`
 }
 
