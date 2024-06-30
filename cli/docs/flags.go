@@ -8,8 +8,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 const (
@@ -222,7 +222,7 @@ var flagsMap = map[string]components.Flag{
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
-		components.WithStrDefaultValue(strings.Join(sca.DefaultExcludePatterns, ";")),
+		components.WithStrDefaultValue(strings.Join(utils.DefaultScaExcludePatterns, ";")),
 	),
 	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
 	Gradle:  components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),

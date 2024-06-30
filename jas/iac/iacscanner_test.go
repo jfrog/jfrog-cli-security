@@ -1,11 +1,12 @@
 package iac
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/stretchr/testify/require"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -34,7 +35,7 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t, "currentDir")
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(utils.IaC))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String())
 	require.NoError(t, err)
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
 

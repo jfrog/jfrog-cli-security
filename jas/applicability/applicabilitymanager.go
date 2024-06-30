@@ -1,17 +1,20 @@
 package applicability
 
 import (
+	"path/filepath"
+
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
-	"path/filepath"
 )
 
 const (
@@ -48,7 +51,7 @@ type ApplicabilityScanManager struct {
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, string(utils.Applicability)); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
 		return
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType, scannerTempDir)
@@ -58,12 +61,12 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
 	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
-		err = utils.ParseAnalyzerManagerError(utils.Applicability, err)
+		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
 	results = applicabilityScanManager.applicabilityScanResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", utils.GetApplicableResultCountFromRule(results...), "applicable cves")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
 	}
 	return
 }
@@ -167,7 +170,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 	excludePatterns := jas.GetExcludePatterns(module, nil, exclusions...)
 	if asm.thirdPartyScan {
 		log.Info("Including node modules folder in applicability scan")
-		excludePatterns = removeElementFromSlice(excludePatterns, jas.NodeModulesPattern)
+		excludePatterns = removeElementFromSlice(excludePatterns, utils.NodeModulesPattern)
 	}
 	configFileContent := applicabilityScanConfig{
 		Scans: []scanConfiguration{
@@ -182,7 +185,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 			},
 		},
 	}
-	return jas.CreateScannersConfigFile(asm.configFileName, configFileContent, utils.Applicability)
+	return jas.CreateScannersConfigFile(asm.configFileName, configFileContent, jasutils.Applicability)
 }
 
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for

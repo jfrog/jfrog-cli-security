@@ -1,16 +1,19 @@
-package utils
+package xsc
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-	"strings"
-	"time"
 )
 
 type AnalyticsMetricsService struct {
@@ -103,7 +106,7 @@ func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.Produ
 			JfrogUser:              ams.xscManager.Config().GetServiceDetails().GetUser(),
 			OsPlatform:             curOs,
 			OsArchitecture:         curArch,
-			AnalyzerManagerVersion: GetAnalyzerManagerVersion(),
+			AnalyzerManagerVersion: jas.GetAnalyzerManagerVersion(),
 		},
 	}
 	return &event
@@ -154,7 +157,7 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 	return event, err
 }
 
-func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *Results) *xscservices.XscAnalyticsGeneralEventFinalize {
+func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *utils.Results) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
 	eventStatus := xscservices.Completed
 	if auditResults.ScansErr != nil {

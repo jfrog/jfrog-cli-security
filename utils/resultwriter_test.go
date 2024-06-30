@@ -7,6 +7,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -64,7 +66,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 		name                string
 		formattedDeps       string
 		maxCveScore         string
-		status              ApplicabilityStatus
+		status              jasutils.ApplicabilityStatus
 		fixedVersions       []string
 		expectedDescription string
 	}{
@@ -187,25 +189,25 @@ func TestGetXrayIssueLocationIfValidExists(t *testing.T) {
 		{
 			name:           "No descriptor information",
 			tech:           techutils.Pip,
-			run:            CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
+			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://Package-Descriptor"))),
 		},
 		{
 			name:           "One descriptor information",
 			tech:           techutils.Go,
-			run:            CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
+			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filepath.Join(testDir, "go.mod")))),
 		},
 		{
 			name:           "One descriptor information - no invocation",
 			tech:           techutils.Go,
-			run:            CreateRunWithDummyResults(),
+			run:            sarifutils.CreateRunWithDummyResults(),
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://go.mod"))),
 		},
 		{
 			name:           "Multiple descriptor information",
 			tech:           techutils.Gradle,
-			run:            CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
+			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filepath.Join(testDir, "build.gradle.kts")))),
 		},
 	}
@@ -239,7 +241,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -247,7 +249,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -255,7 +257,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-2",
 			IssueId: "XRAY-2",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -285,7 +287,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -293,7 +295,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -302,7 +304,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 		{
 			LicenseKey: "license-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
 				ImpactedDependencyName: "component-B",
 			},
 		},
