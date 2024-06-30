@@ -299,6 +299,9 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		return err
 	}
 	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
+	if err != nil {
+		return err
+	}
 	// Validate the graph isn't empty.
 	if len(depTreeResult.FullDepTrees) == 0 {
 		return errorutils.CheckErrorf("found no dependencies for the audited project using '%v' as the package manager", tech.String())
