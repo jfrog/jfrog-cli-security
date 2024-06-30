@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

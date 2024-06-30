@@ -13,7 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
