@@ -5,7 +5,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/scanconfig"
+	"github.com/jfrog/jfrog-cli-security/utils/configs"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -39,17 +39,23 @@ type ScanResults struct {
 	// // Logical name of the target
 	// Name  string `json:"name,omitempty"`
 
-	scanconfig.ScanTarget `json:",inline"`
+	configs.ScanTarget `json:",inline"`
 
 	Errors error `json:"errors,omitempty"`
 	// All scan results for the target
-	ScaResults []ScaScanResults `json:"sca_scans"`
+	ScaResults []*ScaScanResults `json:"sca_scans"`
 	JasResults *JasScansResults `json:"Jas_scans,omitempty"`
 }
 
 type ScaScanResults struct {
-	scanconfig.ScanTarget `json:",inline"`
+	// Related Descriptor that provided the dependencies for the scan
+	configs.ScanTarget `json:",inline,omitempty"`
+	
+	// List of unique dependencies in the descriptor
+	// Dependencies []string `json:"Dependencies,omitempty"`
+	// DependenciesTree *scautils.DependenciesTree `json:"DependenciesTree,omitempty"`
 
+	// TODO: build response base on response of tech
 	XrayResult services.ScanResponse `json:"XrayScan"`
 
 	// Optional field (not used only in build scan) to provide the technology of the scan
@@ -169,7 +175,7 @@ func (r *ScanCommandResults) HasFindings() bool {
 
 // --- Scan on a target ---
 
-func (r *ScanCommandResults) NewScanResults(target scanconfig.ScanTarget) *ScanResults {
+func (r *ScanCommandResults) NewScanResults(target configs.ScanTarget) *ScanResults {
 	scanResults := &ScanResults{ScanTarget: target}
 	if r.EntitledForJas {
 		scanResults.JasResults = &JasScansResults{}
@@ -225,7 +231,7 @@ func (sr *ScanResults) NewScaScanResults(response *services.ScanResponse) *ScaSc
 }
 
 func (sr *ScanResults) NewScaScan(target string, technology techutils.Technology) *ScaScanResults {
-	scaScanResults := &ScaScanResults{ScanTarget: scanconfig.ScanTarget{Target: target, Technology: technology}}
+	scaScanResults := &ScaScanResults{ScanTarget: configs.ScanTarget{Target: target, Technology: technology}}
 	sr.ScaResults = append(sr.ScaResults, *scaScanResults)
 	return scaScanResults
 }

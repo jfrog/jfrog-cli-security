@@ -31,8 +31,14 @@ type BuildDependencyTreeParams struct {
 }
 
 type DetectDependenciesCommand struct {
+	TargetConfig *configs.DetectTechParams
+
+
+
 	serverDetails *config.ServerDetails
 	params 	  *DetectDependenciesParams
+
+
 }
 
 func NewDetectDependenciesCommand() *DetectDependenciesCommand {

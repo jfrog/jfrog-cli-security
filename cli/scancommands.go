@@ -155,17 +155,6 @@ func getAuditAndScansCommands() []components.Command {
 	}
 }
 
-// func ScanProfileCmd(c *components.Context) error {
-
-// 	serverDetails, err := createServerDetailsWithConfigOffer(c)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	getScanProfileCmd := appConfig.NewScanProfileCommand()
-
-// 	return commandsCommon.Exec(getScanProfileCmd)
-// }
-
 func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)

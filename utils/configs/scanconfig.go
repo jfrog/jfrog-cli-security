@@ -16,6 +16,10 @@ type DetectScanConfigParams struct {
 	ScanOutput
 }
 
+
+
+
+
 // Configuration for audit command
 type AppsSecurityConfig struct {
 	// Platform information
@@ -45,6 +49,35 @@ type ScanOutput struct {
 	OutputFormat format.OutputFormat    `json:"output_format,omitempty"`
 	ExtendedTable bool                  `json:"extended_table,omitempty"`
 }
+
+
+type ScanTargetConfig struct {
+	ScanTarget
+	ScaScanTarget
+	// Optional field (used in audit) to provide an exclusion list for the target
+	// ExcludePatterns []string `json:"exclude_patterns,omitempty"`
+
+	// If nil - scanner will not be executed
+	// ScaScanConfig *TechConfig `json:"sca_scans,omitempty"`
+	// Optional field (used in source code scans) to provide custom configuration for the target technology
+	ScaScanConfig *TargetTechConfig `json:"tech_config,omitempty"`
+	// All the JAS scanners that should be executed on the target with their configurations
+	JasScanConfigs *JasScannersConfig `json:"jas_scans,omitempty"`
+}
+
+// Configuration for sca scan target
+type ScaScanTarget struct {
+	
+	
+}
+
+// Configurations for source code dependencies scan
+type TargetTechConfig struct {
+	DetectTechParams
+	// Include third party dependencies source code in the applicability scan.
+	ThirdPartyApplicabilityScan bool
+}
+
 
 // Configuration for Jas scans on target
 type JasScannersConfig struct {

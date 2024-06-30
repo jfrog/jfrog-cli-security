@@ -22,6 +22,10 @@ type DetectTechParams struct {
 	//CustomPipDependenciesFilePath string `json:"customPipDependenciesFilePath,omitempty"`
 }
 
+
+
+
+
 // Configuration for handling technology configurations on a target (install, build dependency tree...)
 type TechParams struct {
 	Descriptors    []string `json:"descriptors,omitempty"`
@@ -42,20 +46,11 @@ type InstallParams struct {
 	CurationConfig		*CurationConfig `json:"curation_config,omitempty"`
 }
 
-// Configurations for source code dependencies scan
-type TargetTechConfig struct {
-	DetectTechParams
-	// Include third party dependencies source code in the applicability scan.
-	ThirdPartyApplicabilityScan bool
-}
-
 type ArtifactoryRegistryConfig struct {
 	// Artifactory server details as a resolution repository target
 	ServerDetails *config.ServerDetails
 	Repository    string `json:"repository,omitempty"`
 }
-
-
 
 type CurationConfig struct {
 	// Curation params

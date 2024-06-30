@@ -38,8 +38,8 @@ type DetectAppsCommand struct {
 	params        *AppsDetectParams
 }
 
-func NewScanProfileCommand() *DetectAppsCommand {
-	return &DetectAppsCommand{}
+func NewDetectAppsCommand(serverDetails *config.ServerDetails) *DetectAppsCommand {
+	return &DetectAppsCommand{serverDetails: serverDetails}
 }
 
 func (daCmd *DetectAppsCommand) CommandName() string {

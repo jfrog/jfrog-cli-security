@@ -8,7 +8,6 @@ import (
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-security/commands/scans/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/commands/scans/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 )
 
@@ -152,6 +151,14 @@ var commandFlags = map[string][]string{
 	AuditPipenv: {
 		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
+}
+
+func getAuditFlags() []string {
+	return []string{
+		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
+		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+	}
 }
 
 // Security Flag keys mapped to their corresponding components.Flag definition.
