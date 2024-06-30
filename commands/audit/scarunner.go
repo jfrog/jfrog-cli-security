@@ -9,9 +9,11 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
+	"os"
+	"time"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
-	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -25,14 +27,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"os"
-	"time"
 )
 
 func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
@@ -209,7 +210,7 @@ type DependencyTreeResult struct {
 	DownloadUrls map[string]string
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
+func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -222,14 +223,6 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
 
-	err = SetResolutionRepoIfExists(params, tech)
-	if err != nil {
-		return
-	}
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
 	var uniqueDeps []string
 	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
 	startTime := time.Now()
@@ -237,7 +230,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
-			Server:                  serverDetails,
+			Server:                  artifactoryServerDetails,
 			DepsRepo:                params.DepsRepo(),
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
 			UseWrapper:              params.UseWrapper(),
@@ -255,7 +248,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
 		depTreeResult.FullDepTrees, uniqueDeps,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
-			Server:              serverDetails,
+			Server:              artifactoryServerDetails,
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
 			PipRequirementsFile: params.PipRequirementsFile(),
@@ -304,66 +297,22 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 	return logMessage, curationCacheFolder, err
 }
 
-// Associates a technology with another of a different type in the structure.
-// Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
-var TechType = map[techutils.Technology]project.ProjectType{
-	techutils.Maven: project.Maven, techutils.Gradle: project.Gradle, techutils.Npm: project.Npm, techutils.Yarn: project.Yarn, techutils.Go: project.Go, techutils.Pip: project.Pip,
-	techutils.Pipenv: project.Pipenv, techutils.Poetry: project.Poetry, techutils.Nuget: project.Nuget, techutils.Dotnet: project.Dotnet,
-}
-
-// Verifies the existence of depsRepo. If it doesn't exist, it searches for a configuration file based on the technology type. If found, it assigns depsRepo in the AuditParams.
-func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech techutils.Technology) (err error) {
+func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
+		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
 	}
-	configFilePath, exists, err := project.GetProjectConfFilePath(TechType[tech])
+	artifactoryDetails, err := artifactory.GetResolutionRepoIfExists(tech)
 	if err != nil {
-		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 		return
 	}
-	if !exists {
-		// Nuget and Dotnet are identified similarly in the detection process. To prevent redundancy, Dotnet is filtered out earlier in the process, focusing solely on detecting Nuget.
-		// Consequently, it becomes necessary to verify the presence of dotnet.yaml when Nuget detection occurs.
-		if tech == techutils.Nuget {
-			configFilePath, exists, err = project.GetProjectConfFilePath(TechType[techutils.Dotnet])
-			if err != nil {
-				err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
-				return
-			}
-			if !exists {
-				log.Debug(fmt.Sprintf("No %s.yaml nor %s.yaml configuration file was found. Resolving dependencies from %s default registry", techutils.Nuget.String(), techutils.Dotnet.String(), tech.String()))
-				return
-			}
-		} else {
-			log.Debug(fmt.Sprintf("No %s.yaml configuration file was found. Resolving dependencies from %s default registry", tech.String(), tech.String()))
-			return
-		}
+	if artifactoryDetails == nil {
+		return params.ServerDetails()
 	}
-
-	log.Debug("Using resolver config from", configFilePath)
-	repoConfig, err := project.ReadResolutionOnlyConfiguration(configFilePath)
-	if err != nil {
-		var missingResolverErr *project.MissingResolverErr
-		if !errors.As(err, &missingResolverErr) {
-			err = fmt.Errorf("failed while reading %s.yaml config file: %s", tech.String(), err.Error())
-			return
-		}
-		// When the resolver repository is absent from the configuration file, ReadResolutionOnlyConfiguration throws an error.
-		// However, this situation isn't considered an error here as the resolver repository isn't mandatory for constructing the dependencies tree.
-		err = nil
-	}
-
-	// If the resolver repository doesn't exist and triggers a MissingResolverErr in ReadResolutionOnlyConfiguration, the repoConfig becomes nil. In this scenario, there is no depsRepo to set, nor is there a necessity to do so.
-	if repoConfig != nil {
-		log.Debug("Using resolver config from", configFilePath)
-		details, e := repoConfig.ServerDetails()
-		if e != nil {
-			err = fmt.Errorf("failed getting server details: %s", e.Error())
-		} else {
-			params.SetServerDetails(details)
-			params.SetDepsRepo(repoConfig.TargetRepo())
-		}
-	}
+	// If the configuration file is found, the server details and the target repository are extracted from it.
+	params.SetDepsRepo(artifactoryDetails.TargetRepository)
+	params.SetServerDetails(artifactoryDetails.ServerDetails)
+	serverDetails = artifactoryDetails.ServerDetails
 	return
 }
 
@@ -413,7 +362,11 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*Depen
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
+	serverDetails, err := SetResolutionRepoIfExists(params.AuditBasicParams, scan.Technology)
+	if err != nil {
+		return nil, err
+	}
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
