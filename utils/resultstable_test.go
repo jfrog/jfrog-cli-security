@@ -1110,18 +1110,3 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	}
 }
 
-func newBoolPtr(v bool) *bool {
-	return &v
-}
-
-func newIntPtr(v int) *int {
-	return &v
-}
-
-func newInt64Ptr(v int64) *int64 {
-	return &v
-}
-
-func newFloat64Ptr(v float64) *float64 {
-	return &v
-}

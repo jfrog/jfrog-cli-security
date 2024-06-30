@@ -108,7 +108,7 @@ func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormat
 	multipleTargets := cmdResults.HasMultipleTargets()
 	parser.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled)
 	for _, scan := range cmdResults.Scans {
-		if err = parser.ParseNewScanResultsMetadata(scan.Target, scan.Errors); err != nil {
+		if err = parser.ParseNewScanResultsMetadata(scan.Target, scan.Error); err != nil {
 			return err
 		}
 		for _, scaResults := range scan.ScaResults {

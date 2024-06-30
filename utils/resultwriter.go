@@ -24,10 +24,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const (
-	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-)
-
 const MissingCveScore = "0"
 const maxPossibleCve = 10.0
 

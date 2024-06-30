@@ -1,4 +1,4 @@
-package utils
+package output
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -356,7 +357,7 @@ func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string
 	}
 }
 
-func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary formats.ScanSummaryResult) {
+func getScanSummary(extendedScanResults *results.ExtendedScanResults, scaResults ...*results.ScaScanResult) (summary formats.ScanSummaryResult) {
 	if len(scaResults) == 0 {
 		return
 	}
@@ -370,7 +371,7 @@ func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...*Sca
 	return
 }
 
-func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.TwoLevelSummaryCount) {
+func getScanViolationsSummary(scaResults ...*results.ScaScanResult) (violations formats.TwoLevelSummaryCount) {
 	vioUniqueFindings := map[string]IssueDetails{}
 	if len(scaResults) == 0 {
 		return
@@ -396,7 +397,7 @@ func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.
 	return issueDetailsToSummaryCount(vioUniqueFindings)
 }
 
-func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
+func getScanSecurityVulnerabilitiesSummary(extendedScanResults *results.ExtendedScanResults, scaResults ...*results.ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
 	summary = &formats.ScanVulnerabilitiesSummary{}
 	if extendedScanResults == nil {
 		summary.ScaScanResults = getScaSummaryResults(scaResults)
@@ -429,7 +430,7 @@ func getSecurityIssueFindings(cves []services.Cve, issueId string, severity seve
 	for _, cve := range cves {
 		cveId := getCveId(cve, issueId)
 		applicableStatus := jasutils.NotScanned
-		if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
+		if applicableInfo := results.GetCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
 			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
 		}
 		uniqueFindings[cveId] = IssueDetails{
@@ -443,7 +444,7 @@ func getSecurityIssueFindings(cves []services.Cve, issueId string, severity seve
 	return
 }
 
-func getScaSummaryResults(scaScanResults []*ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
+func getScaSummaryResults(scaScanResults []*results.ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
 	vulFindings := map[string]IssueDetails{}
 	vulUniqueFindings := map[string]IssueDetails{}
 	if len(scaScanResults) == 0 {
