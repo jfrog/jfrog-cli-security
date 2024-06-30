@@ -716,8 +716,6 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/gailazar300/froggit-go v0.0.0-20240626133907-1836c1d0d4b6 h1:+EFFpoBBhvRN74XIubQNIsyNfjk4eDnQJAu8WT4w4Js=
-github.com/gailazar300/froggit-go v0.0.0-20240626133907-1836c1d0d4b6/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
 github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab h1:+7KwW/yy/ThnRXW9khailFFncxJiiFpxyk5BI9GK9pI=
 github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab/go.mod h1:IqOZzks2wlWCIai0esXnZPdPwxF2yOz0HcCYw5I4pCg=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
@@ -891,6 +889,8 @@ github.com/jfrog/archiver/v3 v3.6.0 h1:OVZ50vudkIQmKMgA8mmFF9S0gA47lcag22N13iV3F
 github.com/jfrog/archiver/v3 v3.6.0/go.mod h1:fCAof46C3rAXgZurS8kNRNdSVMKBbZs+bNNhPYxLldI=
 github.com/jfrog/build-info-go v1.9.29 h1:3vJ+kbk9PpU6wjisXi9c4qISNpYkISh/NmB5mq1ZlSY=
 github.com/jfrog/build-info-go v1.9.29/go.mod h1:AzFJlN/yKfKuKcSBaGy5nNmKN1xzx6+XcRWAswCTLTA=
+github.com/jfrog/froggit-go v1.15.1-0.20240630120845-4523262ce5a5 h1:vqTVYBhk/hXoeIt1w5vNXdnxqHPvdjpS6eeh6C0Snuo=
+github.com/jfrog/froggit-go v1.15.1-0.20240630120845-4523262ce5a5/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
 github.com/jfrog/gofrog v1.7.2 h1:VkAaA/9tmbw27IqgUOmaZWnO6ATUqL3vRzDnsROKATw=
 github.com/jfrog/gofrog v1.7.2/go.mod h1:WJFk88SR9Sr9mKl1bQBig7DmSdXiBGKV3WhL9O6jL9w=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=

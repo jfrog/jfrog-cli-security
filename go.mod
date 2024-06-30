@@ -121,4 +121,4 @@ require (
 
 //replace github.com/jfrog/froggit-go => ../froggit-go
 
-replace github.com/jfrog/froggit-go => github.com/gailazar300/froggit-go v0.0.0-20240626133907-1836c1d0d4b6
+replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go v1.15.1-0.20240630120845-4523262ce5a5
