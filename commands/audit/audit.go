@@ -3,19 +3,21 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"os"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
-	"os"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
@@ -31,7 +33,7 @@ type AuditCommand struct {
 	IncludeLicenses         bool
 	Fail                    bool
 	PrintExtendedTable      bool
-	analyticsMetricsService *xrayutils.AnalyticsMetricsService
+	analyticsMetricsService *xsc.AnalyticsMetricsService
 	Threads                 int
 	AuditParams
 }
@@ -75,7 +77,7 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xrayutils.AnalyticsMetricsService) *AuditCommand {
+func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *AuditCommand {
 	auditCmd.analyticsMetricsService = analyticsMetricsService
 	return auditCmd
 }
@@ -146,7 +148,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	if !auditResults.ExtendedScanResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
 	}
-	if err = xrayutils.NewResultsWriter(auditResults).
+	if err = utils.NewResultsWriter(auditResults).
 		SetIsMultipleRootProject(auditResults.IsMultipleProject()).
 		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 		SetIncludeLicenses(auditCmd.IncludeLicenses).
@@ -164,8 +166,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && xrayutils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
-		err = xrayutils.NewFailBuildError()
+	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && utils.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+		err = utils.NewFailBuildError()
 	}
 	return
 }
@@ -177,9 +179,9 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (results *xrayutils.Results, err error) {
+func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	// Initialize Results struct
-	results = xrayutils.NewAuditResults()
+	results = utils.NewAuditResults()
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
@@ -259,7 +261,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	defer func() {
 		auditParallelRunner.JasWg.Done()
 	}()
-	if err = xrayutils.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+	if err = jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, auditParams.Exclusions()...)

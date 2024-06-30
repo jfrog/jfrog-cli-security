@@ -24,11 +24,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -159,7 +160,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
 		SetXrayVersion(params.xrayVersion).
 		SetFixableOnly(params.fixableOnly).
-		SetSeverityLevel(params.minSeverityFilter)
+		SetSeverityLevel(params.minSeverityFilter.String())
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
 	if err != nil {
 		return
@@ -224,7 +225,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	}
 
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
+	var uniqDepsWithTypes map[string]*xray.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -316,7 +317,7 @@ func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technolo
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}

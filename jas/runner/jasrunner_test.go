@@ -42,7 +42,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 }
 
 func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
-	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded(0))
+	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner := &jas.JasScanner{}
