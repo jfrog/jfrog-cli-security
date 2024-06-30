@@ -1,8 +1,9 @@
 package audit
 
 import (
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -12,7 +13,7 @@ type AuditParams struct {
 	workingDirs           []string
 	installFunc           func(tech string) error
 	fixableOnly           bool
-	minSeverityFilter     string
+	minSeverityFilter     severityutils.Severity
 	*xrayutils.AuditBasicParams
 	xrayVersion string
 	// Include third party dependencies source code in the applicability scan.
@@ -62,11 +63,11 @@ func (params *AuditParams) SetFixableOnly(fixable bool) *AuditParams {
 	return params
 }
 
-func (params *AuditParams) MinSeverityFilter() string {
+func (params *AuditParams) MinSeverityFilter() severityutils.Severity {
 	return params.minSeverityFilter
 }
 
-func (params *AuditParams) SetMinSeverityFilter(minSeverityFilter string) *AuditParams {
+func (params *AuditParams) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *AuditParams {
 	params.minSeverityFilter = minSeverityFilter
 	return params
 }

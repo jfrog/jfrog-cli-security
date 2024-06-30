@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -218,7 +219,7 @@ func runDotnetRestore(wd string, params utils.AuditParams, toolType bidotnet.Too
 func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils.GraphNode, allUniqueDeps []string) {
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, module := range buildInfo.Modules {
-		treeMap := make(map[string]utils.DepTreeNode)
+		treeMap := make(map[string]xray.DepTreeNode)
 		for _, dependency := range module.Dependencies {
 			dependencyId := nugetPackageTypeIdentifier + dependency.Id
 			parent := nugetPackageTypeIdentifier + dependency.RequestedBy[0][0]
@@ -230,7 +231,7 @@ func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils
 			}
 			treeMap[parent] = depTreeNode
 		}
-		dependencyTree, uniqueDeps := utils.BuildXrayDependencyTree(treeMap, nugetPackageTypeIdentifier+module.Id)
+		dependencyTree, uniqueDeps := xray.BuildXrayDependencyTree(treeMap, nugetPackageTypeIdentifier+module.Id)
 		nodes = append(nodes, dependencyTree)
 		for _, uniqueDep := range maps.Keys(uniqueDeps) {
 			uniqueDepsSet.Add(uniqueDep)

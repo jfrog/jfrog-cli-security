@@ -9,6 +9,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
+	"os"
+	"time"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -22,17 +25,16 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"os"
-	"time"
 )
 
 func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
@@ -158,7 +160,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
 		SetXrayVersion(params.xrayVersion).
 		SetFixableOnly(params.fixableOnly).
-		SetSeverityLevel(params.minSeverityFilter)
+		SetSeverityLevel(params.minSeverityFilter.String())
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
 	if err != nil {
 		return
@@ -231,7 +233,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 		return
 	}
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
+	var uniqDepsWithTypes map[string]*xray.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
@@ -367,7 +369,7 @@ func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech techutils.Tech
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -142,7 +143,7 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, project := range projectInfo {
 		// Parse the dependencies into Xray dependency tree format
-		dependencyTree, uniqueProjectDeps := utils.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
+		dependencyTree, uniqueProjectDeps := xray.BuildXrayDependencyTree(createProjectDependenciesTree(project), getDependencyId(project.Name, project.Version))
 		// Add results
 		dependencyTrees = append(dependencyTrees, dependencyTree)
 		uniqueDepsSet.AddElements(maps.Keys(uniqueProjectDeps)...)
@@ -151,8 +152,8 @@ func parsePnpmLSContent(projectInfo []pnpmLsProject) (dependencyTrees []*xrayUti
 	return
 }
 
-func createProjectDependenciesTree(project pnpmLsProject) map[string]utils.DepTreeNode {
-	treeMap := make(map[string]utils.DepTreeNode)
+func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTreeNode {
+	treeMap := make(map[string]xray.DepTreeNode)
 	directDependencies := []string{}
 	// Handle production-dependencies
 	for depName, dependency := range project.Dependencies {
@@ -167,7 +168,7 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]utils.DepTr
 		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
 	}
 	if len(directDependencies) > 0 {
-		treeMap[getDependencyId(project.Name, project.Version)] = utils.DepTreeNode{Children: directDependencies}
+		treeMap[getDependencyId(project.Name, project.Version)] = xray.DepTreeNode{Children: directDependencies}
 	}
 	return treeMap
 }
@@ -177,13 +178,13 @@ func getDependencyId(depName, version string) string {
 	return utils.NpmPackageTypeIdentifier + depName + ":" + version
 }
 
-func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]utils.DepTreeNode) {
+func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]xray.DepTreeNode) {
 	for depName, dependency := range dependencies {
 		dependencyId := getDependencyId(depName, dependency.Version)
 		if node, ok := result[parent]; ok {
 			node.Children = appendUniqueChild(node.Children, dependencyId)
 		} else {
-			result[parent] = utils.DepTreeNode{Children: []string{dependencyId}}
+			result[parent] = xray.DepTreeNode{Children: []string{dependencyId}}
 		}
 		appendTransitiveDependencies(dependencyId, dependency.Dependencies, result)
 	}

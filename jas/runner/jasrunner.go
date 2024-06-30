@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -38,18 +40,18 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SecretsScan) {
 				log.Debug("Skipping secrets scan as requested by input...")
-			} else if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
+			} else if err = addModuleJasScanTask(module, jasutils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
 					log.Debug("Skipping Iac scan as requested by input...")
-				} else if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				} else if err = addModuleJasScanTask(module, jasutils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SastScan) {
 					log.Debug("Skipping Sast scan as requested by input...")
-				} else if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				} else if err = addModuleJasScanTask(module, jasutils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
 					return
 				}
 			}
@@ -60,14 +62,14 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		return err
 	}
 	for _, module := range scanner.JFrogAppsConfig.Modules {
-		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
+		if err = addModuleJasScanTask(module, jasutils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
 			return
 		}
 	}
 	return err
 }
 
-func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, errHandlerFunc func(error)) (err error) {
+func addModuleJasScanTask(module jfrogappsconfig.Module, scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, errHandlerFunc func(error)) (err error) {
 	if jas.ShouldSkipScanner(module, scanType) {
 		return
 	}

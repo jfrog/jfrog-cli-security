@@ -3,8 +3,9 @@ package yarn
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/exp/maps"
 	"path/filepath"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/build-info-go/build"
 	biutils "github.com/jfrog/build-info-go/build/utils"
@@ -14,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -199,7 +201,7 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 
 // Parse the dependencies into a Xray dependency tree format
 func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string) {
-	treeMap := make(map[string]utils.DepTreeNode)
+	treeMap := make(map[string]xray.DepTreeNode)
 	for _, dependency := range dependencies {
 		xrayDepId := getXrayDependencyId(dependency)
 		var subDeps []string
@@ -207,10 +209,10 @@ func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, r
 			subDeps = append(subDeps, getXrayDependencyId(dependencies[biutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]))
 		}
 		if len(subDeps) > 0 {
-			treeMap[xrayDepId] = utils.DepTreeNode{Children: subDeps}
+			treeMap[xrayDepId] = xray.DepTreeNode{Children: subDeps}
 		}
 	}
-	graph, uniqDeps := utils.BuildXrayDependencyTree(treeMap, rootXrayId)
+	graph, uniqDeps := xray.BuildXrayDependencyTree(treeMap, rootXrayId)
 	return graph, maps.Keys(uniqDeps)
 }
 
