@@ -1109,4 +1109,3 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 		})
 	}
 }
-

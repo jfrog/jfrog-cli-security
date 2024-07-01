@@ -14,10 +14,10 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 	target1 := &ScaScanResult{Target: "target1"}
 	target2 := &ScaScanResult{Target: "target2"}
 	testCases := []struct {
-		name     string
-		cmdResults  ScanCommandResults
-		target   string
-		expected *ScaScanResult
+		name       string
+		cmdResults ScanCommandResults
+		target     string
+		expected   *ScaScanResult
 	}{
 		{
 			name: "Sca scan result by target",
@@ -74,14 +74,14 @@ func TestGetSummary(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		cmdResults      ScanCommandResults
+		cmdResults   ScanCommandResults
 		expected     formats.SummaryResults
 		findingCount int
 		issueCount   int
 	}{
 		{
 			name:         "Empty results",
-			cmdResults:      ScanCommandResults{ScaResults: []*ScaScanResult{}},
+			cmdResults:   ScanCommandResults{ScaResults: []*ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 			issueCount:   0,

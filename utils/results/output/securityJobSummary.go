@@ -9,13 +9,10 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 )
 
@@ -23,6 +20,28 @@ const (
 	Build   SecuritySummarySection = "Builds"
 	Binary  SecuritySummarySection = "Artifacts"
 	Modules SecuritySummarySection = "Modules"
+)
+
+var (
+	// Convert summary of the given keys to the needed string
+	summaryContentToFormatString = map[string]string{
+		severityutils.Critical.String():               `❗️ <span style="color:red">%d ` + severityutils.Critical.String() + `</span>`,
+		severityutils.High.String():                   `🔴 <span style="color:red">%d ` + severityutils.High.String() + `</span>`,
+		severityutils.Medium.String():                 `🟠 <span style="color:orange">%d ` + severityutils.Medium.String() + `</span>`,
+		severityutils.Low.String():                    `🟡 <span style="color:yellow">%d ` + severityutils.Low.String() + `</span>`,
+		severityutils.Unknown.String():                `⚪️ <span style="color:white">%d ` + severityutils.Unknown.String() + `</span>`,
+		jasutils.Applicable.String():                  "%d " + jasutils.Applicable.String(),
+		jasutils.NotApplicable.String():               "%d " + jasutils.NotApplicable.String(),
+		formats.ViolationTypeSecurity.String():        "%d Security",
+		formats.ViolationTypeLicense.String():         "%d License",
+		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
+	}
+	// AllowedSorted is the order of the keys to display in the summary
+	allowedSorted = []string{
+		severityutils.Critical.String(), severityutils.High.String(), severityutils.Medium.String(), severityutils.Low.String(), severityutils.Unknown.String(),
+		jasutils.Applicable.String(), jasutils.NotApplicable.String(),
+		formats.ViolationTypeSecurity.String(), formats.ViolationTypeLicense.String(), formats.ViolationTypeOperationalRisk.String(),
+	}
 )
 
 type SecuritySummarySection string
@@ -44,8 +63,20 @@ func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error)
 	return commandsummary.New(&SecurityCommandsSummary{}, "security")
 }
 
+func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (ScanCommandSummaryResult, error) {
+	convertor := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{})
+	summary, err := convertor.ConvertToSummary(cmdResults)
+	if err != nil {
+		return ScanCommandSummaryResult{Section: section}, err
+	}
+	return ScanCommandSummaryResult{
+		Section: section,
+		Results: summary,
+	}, nil
+}
+
 // Record the security command output
-func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
+func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (err error) {
 	if !commandsummary.ShouldRecordSummary() {
 		return
 	}
@@ -57,8 +88,12 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil {
 		return
 	}
-	content.WorkingDirectory = wd
-	return manager.Record(content)
+	summary, err := CreateCommandSummaryResult(section, cmdResults)
+	if err != nil {
+		return
+	}
+	summary.WorkingDirectory = wd
+	return manager.Record(summary)
 }
 
 func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
@@ -75,11 +110,18 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		if err = commandsummary.UnmarshalFromFilePath(dataFilePath, &cmdResults); err != nil {
 			return fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
 		}
-		results := cmdResults.Results
+		scs.addCommandSummaryResult(cmdResults)
+	}
+	return
+}
+
+func (scs *SecurityCommandsSummary) addCommandSummaryResult(cmdResults ...ScanCommandSummaryResult) {
+	for _, cmdResult := range cmdResults {
+		results := cmdResult.Results
 		// Update the working directory
-		updateSummaryNamesToRelativePath(&results, cmdResults.WorkingDirectory)
+		updateSummaryNamesToRelativePath(&results, cmdResult.WorkingDirectory)
 		// Append the new data
-		switch cmdResults.Section {
+		switch cmdResult.Section {
 		case Build:
 			scs.BuildScanCommands = append(scs.BuildScanCommands, results)
 		case Binary:
@@ -88,7 +130,21 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 			scs.AuditCommands = append(scs.AuditCommands, results)
 		}
 	}
-	return
+}
+
+func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
+	for i, scan := range summary.Scans {
+		if scan.Target == "" {
+			continue
+		}
+		if !strings.HasPrefix(scan.Target, wd) {
+			continue
+		}
+		if scan.Target == wd {
+			summary.Scans[i].Target = filepath.Base(wd)
+		}
+		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
+	}
 }
 
 func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
@@ -285,28 +341,6 @@ func GetScaSummaryCountString(summary formats.ScanScaResult, padding int) (conte
 	return
 }
 
-var (
-	// Convert summary of the given keys to the needed string
-	summaryContentToFormatString = map[string]string{
-		"Critical":                             `❗️ <span style="color:red">%d Critical</span>`,
-		"High":                                 `🔴 <span style="color:red">%d High</span>`,
-		"Medium":                               `🟠 <span style="color:orange">%d Medium</span>`,
-		"Low":                                  `🟡 <span style="color:yellow">%d Low</span>`,
-		"Unknown":                              `⚪️ <span style="color:white">%d Unknown</span>`,
-		jasutils.Applicable.String():           "%d " + jasutils.Applicable.String(),
-		jasutils.NotApplicable.String():        "%d " + jasutils.NotApplicable.String(),
-		formats.ViolationTypeSecurity.String(): "%d Security",
-		formats.ViolationTypeLicense.String():  "%d License",
-		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
-	}
-	// AllowedSorted is the order of the keys to display in the summary
-	allowedSorted = []string{
-		"Critical", "High", "Medium", "Low", "Unknown",
-		jasutils.Applicable.String(), jasutils.NotApplicable.String(),
-		formats.ViolationTypeSecurity.String(), formats.ViolationTypeLicense.String(), formats.ViolationTypeOperationalRisk.String(),
-	}
-)
-
 func getSummarySortedKeysToDisplay(keys ...string) (sorted []string) {
 	if len(keys) == 0 {
 		return
@@ -340,169 +374,4 @@ func GetSummaryContentString(summary formats.SummaryCount, delimiter string, wra
 		content = fmt.Sprintf(" (%s)", content)
 	}
 	return
-}
-
-func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
-	for i, scan := range summary.Scans {
-		if scan.Target == "" {
-			continue
-		}
-		if !strings.HasPrefix(scan.Target, wd) {
-			continue
-		}
-		if scan.Target == wd {
-			summary.Scans[i].Target = filepath.Base(wd)
-		}
-		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
-	}
-}
-
-func getScanSummary(extendedScanResults *results.ExtendedScanResults, scaResults ...*results.ScaScanResult) (summary formats.ScanSummaryResult) {
-	if len(scaResults) == 0 {
-		return
-	}
-	if len(scaResults) == 1 {
-		summary.Target = scaResults[0].Target
-	}
-	// Parse violations
-	summary.Violations = getScanViolationsSummary(scaResults...)
-	// Parse vulnerabilities
-	summary.Vulnerabilities = getScanSecurityVulnerabilitiesSummary(extendedScanResults, scaResults...)
-	return
-}
-
-func getScanViolationsSummary(scaResults ...*results.ScaScanResult) (violations formats.TwoLevelSummaryCount) {
-	vioUniqueFindings := map[string]IssueDetails{}
-	if len(scaResults) == 0 {
-		return
-	}
-	// Parse unique findings
-	for _, scaResult := range scaResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			for _, violation := range xrayResult.Violations {
-				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: severityutils.GetSeverity(violation.Severity).String()}
-				for compId := range violation.Components {
-					if violation.ViolationType == formats.ViolationTypeSecurity.String() {
-						for _, cve := range violation.Cves {
-							vioUniqueFindings[getCveId(cve, violation.IssueId)+compId] = details
-						}
-					} else {
-						vioUniqueFindings[violation.IssueId+compId] = details
-					}
-				}
-			}
-		}
-	}
-	// Aggregate
-	return issueDetailsToSummaryCount(vioUniqueFindings)
-}
-
-func getScanSecurityVulnerabilitiesSummary(extendedScanResults *results.ExtendedScanResults, scaResults ...*results.ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
-	summary = &formats.ScanVulnerabilitiesSummary{}
-	if extendedScanResults == nil {
-		summary.ScaScanResults = getScaSummaryResults(scaResults)
-		return
-	}
-	if len(scaResults) > 0 {
-		summary.ScaScanResults = getScaSummaryResults(scaResults, extendedScanResults.ApplicabilityScanResults...)
-	}
-	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
-	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
-	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)
-	return
-}
-
-type IssueDetails struct {
-	FirstLevelValue  string
-	SecondLevelValue string
-}
-
-func getCveId(cve services.Cve, defaultIssueId string) string {
-	if cve.Id == "" {
-		return defaultIssueId
-	}
-	return cve.Id
-}
-
-func getSecurityIssueFindings(cves []services.Cve, issueId string, severity severityutils.Severity, components map[string]services.Component, applicableRuns ...*sarif.Run) (findings, uniqueFindings map[string]IssueDetails) {
-	findings = map[string]IssueDetails{}
-	uniqueFindings = map[string]IssueDetails{}
-	for _, cve := range cves {
-		cveId := getCveId(cve, issueId)
-		applicableStatus := jasutils.NotScanned
-		if applicableInfo := results.GetCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
-			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
-		}
-		uniqueFindings[cveId] = IssueDetails{
-			FirstLevelValue:  severity.String(),
-			SecondLevelValue: applicableStatus.String(),
-		}
-		for compId := range components {
-			findings[cveId+compId] = uniqueFindings[cveId]
-		}
-	}
-	return
-}
-
-func getScaSummaryResults(scaScanResults []*results.ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
-	vulFindings := map[string]IssueDetails{}
-	vulUniqueFindings := map[string]IssueDetails{}
-	if len(scaScanResults) == 0 {
-		return nil
-	}
-	// Aggregate unique findings
-	for _, scaResult := range scaScanResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				vulFinding, vulUniqueFinding := getSecurityIssueFindings(vulnerability.Cves, vulnerability.IssueId, severityutils.GetSeverity(vulnerability.Severity), vulnerability.Components, applicableRuns...)
-				for key, value := range vulFinding {
-					vulFindings[key] = value
-				}
-				for key, value := range vulUniqueFinding {
-					vulUniqueFindings[key] = value
-				}
-			}
-		}
-	}
-	return &formats.ScanScaResult{
-		SummaryCount:   issueDetailsToSummaryCount(vulFindings),
-		UniqueFindings: issueDetailsToSummaryCount(vulUniqueFindings).GetTotal(),
-	}
-}
-
-func issueDetailsToSummaryCount(uniqueFindings map[string]IssueDetails) formats.TwoLevelSummaryCount {
-	summary := formats.TwoLevelSummaryCount{}
-	for _, details := range uniqueFindings {
-		if _, ok := summary[details.FirstLevelValue]; !ok {
-			summary[details.FirstLevelValue] = formats.SummaryCount{}
-		}
-		summary[details.FirstLevelValue][details.SecondLevelValue]++
-	}
-	return summary
-}
-
-func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
-	if len(runs) == 0 {
-		return nil
-	}
-	count := formats.SummaryCount{}
-	issueToSeverity := map[string]string{}
-	for _, run := range runs {
-		for _, result := range run.Results {
-			for _, location := range result.Locations {
-				resultLevel := sarifutils.GetResultLevel(result)
-				severity, err := severityutils.ParseSeverity(resultLevel, true)
-				if err != nil {
-					log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", resultLevel, err.Error()))
-					severity = severityutils.Unknown
-				}
-				severityutils.GetSeverity(sarifutils.GetResultLevel(result))
-				issueToSeverity[sarifutils.GetLocationId(location)] = severity.String()
-			}
-		}
-	}
-	for _, severity := range issueToSeverity {
-		count[severity]++
-	}
-	return &count
 }

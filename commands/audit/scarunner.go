@@ -69,6 +69,9 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
 	}()
 	for _, scan := range scans {
+		// Create sub scan
+		cmdResults.NewScanResults(results.ScanTarget{Target: scan})
+
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
@@ -92,7 +95,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 }
 
 // Calculate the scans to preform
-func getScaScansToPreform(params *AuditParams) (scansToPreform []*results.ScaScanResult) {
+func getScaScansToPreform(params *AuditParams) (scansToPreform []*results.ScanTarget) {
 	for _, requestedDirectory := range params.workingDirs {
 		if !fileutils.IsPathExists(requestedDirectory, false) {
 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
@@ -113,11 +116,11 @@ func getScaScansToPreform(params *AuditParams) (scansToPreform []*results.ScaSca
 			}
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				scansToPreform = append(scansToPreform, &results.ScaScanResult{Target: requestedDirectory, Technology: tech})
+				scansToPreform = append(scansToPreform, &results.ScanTarget{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				scansToPreform = append(scansToPreform, &results.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
+				scansToPreform = append(scansToPreform, &results.ScanTarget{Target: workingDir, Technology: tech, Descriptors: descriptors})
 			}
 		}
 	}

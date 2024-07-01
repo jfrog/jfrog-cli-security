@@ -35,7 +35,7 @@ type ScanResults struct {
 	ScanTarget
 	// All scan results for the target
 	ScaResults []*ScaScanResults `json:"sca_scans,omitempty"`
-	JasResults *JasScansResults `json:"Jas_scans,omitempty"`
+	JasResults *JasScansResults  `json:"jas_scans,omitempty"`
 	// Scan result error
 	Error error `json:"errors,omitempty"`
 }
@@ -247,22 +247,6 @@ func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results [
 	}
 	return
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // func NewAuditResults() *ScanCommandResults {
 // 	return &ScanCommandResults{ExtendedScanResults: &ExtendedScanResults{}}
