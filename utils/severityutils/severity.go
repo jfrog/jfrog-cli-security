@@ -6,7 +6,7 @@ import (
 	"github.com/gookit/color"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"golang.org/x/text/cases"
@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	MinCveScore = 0.0
-	MaxCveScore = 10.0
+	MinCveScore float32 = 0.0
+	MaxCveScore float32 = 10.0
 	// When parsing Sarif level to severity,
 	// If the level is not provided, the value is defaulted to be 'Medium'
 	SeverityDefaultValue      = Medium

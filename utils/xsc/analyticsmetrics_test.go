@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -76,35 +77,16 @@ func TestAddGeneralEvent(t *testing.T) {
 func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
-	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
-	scaResults := []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
-	auditResults := utils.Results{
-		ScaResults: scaResults,
-		ExtendedScanResults: &utils.ExtendedScanResults{
-			ApplicabilityScanResults: []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))},
-			SecretsScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-			},
-			IacScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-			},
-			SastScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-			},
-		},
-	}
+
 	testStruct := []struct {
 		name         string
-		auditResults *utils.Results
+		auditResults *results.ScanCommandResults
 		want         xscservices.XscAnalyticsBasicGeneralEvent
 	}{
-		{name: "No audit results", auditResults: &utils.Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
-		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-		{name: "Scan failed because jas errors.", auditResults: &utils.Results{ScansErr: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed because sca errors.", auditResults: &utils.Results{ScansErr: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{name: "No audit results", auditResults: &results.ScanCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+		{name: "Valid audit result", auditResults: getDummyContentForGeneralEvent(true, false), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
+		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
+		{name: "Scan failed no findings.", auditResults: &results.ScanCommandResults{Scans: []*results.ScanResults{{Error: errors.New("an error")}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
 	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
@@ -121,4 +103,34 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 			assert.True(t, totalDuration > 0)
 		})
 	}
+}
+
+func getDummyContentForGeneralEvent(withJas, withErr bool) *results.ScanCommandResults {
+	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
+
+	cmdResults := results.NewCommandResults("", true)
+	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
+	scanResults.NewScaScanResults(&services.ScanResponse{Vulnerabilities: vulnerabilities})
+
+	if withJas {
+		scanResults.JasResults.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
+		scanResults.JasResults.SecretsScanResults = []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
+		}
+		scanResults.JasResults.IacScanResults = []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
+		}
+		scanResults.JasResults.SastScanResults = []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
+		}
+	}
+
+	if withErr {
+		scanResults.Error = errors.New("an error")
+	}
+
+	return cmdResults
 }

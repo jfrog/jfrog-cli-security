@@ -11,8 +11,8 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -38,8 +38,8 @@ const (
 // In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintViolationsTable(violations []services.Violation, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
-	securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err := prepareViolations(violations, results, multipleRoots, true, true)
+func PrintViolationsTable(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, printExtended bool, scanType services.ScanType) error {
+	securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err := prepareViolations(violations, cmdResults, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
@@ -73,11 +73,11 @@ func PrintViolationsTable(violations []services.Violation, results *Results, mul
 }
 
 // Prepare violations for all non-table formats (without style or emoji)
-func PrepareViolations(violations []services.Violation, results *Results, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
-	return prepareViolations(violations, results, multipleRoots, false, simplifiedOutput)
+func PrepareViolations(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+	return prepareViolations(violations, cmdResults, multipleRoots, false, simplifiedOutput)
 }
 
-func prepareViolations(violations []services.Violation, results *Results, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+func prepareViolations(violations []services.Violation, cmdResults *ScanCommandResults, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
 	if simplifiedOutput {
 		violations = simplifyViolations(violations, multipleRoots)
 	}
@@ -92,12 +92,12 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 		switch violation.ViolationType {
 		case formats.ViolationTypeSecurity.String():
 			cves := convertCves(violation.Cves)
-			if results.ExtendedScanResults.EntitledForJas {
+			if cmdResults.ExtendedScanResults.EntitledForJas {
 				for i := range cves {
-					cves[i].Applicability = getCveApplicabilityField(cves[i].Id, results.ExtendedScanResults.ApplicabilityScanResults, violation.Components)
+					cves[i].Applicability = getCveApplicabilityField(cves[i].Id, cmdResults.ExtendedScanResults.ApplicabilityScanResults, violation.Components)
 				}
 			}
-			applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
+			applicabilityStatus := getApplicableCveStatus(cmdResults.ExtendedScanResults.EntitledForJas, cmdResults.ExtendedScanResults.ApplicabilityScanResults, cves)
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
@@ -192,8 +192,8 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
-	vulnerabilitiesRows, err := prepareVulnerabilities(vulnerabilities, results, multipleRoots, true, true)
+func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, printExtended bool, scanType services.ScanType) error {
+	vulnerabilitiesRows, err := prepareVulnerabilities(vulnerabilities, cmdResults, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results
 		return coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(vulnerabilitiesRows), "Vulnerable Components", "✨ No vulnerable components were found ✨", printExtended)
 	}
 	var emptyTableMessage string
-	if len(results.ScaResults) > 0 {
+	if len(cmdResults.ScaResults) > 0 {
 		emptyTableMessage = "✨ No vulnerable dependencies were found ✨"
 	} else {
 		emptyTableMessage = coreutils.PrintYellow("🔧 Couldn't determine a package manager or build tool used by this project 🔧")
@@ -211,11 +211,11 @@ func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results
 }
 
 // Prepare vulnerabilities for all non-table formats (without style or emoji)
-func PrepareVulnerabilities(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
-	return prepareVulnerabilities(vulnerabilities, results, multipleRoots, false, simplifiedOutput)
+func PrepareVulnerabilities(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
+	return prepareVulnerabilities(vulnerabilities, cmdResults, multipleRoots, false, simplifiedOutput)
 }
 
-func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
+func prepareVulnerabilities(vulnerabilities []services.Vulnerability, cmdResults *ScanCommandResults, multipleRoots, isTable, simplifiedOutput bool) ([]formats.VulnerabilityOrViolationRow, error) {
 	if simplifiedOutput {
 		vulnerabilities = simplifyVulnerabilities(vulnerabilities, multipleRoots)
 	}
@@ -226,12 +226,12 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 			return nil, err
 		}
 		cves := convertCves(vulnerability.Cves)
-		if results.ExtendedScanResults.EntitledForJas {
+		if cmdResults.ExtendedScanResults.EntitledForJas {
 			for i := range cves {
-				cves[i].Applicability = getCveApplicabilityField(cves[i].Id, results.ExtendedScanResults.ApplicabilityScanResults, vulnerability.Components)
+				cves[i].Applicability = getCveApplicabilityField(cves[i].Id, cmdResults.ExtendedScanResults.ApplicabilityScanResults, vulnerability.Components)
 			}
 		}
-		applicabilityStatus := getApplicableCveStatus(results.ExtendedScanResults.EntitledForJas, results.ExtendedScanResults.ApplicabilityScanResults, cves)
+		applicabilityStatus := getApplicableCveStatus(cmdResults.ExtendedScanResults.EntitledForJas, cmdResults.ExtendedScanResults.ApplicabilityScanResults, cves)
 		currSeverity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
 		if err != nil {
 			return nil, err
@@ -528,7 +528,7 @@ func splitComponents(impactedPackages map[string]services.Component) (impactedPa
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currCompType := SplitComponentId(currCompId)
+		currCompName, currCompVersion, currCompType := techutils.SplitComponentId(currCompId)
 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
 		impactedPackagesTypes = append(impactedPackagesTypes, currCompType)
@@ -538,86 +538,6 @@ func splitComponents(impactedPackages map[string]services.Component) (impactedPa
 		impactPaths = append(impactPaths, currImpactPaths)
 	}
 	return
-}
-
-var packageTypes = map[string]string{
-	"gav":      "Maven",
-	"docker":   "Docker",
-	"rpm":      "RPM",
-	"deb":      "Debian",
-	"nuget":    "NuGet",
-	"generic":  "Generic",
-	"npm":      "npm",
-	"pip":      "Python",
-	"pypi":     "Python",
-	"composer": "Composer",
-	"go":       "Go",
-	"alpine":   "Alpine",
-}
-
-// SplitComponentId splits a Xray component ID to the component name, version and package type.
-// In case componentId doesn't contain a version, the returned version will be an empty string.
-// In case componentId's format is invalid, it will be returned as the component name
-// and empty strings will be returned instead of the version and the package type.
-// Examples:
-//  1. componentId: "gav://antparent:ant:1.6.5"
-//     Returned values:
-//     Component name: "antparent:ant"
-//     Component version: "1.6.5"
-//     Package type: "Maven"
-//  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
-//     Returned values:
-//     Component name: "foo.jar"
-//     Component version: ""
-//     Package type: "Generic"
-//  3. componentId: "invalid-comp-id"
-//     Returned values:
-//     Component name: "invalid-comp-id"
-//     Component version: ""
-//     Package type: ""
-func SplitComponentId(componentId string) (string, string, string) {
-	compIdParts := strings.Split(componentId, "://")
-	// Invalid component ID
-	if len(compIdParts) != 2 {
-		return componentId, "", ""
-	}
-
-	packageType := compIdParts[0]
-	packageId := compIdParts[1]
-
-	// Generic identifier structure: generic://sha256:<Checksum>/name
-	if packageType == "generic" {
-		lastSlashIndex := strings.LastIndex(packageId, "/")
-		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
-	}
-
-	var compName, compVersion string
-	switch packageType {
-	case "rpm":
-		// RPM identifier structure: rpm://os-version:package:epoch-version:version
-		// os-version is optional.
-		splitCompId := strings.Split(packageId, ":")
-		if len(splitCompId) >= 3 {
-			compName = splitCompId[len(splitCompId)-3]
-			compVersion = fmt.Sprintf("%s:%s", splitCompId[len(splitCompId)-2], splitCompId[len(splitCompId)-1])
-		}
-	default:
-		// All other identifiers look like this: package-type://package-name:version.
-		// Sometimes there's a namespace or a group before the package name, separated by a '/' or a ':'.
-		lastColonIndex := strings.LastIndex(packageId, ":")
-
-		if lastColonIndex != -1 {
-			compName = packageId[:lastColonIndex]
-			compVersion = packageId[lastColonIndex+1:]
-		}
-	}
-
-	// If there's an error while parsing the component ID
-	if compName == "" {
-		compName = packageId
-	}
-
-	return compName, compVersion, packageTypes[packageType]
 }
 
 // Gets a slice of the direct dependencies or packages of the scanned component, that depends on the vulnerable package, and converts the impact paths.
@@ -633,14 +553,14 @@ func getDirectComponentsAndImpactPaths(impactPaths [][]services.ImpactPathNode) 
 		}
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
-			compName, compVersion, _ := SplitComponentId(componentId)
+			compName, compVersion, _ := techutils.SplitComponentId(componentId)
 			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion}
 		}
 
 		// Convert the impact path
 		var compImpactPathRows []formats.ComponentRow
 		for _, pathNode := range impactPath {
-			nodeCompName, nodeCompVersion, _ := SplitComponentId(pathNode.ComponentId)
+			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentId(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
 				Name:    nodeCompName,
 				Version: nodeCompVersion,
@@ -704,7 +624,7 @@ func simplifyVulnerabilities(scanVulnerabilities []services.Vulnerability, multi
 	var uniqueVulnerabilities = make(map[string]*services.Vulnerability)
 	for _, vulnerability := range scanVulnerabilities {
 		for vulnerableComponentId := range vulnerability.Components {
-			vulnerableDependency, vulnerableVersion, _ := SplitComponentId(vulnerableComponentId)
+			vulnerableDependency, vulnerableVersion, _ := techutils.SplitComponentId(vulnerableComponentId)
 			packageKey := GetUniqueKey(vulnerableDependency, vulnerableVersion, vulnerability.IssueId, len(vulnerability.Components[vulnerableComponentId].FixedVersions) > 0)
 			if uniqueVulnerability, exist := uniqueVulnerabilities[packageKey]; exist {
 				fixedVersions := appendUniqueFixVersions(uniqueVulnerability.Components[vulnerableComponentId].FixedVersions, vulnerability.Components[vulnerableComponentId].FixedVersions...)
@@ -740,7 +660,7 @@ func simplifyViolations(scanViolations []services.Violation, multipleRoots bool)
 	var uniqueViolations = make(map[string]*services.Violation)
 	for _, violation := range scanViolations {
 		for vulnerableComponentId := range violation.Components {
-			vulnerableDependency, vulnerableVersion, _ := SplitComponentId(vulnerableComponentId)
+			vulnerableDependency, vulnerableVersion, _ := techutils.SplitComponentId(vulnerableComponentId)
 			packageKey := GetUniqueKey(vulnerableDependency, vulnerableVersion, violation.IssueId, len(violation.Components[vulnerableComponentId].FixedVersions) > 0)
 			if uniqueVulnerability, exist := uniqueViolations[packageKey]; exist {
 				fixedVersions := appendUniqueFixVersions(uniqueVulnerability.Components[vulnerableComponentId].FixedVersions, violation.Components[vulnerableComponentId].FixedVersions...)

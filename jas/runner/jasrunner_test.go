@@ -1,15 +1,17 @@
 package runner
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"os"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +38,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	scanner := &jas.JasScanner{}
 	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails)
 	assert.NoError(t, err)
-	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
+	scanResults := &results.ScanCommandResults{ScaResults: []*results.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &results.ExtendedScanResults{}}
 	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, scanResults.GetScaScannedTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, "", jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan, utils.GetAllSupportedScans())
 	assert.NoError(t, err)
 }

@@ -4,8 +4,19 @@ package formats
 // Annotations are as described in the tableutils.PrintTable description.
 // Use the conversion methods in this package to convert from the API structs to the table structs.
 
+type ResultsTables struct {
+	SecurityVulnerabilitiesTable   []VulnerabilityTableRow
+	LicensesTable                  []licenseTableRow
+	LicenseViolationsTable         []licenseViolationTableRow
+	OperationalRiskViolationsTable []operationalRiskViolationTableRow
+	IacTable                       []iacOrSastTableRow
+	SastTable                      []iacOrSastTableRow
+	SecretsTable                   []secretsTableRow
+	Errors                         []error
+}
+
 // Used for vulnerabilities and security violations
-type vulnerabilityTableRow struct {
+type VulnerabilityTableRow struct {
 	severity   string `col-name:"Severity"`
 	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -94,7 +95,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *utils.Results) (err error) {
+	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *results.ScanCommandResults) (err error) {
 		if scanResults == nil || len(scanResults.ScaResults) == 0 {
 			return
 		}
