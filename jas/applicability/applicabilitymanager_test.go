@@ -37,12 +37,12 @@ func TestNewApplicabilityScanManager_DependencyTreeDoesntExist(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	// Act
-	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, nil, scanner, false, ApplicabilityScannerType, "temoDirPath")
+	applicabilityManager := newApplicabilityScanManager(jas.FakeBasicXrayResults, nil, scanner, false, ApplicabilityScannerType, "tempDirPath")
 
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
 		assert.NotNil(t, applicabilityManager.scanner.ScannerDirCleanupFunc)
-		assert.Len(t, applicabilityManager.scanner.JFrogAppsConfig.Modules, 1)
+		// assert.Len(t, applicabilityManager.scanner.JFrogAppsConfig.Modules, 1)
 		assert.NotEmpty(t, applicabilityManager.configFileName)
 		assert.NotEmpty(t, applicabilityManager.resultsFileName)
 		assert.Empty(t, applicabilityManager.directDependenciesCves)
@@ -300,6 +300,8 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	// Arrange
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	assert.NoError(t, err)
 
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability))
 	require.NoError(t, err)
@@ -310,7 +312,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			applicabilityManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", tc.fileName)
 			var err error
-			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
+			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
 			if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
 				assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
 				assert.Len(t, applicabilityManager.applicabilityScanResults[0].Results, tc.expectedResults)

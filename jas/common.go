@@ -37,12 +37,12 @@ type JasScanner struct {
 	TempDir               string
 	AnalyzerManager       AnalyzerManager
 	ServerDetails         *config.ServerDetails
-	JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
+	// JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
 	ScannerDirCleanupFunc func() error
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, exclusions ...string) (*JasScanner, error) {
+func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, exclusions ...string) (*JasScanner, error) {
 	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
 		return scanner, err
@@ -56,7 +56,7 @@ func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFro
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.JFrogAppsConfig = jfrogAppsConfig
+	// scanner.JFrogAppsConfig = jfrogAppsConfig
 	scanner.Exclusions = exclusions
 	return scanner, err
 }
@@ -198,12 +198,10 @@ var FakeBasicXrayResults = []services.ScanResponse{
 	},
 }
 
-func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
+func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
-	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
-	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails)
+	scanner, err := CreateJasScanner(scanner, &FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -212,6 +210,15 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 
 func GetTestDataPath() string {
 	return filepath.Join("..", "..", "tests", "testdata", "other")
+}
+
+func GetModule(root string, appConfig *jfrogappsconfig.JFrogAppsConfig) *jfrogappsconfig.Module {
+	for _, module := range appConfig.Modules {
+		if module.SourceRoot == root {
+			return &module
+		}
+	}
+	return nil
 }
 
 func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {

@@ -63,7 +63,7 @@ func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error)
 	return commandsummary.New(&SecurityCommandsSummary{}, "security")
 }
 
-func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (ScanCommandSummaryResult, error) {
+func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *results.SecurityCommandResults) (ScanCommandSummaryResult, error) {
 	convertor := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{})
 	summary, err := convertor.ConvertToSummary(cmdResults)
 	if err != nil {
@@ -76,7 +76,7 @@ func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *resu
 }
 
 // Record the security command output
-func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *results.ScanCommandResults) (err error) {
+func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *results.SecurityCommandResults) (err error) {
 	if !commandsummary.ShouldRecordSummary() {
 		return
 	}

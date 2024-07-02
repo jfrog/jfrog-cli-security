@@ -11,18 +11,18 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
-// ScanCommandResults is a struct that holds the results of a security scan/audit command.
-type ScanCommandResults struct {
+// SecurityCommandResults is a struct that holds the results of a security scan/audit command.
+type SecurityCommandResults struct {
 	// General fields describing the command metadata
 	XrayVersion    string `json:"xray_version"`
 	EntitledForJas bool   `json:"jas_entitled"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
-	Scans  []*ScanResults `json:"scans"`
-	scansMutex sync.Mutex `json:"-"`
+	Targets    []*TargetResults `json:"targets"`
+	scansMutex sync.Mutex       `json:"-"`
 	// Error that occurred during the command execution
-	Errors error          `json:"errors,omitempty"`
+	Error error `json:"error,omitempty"`
 }
 
 type ScanTarget struct {
@@ -34,19 +34,23 @@ type ScanTarget struct {
 	Technology techutils.Technology `json:"technology,omitempty"`
 }
 
-type ScanResults struct {
+type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
-	ScaResults []*ScaScanResults `json:"sca_scans,omitempty"`
-	JasResults *JasScansResults  `json:"jas_scans,omitempty"`
-	// Scan result error
-	Error error `json:"errors,omitempty"`
+	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
+	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	// Errors that occurred during the scans
+	Errors      []error    `json:"errors,omitempty"`
+	// TODO: move to funcs...
+	errorsMutex sync.Mutex `json:"-"`
 }
 
 type ScaScanResults struct {
+	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
+	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
-	XrayResult services.ScanResponse `json:"xray_scan"`
+	XrayResults []services.ScanResponse `json:"xray_scan"`
 }
 
 type JasScansResults struct {
@@ -56,37 +60,37 @@ type JasScansResults struct {
 	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
 }
 
-func NewCommandResults(xrayVersion string, entitledForJas bool) *ScanCommandResults {
-	return &ScanCommandResults{XrayVersion: xrayVersion, EntitledForJas: entitledForJas, scansMutex: sync.Mutex{}}
+func NewCommandResults(xrayVersion string, entitledForJas bool) *SecurityCommandResults {
+	return &SecurityCommandResults{XrayVersion: xrayVersion, EntitledForJas: entitledForJas, scansMutex: sync.Mutex{}}
 }
 
-func (r *ScanCommandResults) SetMultiScanId(multiScanId string) *ScanCommandResults {
+func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {
 	r.MultiScanId = multiScanId
 	return r
 }
 
 // --- Aggregated results for all targets ---
 
-func (r *ScanCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
-	for _, scan := range r.Scans {
+func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
+	for _, scan := range r.Targets {
 		results = append(results, scan.GetScaScansXrayResults()...)
 	}
 	return
 }
 
-func (r *ScanCommandResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	if !r.EntitledForJas {
 		return
 	}
-	for _, scan := range r.Scans {
+	for _, scan := range r.Targets {
 		results = append(results, scan.GetJasScansResults(scanType)...)
 	}
 	return
 }
 
-func (r *ScanCommandResults) GetErrors() (err error) {
+func (r *SecurityCommandResults) GetErrors() (err error) {
 	err = r.Errors
-	for _, scan := range r.Scans {
+	for _, scan := range r.Targets {
 		if scan.Error != nil {
 			err = errors.Join(err, scan.Error)
 		}
@@ -94,8 +98,8 @@ func (r *ScanCommandResults) GetErrors() (err error) {
 	return
 }
 
-func (r *ScanCommandResults) GetTechnologyScaScans(technology techutils.Technology) (scans []*ScaScanResults) {
-	for _, scan := range r.Scans {
+func (r *SecurityCommandResults) GetTechnologyScaScans(technology techutils.Technology) (scans []*ScaScanResults) {
+	for _, scan := range r.Targets {
 		for _, scaResult := range scan.ScaResults {
 			if scaResult.Technology == technology {
 				scans = append(scans, scaResult)
@@ -105,9 +109,9 @@ func (r *ScanCommandResults) GetTechnologyScaScans(technology techutils.Technolo
 	return
 }
 
-func (r *ScanCommandResults) GetTechnologies() []techutils.Technology {
+func (r *SecurityCommandResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
-	for _, scan := range r.Scans {
+	for _, scan := range r.Targets {
 		technologies.AddElements(scan.GetTechnologies()...)
 	}
 	return technologies.ToSlice()
@@ -115,11 +119,11 @@ func (r *ScanCommandResults) GetTechnologies() []techutils.Technology {
 
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set multipleRoots to true in case the given vulnerabilities array contains (or may contain) results of several projects or files (like in binary scan).
-func (r *ScanCommandResults) HasMultipleTargets() bool {
-	if len(r.Scans) > 1 {
+func (r *SecurityCommandResults) HasMultipleTargets() bool {
+	if len(r.Targets) > 1 {
 		return true
 	}
-	for _, scan := range r.Scans {
+	for _, scan := range r.Targets {
 		// If there is more than one SCA scan target (i.e multiple files with dependencies information)
 		if len(scan.ScaResults) > 1 {
 			return true
@@ -128,8 +132,8 @@ func (r *ScanCommandResults) HasMultipleTargets() bool {
 	return false
 }
 
-func (r *ScanCommandResults) HasInformation() bool {
-	for _, scan := range r.Scans {
+func (r *SecurityCommandResults) HasInformation() bool {
+	for _, scan := range r.Targets {
 		if scan.HasInformation() {
 			return true
 		}
@@ -137,8 +141,8 @@ func (r *ScanCommandResults) HasInformation() bool {
 	return false
 }
 
-func (r *ScanCommandResults) HasFindings() bool {
-	for _, scan := range r.Scans {
+func (r *SecurityCommandResults) HasFindings() bool {
+	for _, scan := range r.Targets {
 		if scan.HasFindings() {
 			return true
 		}
@@ -148,25 +152,25 @@ func (r *ScanCommandResults) HasFindings() bool {
 
 // --- Scan on a target ---
 
-func (r *ScanCommandResults) NewScanResults(target ScanTarget) *ScanResults {
-	scanResults := &ScanResults{ScanTarget: target}
+func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
+	scanResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
 	if r.EntitledForJas {
 		scanResults.JasResults = &JasScansResults{}
 	}
 	r.scansMutex.Lock()
-	r.Scans = append(r.Scans, scanResults)
+	r.Targets = append(r.Targets, scanResults)
 	r.scansMutex.Unlock()
 	return scanResults
 }
 
-func (sr *ScanResults) GetScaScansXrayResults() (results []services.ScanResponse) {
+func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scaResult := range sr.ScaResults {
 		results = append(results, scaResult.XrayResult)
 	}
 	return
 }
 
-func (sr *ScanResults) GetTechnologies() []techutils.Technology {
+func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scaResult := range sr.ScaResults {
 		technologies.Add(scaResult.Technology)
@@ -174,14 +178,14 @@ func (sr *ScanResults) GetTechnologies() []techutils.Technology {
 	return technologies.ToSlice()
 }
 
-func (sr *ScanResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+func (sr *TargetResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	if sr.JasResults == nil {
 		return
 	}
 	return sr.JasResults.GetResults(scanType)
 }
 
-func (sr *ScanResults) HasInformation() bool {
+func (sr *TargetResults) HasInformation() bool {
 	for _, scaResult := range sr.ScaResults {
 		if scaResult.HasInformation() {
 			return true
@@ -190,7 +194,7 @@ func (sr *ScanResults) HasInformation() bool {
 	return false
 }
 
-func (sr *ScanResults) HasFindings() bool {
+func (sr *TargetResults) HasFindings() bool {
 	for _, scaResult := range sr.ScaResults {
 		if scaResult.HasFindings() {
 			return true
@@ -199,14 +203,28 @@ func (sr *ScanResults) HasFindings() bool {
 	return false
 }
 
-func (sr *ScanResults) NewScaScanResults(response *services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) AddError(err error) {
+	sr.errorsMutex.Lock()
+	sr.Error = errors.Join(sr.Error, err)
+	sr.errorsMutex.Unlock()
+}
+
+func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
+	if sr.ScaResults == nil {
+		return sr
+	}
+	sr.ScaResults.Descriptors = descriptors
+	return sr
+}
+
+func (sr *TargetResults) NewScaScanResults(responses ...*services.ScanResponse) *ScaScanResults {
 	scaScanResults := NewScaScanResults(response)
 	sr.ScaResults = append(sr.ScaResults, scaScanResults)
 	return scaScanResults
 }
 
-func (sr *ScanResults) NewScaScan(target string, technology techutils.Technology) *ScaScanResults {
-	scaScanResults := &ScaScanResults{ScanTarget: ScanTarget{Target: target, Technology: technology}}
+func (sr *TargetResults) NewScaScan(descriptors ...string) *ScaScanResults {
+	scaScanResults := &ScaScanResults{Descriptors: descriptors}
 	sr.ScaResults = append(sr.ScaResults, scaScanResults)
 	return scaScanResults
 }

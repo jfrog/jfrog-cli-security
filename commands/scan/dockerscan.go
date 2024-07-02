@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -95,15 +95,16 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *results.ScanCommandResults) (err error) {
-		if scanResults == nil || len(scanResults.ScaResults) == 0 {
+	return dsc.ScanCommand.RunAndRecordResults(func(cmdResults *results.SecurityCommandResults) (err error) {
+		if cmdResults == nil || len(cmdResults.Targets) == 0 {
 			return
 		}
-		for i := range scanResults.ScaResults {
+		for i := range cmdResults.Targets {
 			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
-			scanResults.ScaResults[i].Target = dsc.imageTag
+			cmdResults.Targets[i].Name = dsc.imageTag
+			// scanResults.Scans[i].Target = dsc.imageTag
 		}
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+		return output.RecordSecurityCommandOutput(output.Binary, cmdResults)
 	})
 }
 

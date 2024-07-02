@@ -158,7 +158,7 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 	return event, err
 }
 
-func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *results.ScanCommandResults) *xscservices.XscAnalyticsGeneralEventFinalize {
+func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *results.SecurityCommandResults) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
 	eventStatus := xscservices.Completed
 	if auditResults.GetErrors() != nil {

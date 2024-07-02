@@ -55,7 +55,7 @@ type ResultsStreamFormatParser interface {
 	ParseSast(target string, sast ...*sarif.Run) error
 }
 
-func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.ScanCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
+func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.SecurityCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
 	parser := simplejsonparser.NewCmdResultsSimpleJsonConverter(false)
 	err = c.parseCommandResults(parser, cmdResults)
 	if err != nil {
@@ -70,7 +70,7 @@ func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.ScanCo
 	return
 }
 
-func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.ScanCommandResults) (sarifReport *sarif.Report, err error) {
+func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
 	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.Pretty, c.Params.AllowResultsWithoutLocations)
 	err = c.parseCommandResults(parser, cmdResults)
 	if err != nil {
@@ -79,7 +79,7 @@ func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.ScanCommand
 	return parser.Get()
 }
 
-func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.ScanCommandResults) (tableResults formats.ResultsTables, err error) {
+func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.SecurityCommandResults) (tableResults formats.ResultsTables, err error) {
 	parser := tableparser.NewCmdResultsTableConverter(c.Params.Pretty)
 	err = c.parseCommandResults(parser, cmdResults)
 	if err != nil {
@@ -94,7 +94,7 @@ func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.ScanCommand
 	return
 }
 
-func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.ScanCommandResults) (summaryResults formats.SummaryResults, err error) {
+func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityCommandResults) (summaryResults formats.SummaryResults, err error) {
 	parser := summaryparser.NewCmdResultsSummaryConverter()
 	err = c.parseCommandResults(parser, cmdResults)
 	if err != nil {
@@ -103,11 +103,11 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.ScanComma
 	return *parser.Get(), nil
 }
 
-func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormatParser, cmdResults *results.ScanCommandResults) (err error) {
+func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormatParser, cmdResults *results.SecurityCommandResults) (err error) {
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
 	parser.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled)
-	for _, scan := range cmdResults.Scans {
+	for _, scan := range cmdResults.Targets {
 		if err = parser.ParseNewScanResultsMetadata(scan.Target, scan.Error); err != nil {
 			return err
 		}

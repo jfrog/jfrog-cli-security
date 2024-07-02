@@ -29,7 +29,7 @@ const maxPossibleCve = 10.0
 
 type ResultsWriter struct {
 	// The scan cmdResults.
-	cmdResults *results.ScanCommandResults
+	cmdResults *results.SecurityCommandResults
 	// SimpleJsonError  Errors to be added to output of the SimpleJson format.
 	simpleJsonError []formats.SimpleJsonError
 	// Format  The output format.
@@ -50,7 +50,7 @@ type ResultsWriter struct {
 	messages []string
 }
 
-func NewResultsWriter(scanResults *results.ScanCommandResults) *ResultsWriter {
+func NewResultsWriter(scanResults *results.SecurityCommandResults) *ResultsWriter {
 	return &ResultsWriter{cmdResults: scanResults}
 }
 
@@ -180,7 +180,7 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func GenereateSarifReportFromResults(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
+func GenereateSarifReportFromResults(cmdResults *results.SecurityCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
 	report, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -199,7 +199,7 @@ func GenereateSarifReportFromResults(cmdResults *results.ScanCommandResults, isM
 	return
 }
 
-func convertXrayResponsesToSarifRun(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
+func convertXrayResponsesToSarifRun(cmdResults *results.SecurityCommandResults, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
 	xrayJson, err := ConvertXrayScanToSimpleJson(cmdResults, isMultipleRoots, includeLicenses, true, allowedLicenses)
 	if err != nil {
 		return
@@ -353,7 +353,7 @@ func addXrayRule(ruleId, ruleDescription, maxCveScore, summary, markdownDescript
 	})
 }
 
-func ConvertXrayScanToSimpleJson(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses, simplifiedOutput bool, allowedLicenses []string) (formats.SimpleJsonResults, error) {
+func ConvertXrayScanToSimpleJson(cmdResults *results.SecurityCommandResults, isMultipleRoots, includeLicenses, simplifiedOutput bool, allowedLicenses []string) (formats.SimpleJsonResults, error) {
 	violations, vulnerabilities, licenses := SplitScanResults(cmdResults.ScaResults)
 	jsonTable := formats.SimpleJsonResults{}
 	if len(vulnerabilities) > 0 {
@@ -514,7 +514,7 @@ func SplitScanResults(results []*results.ScaScanResult) ([]services.Violation, [
 	return violations, vulnerabilities, licenses
 }
 
-func writeJsonResults(cmdResults *results.ScanCommandResults) (resultsPath string, err error) {
+func writeJsonResults(cmdResults *results.SecurityCommandResults) (resultsPath string, err error) {
 	out, err := fileutils.CreateTempFile()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -551,7 +551,7 @@ func PrintJson(output interface{}) error {
 	return nil
 }
 
-func PrintSarif(cmdResults *results.ScanCommandResults, isMultipleRoots, includeLicenses bool) error {
+func PrintSarif(cmdResults *results.SecurityCommandResults, isMultipleRoots, includeLicenses bool) error {
 	sarifReport, err := GenereateSarifReportFromResults(cmdResults, isMultipleRoots, includeLicenses, nil)
 	if err != nil {
 		return err

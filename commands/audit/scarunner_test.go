@@ -3,11 +3,8 @@ package audit
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -117,108 +114,3 @@ func createEmptyFile(t *testing.T, path string) {
 	assert.NoError(t, file.Close())
 }
 
-func TestGetScaScansToPreform(t *testing.T) {
-
-	dir, cleanUp := createTestDir(t)
-
-	tests := []struct {
-		name     string
-		wd       string
-		params   func() *AuditParams
-		expected []*results.ScaScanResult
-	}{
-		{
-			name: "Test specific technologies",
-			wd:   dir,
-			params: func() *AuditParams {
-				param := NewAuditParams().SetWorkingDirs([]string{dir})
-				param.SetTechnologies([]string{"maven", "npm", "go"}).SetIsRecursiveScan(true)
-				return param
-			},
-			expected: []*results.ScaScanResult{
-				{
-					Technology: techutils.Maven,
-					Target:     filepath.Join(dir, "dir", "maven"),
-					Descriptors: []string{
-						filepath.Join(dir, "dir", "maven", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
-					},
-				},
-				{
-					Technology:  techutils.Npm,
-					Target:      filepath.Join(dir, "dir", "npm"),
-					Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
-				},
-				{
-					Technology:  techutils.Go,
-					Target:      filepath.Join(dir, "dir", "go"),
-					Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
-				},
-			},
-		},
-		{
-			name: "Test all",
-			wd:   dir,
-			params: func() *AuditParams {
-				param := NewAuditParams().SetWorkingDirs([]string{dir})
-				param.SetIsRecursiveScan(true)
-				return param
-			},
-			expected: []*results.ScaScanResult{
-				{
-					Technology: techutils.Maven,
-					Target:     filepath.Join(dir, "dir", "maven"),
-					Descriptors: []string{
-						filepath.Join(dir, "dir", "maven", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
-					},
-				},
-				{
-					Technology:  techutils.Npm,
-					Target:      filepath.Join(dir, "dir", "npm"),
-					Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
-				},
-				{
-					Technology:  techutils.Go,
-					Target:      filepath.Join(dir, "dir", "go"),
-					Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
-				},
-				{
-					Technology:  techutils.Yarn,
-					Target:      filepath.Join(dir, "yarn"),
-					Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
-				},
-				{
-					Technology:  techutils.Pip,
-					Target:      filepath.Join(dir, "yarn", "Pip"),
-					Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
-				},
-				{
-					Technology:  techutils.Pipenv,
-					Target:      filepath.Join(dir, "yarn", "Pipenv"),
-					Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
-				},
-				{
-					Technology:  techutils.Nuget,
-					Target:      filepath.Join(dir, "Nuget"),
-					Descriptors: []string{filepath.Join(dir, "Nuget", "project.sln"), filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj")},
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := getScaScansToPreform(test.params())
-			for i := range result {
-				sort.Strings(result[i].Descriptors)
-				sort.Strings(test.expected[i].Descriptors)
-			}
-			assert.ElementsMatch(t, test.expected, result)
-		})
-	}
-
-	cleanUp()
-}

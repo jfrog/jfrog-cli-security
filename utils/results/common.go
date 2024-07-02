@@ -411,11 +411,11 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func SplitScaScanResults(results *ScanCommandResults) ([]services.Violation, []services.Vulnerability, []services.License) {
+func SplitScaScanResults(results *SecurityCommandResults) ([]services.Violation, []services.Vulnerability, []services.License) {
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
-	for _, scan := range results.Scans {
+	for _, scan := range results.Targets {
 		for _, scaScan := range scan.ScaResults {
 			violations = append(violations, scaScan.XrayResult.Violations...)
 			vulnerabilities = append(vulnerabilities, scaScan.XrayResult.Vulnerabilities...)

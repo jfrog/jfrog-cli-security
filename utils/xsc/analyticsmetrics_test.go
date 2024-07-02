@@ -80,13 +80,13 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 
 	testStruct := []struct {
 		name         string
-		auditResults *results.ScanCommandResults
+		auditResults *results.SecurityCommandResults
 		want         xscservices.XscAnalyticsBasicGeneralEvent
 	}{
-		{name: "No audit results", auditResults: &results.ScanCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+		{name: "No audit results", auditResults: &results.SecurityCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
 		{name: "Valid audit result", auditResults: getDummyContentForGeneralEvent(true, false), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
 		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed no findings.", auditResults: &results.ScanCommandResults{Scans: []*results.ScanResults{{Error: errors.New("an error")}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{name: "Scan failed no findings.", auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Error: errors.New("an error")}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
 	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
@@ -105,7 +105,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	}
 }
 
-func getDummyContentForGeneralEvent(withJas, withErr bool) *results.ScanCommandResults {
+func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityCommandResults {
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
 	cmdResults := results.NewCommandResults("", true)
