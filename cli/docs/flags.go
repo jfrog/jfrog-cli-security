@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -13,13 +14,14 @@ import (
 
 const (
 	// Security Commands Keys
-	XrCurl        = "xr-curl"
-	OfflineUpdate = "offline-update"
-	XrScan        = "xr-scan"
-	BuildScan     = "build-scan"
-	DockerScan    = "docker scan"
-	Audit         = "audit"
-	CurationAudit = "curation-audit"
+	XrCurl               = "xr-curl"
+	OfflineUpdate        = "offline-update"
+	XrScan               = "xr-scan"
+	BuildScan            = "build-scan"
+	DockerScan           = "docker scan"
+	Audit                = "audit"
+	CurationAudit        = "curation-audit"
+	GitCountContributors = "count-contributors"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -113,6 +115,15 @@ const (
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
+
+	// Unique git flags
+	ScmType         = "scm-type"
+	ScmApiUrl       = "scm-api-url"
+	Token           = "token"
+	Owner           = "owner"
+	RepoName        = "repo-name"
+	Months          = "months"
+	DetailedSummary = "detailed-summary"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -137,6 +148,9 @@ var commandFlags = map[string][]string{
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
+	},
+	GitCountContributors: {
+		ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -233,6 +247,15 @@ var flagsMap = map[string]components.Flag{
 	Sast:             components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
 	Secrets:          components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
 	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+
+	// Git flags
+	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
+	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars())),
+	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depends on the git provider - on github and gitlab the owner is usually an individual or an organization, on bitbucket it is a project.", components.SetMandatory()),
+	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
+	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
+	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {
