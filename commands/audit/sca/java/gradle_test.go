@@ -3,8 +3,10 @@ package java
 import (
 	"errors"
 	"fmt"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -47,7 +49,12 @@ func TestGradleTreesWithoutConfig(t *testing.T) {
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
-
+	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
+	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
+	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
+		securityTestUtils.CreateJfrogHomeConfig(t, true)
+		defer securityTestUtils.CleanTestsHomeEnv()
+	}
 	// Run getModulesDependencyTrees
 	modulesDependencyTrees, uniqueDeps, err := buildGradleDependencyTree(&DepTreeParams{})
 	if assert.NoError(t, err) && assert.NotNil(t, modulesDependencyTrees) {
@@ -71,6 +78,12 @@ func TestGradleTreesWithConfig(t *testing.T) {
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle-example-config"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
+	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
+	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
+		securityTestUtils.CreateJfrogHomeConfig(t, true)
+		defer securityTestUtils.CleanTestsHomeEnv()
+	}
 
 	// Run getModulesDependencyTrees
 	modulesDependencyTrees, uniqueDeps, err := buildGradleDependencyTree(&DepTreeParams{UseWrapper: true})
