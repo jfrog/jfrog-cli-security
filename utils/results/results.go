@@ -2,6 +2,7 @@ package results
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -14,11 +15,13 @@ import (
 type ScanCommandResults struct {
 	// General fields describing the command metadata
 	XrayVersion    string `json:"xray_version"`
-	EntitledForJas bool   `json:"entitledForJas"`
+	EntitledForJas bool   `json:"jas_entitled"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
 	Scans  []*ScanResults `json:"scans"`
+	scansMutex sync.Mutex `json:"-"`
+	// Error that occurred during the command execution
 	Errors error          `json:"errors,omitempty"`
 }
 
@@ -41,21 +44,20 @@ type ScanResults struct {
 }
 
 type ScaScanResults struct {
-	// Related Descriptor that provided the dependencies for the scan
-	ScanTarget
+	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
-	XrayResult services.ScanResponse `json:"XrayScan"`
+	XrayResult services.ScanResponse `json:"xray_scan"`
 }
 
 type JasScansResults struct {
-	ApplicabilityScanResults []*sarif.Run `json:"ContextualAnalysis,omitempty"`
-	SecretsScanResults       []*sarif.Run `json:"Secrets,omitempty"`
-	IacScanResults           []*sarif.Run `json:"Iac,omitempty"`
-	SastScanResults          []*sarif.Run `json:"Sast,omitempty"`
+	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
+	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
+	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
+	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
 }
 
 func NewCommandResults(xrayVersion string, entitledForJas bool) *ScanCommandResults {
-	return &ScanCommandResults{XrayVersion: xrayVersion, EntitledForJas: entitledForJas}
+	return &ScanCommandResults{XrayVersion: xrayVersion, EntitledForJas: entitledForJas, scansMutex: sync.Mutex{}}
 }
 
 func (r *ScanCommandResults) SetMultiScanId(multiScanId string) *ScanCommandResults {
@@ -151,7 +153,9 @@ func (r *ScanCommandResults) NewScanResults(target ScanTarget) *ScanResults {
 	if r.EntitledForJas {
 		scanResults.JasResults = &JasScansResults{}
 	}
+	r.scansMutex.Lock()
 	r.Scans = append(r.Scans, scanResults)
+	r.scansMutex.Unlock()
 	return scanResults
 }
 
