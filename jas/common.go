@@ -3,6 +3,7 @@ package jas
 import (
 	"errors"
 	"fmt"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -199,6 +200,12 @@ var FakeBasicXrayResults = []services.ScanResponse{
 }
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
+	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
+	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
+	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
+		securityTestUtils.CreateJfrogHomeConfig(t, true)
+		defer securityTestUtils.CleanTestsHomeEnv()
+	}
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
