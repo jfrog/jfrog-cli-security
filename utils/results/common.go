@@ -25,7 +25,6 @@ const (
 	directDependencyIndex      = 1
 	directDependencyPathLength = 2
 	nodeModules                = "node_modules"
-	NpmPackageTypeIdentifier   = "npm://"
 )
 
 var (
@@ -415,11 +414,11 @@ func SplitScaScanResults(results *SecurityCommandResults) ([]services.Violation,
 	var violations []services.Violation
 	var vulnerabilities []services.Vulnerability
 	var licenses []services.License
-	for _, scan := range results.Targets {
-		for _, scaScan := range scan.ScaResults {
-			violations = append(violations, scaScan.XrayResult.Violations...)
-			vulnerabilities = append(vulnerabilities, scaScan.XrayResult.Vulnerabilities...)
-			licenses = append(licenses, scaScan.XrayResult.Licenses...)
+	for _, scanTarget := range results.Targets {
+		for _, scaScan := range scanTarget.ScaResults.XrayResults {
+			violations = append(violations, scaScan.Violations...)
+			vulnerabilities = append(vulnerabilities, scaScan.Vulnerabilities...)
+			licenses = append(licenses, scaScan.Licenses...)
 		}
 	}
 	return violations, vulnerabilities, licenses
@@ -550,10 +549,10 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 // Found use of a badCode inside the node_modules from a different package, report applicable.
 func shouldDisqualifyEvidence(components map[string]services.Component, evidenceFilePath string) (disqualify bool) {
 	for key := range components {
-		if !strings.HasPrefix(key, NpmPackageTypeIdentifier) {
+		if !strings.HasPrefix(key, techutils.Npm.GetPackageTypeId()) {
 			return
 		}
-		dependencyName := extractDependencyNameFromComponent(key, NpmPackageTypeIdentifier)
+		dependencyName := extractDependencyNameFromComponent(key, techutils.Npm.GetPackageTypeId())
 		// Check both Unix & Windows paths.
 		if strings.Contains(evidenceFilePath, nodeModules+"/"+dependencyName) || strings.Contains(evidenceFilePath, filepath.Join(nodeModules, dependencyName)) {
 			return true

@@ -278,7 +278,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
 	}
 
-	if err = utils.NewResultsWriter(cmdResults).
+	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
@@ -296,8 +296,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
 	if scanCmd.fail && !scanCmd.includeVulnerabilities {
-		if utils.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
-			return utils.NewFailBuildError()
+		if results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
+			return results.NewFailBuildError()
 		}
 	}
 	if cmdResults.GetErrors() != nil {

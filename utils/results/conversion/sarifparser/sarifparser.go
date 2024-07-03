@@ -61,7 +61,7 @@ func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas 
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, errors error) (err error) {
+func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, _ ...error) (err error) {
 	if sc.current == nil {
 		return results.ConvertorResetErr
 	}

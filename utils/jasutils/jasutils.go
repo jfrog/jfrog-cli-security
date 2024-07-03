@@ -23,6 +23,10 @@ func (jst JasScanType) String() string {
 	return string(jst)
 }
 
+func GetJasScanTypes() []JasScanType {
+	return []JasScanType{Applicability, Secrets, IaC, Sast}
+}
+
 type ApplicabilityStatus string
 
 const (

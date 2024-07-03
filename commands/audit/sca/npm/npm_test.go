@@ -8,6 +8,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	biutils "github.com/jfrog/build-info-go/build/utils"
@@ -105,7 +106,7 @@ func TestParseNpmDependenciesList(t *testing.T) {
 	}
 	expectedUniqueDeps := []string{xrayDependenciesTree.Id}
 	for _, dep := range dependencies {
-		expectedUniqueDeps = append(expectedUniqueDeps, utils.NpmPackageTypeIdentifier+dep.Id)
+		expectedUniqueDeps = append(expectedUniqueDeps, techutils.Npm.GetPackageTypeId()+dep.Id)
 	}
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 

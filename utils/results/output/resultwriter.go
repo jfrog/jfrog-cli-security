@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"slices"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -28,10 +29,14 @@ type ResultsWriter struct {
 	includeVulnerabilities bool
 	// IncludeLicenses  If true, also include license violations as part of the output.
 	includeLicenses bool
+	// IsMultipleRoots  multipleRoots is set to true, in case the given results array contains (or may contain) results of several projects (like in binary scan).
+	isMultipleRoots *bool
 	// PrintExtended, If true, show extended results.
 	printExtended bool
 	// The scanType (binary,dependency)
 	scanType services.ScanType
+	// For table format - show table only for the given subScansPreformed
+	subScansPreformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
 }
@@ -45,8 +50,18 @@ func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 	return rw
 }
 
+func (rw *ResultsWriter) SetIsMultipleRootProject(isMultipleRootProject bool) *ResultsWriter {
+	rw.isMultipleRoots = &isMultipleRootProject
+	return rw
+}
+
 func (rw *ResultsWriter) SetScanType(scanType services.ScanType) *ResultsWriter {
 	rw.scanType = scanType
+	return rw
+}
+
+func (rw *ResultsWriter) SetSubScansPreformed(subScansPreformed []utils.SubScanType) *ResultsWriter {
+	rw.subScansPreformed = subScansPreformed
 	return rw
 }
 
@@ -87,6 +102,13 @@ func isPrettyOutputSupported() bool {
 	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
+func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanType, scanType services.ScanType) bool {
+	if scanType == services.Binary && (subScan == utils.IacScan || subScan == utils.SastScan) {
+		return false
+	}
+	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
+}
+
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
@@ -116,6 +138,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 
 func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.CommandResultsConvertor {
 	return conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		IsMultipleRoots:              rw.isMultipleRoots,
 		IncludeLicenses:              rw.includeLicenses,
 		IncludeVulnerabilities:       rw.includeVulnerabilities,
 		Pretty:                       pretty,
@@ -159,24 +182,34 @@ func (rw *ResultsWriter) printTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if rw.includeVulnerabilities {
-		err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended)
-	} else {
-		err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended)
+
+	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.scanType) {
+		if rw.includeVulnerabilities {
+			err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended)
+		} else {
+			err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended)
+		}
+		if err != nil {
+			return
+		}
+		if rw.includeLicenses {
+			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.scanType); err != nil {
+				return
+			}
+		}
 	}
-	if err != nil {
-		return
-	}
-	if rw.includeLicenses {
-		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.scanType); err != nil {
+	if shouldPrintTable(rw.subScansPreformed, utils.SecretsScan, rw.scanType) {
+		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Secrets); err != nil {
 			return
 		}
 	}
-	if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Secrets); err != nil {
-		return
+	if shouldPrintTable(rw.subScansPreformed, utils.IacScan, rw.scanType) {
+		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
+			return
+		}
 	}
-	if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
-		return
+	if !shouldPrintTable(rw.subScansPreformed, utils.SastScan, rw.scanType) {
+		return nil
 	}
 	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
 }

@@ -41,12 +41,14 @@ func (sjc *CmdResultsSimpleJsonConverter) Reset(multiScanId, _ string, entitledF
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseNewScanResultsMetadata(target string, errors error) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseNewScanResultsMetadata(target string, errors ...error) (err error) {
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
-	if errors != nil {
-		sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{FilePath: target, ErrorMessage: errors.Error()})
+	for _, err := range errors {
+		if err != nil {
+			sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{FilePath: target, ErrorMessage: err.Error()})
+		}
 	}
 	return
 }

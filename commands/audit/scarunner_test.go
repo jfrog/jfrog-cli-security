@@ -113,4 +113,3 @@ func createEmptyFile(t *testing.T, path string) {
 	assert.NoError(t, err)
 	assert.NoError(t, file.Close())
 }
-

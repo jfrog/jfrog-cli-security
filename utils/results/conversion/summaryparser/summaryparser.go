@@ -38,7 +38,7 @@ func (sc *CmdResultsSummaryConverter) Reset(_, _ string, entitledForJas bool) (e
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseNewScanResultsMetadata(target string, errors error) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseNewScanResultsMetadata(target string, _ ...error) (err error) {
 	if sc.current == nil {
 		return results.ConvertorResetErr
 	}

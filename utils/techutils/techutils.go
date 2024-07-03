@@ -67,6 +67,8 @@ var packageTypes = map[string]string{
 type TechData struct {
 	// The name of the package type used in this technology.
 	packageType string
+	// The package type ID used in Xray.
+	packageTypeId string
 	// Suffixes of file/directory names that indicate if a project uses this technology.
 	// The name of at least one of the files/directories in the project's directory must end with one of these suffixes.
 	indicators []string
@@ -84,7 +86,7 @@ type TechData struct {
 	// The operator for package versioning
 	packageVersionOperator string
 	// The package installation command of a package
-	packageInstallationCommand string
+	packageInstallationCommand string 
 }
 
 // Given a file content, returns true if the content is an indicator of the technology.
@@ -113,6 +115,7 @@ var technologiesData = map[Technology]TechData{
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
+		packageTypeId: 				"npm://",
 		packageInstallationCommand: "update",
 	},
 	Yarn: {
@@ -233,6 +236,13 @@ func (tech Technology) GetPackageType() string {
 		return tech.String()
 	}
 	return technologiesData[tech].packageType
+}
+
+func (tech Technology) GetPackageTypeId() string {
+	if technologiesData[tech].packageTypeId == "" {
+		return fmt.Sprintf("%s://", tech.GetPackageType())
+	}
+	return technologiesData[tech].packageTypeId
 }
 
 func (tech Technology) GetPackageDescriptor() []string {

@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestDetectScansToPreform(t *testing.T) {
 
 	dir, cleanUp := createTestDir(t)
@@ -37,16 +36,16 @@ func TestDetectScansToPreform(t *testing.T) {
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
-						filepath.Join(dir, "dir", "maven", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
-						filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
 						},
 					},
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Npm,
-						Target:      filepath.Join(dir, "dir", "npm"),
+						Technology: techutils.Npm,
+						Target:     filepath.Join(dir, "dir", "npm"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
@@ -54,8 +53,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Go,
-						Target:      filepath.Join(dir, "dir", "go"),
+						Technology: techutils.Go,
+						Target:     filepath.Join(dir, "dir", "go"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
@@ -87,8 +86,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Npm,
-						Target:      filepath.Join(dir, "dir", "npm"),
+						Technology: techutils.Npm,
+						Target:     filepath.Join(dir, "dir", "npm"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
@@ -96,8 +95,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Go,
-						Target:      filepath.Join(dir, "dir", "go"),
+						Technology: techutils.Go,
+						Target:     filepath.Join(dir, "dir", "go"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
@@ -105,8 +104,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Yarn,
-						Target:      filepath.Join(dir, "yarn"),
+						Technology: techutils.Yarn,
+						Target:     filepath.Join(dir, "yarn"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
@@ -114,8 +113,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Pip,
-						Target:      filepath.Join(dir, "yarn", "Pip"),
+						Technology: techutils.Pip,
+						Target:     filepath.Join(dir, "yarn", "Pip"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
@@ -123,8 +122,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Pipenv,
-						Target:      filepath.Join(dir, "yarn", "Pipenv"),
+						Technology: techutils.Pipenv,
+						Target:     filepath.Join(dir, "yarn", "Pipenv"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
@@ -132,8 +131,8 @@ func TestDetectScansToPreform(t *testing.T) {
 				},
 				{
 					ScanTarget: results.ScanTarget{
-						Technology:  techutils.Nuget,
-						Target:      filepath.Join(dir, "Nuget"),
+						Technology: techutils.Nuget,
+						Target:     filepath.Join(dir, "Nuget"),
 					},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "Nuget", "project.sln"), filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj")},

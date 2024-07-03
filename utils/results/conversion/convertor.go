@@ -21,6 +21,8 @@ type CommandResultsConvertor struct {
 }
 
 type ResultConvertParams struct {
+	// Control and override converting command results as multi target results 
+	IsMultipleRoots *bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool
 	// Control if the output should include vulnerabilities information
@@ -44,7 +46,7 @@ type ResultsStreamFormatParser interface {
 	// Reset the convertor to start converting a new command results
 	Reset(multiScanId, xrayVersion string, entitledForJas bool) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
-	ParseNewScanResultsMetadata(target string, errors error) error
+	ParseNewScanResultsMetadata(target string, errors ...error) error
 	// Parse SCA content to the current scan target
 	ParseViolations(target string, tech techutils.Technology, violations []services.Violation, applicabilityRuns ...*sarif.Run) error
 	ParseVulnerabilities(target string, tech techutils.Technology, vulnerabilities []services.Vulnerability, applicabilityRuns ...*sarif.Run) error
@@ -106,68 +108,94 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityC
 func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormatParser, cmdResults *results.SecurityCommandResults) (err error) {
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
+	if c.Params.IsMultipleRoots != nil {
+		multipleTargets = *c.Params.IsMultipleRoots
+	}
 	parser.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled)
-	for _, scan := range cmdResults.Targets {
-		if err = parser.ParseNewScanResultsMetadata(scan.Target, scan.Error); err != nil {
-			return err
+	for _, targetScansResults := range cmdResults.Targets {
+		if err = parser.ParseNewScanResultsMetadata(targetScansResults.Target, targetScansResults.Errors...); err != nil {
+			return
 		}
-		for _, scaResults := range scan.ScaResults {
-			actualTarget := scaResults.Target
-			if actualTarget == "" {
-				// If target was not provided, use the scan target
-				// TODO: make sure works for build-scan since its not a file
-				actualTarget = scan.Target
-			}
-			var applicableRuns []*sarif.Run
-			if jasEntitled && scan.JasResults != nil {
-				applicableRuns = scan.JasResults.ApplicabilityScanResults
-			}
-			vulnerabilities := scaResults.XrayResult.Vulnerabilities
-			if c.Params.SimplifiedOutput {
-				vulnerabilities = simplifyVulnerabilities(vulnerabilities, multipleTargets)
-			}
-			if len(vulnerabilities) > 0 {
-				if err = parser.ParseVulnerabilities(actualTarget, scaResults.Technology, vulnerabilities, applicableRuns...); err != nil {
-					return
-				}
-			}
-			violations := scaResults.XrayResult.Violations
-			if c.Params.SimplifiedOutput {
-				violations = simplifyViolations(violations, multipleTargets)
-			}
-			if len(violations) > 0 {
-				if err = parser.ParseViolations(actualTarget, scaResults.Technology, violations, applicableRuns...); err != nil {
-					return
-				}
-			} else if len(c.Params.AllowedLicenses) > 0 {
-				// If no violations were found, check if there are licenses that are not allowed
-				licViolations := results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.XrayResult.Licenses)
-				if len(licViolations) > 0 {
-					if err = parser.ParseViolations(actualTarget, scaResults.Technology, results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.XrayResult.Licenses)); err != nil {
-						return
-					}
-				}
-			}
-			if c.Params.IncludeLicenses {
-				if err = parser.ParseLicenses(actualTarget, scaResults.Technology, scaResults.XrayResult.Licenses); err != nil {
-					return
-				}
+		if targetScansResults.ScaResults != nil {
+			if err = c.parseScaResults(parser, targetScansResults, jasEntitled, multipleTargets); err != nil {
+				return
 			}
 		}
-		if !jasEntitled || scan.JasResults == nil {
+		if !jasEntitled || targetScansResults.JasResults == nil {
 			continue
 		}
-		if err = parser.ParseSecrets(scan.Target, scan.JasResults.SecretsScanResults...); err != nil {
+		if err = parser.ParseSecrets(targetScansResults.Target, targetScansResults.JasResults.SecretsScanResults...); err != nil {
 			return
 		}
-		if err = parser.ParseIacs(scan.Target, scan.JasResults.IacScanResults...); err != nil {
+		if err = parser.ParseIacs(targetScansResults.Target, targetScansResults.JasResults.IacScanResults...); err != nil {
 			return
 		}
-		if err = parser.ParseSast(scan.Target, scan.JasResults.SastScanResults...); err != nil {
+		if err = parser.ParseSast(targetScansResults.Target, targetScansResults.JasResults.SastScanResults...); err != nil {
 			return
 		}
 	}
 	return
+}
+
+func (c *CommandResultsConvertor) parseScaResults(parser ResultsStreamFormatParser, targetScansResults *results.TargetResults, jasEntitled, multipleTargets bool) (err error) {
+	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
+		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.Target)
+		var applicableRuns []*sarif.Run
+		if jasEntitled && targetScansResults.JasResults != nil {
+			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+		}
+		vulnerabilities := scaResults.Vulnerabilities
+		if c.Params.SimplifiedOutput {
+			vulnerabilities = simplifyVulnerabilities(vulnerabilities, multipleTargets)
+		}
+		if len(vulnerabilities) > 0 {
+			if err = parser.ParseVulnerabilities(actualTarget, targetScansResults.Technology, vulnerabilities, applicableRuns...); err != nil {
+				return
+			}
+		}
+		violations := scaResults.Violations
+		if c.Params.SimplifiedOutput {
+			violations = simplifyViolations(violations, multipleTargets)
+		}
+		if len(violations) > 0 {
+			if err = parser.ParseViolations(actualTarget, targetScansResults.Technology, violations, applicableRuns...); err != nil {
+				return
+			}
+		} else if len(c.Params.AllowedLicenses) > 0 {
+			// If no violations were found, check if there are licenses that are not allowed
+			licViolations := results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.Licenses)
+			if len(licViolations) > 0 {
+				if err = parser.ParseViolations(actualTarget, targetScansResults.Technology, results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.Licenses)); err != nil {
+					return
+				}
+			}
+		}
+		if c.Params.IncludeLicenses {
+			if err = parser.ParseLicenses(actualTarget, targetScansResults.Technology, scaResults.Licenses); err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+func getScaScanTarget(scaResults *results.ScaScanResults, target string) string {
+	if scaResults == nil || len(scaResults.Descriptors) == 0 {
+		// If target was not provided, use the scan target
+		// TODO: make sure works for build-scan since its not a file
+		return target
+	}
+	// Get the one that it's directory is the prefix of the target and the shortest
+	var bestMatch string
+	for _, descriptor := range scaResults.Descriptors {
+		if strings.HasPrefix(descriptor, target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
+			bestMatch = descriptor
+		}
+	}
+	if bestMatch != "" {
+		return bestMatch
+	}
+	return target
 }
 
 // simplifyViolations returns a new slice of services.Violations that contains only the unique violations from the input slice

@@ -34,9 +34,9 @@ import (
 )
 
 type JasScanner struct {
-	TempDir               string
-	AnalyzerManager       AnalyzerManager
-	ServerDetails         *config.ServerDetails
+	TempDir         string
+	AnalyzerManager AnalyzerManager
+	ServerDetails   *config.ServerDetails
 	// JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
 	ScannerDirCleanupFunc func() error
 	Exclusions            []string

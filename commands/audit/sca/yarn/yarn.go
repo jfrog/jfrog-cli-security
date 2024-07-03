@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -217,5 +218,5 @@ func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, r
 }
 
 func getXrayDependencyId(yarnDependency *biutils.YarnDependency) string {
-	return utils.NpmPackageTypeIdentifier + yarnDependency.Name() + ":" + yarnDependency.Details.Version
+	return techutils.Npm.GetPackageTypeId() + yarnDependency.Name() + ":" + yarnDependency.Details.Version
 }
