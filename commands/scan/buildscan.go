@@ -3,6 +3,8 @@ package scan
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -120,6 +122,16 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	if err != nil {
 		return false, err
 	}
+
+	url, endpoint, trimerr := trimBuildScanResultUrl(buildScanResults.MoreDetailsUrl)
+	if trimerr != nil {
+		return false, err
+	}
+	// Check that the response url from scan build API is the same url as the one that was inserted to the CLI in config
+	if url != bsc.serverDetails.Url {
+		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s. replacing with CLI url", url, bsc.serverDetails.Url))
+		buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
+	}
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
@@ -169,4 +181,16 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
+}
+
+func trimBuildScanResultUrl(fullUrl string) (string, string, error) {
+	parsedUrl, err := url.Parse(fullUrl)
+	if err != nil {
+		return "", "", err
+	}
+
+	baseUrl := fmt.Sprintf("%s://%s/", parsedUrl.Scheme, parsedUrl.Host)
+	endpoint := strings.TrimPrefix(fullUrl, baseUrl)
+
+	return baseUrl, endpoint, nil
 }
