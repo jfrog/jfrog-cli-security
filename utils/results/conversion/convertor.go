@@ -21,7 +21,7 @@ type CommandResultsConvertor struct {
 }
 
 type ResultConvertParams struct {
-	// Control and override converting command results as multi target results 
+	// Control and override converting command results as multi target results
 	IsMultipleRoots *bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool

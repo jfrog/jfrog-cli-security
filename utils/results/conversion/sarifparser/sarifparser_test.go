@@ -52,7 +52,7 @@ func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
 	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaIssueSarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
 }
 
-func TestgetXrayLicenseSarifHeadline(t *testing.T) {
+func TestGetXrayLicenseSarifHeadline(t *testing.T) {
 	assert.Equal(t, "License violation [MIT] in loadsh 1.4.1", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT"))
 	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT"))
 }

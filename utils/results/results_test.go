@@ -1,13 +1,13 @@
 package results
 
 import (
-	// "testing"
+// "testing"
 
-	// "github.com/jfrog/jfrog-cli-security/utils/formats"
-	// "github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	// "github.com/jfrog/jfrog-client-go/xray/services"
-	// "github.com/owenrumney/go-sarif/v2/sarif"
-	// "github.com/stretchr/testify/assert"
+// "github.com/jfrog/jfrog-cli-security/utils/formats"
+// "github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+// "github.com/jfrog/jfrog-client-go/xray/services"
+// "github.com/owenrumney/go-sarif/v2/sarif"
+// "github.com/stretchr/testify/assert"
 )
 
 // func TestGetScaScanResultByTarget(t *testing.T) {

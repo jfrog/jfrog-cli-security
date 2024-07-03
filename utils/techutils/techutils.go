@@ -86,7 +86,7 @@ type TechData struct {
 	// The operator for package versioning
 	packageVersionOperator string
 	// The package installation command of a package
-	packageInstallationCommand string 
+	packageInstallationCommand string
 }
 
 // Given a file content, returns true if the content is an indicator of the technology.
@@ -115,7 +115,7 @@ var technologiesData = map[Technology]TechData{
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
-		packageTypeId: 				"npm://",
+		packageTypeId:              "npm://",
 		packageInstallationCommand: "update",
 	},
 	Yarn: {

@@ -20,7 +20,7 @@ type SecurityCommandResults struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
-	Targets    []*TargetResults `json:"targets"`
+	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
 	// Error that occurred during the command execution
 	Error error `json:"error,omitempty"`
@@ -41,7 +41,7 @@ type TargetResults struct {
 	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
-	Errors []error `json:"errors,omitempty"`
+	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
 }
 
