@@ -20,7 +20,7 @@ const (
 	DockerScan    = "docker scan"
 	Audit         = "audit"
 	CurationAudit = "curation-audit"
-	Enrich        = "sbom enrich"
+	Enrich        = "sbom-enrich"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"

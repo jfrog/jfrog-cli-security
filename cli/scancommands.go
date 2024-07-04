@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"os"
 	"strings"
 
@@ -48,6 +50,14 @@ func getAuditAndScansCommands() []components.Command {
 			Arguments:   scanDocs.GetArguments(),
 			Category:    auditScanCategory,
 			Action:      ScanCmd,
+		},
+		{
+			Name:        "sbom-enrich",
+			Aliases:     []string{"se"},
+			Flags:       flags.GetCommandFlags(flags.Enrich),
+			Description: enrichDocs.GetDescription(),
+			Arguments:   enrichDocs.GetArguments(),
+			Action:      EnrichCmd,
 		},
 		{
 			Name:        "build-scan",
@@ -150,6 +160,32 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 	}
+}
+
+func EnrichCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 {
+		return pluginsCommon.PrintHelpAndReturnError("providing a <source pattern> argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	if err = validateXrayContext(c, serverDetails); err != nil {
+		return err
+	}
+	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+	if err = spec.ValidateSpec(specFile.Files, false, false); err != nil {
+		return err
+	}
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	EnrichCmd := enrich.NewEnrichCommand().
+		SetServerDetails(serverDetails).
+		SetThreads(threads).
+		SetSpec(specFile)
+	return commandsCommon.Exec(EnrichCmd)
 }
 
 func ScanCmd(c *components.Context) error {

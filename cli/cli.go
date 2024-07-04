@@ -16,11 +16,5 @@ func GetJfrogCliSecurityApp() components.App {
 		Commands:    getXrayNameSpaceCommands(),
 		Category:    "Command Namespaces",
 	})
-	app.Subcommands = append(app.Subcommands, components.Namespace{
-		Name:        string(cliutils.Sbom),
-		Description: "Sbom commands.",
-		Commands:    getSbomCommands(),
-		Category:    "Command Namespaces",
-	})
 	return app
 }
