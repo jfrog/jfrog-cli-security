@@ -9,5 +9,5 @@ func GetDescription() string {
 }
 
 func GetArguments() []components.Argument {
-	return []components.Argument{{Name: "source pattern", Description: `Specifies the local file system path of the JSON to be scanned.`}}
+	return []components.Argument{{Name: "Specific file path", Description: `Specifies the local file system path of the JSON to be scanned.`}}
 }

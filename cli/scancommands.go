@@ -164,7 +164,7 @@ func getAuditAndScansCommands() []components.Command {
 
 func EnrichCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 {
-		return pluginsCommon.PrintHelpAndReturnError("providing a <source pattern> argument is mandatory", c)
+		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
 	}
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {

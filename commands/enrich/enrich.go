@@ -7,9 +7,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	enrichgraph2 "github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -91,7 +90,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	}
 
 	// Validate Xray minimum version for graph scan command
-	err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion)
+	err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, enrichgraph.EnrichMinimumVersionXray)
 	if err != nil {
 		return err
 	}
@@ -207,7 +206,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SBOMInput: fileContent,
 					ScanType:  services.Binary,
 				}
-				importGraphParams := enrichgraph2.NewEnrichGraphParams().
+				importGraphParams := enrichgraph.NewEnrichGraphParams().
 					SetServerDetails(enrichCmd.serverDetails).
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(xrayVersion)
@@ -215,7 +214,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return err
 				}
-				scanResults, err := enrichgraph2.RunImportGraphAndGetResults(importGraphParams, xrayManager)
+				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
 					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					return
