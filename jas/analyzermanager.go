@@ -55,16 +55,13 @@ type AnalyzerManager struct {
 	MultiScanId             string
 }
 
-func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails) (err error) {
-	return am.ExecWithOutputFile(configFile, scanCommand, workingDir, "", serverDetails)
+func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
+	return am.ExecWithOutputFile(configFile, scanCommand, workingDir, "", serverDetails, envVars)
 }
 
-func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails) (err error) {
-	if err = SetAnalyzerManagerEnvVariables(serverDetails); err != nil {
-		return
-	}
+func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
 	var cmd *exec.Cmd
-	multiScanId := os.Getenv(utils.JfMsiEnvVariable)
+	multiScanId := envVars[utils.JfMsiEnvVariable]
 	if len(outputFile) > 0 {
 		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
 		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)
@@ -79,6 +76,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 			}
 		}
 	}()
+	cmd.Env = utils.ToCommandEnvVars(envVars)
 	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
 	if isCI() || err != nil {
@@ -141,32 +139,21 @@ func isCI() bool {
 	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
 }
 
-func SetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) error {
-	if serverDetails == nil {
-		return errors.New("cant get xray server details")
-	}
-	if err := os.Setenv(jfUserEnvVariable, serverDetails.User); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfPasswordEnvVariable, serverDetails.Password); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfPlatformUrlEnvVariable, serverDetails.Url); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfTokenEnvVariable, serverDetails.AccessToken); errorutils.CheckError(err) != nil {
-		return err
+func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
+	envVars = map[string]string{
+		jfUserEnvVariable:        serverDetails.User,
+		jfPasswordEnvVariable:    serverDetails.Password,
+		jfPlatformUrlEnvVariable: serverDetails.Url,
+		jfTokenEnvVariable:       serverDetails.AccessToken,
 	}
 	if !isCI() {
 		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err = os.Setenv(logDirEnvVariable, analyzerManagerLogFolder); errorutils.CheckError(err) != nil {
-			return err
-		}
+		envVars[logDirEnvVariable] = analyzerManagerLogFolder
 	}
-	return nil
+	return
 }
 
 func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
