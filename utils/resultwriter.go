@@ -130,8 +130,8 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	return nil
 }
 
-func (rw *ResultsWriter) AppendVulnsToJson() error {
-	fileName := getScaScanFileName(rw.results)
+func AppendVulnsToJson(results *Results) error {
+	fileName := getScaScanFileName(results)
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -144,7 +144,7 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 		return err
 	}
 	var vulnerabilities []map[string]string
-	xrayResults := rw.results.GetScaScansXrayResults()[0]
+	xrayResults := results.GetScaScansXrayResults()[0]
 	for _, vuln := range xrayResults.Vulnerabilities {
 		for component := range vuln.Components {
 			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
@@ -155,15 +155,15 @@ func (rw *ResultsWriter) AppendVulnsToJson() error {
 	return PrintJson(data)
 }
 
-func (rw *ResultsWriter) AppendVulnsToXML() error {
-	fileName := getScaScanFileName(rw.results)
+func AppendVulnsToXML(results *Results) error {
+	fileName := getScaScanFileName(results)
 	result := etree.NewDocument()
 	err := result.ReadFromFile(fileName)
 	if err != nil {
 		return err
 	}
 	destination := result.FindElements("//bom")[0]
-	xrayResults := rw.results.GetScaScansXrayResults()[0]
+	xrayResults := results.GetScaScansXrayResults()[0]
 	vulns := destination.CreateElement("vulnerabilities")
 	for _, vuln := range xrayResults.Vulnerabilities {
 		for component := range vuln.Components {

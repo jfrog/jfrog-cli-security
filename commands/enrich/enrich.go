@@ -146,13 +146,11 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		return
 	}
 	if isxml {
-		if err = xrutils.NewResultsWriter(scanResults).
-			AppendVulnsToXML(); err != nil {
+		if err = utils.AppendVulnsToXML(scanResults); err != nil {
 			return
 		}
 	} else {
-		if err = xrutils.NewResultsWriter(scanResults).
-			AppendVulnsToJson(); err != nil {
+		if err = utils.AppendVulnsToJson(scanResults); err != nil {
 			return
 		}
 	}
