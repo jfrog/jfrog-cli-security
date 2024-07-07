@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -84,7 +85,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 			}
 		}
 	}()
-	_, xrayVersion, err := xrutils.CreateXrayServiceManagerAndGetVersion(enrichCmd.serverDetails)
+	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(enrichCmd.serverDetails)
 	if err != nil {
 		return err
 	}
@@ -210,7 +211,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SetServerDetails(enrichCmd.serverDetails).
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(xrayVersion)
-				xrayManager, err := utils.CreateXrayServiceManager(importGraphParams.ServerDetails())
+				xrayManager, err := xray.CreateXrayServiceManager(importGraphParams.ServerDetails())
 				if err != nil {
 					return err
 				}
