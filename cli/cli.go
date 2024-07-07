@@ -16,5 +16,11 @@ func GetJfrogCliSecurityApp() components.App {
 		Commands:    getXrayNameSpaceCommands(),
 		Category:    "Command Namespaces",
 	})
+	app.Subcommands = append(app.Subcommands, components.Namespace{
+		Name:        "git",
+		Description: "Git commands.",
+		Commands:    getGitNameSpaceCommands(),
+		Category:    "Command Namespaces",
+	})
 	return app
 }

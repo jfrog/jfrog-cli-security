@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/sast"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -29,27 +31,23 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		runAllScanners = true
 	}
 	// Set environments variables for analytics in analyzers manager.
-	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
-	defer func() {
-		callback()
-	}()
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {
 			if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SecretsScan) {
 				log.Debug("Skipping secrets scan as requested by input...")
-			} else if err = addModuleJasScanTask(module, utils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, secretsScanType), errHandlerFunc); err != nil {
+			} else if err = addModuleJasScanTask(module, jasutils.Secrets, securityParallelRunner, runSecretsScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, msi, technologiesList, secretsScanType), errHandlerFunc); err != nil {
 				return
 			}
 			if runAllScanners {
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.IacScan) {
 					log.Debug("Skipping Iac scan as requested by input...")
-				} else if err = addModuleJasScanTask(module, utils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				} else if err = addModuleJasScanTask(module, jasutils.IaC, securityParallelRunner, runIacScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, msi, technologiesList), errHandlerFunc); err != nil {
 					return
 				}
 				if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.SastScan) {
 					log.Debug("Skipping Sast scan as requested by input...")
-				} else if err = addModuleJasScanTask(module, utils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module), errHandlerFunc); err != nil {
+				} else if err = addModuleJasScanTask(module, jasutils.Sast, securityParallelRunner, runSastScan(securityParallelRunner, scanner, scanResults.ExtendedScanResults, module, msi, technologiesList), errHandlerFunc); err != nil {
 					return
 				}
 			}
@@ -60,14 +58,14 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		return err
 	}
 	for _, module := range scanner.JFrogAppsConfig.Modules {
-		if err = addModuleJasScanTask(module, utils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
+		if err = addModuleJasScanTask(module, jasutils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, msi, technologiesList, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
 			return
 		}
 	}
 	return err
 }
 
-func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, errHandlerFunc func(error)) (err error) {
+func addModuleJasScanTask(module jfrogappsconfig.Module, scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, errHandlerFunc func(error)) (err error) {
 	if jas.ShouldSkipScanner(module, scanType) {
 		return
 	}
@@ -79,9 +77,11 @@ func addModuleJasScanTask(module jfrogappsconfig.Module, scanType utils.JasScanT
 }
 
 func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
-	module jfrogappsconfig.Module, secretsScanType secrets.SecretsScanType) parallel.TaskFunc {
+	module jfrogappsconfig.Module, msi string, technologiesList []techutils.Technology, secretsScanType secrets.SecretsScanType) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
 		defer func() {
+			callback()
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
@@ -96,9 +96,11 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 }
 
 func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
-	module jfrogappsconfig.Module) parallel.TaskFunc {
+	module jfrogappsconfig.Module, msi string, technologiesList []techutils.Technology) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
 		defer func() {
+			callback()
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		results, err := iac.RunIacScan(scanner, module, threadId)
@@ -113,9 +115,11 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 }
 
 func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *utils.ExtendedScanResults,
-	module jfrogappsconfig.Module) parallel.TaskFunc {
+	module jfrogappsconfig.Module, msi string, technologiesList []techutils.Technology) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
 		defer func() {
+			callback()
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		results, err := sast.RunSastScan(scanner, module, threadId)
@@ -130,9 +134,11 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 }
 
 func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results,
-	module jfrogappsconfig.Module, directDependencies *[]string, thirdPartyApplicabilityScan bool, scanType applicability.ApplicabilityScanType) parallel.TaskFunc {
+	module jfrogappsconfig.Module, msi string, technologiesList []techutils.Technology, directDependencies *[]string, thirdPartyApplicabilityScan bool, scanType applicability.ApplicabilityScanType) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
 		defer func() {
+			callback()
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		// Wait for sca scans to complete before running contextual scan

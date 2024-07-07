@@ -1,13 +1,15 @@
-package utils
+package xsc
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -25,7 +27,7 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 	}{
 		{
 			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
-				serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				serverMock, serverDetails, _ := utils.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 					if r.RequestURI == "/xsc/api/v1/system/version" {
 						w.WriteHeader(http.StatusNotFound)
 						_, innerError := w.Write([]byte("Xsc service is not enabled"))
@@ -39,18 +41,20 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 			expectedResponse: false,
 		},
 		{
-			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return xscServer(t, "") },
+			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return utils.XscServer(t, "") },
 			expectedResponse:   false,
 		},
 		{
 			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
-				return xscServer(t, unsupportedXscVersionForErrorLogs)
+				return utils.XscServer(t, unsupportedXscVersionForErrorLogs)
 			},
 			expectedResponse: false,
 		},
 		{
-			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return xscServer(t, supportedXscVersionForErrorLogs) },
-			expectedResponse:   true,
+			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
+				return utils.XscServer(t, supportedXscVersionForErrorLogs)
+			},
+			expectedResponse: true,
 		},
 	}
 
