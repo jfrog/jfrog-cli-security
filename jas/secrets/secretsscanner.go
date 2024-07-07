@@ -112,7 +112,7 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
-	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails)
+	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails, s.scanner.EnvVars)
 }
 
 func maskSecret(secret string) string {

@@ -11,8 +11,6 @@ import (
 	"time"
 	"unicode"
 
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -39,12 +37,16 @@ type JasScanner struct {
 	ServerDetails         *config.ServerDetails
 	JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
 	ScannerDirCleanupFunc func() error
+	EnvVars               map[string]string
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, exclusions ...string) (*JasScanner, error) {
+func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
 	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
+		return scanner, err
+	}
+	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
 		return scanner, err
 	}
 	var tempDir string
@@ -59,6 +61,14 @@ func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFro
 	scanner.JFrogAppsConfig = jfrogAppsConfig
 	scanner.Exclusions = exclusions
 	return scanner, err
+}
+
+func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
+	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
+	if err != nil {
+		return nil, err
+	}
+	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
@@ -203,7 +213,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails)
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -260,44 +270,16 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
-	errMsg := "failed %s %s environment variable. Cause: %s"
-	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfMsiEnvVariable, err.Error()))
-	}
+func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
 	if len(technologies) != 1 {
-		// Only report analytics for one technology at a time.
-		return func() {
-			err = resetAnalyzerManageJfMsiVar()
-			if err != nil {
-				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
-			}
-		}
+		return envVars
 	}
 	technology := technologies[0]
-	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(JfPackageManagerEnvVariable, technology.String())
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", JfPackageManagerEnvVariable, err.Error()))
-	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", JfLanguageEnvVariable, err.Error()))
-	}
-	return func() {
-		err = resetAnalyzerManageJfMsiVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
-		}
-		err = resetAnalyzerManagerPackageManagerVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", JfPackageManagerEnvVariable, err.Error()))
-		}
-		err = resetAnalyzerManagerLanguageVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", JfLanguageEnvVariable, err.Error()))
-		}
-	}
+	envVars[JfPackageManagerEnvVariable] = technology.String()
+	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
+	return envVars
+
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {

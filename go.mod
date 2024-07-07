@@ -6,11 +6,11 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.9.29
-	github.com/jfrog/froggit-go v1.15.0
+	github.com/jfrog/froggit-go v1.16.0
 	github.com/jfrog/gofrog v1.7.2
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.53.1
-	github.com/jfrog/jfrog-client-go v1.41.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.53.2
+	github.com/jfrog/jfrog-client-go v1.41.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -119,6 +119,4 @@ require (
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-//replace github.com/jfrog/froggit-go => ../froggit-go
-
-replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go v1.15.1-0.20240630120845-4523262ce5a5
+// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev
