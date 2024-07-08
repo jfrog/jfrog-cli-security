@@ -145,8 +145,8 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
 		}
 		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
-		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		auditParallelRunner.ResultsMu.Lock()
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.ResultsMu.Unlock()
 		return
