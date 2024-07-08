@@ -12,17 +12,20 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -84,7 +87,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 		return false, err
 	}
 
-	_, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
 		return false, err
 	}
@@ -291,7 +294,12 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string][]*PackageStatus) error {
-	depTreeResult, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
+	params := ca.getAuditParamsByTech(tech)
+	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
+	if err != nil {
+		return err
+	}
+	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		return err
 	}
@@ -328,7 +336,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		projectName = projectScope + "/" + projectName
 	}
 	if ca.parallelRequests == 0 {
-		ca.parallelRequests = TotalConcurrentRequests
+		ca.parallelRequests = cliutils.Threads
 	}
 	var packagesStatus []*PackageStatus
 	analyzer := treeAnalyzer{
@@ -422,7 +430,7 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
-	resolverParams, err := ca.getRepoParams(audit.TechType[tech])
+	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
 	if err != nil {
 		return err
 	}
@@ -725,13 +733,6 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
-}
-
-func DetectNumOfThreads(threadsCount int) (int, error) {
-	if threadsCount > TotalConcurrentRequests {
-		return 0, errorutils.CheckErrorf("number of threads crossed the maximum, the maximum threads allowed is %v", TotalConcurrentRequests)
-	}
-	return threadsCount, nil
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {

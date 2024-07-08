@@ -1,9 +1,10 @@
-package utils
+package sarifutils
 
 import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -472,65 +473,33 @@ func TestExtractRelativePath(t *testing.T) {
 	}
 }
 
-func TestGetResultSeverity(t *testing.T) {
-	levelValueHigh := string(errorLevel)
-	levelValueMedium := string(warningLevel)
-	levelValueMedium2 := string(infoLevel)
-	levelValueLow := string(noteLevel)
-	levelValueUnknown := string(noneLevel)
+func TestGetResultLevel(t *testing.T) {
+	levelValueErr := "error"
+	levelValueWarn := "warning"
+	levelValueInfo := "info"
+	levelValueNote := "note"
+	levelValueNone := "none"
 
 	tests := []struct {
 		result           *sarif.Result
 		expectedSeverity string
 	}{
+		{result: &sarif.Result{Level: &levelValueErr},
+			expectedSeverity: severityutils.LevelError.String()},
+		{result: &sarif.Result{Level: &levelValueWarn},
+			expectedSeverity: severityutils.LevelWarning.String()},
+		{result: &sarif.Result{Level: &levelValueInfo},
+			expectedSeverity: severityutils.LevelInfo.String()},
+		{result: &sarif.Result{Level: &levelValueNote},
+			expectedSeverity: severityutils.LevelNote.String()},
+		{result: &sarif.Result{Level: &levelValueNone},
+			expectedSeverity: severityutils.LevelNone.String()},
 		{result: &sarif.Result{},
-			expectedSeverity: "Medium"},
-		{result: &sarif.Result{Level: &levelValueHigh},
-			expectedSeverity: "High"},
-		{result: &sarif.Result{Level: &levelValueMedium},
-			expectedSeverity: "Medium"},
-		{result: &sarif.Result{Level: &levelValueMedium2},
-			expectedSeverity: "Medium"},
-		{result: &sarif.Result{Level: &levelValueLow},
-			expectedSeverity: "Low"},
-		{result: &sarif.Result{Level: &levelValueUnknown},
-			expectedSeverity: "Unknown"},
+			expectedSeverity: ""},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedSeverity, GetResultSeverity(test.result))
-	}
-}
-
-func TestConvertToSarifLevel(t *testing.T) {
-	tests := []struct {
-		severity       string
-		expectedOutput string
-	}{
-		{
-			severity:       "Unknown",
-			expectedOutput: "none",
-		},
-		{
-			severity:       "Low",
-			expectedOutput: "note",
-		},
-		{
-			severity:       "Medium",
-			expectedOutput: "warning",
-		},
-		{
-			severity:       "High",
-			expectedOutput: "error",
-		},
-		{
-			severity:       "Critical",
-			expectedOutput: "error",
-		},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, ConvertToSarifLevel(test.severity))
+		assert.Equal(t, test.expectedSeverity, GetResultLevel(test.result))
 	}
 }
 
@@ -551,7 +520,7 @@ func TestIsApplicableResult(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, IsApplicableResult(test.sarifResult))
+		assert.Equal(t, test.expectedOutput, IsResultKindNotPass(test.sarifResult))
 	}
 }
 
@@ -576,30 +545,6 @@ func TestGetRuleFullDescription(t *testing.T) {
 
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetRuleFullDescription(test.rule))
-	}
-}
-
-func TestCveToApplicabilityRuleId(t *testing.T) {
-	assert.Equal(t, "applic_cve", CveToApplicabilityRuleId("cve"))
-}
-
-func TestApplicabilityRuleIdToCve(t *testing.T) {
-	tests := []struct {
-		ruleId         string
-		expectedOutput string
-	}{
-		{
-			ruleId:         "rule",
-			expectedOutput: "rule",
-		},
-		{
-			ruleId:         "applic_cve",
-			expectedOutput: "cve",
-		},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, ApplicabilityRuleIdToCve(test.ruleId))
 	}
 }
 

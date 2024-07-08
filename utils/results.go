@@ -3,18 +3,18 @@ package utils
 import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
 type Results struct {
-	ScaResults  []ScaScanResult
+	ScaResults  []*ScaScanResult
 	XrayVersion string
-	ScaError    error
+	ScansErr    error
 
 	ExtendedScanResults *ExtendedScanResults
-	JasError            error
 
 	MultiScanId string
 }
@@ -63,7 +63,7 @@ func (r *Results) IsScaIssuesFound() bool {
 func (r *Results) getScaScanResultByTarget(target string) *ScaScanResult {
 	for _, scan := range r.ScaResults {
 		if scan.Target == target {
-			return &scan
+			return scan
 		}
 	}
 	return nil
@@ -84,7 +84,6 @@ func (r *Results) IsIssuesFound() bool {
 func (r *Results) CountScanResultsFindings() (total int) {
 	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
 }
-
 func (r *Results) GetSummary() (summary formats.SummaryResults) {
 	if len(r.ScaResults) <= 1 {
 		summary.Scans = r.getScanSummaryByTargets()
@@ -105,9 +104,9 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 	}
 	for _, target := range targets {
 		// Get target sca results
-		targetScaResults := []ScaScanResult{}
+		targetScaResults := []*ScaScanResult{}
 		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
-			targetScaResults = append(targetScaResults, *targetScaResult)
+			targetScaResults = append(targetScaResults, targetScaResult)
 		}
 		// Get target extended results
 		targetExtendedResults := r.ExtendedScanResults
@@ -146,17 +145,17 @@ type ExtendedScanResults struct {
 }
 
 func (e *ExtendedScanResults) IsIssuesFound() bool {
-	return GetResultsLocationCount(e.ApplicabilityScanResults...) > 0 ||
-		GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
-		GetResultsLocationCount(e.IacScanResults...) > 0 ||
-		GetResultsLocationCount(e.SastScanResults...) > 0
+	return sarifutils.GetResultsLocationCount(e.ApplicabilityScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.SecretsScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.IacScanResults...) > 0 ||
+		sarifutils.GetResultsLocationCount(e.SastScanResults...) > 0
 }
 
 func (e *ExtendedScanResults) GetResultsForTarget(target string) (result *ExtendedScanResults) {
 	return &ExtendedScanResults{
-		ApplicabilityScanResults: GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
-		SecretsScanResults:       GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
-		IacScanResults:           GetRunsByWorkingDirectory(target, e.IacScanResults...),
-		SastScanResults:          GetRunsByWorkingDirectory(target, e.SastScanResults...),
+		ApplicabilityScanResults: sarifutils.GetRunsByWorkingDirectory(target, e.ApplicabilityScanResults...),
+		SecretsScanResults:       sarifutils.GetRunsByWorkingDirectory(target, e.SecretsScanResults...),
+		IacScanResults:           sarifutils.GetRunsByWorkingDirectory(target, e.IacScanResults...),
+		SastScanResults:          sarifutils.GetRunsByWorkingDirectory(target, e.SastScanResults...),
 	}
 }

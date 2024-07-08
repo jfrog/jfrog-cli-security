@@ -1,11 +1,12 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -398,174 +399,147 @@ func TestAppendUniqueImpactPaths(t *testing.T) {
 	}
 }
 
-func TestGetSeveritiesFormat(t *testing.T) {
-	testCases := []struct {
-		input          string
-		expectedOutput string
-		expectedError  error
-	}{
-		// Test supported severity
-		{input: "critical", expectedOutput: "Critical", expectedError: nil},
-		{input: "hiGH", expectedOutput: "High", expectedError: nil},
-		{input: "Low", expectedOutput: "Low", expectedError: nil},
-		{input: "MedIum", expectedOutput: "Medium", expectedError: nil},
-		{input: "", expectedOutput: "", expectedError: nil},
-		// Test unsupported severity
-		{input: "invalid_severity", expectedOutput: "", expectedError: errors.New("only the following severities are supported")},
-	}
-
-	for _, tc := range testCases {
-		output, err := GetSeveritiesFormat(tc.input)
-		if err != nil {
-			assert.Contains(t, err.Error(), tc.expectedError.Error())
-		} else {
-			assert.Equal(t, tc.expectedError, err)
-		}
-		assert.Equal(t, tc.expectedOutput, output)
-	}
-}
-
 func TestGetApplicableCveValue(t *testing.T) {
 	testCases := []struct {
 		name           string
 		scanResults    *ExtendedScanResults
 		cves           []services.Cve
-		expectedResult ApplicabilityStatus
+		expectedResult jasutils.ApplicabilityStatus
 		expectedCves   []formats.CveRow
 	}{
 		{
 			name:           "not entitled for jas",
 			scanResults:    &ExtendedScanResults{EntitledForJas: false},
-			expectedResult: NotScanned,
+			expectedResult: jasutils.NotScanned,
 		},
 		{
 			name: "no cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(
-						CreateResultWithOneLocation("fileName1", 0, 1, 0, 0, "snippet1", "applic_testCve1", "info"),
-						CreateDummyPassingResult("applic_testCve2"),
+					sarifutils.CreateRunWithDummyResults(
+						sarifutils.CreateResultWithOneLocation("fileName1", 0, 1, 0, 0, "snippet1", "applic_testCve1", "info"),
+						sarifutils.CreateDummyPassingResult("applic_testCve2"),
 					),
 				},
 				EntitledForJas: true,
 			},
 			cves:           nil,
-			expectedResult: NotCovered,
+			expectedResult: jasutils.NotCovered,
 			expectedCves:   nil,
 		},
 		{
 			name: "applicable cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(
-						CreateDummyPassingResult("applic_testCve1"),
-						CreateResultWithOneLocation("fileName2", 1, 0, 0, 0, "snippet2", "applic_testCve2", "warning"),
+					sarifutils.CreateRunWithDummyResults(
+						sarifutils.CreateDummyPassingResult("applic_testCve1"),
+						sarifutils.CreateResultWithOneLocation("fileName2", 1, 0, 0, 0, "snippet2", "applic_testCve2", "warning"),
 					),
 				},
 				EntitledForJas: true,
 			},
 			cves:           []services.Cve{{Id: "testCve2"}},
-			expectedResult: Applicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(Applicable)}}},
+			expectedResult: jasutils.Applicable,
+			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}}},
 		},
 		{
 			name: "undetermined cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(
-						CreateDummyPassingResult("applic_testCve1"),
-						CreateResultWithOneLocation("fileName3", 0, 1, 0, 0, "snippet3", "applic_testCve2", "info"),
+					sarifutils.CreateRunWithDummyResults(
+						sarifutils.CreateDummyPassingResult("applic_testCve1"),
+						sarifutils.CreateResultWithOneLocation("fileName3", 0, 1, 0, 0, "snippet3", "applic_testCve2", "info"),
 					),
 				},
 				EntitledForJas: true,
 			},
 			cves:           []services.Cve{{Id: "testCve3"}},
-			expectedResult: ApplicabilityUndetermined,
+			expectedResult: jasutils.ApplicabilityUndetermined,
 			expectedCves:   []formats.CveRow{{Id: "testCve3"}},
 		},
 		{
 			name: "not applicable cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(
-						CreateDummyPassingResult("applic_testCve1"),
-						CreateDummyPassingResult("applic_testCve2"),
+					sarifutils.CreateRunWithDummyResults(
+						sarifutils.CreateDummyPassingResult("applic_testCve1"),
+						sarifutils.CreateDummyPassingResult("applic_testCve2"),
 					),
 				},
 				EntitledForJas: true,
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: NotApplicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}}},
+			expectedResult: jasutils.NotApplicable,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
 		},
 		{
 			name: "applicable and not applicable cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(
-						CreateDummyPassingResult("applic_testCve1"),
-						CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"),
+					sarifutils.CreateRunWithDummyResults(
+						sarifutils.CreateDummyPassingResult("applic_testCve1"),
+						sarifutils.CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"),
 					),
 				},
 				EntitledForJas: true,
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: Applicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(Applicable)}}},
+			expectedResult: jasutils.Applicable,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}}},
 		},
 		{
 			name: "undetermined and not applicable cves",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResults(CreateDummyPassingResult("applic_testCve1")),
+					sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_testCve1")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: ApplicabilityUndetermined,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotApplicable)}}, {Id: "testCve2"}},
+			expectedResult: jasutils.ApplicabilityUndetermined,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}, {Id: "testCve2"}},
 		},
 		{
 			name: "new scan statuses - applicable wins all statuses",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
-					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve3")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", sarifutils.CreateDummyPassingResult("applic_testCve1")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve3")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
-			expectedResult: Applicable,
-			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(Applicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotCovered)}},
+			expectedResult: jasutils.Applicable,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
 			},
 		},
 		{
 			name: "new scan statuses - not covered wins not applicable",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", CreateDummyPassingResult("applic_testCve2")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: NotCovered,
-			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(NotApplicable)}},
+			expectedResult: jasutils.NotCovered,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}},
 			},
 		},
 		{
 			name: "new scan statuses - undetermined wins not covered",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", CreateDummyPassingResult("applic_testCve1")),
-					CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", CreateDummyPassingResult("applic_testCve2")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", sarifutils.CreateDummyPassingResult("applic_testCve2")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: ApplicabilityUndetermined,
-			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(NotCovered)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(ApplicabilityUndetermined)}},
+			expectedResult: jasutils.ApplicabilityUndetermined,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String()}},
 			},
 		},
 	}
@@ -678,12 +652,12 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 						ImpactedDependencyVersion: "1.0.0",
 					},
 					Summary:       "Summary 1",
-					Applicable:    Applicable.String(),
+					Applicable:    jasutils.Applicable.String(),
 					FixedVersions: []string{"1.0.0"},
 				},
 				{
 					Summary:    "Summary 2",
-					Applicable: NotApplicable.String(),
+					Applicable: jasutils.NotApplicable.String(),
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails: formats.SeverityDetails{
 							Severity:         "Critical",
@@ -695,7 +669,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 				},
 				{
 					Summary:    "Summary 3",
-					Applicable: ApplicabilityUndetermined.String(),
+					Applicable: jasutils.ApplicabilityUndetermined.String(),
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails: formats.SeverityDetails{
 							Severity:         "Critical",
@@ -772,27 +746,27 @@ func TestPrepareIac(t *testing.T) {
 		{
 			name: "Prepare Iac run - no results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
 			},
 			expectedOutput: []formats.SourceCodeRow{},
 		},
 		{
 			name: "Prepare Iac run - with results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("iac finding", "rule1", "info",
-						CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("iac finding", "rule1", "info",
+						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
+						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
 					),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
 				}),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("other iac finding", "rule2", "error",
-						CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("other iac finding", "rule2", "error",
+						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
 					),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
@@ -869,27 +843,27 @@ func TestPrepareSecrets(t *testing.T) {
 		{
 			name: "Prepare Secret run - no results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
 			},
 			expectedOutput: []formats.SourceCodeRow{},
 		},
 		{
 			name: "Prepare Secret run - with results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("secret finding", "rule1", "info",
-						CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet"),
-						CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-secret-snippet"),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("secret finding", "rule1", "info",
+						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet"),
+						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-secret-snippet"),
 					),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
 				}),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("other secret finding", "rule2", "note",
-						CreateLocation("file://wd2/file3", 1, 2, 3, 4, "some-secret-snippet"),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("other secret finding", "rule2", "note",
+						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "some-secret-snippet"),
 					),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
@@ -966,36 +940,36 @@ func TestPrepareSast(t *testing.T) {
 		{
 			name: "Prepare Sast run - no results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(),
 			},
 			expectedOutput: []formats.SourceCodeRow{},
 		},
 		{
 			name: "Prepare Sast run - with results",
 			input: []*sarif.Run{
-				CreateRunWithDummyResults(),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("sast finding", "rule1", "info",
-						CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
-						CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("sast finding", "rule1", "info",
+						sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
+						sarifutils.CreateLocation("file://wd/file2", 5, 6, 7, 8, "other-snippet"),
 					).WithCodeFlows([]*sarif.CodeFlow{
-						CreateCodeFlow(CreateThreadFlow(
-							CreateLocation("file://wd/file2", 0, 2, 0, 2, "snippetA"),
-							CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
+						sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+							sarifutils.CreateLocation("file://wd/file2", 0, 2, 0, 2, "snippetA"),
+							sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
 						)),
-						CreateCodeFlow(CreateThreadFlow(
-							CreateLocation("file://wd/file4", 1, 0, 1, 8, "snippetB"),
-							CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
+						sarifutils.CreateCodeFlow(sarifutils.CreateThreadFlow(
+							sarifutils.CreateLocation("file://wd/file4", 1, 0, 1, 8, "snippetB"),
+							sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "snippet"),
 						)),
 					}),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
 				}),
-				CreateRunWithDummyResults(
-					CreateResultWithLocations("other sast finding", "rule2", "error",
-						CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("other sast finding", "rule2", "error",
+						sarifutils.CreateLocation("file://wd2/file3", 1, 2, 3, 4, "snippet"),
 					),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
@@ -1099,33 +1073,33 @@ func TestPrepareSast(t *testing.T) {
 func TestGetFinalApplicabilityStatus(t *testing.T) {
 	testCases := []struct {
 		name           string
-		input          []ApplicabilityStatus
-		expectedOutput ApplicabilityStatus
+		input          []jasutils.ApplicabilityStatus
+		expectedOutput jasutils.ApplicabilityStatus
 	}{
 		{
 			name:           "applicable wins all statuses",
-			input:          []ApplicabilityStatus{ApplicabilityUndetermined, Applicable, NotCovered, NotApplicable},
-			expectedOutput: Applicable,
+			input:          []jasutils.ApplicabilityStatus{jasutils.ApplicabilityUndetermined, jasutils.Applicable, jasutils.NotCovered, jasutils.NotApplicable},
+			expectedOutput: jasutils.Applicable,
 		},
 		{
 			name:           "undetermined wins not covered",
-			input:          []ApplicabilityStatus{NotCovered, ApplicabilityUndetermined, NotCovered, NotApplicable},
-			expectedOutput: ApplicabilityUndetermined,
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotCovered, jasutils.ApplicabilityUndetermined, jasutils.NotCovered, jasutils.NotApplicable},
+			expectedOutput: jasutils.ApplicabilityUndetermined,
 		},
 		{
 			name:           "not covered wins not applicable",
-			input:          []ApplicabilityStatus{NotApplicable, NotCovered, NotApplicable},
-			expectedOutput: NotCovered,
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotApplicable, jasutils.NotCovered, jasutils.NotApplicable},
+			expectedOutput: jasutils.NotCovered,
 		},
 		{
 			name:           "all statuses are not applicable",
-			input:          []ApplicabilityStatus{NotApplicable, NotApplicable, NotApplicable},
-			expectedOutput: NotApplicable,
+			input:          []jasutils.ApplicabilityStatus{jasutils.NotApplicable, jasutils.NotApplicable, jasutils.NotApplicable},
+			expectedOutput: jasutils.NotApplicable,
 		},
 		{
 			name:           "no statuses",
-			input:          []ApplicabilityStatus{},
-			expectedOutput: NotScanned,
+			input:          []jasutils.ApplicabilityStatus{},
+			expectedOutput: jasutils.NotScanned,
 		},
 	}
 	for _, tc := range testCases {

@@ -1,4 +1,4 @@
-package utils
+package xsc
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -21,31 +23,31 @@ const (
 
 func TestCalcShouldReportEvents(t *testing.T) {
 	// Save original environment information.
-	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
+	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
 	defer msiCallback()
 	reportUsageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
 	defer reportUsageCallback()
 
 	// Minimum Xsc version.
-	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// Lower Xsc version.
-	mockServerLowerVersion, serverDetails := xscServer(t, lowerAnalyticsMetricsMinXscVersion)
+	mockServerLowerVersion, serverDetails := utils.XscServer(t, lowerAnalyticsMetricsMinXscVersion)
 	defer mockServerLowerVersion.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.False(t, am.calcShouldReportEvents())
 
 	// Higher Xsc version.
-	mockServerHigherVersion, serverDetails := xscServer(t, higherAnalyticsMetricsMinXscVersion)
+	mockServerHigherVersion, serverDetails := utils.XscServer(t, higherAnalyticsMetricsMinXscVersion)
 	defer mockServerHigherVersion.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// JFROG_CLI_REPORT_USAGE is false.
-	err := os.Setenv(JfMsiEnvVariable, "")
+	err := os.Setenv(utils.JfMsiEnvVariable, "")
 	assert.NoError(t, err)
 	err = os.Setenv(coreutils.ReportUsage, "false")
 	assert.NoError(t, err)
@@ -53,16 +55,16 @@ func TestCalcShouldReportEvents(t *testing.T) {
 }
 
 func TestAddGeneralEvent(t *testing.T) {
-	msiCallback := tests.SetEnvWithCallbackAndAssert(t, JfMsiEnvVariable, "")
+	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
 	defer msiCallback()
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	// Successful flow.
-	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, testMsi, am.GetMsi())
+	assert.Equal(t, utils.TestMsi, am.GetMsi())
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
@@ -75,36 +77,36 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
-	scaResults := []ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
-	auditResults := Results{
+	scaResults := []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{{Vulnerabilities: vulnerabilities}}}}
+	auditResults := utils.Results{
 		ScaResults: scaResults,
-		ExtendedScanResults: &ExtendedScanResults{
-			ApplicabilityScanResults: []*sarif.Run{CreateRunWithDummyResults(CreateDummyPassingResult("applic_CVE-123"))},
+		ExtendedScanResults: &utils.ExtendedScanResults{
+			ApplicabilityScanResults: []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))},
 			SecretsScanResults: []*sarif.Run{
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 			},
 			IacScanResults: []*sarif.Run{
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 			},
 			SastScanResults: []*sarif.Run{
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 0, 0, 0, 0, ""))),
-				CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("", 1, 1, 1, 1, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 			},
 		},
 	}
 	testStruct := []struct {
 		name         string
-		auditResults *Results
+		auditResults *utils.Results
 		want         xscservices.XscAnalyticsBasicGeneralEvent
 	}{
-		{name: "No audit results", auditResults: &Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+		{name: "No audit results", auditResults: &utils.Results{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
 		{name: "Valid audit result", auditResults: &auditResults, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-		{name: "Scan failed because jas errors.", auditResults: &Results{JasError: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed because sca errors.", auditResults: &Results{JasError: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because jas errors.", auditResults: &utils.Results{ScansErr: errors.New("jas error"), ScaResults: scaResults}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
+		{name: "Scan failed because sca errors.", auditResults: &utils.Results{ScansErr: errors.New("sca error")}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
-	mockServer, serverDetails := xscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()

@@ -23,6 +23,8 @@ jobs:
     env:
       GOPROXY: direct
       GRADLE_OPTS: -Dorg.gradle.daemon=false
+      CI: true
+      JFROG_CLI_LOG_LEVEL: DEBUG
     steps:
       # Install dependencies
       - name: Install Go
@@ -69,8 +71,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       # Test
       - name: Run security tests (without Docker Scan)
-        run: go test -v github.com/jfrog/jfrog-cli-security --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
+        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
         if: ${{ matrix.os != 'ubuntu' }}
       - name: Run security tests (with Docker Scan, only on Ubuntu)
-        run: go test -v github.com/jfrog/jfrog-cli-security --timeout 0 --test.security --test.dockerScan --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
+        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --test.dockerScan --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
         if: ${{ matrix.os == 'ubuntu' }}

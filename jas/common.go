@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
-
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -28,56 +31,58 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	NodeModulesPattern = "**/*node_modules*/**"
-)
-
-var (
-	DefaultExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
-
-	mapSeverityToScore = map[string]string{
-		"":         "0.0",
-		"unknown":  "0.0",
-		"low":      "3.9",
-		"medium":   "6.9",
-		"high":     "8.9",
-		"critical": "10",
-	}
-)
-
 type JasScanner struct {
-	ConfigFileName        string
-	ResultsFileName       string
-	AnalyzerManager       utils.AnalyzerManager
+	TempDir               string
+	AnalyzerManager       AnalyzerManager
 	ServerDetails         *config.ServerDetails
 	JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
 	ScannerDirCleanupFunc func() error
+	EnvVars               map[string]string
+	Exclusions            []string
 }
 
-func NewJasScanner(workingDirs []string, serverDetails *config.ServerDetails) (scanner *JasScanner, err error) {
-	scanner = &JasScanner{}
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = utils.GetAnalyzerManagerExecutable(); err != nil {
-		return
+func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
+	var err error
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
+		return scanner, err
+	}
+	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
+		return scanner, err
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return
+		return scanner, err
 	}
+	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	scanner.ConfigFileName = filepath.Join(tempDir, "config.yaml")
-	scanner.ResultsFileName = filepath.Join(tempDir, "results.sarif")
-	scanner.JFrogAppsConfig, err = createJFrogAppsConfig(workingDirs)
-	return
+	scanner.JFrogAppsConfig = jfrogAppsConfig
+	scanner.Exclusions = exclusions
+	return scanner, err
 }
 
-func createJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
+func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
+	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
+	if err != nil {
+		return nil, err
+	}
+	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
+}
+
+func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
 		// jfrog-apps-config.yml exist in the workspace
+		for _, module := range jfrogAppsConfig.Modules {
+			// converting to absolute path before starting the scan flow
+			module.SourceRoot, err = filepath.Abs(module.SourceRoot)
+			if err != nil {
+				return nil, errorutils.CheckError(err)
+			}
+		}
 		return jfrogAppsConfig, nil
 	}
 
@@ -97,42 +102,17 @@ type ScannerCmd interface {
 	Run(module jfrogappsconfig.Module) (err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd) (err error) {
-	for _, module := range a.JFrogAppsConfig.Modules {
-		func() {
-			defer func() {
-				err = errors.Join(err, deleteJasProcessFiles(a.ConfigFileName, a.ResultsFileName))
-			}()
-			if err = scannerCmd.Run(module); err != nil {
-				return
-			}
-		}()
-	}
+func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (err error) {
+	func() {
+		if err = scannerCmd.Run(module); err != nil {
+			return
+		}
+	}()
 	return
 }
 
-func deleteJasProcessFiles(configFile string, resultFile string) error {
-	exist, err := fileutils.IsFileExists(configFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		if err = os.Remove(configFile); err != nil {
-			return errorutils.CheckError(err)
-		}
-	}
-	exist, err = fileutils.IsFileExists(resultFile, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		err = os.Remove(resultFile)
-	}
-	return errorutils.CheckError(err)
-}
-
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
-	if sarifRuns, err = utils.ReadScanRunsFromFile(fileName); err != nil {
+	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
 	for _, sarifRun := range sarifRuns {
@@ -141,7 +121,7 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Also used to calculate relative paths if needed with it
 		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
 		// Process runs values
-		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, utils.GetAnalyzerManagerVersion(), sarifRun)
+		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
 		addScoreToRunRules(sarifRun)
 	}
@@ -182,25 +162,21 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	for _, sarifResult := range sarifRun.Results {
 		if rule, err := sarifRun.GetRuleById(*sarifResult.RuleID); err == nil {
 			// Add to the rule security-severity score based on results severity
-			score := convertToScore(utils.GetResultSeverity(sarifResult))
-			if score != utils.MissingCveScore {
-				if rule.Properties == nil {
-					rule.WithProperties(sarif.NewPropertyBag().Properties)
-				}
-				rule.Properties["security-severity"] = score
+			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+				severity = severityutils.Unknown
 			}
+			score := severityutils.GetSeverityScore(severity, jasutils.Applicable)
+			if rule.Properties == nil {
+				rule.WithProperties(sarif.NewPropertyBag().Properties)
+			}
+			rule.Properties[severityutils.SarifSeverityRuleProperty] = score
 		}
 	}
 }
 
-func convertToScore(severity string) string {
-	if level, ok := mapSeverityToScore[strings.ToLower(severity)]; ok {
-		return level
-	}
-	return ""
-}
-
-func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType utils.JasScanType) error {
+func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType jasutils.JasScanType) error {
 	yamlData, err := yaml.Marshal(&fileContent)
 	if errorutils.CheckError(err) != nil {
 		return err
@@ -233,8 +209,11 @@ var FakeBasicXrayResults = []services.ScanResponse{
 }
 
 func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
-	assert.NoError(t, utils.DownloadAnalyzerManagerIfNeeded())
-	scanner, err := NewJasScanner(workingDirs, &FakeServerDetails)
+	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
+	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
+	assert.NoError(t, err)
+	scanner := &JasScanner{}
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -245,7 +224,7 @@ func GetTestDataPath() string {
 	return filepath.Join("..", "..", "tests", "testdata", "other")
 }
 
-func ShouldSkipScanner(module jfrogappsconfig.Module, scanType utils.JasScanType) bool {
+func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanType) bool {
 	lowerScanType := strings.ToLower(string(scanType))
 	if slices.Contains(module.ExcludeScanners, lowerScanType) {
 		log.Info(fmt.Sprintf("Skipping %s scanning", scanType))
@@ -269,62 +248,57 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 	return roots, nil
 }
 
-func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) []string {
+func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
+	if len(exclusions) > 0 {
+		return convertToFilesExcludePatterns(exclusions)
+	}
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
 	}
 	if len(excludePatterns) == 0 {
-		return DefaultExcludePatterns
+		return utils.DefaultJasExcludePatterns
 	}
 	return excludePatterns
 }
 
-func SetAnalyticsMetricsDataForAnalyzerManager(msi string, technologies []techutils.Technology) func() {
-	errMsg := "failed %s %s environment variable. Cause: %s"
-	resetAnalyzerManageJfMsiVar, err := clientutils.SetEnvWithResetCallback(utils.JfMsiEnvVariable, msi)
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfMsiEnvVariable, err.Error()))
+func convertToFilesExcludePatterns(excludePatterns []string) []string {
+	patterns := []string{}
+	for _, excludePattern := range excludePatterns {
+		patterns = append(patterns, "**/"+excludePattern+"/**")
 	}
+	return patterns
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
 	if len(technologies) != 1 {
-		// Only report analytics for one technology at a time.
-		return func() {
-			err = resetAnalyzerManageJfMsiVar()
-			if err != nil {
-				log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
-			}
-		}
+		return envVars
 	}
 	technology := technologies[0]
-	resetAnalyzerManagerPackageManagerVar, err := clientutils.SetEnvWithResetCallback(utils.JfPackageManagerEnvVariable, technology.String())
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfPackageManagerEnvVariable, err.Error()))
-	}
-	resetAnalyzerManagerLanguageVar, err := clientutils.SetEnvWithResetCallback(utils.JfLanguageEnvVariable, string(techutils.TechnologyToLanguage(technology)))
-	if err != nil {
-		log.Debug(fmt.Sprintf(errMsg, "setting", utils.JfLanguageEnvVariable, err.Error()))
-	}
-	return func() {
-		err = resetAnalyzerManageJfMsiVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfMsiEnvVariable, err.Error()))
-		}
-		err = resetAnalyzerManagerPackageManagerVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfPackageManagerEnvVariable, err.Error()))
-		}
-		err = resetAnalyzerManagerLanguageVar()
-		if err != nil {
-			log.Debug(fmt.Sprintf(errMsg, "restoring", utils.JfLanguageEnvVariable, err.Error()))
-		}
-	}
+	envVars[JfPackageManagerEnvVariable] = technology.String()
+	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
+	return envVars
+
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, EntitlementsMinVersion); e != nil {
 		log.Debug(e)
 		return
 	}
-	entitled, err = xrayManager.IsEntitled(utils.ApplicabilityFeatureId)
+	entitled, err = xrayManager.IsEntitled(ApplicabilityFeatureId)
 	return
+}
+
+func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, error) {
+	if scanner.TempDir == "" {
+		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
+	}
+	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + strconv.FormatInt(time.Now().Unix(), 10)
+	err := os.MkdirAll(scannerTempDir, 0777)
+	if err != nil {
+		return "", err
+	}
+	return scannerTempDir, nil
 }
