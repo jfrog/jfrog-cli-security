@@ -123,14 +123,14 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		return false, err
 	}
 
-	url, _, trimerr := trimBuildScanResultUrl(buildScanResults.MoreDetailsUrl)
+	url, endpoint, trimerr := trimBuildScanResultUrl(buildScanResults.MoreDetailsUrl)
 	if trimerr != nil {
 		return false, err
 	}
 	// Check that the response url from scan build API is the same url as the one that was inserted to the CLI in config
 	if url != bsc.serverDetails.Url {
 		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s", url, bsc.serverDetails.Url))
-		//buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
+		buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
 	}
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
