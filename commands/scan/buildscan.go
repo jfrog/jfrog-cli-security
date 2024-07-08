@@ -8,7 +8,7 @@ import (
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	xrutils "github.com/jfrog/jfrog-cli-security/utils"
+	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
@@ -75,7 +75,7 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
-	xrayManager, xrayVersion, err := utils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
+	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 	}
 	// If failBuild flag is true and also got fail build response from Xray
 	if bsc.failBuild && isFailBuildResponse {
-		return xrutils.NewFailBuildError()
+		return utils.NewFailBuildError()
 	}
 	return
 }
@@ -129,11 +129,11 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	}}
 
-	scanResults := xrutils.NewAuditResults()
+	scanResults := utils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = []xrutils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
+	scanResults.ScaResults = []*utils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
-	resultsPrinter := xrutils.NewResultsWriter(scanResults).
+	resultsPrinter := utils.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).

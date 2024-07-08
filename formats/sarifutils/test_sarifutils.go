@@ -1,4 +1,4 @@
-package utils
+package sarifutils
 
 import "github.com/owenrumney/go-sarif/v2/sarif"
 

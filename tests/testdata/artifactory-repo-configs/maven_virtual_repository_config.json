@@ -1,0 +1,6 @@
+{
+  "key": "${MAVEN_VIRTUAL_REPO}",
+  "rclass": "virtual",
+  "packageType": "maven",
+  "repositories": ["${MAVEN_REMOTE_REPO}", "${MAVEN_REMOTE_SNAPSHOTS_REPO}"]
+}

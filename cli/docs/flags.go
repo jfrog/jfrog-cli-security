@@ -2,25 +2,26 @@ package docs
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 const (
 	// Security Commands Keys
-	XrCurl        = "xr-curl"
-	OfflineUpdate = "offline-update"
-	XrScan        = "xr-scan"
-	BuildScan     = "build-scan"
-	DockerScan    = "docker scan"
-	Audit         = "audit"
-	CurationAudit = "curation-audit"
+	XrCurl               = "xr-curl"
+	OfflineUpdate        = "offline-update"
+	XrScan               = "xr-scan"
+	BuildScan            = "build-scan"
+	DockerScan           = "docker scan"
+	Audit                = "audit"
+	CurationAudit        = "curation-audit"
+	GitCountContributors = "count-contributors"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -42,6 +43,14 @@ const (
 	Pip    = "pip"
 	Pipenv = "pipenv"
 	Poetry = "poetry"
+)
+
+const (
+	Sca       = "sca"
+	Iac       = "iac"
+	Sast      = "sast"
+	Secrets   = "secrets"
+	WithoutCA = "without-contextual-analysis"
 )
 
 const (
@@ -105,8 +114,16 @@ const (
 	WorkingDirs                  = "working-dirs"
 
 	// Unique curation flags
-	CurationOutput  = "curation-format"
-	CurationThreads = "curation-threads"
+	CurationOutput = "curation-format"
+
+	// Unique git flags
+	ScmType         = "scm-type"
+	ScmApiUrl       = "scm-api-url"
+	Token           = "token"
+	Owner           = "owner"
+	RepoName        = "repo-name"
+	Months          = "months"
+	DetailedSummary = "detailed-summary"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -125,10 +142,15 @@ var commandFlags = map[string][]string{
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
-		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm, Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
+		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Sca, Iac, Sast, Secrets, WithoutCA,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, CurationThreads, RequirementsFile,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile,
+	},
+	GitCountContributors: {
+		ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -200,7 +222,7 @@ var flagsMap = map[string]components.Flag{
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
-		components.WithStrDefaultValue(strings.Join(sca.DefaultExcludePatterns, ";")),
+		components.WithStrDefaultValue(strings.Join(utils.DefaultScaExcludePatterns, ";")),
 	),
 	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
 	Gradle:  components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),
@@ -219,8 +241,21 @@ var flagsMap = map[string]components.Flag{
 		components.SetHiddenBoolFlag(),
 	),
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
-	CurationThreads:  components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(curation.TotalConcurrentRequests)),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	Sca:              components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. By default, runs both SCA and Contextual Analysis. Can be combined with --%s, --%s, --%s, and --%s.", Secrets, Sast, Iac, WithoutCA)),
+	Iac:              components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
+	Sast:             components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
+	Secrets:          components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
+	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+
+	// Git flags
+	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
+	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars())),
+	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depends on the git provider - on github and gitlab the owner is usually an individual or an organization, on bitbucket it is a project.", components.SetMandatory()),
+	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
+	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
+	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),
 }
 
 func GetCommandFlags(cmdKey string) []components.Flag {

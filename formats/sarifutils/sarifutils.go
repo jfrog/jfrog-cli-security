@@ -1,43 +1,14 @@
-package utils
+package sarifutils
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
-)
-
-type SarifLevel string
-
-const (
-	errorLevel   SarifLevel = "error"
-	warningLevel SarifLevel = "warning"
-	infoLevel    SarifLevel = "info"
-	noteLevel    SarifLevel = "note"
-	noneLevel    SarifLevel = "none"
-
-	SeverityDefaultValue = "Medium"
-
-	applicabilityRuleIdPrefix = "applic_"
-)
-
-var (
-	// All other values (include default) mapped as 'Medium' severity
-	levelToSeverity = map[SarifLevel]string{
-		errorLevel: "High",
-		noteLevel:  "Low",
-		noneLevel:  "Unknown",
-	}
-
-	severityToLevel = map[string]SarifLevel{
-		"critical": errorLevel,
-		"high":     errorLevel,
-		"medium":   warningLevel,
-		"low":      noteLevel,
-		"unknown":  noneLevel,
-	}
 )
 
 func NewReport() (*sarif.Report, error) {
@@ -46,6 +17,14 @@ func NewReport() (*sarif.Report, error) {
 		return nil, errorutils.CheckError(err)
 	}
 	return report, nil
+}
+
+func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
+	out, err := json.Marshal(report)
+	if err != nil {
+		return "", errorutils.CheckError(err)
+	}
+	return utils.IndentJson(out), nil
 }
 
 func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
@@ -137,6 +116,13 @@ func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (fil
 func GetResultMsgText(result *sarif.Result) string {
 	if result.Message.Text != nil {
 		return *result.Message.Text
+	}
+	return ""
+}
+
+func GetResultLevel(result *sarif.Result) string {
+	if result.Level != nil {
+		return *result.Level
 	}
 	return ""
 }
@@ -237,23 +223,7 @@ func ExtractRelativePath(resultPath string, projectRoot string) string {
 	return strings.TrimPrefix(trimSlash, "/")
 }
 
-func GetResultSeverity(result *sarif.Result) string {
-	if result.Level != nil {
-		if severity, ok := levelToSeverity[SarifLevel(strings.ToLower(*result.Level))]; ok {
-			return severity
-		}
-	}
-	return SeverityDefaultValue
-}
-
-func ConvertToSarifLevel(severity string) string {
-	if level, ok := severityToLevel[strings.ToLower(severity)]; ok {
-		return string(level)
-	}
-	return string(noneLevel)
-}
-
-func IsApplicableResult(result *sarif.Result) bool {
+func IsResultKindNotPass(result *sarif.Result) bool {
 	return !(result.Kind != nil && *result.Kind == "pass")
 }
 
@@ -262,14 +232,6 @@ func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
 		return *rule.FullDescription.Text
 	}
 	return ""
-}
-
-func CveToApplicabilityRuleId(cveId string) string {
-	return applicabilityRuleIdPrefix + cveId
-}
-
-func ApplicabilityRuleIdToCve(sarifRuleId string) string {
-	return strings.TrimPrefix(sarifRuleId, applicabilityRuleIdPrefix)
 }
 
 func GetRunRules(run *sarif.Run) []*sarif.ReportingDescriptor {
@@ -284,4 +246,15 @@ func GetInvocationWorkingDirectory(invocation *sarif.Invocation) string {
 		return *invocation.WorkingDirectory.URI
 	}
 	return ""
+}
+
+func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count int) {
+	for _, run := range runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			if rule.Properties[property] != nil && rule.Properties[property] == value {
+				count += 1
+			}
+		}
+	}
+	return
 }

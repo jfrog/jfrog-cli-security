@@ -7,7 +7,7 @@ import (
 )
 
 type AuditParams interface {
-	DirectDependencies() []string
+	DirectDependencies() *[]string
 	AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
 	ServerDetails() (*config.ServerDetails, error)
 	SetServerDetails(serverDetails *config.ServerDetails) *AuditBasicParams
@@ -46,6 +46,7 @@ type AuditBasicParams struct {
 	serverDetails                    *config.ServerDetails
 	outputFormat                     format.OutputFormat
 	progress                         ioUtils.ProgressMgr
+	useJas                           bool
 	excludeTestDependencies          bool
 	useWrapper                       bool
 	insecureTls                      bool
@@ -56,6 +57,7 @@ type AuditBasicParams struct {
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
+	scansToPreform                   []SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -63,8 +65,8 @@ type AuditBasicParams struct {
 	isRecursiveScan                  bool
 }
 
-func (abp *AuditBasicParams) DirectDependencies() []string {
-	return abp.dependenciesForApplicabilityScan
+func (abp *AuditBasicParams) DirectDependencies() *[]string {
+	return &abp.dependenciesForApplicabilityScan
 }
 
 func (abp *AuditBasicParams) AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams {
@@ -89,6 +91,15 @@ func (abp *AuditBasicParams) SetInstallCommandArgs(installCommandArgs []string) 
 func (abp *AuditBasicParams) SetInstallCommandName(installCommandName string) *AuditBasicParams {
 	abp.installCommandName = installCommandName
 	return abp
+}
+
+func (abp *AuditBasicParams) SetUseJas(useJas bool) *AuditBasicParams {
+	abp.useJas = useJas
+	return abp
+}
+
+func (abp *AuditBasicParams) UseJas() bool {
+	return abp.useJas
 }
 
 func (abp *AuditBasicParams) PipRequirementsFile() string {
@@ -134,6 +145,15 @@ func (abp *AuditBasicParams) Technologies() []string {
 func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicParams {
 	abp.technologies = technologies
 	return abp
+}
+
+func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
+	abp.scansToPreform = scansToPerform
+	return abp
+}
+
+func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
+	return abp.scansToPreform
 }
 
 func (abp *AuditBasicParams) Progress() ioUtils.ProgressMgr {

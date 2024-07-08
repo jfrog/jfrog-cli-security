@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -21,9 +22,9 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 		{
 			name: "Sca scan result by target",
 			results: Results{
-				ScaResults: []ScaScanResult{
-					*target1,
-					*target2,
+				ScaResults: []*ScaScanResult{
+					target1,
+					target2,
 				},
 			},
 			target:   "target1",
@@ -32,9 +33,9 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 		{
 			name: "Sca scan result by target not found",
 			results: Results{
-				ScaResults: []ScaScanResult{
-					*target1,
-					*target2,
+				ScaResults: []*ScaScanResult{
+					target1,
+					target2,
 				},
 			},
 			target:   "target3",
@@ -52,20 +53,20 @@ func TestGetScaScanResultByTarget(t *testing.T) {
 func TestGetSummary(t *testing.T) {
 	dummyExtendedScanResults := &ExtendedScanResults{
 		ApplicabilityScanResults: []*sarif.Run{
-			CreateRunWithDummyResults(CreateDummyPassingResult("applic_CVE-2")).WithInvocations([]*sarif.Invocation{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-2")).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
 			}),
 		},
 		SecretsScanResults: []*sarif.Run{
-			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target1/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target1/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
 			}),
-			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target2/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target2/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target2")),
 			}),
 		},
 		SastScanResults: []*sarif.Run{
-			CreateRunWithDummyResults(CreateResultWithLocations("", "", "note", CreateLocation("target1/file2", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target1/file2", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
 				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
 			}),
 		},
@@ -80,7 +81,7 @@ func TestGetSummary(t *testing.T) {
 	}{
 		{
 			name:         "Empty results",
-			results:      Results{ScaResults: []ScaScanResult{}},
+			results:      Results{ScaResults: []*ScaScanResult{}},
 			expected:     formats.SummaryResults{Scans: []formats.ScanSummaryResult{{}}},
 			findingCount: 0,
 			issueCount:   0,
@@ -88,7 +89,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name: "One module result",
 			results: Results{
-				ScaResults: []ScaScanResult{{
+				ScaResults: []*ScaScanResult{{
 					Target:      "target1",
 					XrayResults: getDummyScaTestResults(true, false),
 				}},
@@ -119,7 +120,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name: "Multiple module results",
 			results: Results{
-				ScaResults: []ScaScanResult{
+				ScaResults: []*ScaScanResult{
 					{
 						Target:      "target1",
 						XrayResults: getDummyScaTestResults(false, true),
