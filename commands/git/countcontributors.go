@@ -86,7 +86,10 @@ type CountContributorsParams struct {
 	ScmApiUrl string
 	// SCM API token.
 	Token string
-	// Depends on the git provider - on GitHub and GitLab the owner is usually an individual or an organization, on bitbucket it is a project.
+	// The format of the owner key depends on the Git provider:
+	// - On GitHub and GitLab, the owner is typically an individual or an organization.
+	// - On Bitbucket, the owner can also be a project. In the case of a private instance,
+	//   the individual or organization name should be prefixed with '~'.
 	Owner string
 	// Specific repository name to analyze, If not provided all repositories in the project will be analyzed.
 	Repository string
@@ -208,7 +211,24 @@ func (cc *CountContributorsCommand) getRepositoriesListToScan() ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	return reposMap[cc.Owner], nil
+	log.Debug(fmt.Sprintf("owners and their matching repositories map recived for %s: \n %v", cc.ScmApiUrl, reposMap))
+
+	return cc.getOwnersMatchingRepos(reposMap)
+}
+
+func (cc *CountContributorsCommand) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
+	repos := reposMap[cc.Owner]
+	if len(repos) == 0 {
+		// Matching without considering lower/upper cases.
+		normalizedSearchKey := strings.ToUpper(cc.Owner)
+		for owner, repoList := range reposMap {
+			if strings.ToUpper(owner) == normalizedSearchKey {
+				return repoList, nil
+			}
+		}
+		return nil, fmt.Errorf(fmt.Sprintf("No repositories found for owner %s in %s at URL %s", cc.Owner, cc.ScmType, cc.ScmApiUrl))
+	}
+	return repos, nil
 }
 
 func (cc *CountContributorsCommand) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
