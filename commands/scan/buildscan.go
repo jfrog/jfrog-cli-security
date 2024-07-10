@@ -131,7 +131,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	}
 	// Check that the response url from scan build API is the same url as the one that was inserted to the CLI in config
 	if url != bsc.serverDetails.Url {
-		//if URL from XRAY API is different than the URL in CLI config change the printed url to the CLI config URL and the endpoint from API
+		// if URL from XRAY API is different than the URL in CLI config change the printed url to the CLI config URL and the endpoint from API
 		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s", url, bsc.serverDetails.Url))
 		buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
 	}
@@ -187,13 +187,17 @@ func (bsc *BuildScanCommand) CommandName() string {
 }
 
 func trimBuildScanResultUrl(fullUrl string) (string, string, error) {
-	//Parse through the url and endpoint
+
+	if fullUrl == "" {
+		return "", "", fmt.Errorf("URL to trim is empty")
+	}
+	// Parse through the url and endpoint
 	parsedUrl, err := url.Parse(fullUrl)
 	if err != nil {
 		return "", "", err
 	}
 
-	//Separate to BaseUrl http(s)://<JFROG-URL> and endpoint of the API request
+	// Separate to BaseUrl http(s)://<JFROG-URL> and endpoint of the API request
 	baseUrl := fmt.Sprintf("%s://%s/", parsedUrl.Scheme, parsedUrl.Host)
 	endpoint := strings.TrimPrefix(fullUrl, baseUrl)
 
