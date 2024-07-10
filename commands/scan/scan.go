@@ -33,7 +33,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -525,13 +524,6 @@ func getXrayRepoPathFromTarget(target string) (repoPath string) {
 		return target
 	}
 	return target[:strings.LastIndex(target, "/")+1]
-}
-
-func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]formats.SimpleJsonError) []formats.SimpleJsonError {
-	for _, errorSlice := range errorsToAdd {
-		scanErrors = append(scanErrors, errorSlice...)
-	}
-	return scanErrors
 }
 
 func directDepsListFromVulnerabilities(scanResult ...services.ScanResponse) *[]string {
