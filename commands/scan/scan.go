@@ -402,7 +402,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return err
 				}
-				err = runner.AddJasScannersTasks(jasFileProducerConsumer, module, targetResults, []techutils.Technology{targetResults.Technology}, directDepsListFromVulnerabilities(*graphScanResults), scanCmd.serverDetails, false, "", scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, utils.GetAllSupportedScans())
+				err = runner.AddJasScannersTasks(jasFileProducerConsumer, module, targetResults, directDepsListFromVulnerabilities(*graphScanResults), scanCmd.serverDetails, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, utils.GetAllSupportedScans())
 				if err != nil {
 					log.Error(fmt.Sprintf("%s jas scanning failed with error: %s", clientutils.GetLogMsgPrefix(scanThreadId, false), err.Error()))
 					targetResults.AddError(err)
@@ -416,7 +416,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 }
 
 func getJasScanner(filePath string, serverDetails *config.ServerDetails, targetResults *results.TargetResults) (*jas.JasScanner, error) {
-	scanner, err := jas.CreateJasScanner(&jas.JasScanner{}, serverDetails)
+	scanner, err := jas.CreateJasScanner(&jas.JasScanner{}, serverDetails, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 		targetResults.AddError(err)

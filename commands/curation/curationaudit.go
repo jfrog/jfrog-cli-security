@@ -295,7 +295,12 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string][]*PackageStatus) error {
-	depTreeResult, err := audit.GetTechDependencyTree(ca.getAuditParamsByTech(tech), tech)
+	params := ca.getAuditParamsByTech(tech)
+	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
+	if err != nil {
+		return err
+	}
+	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		return err
 	}
@@ -426,7 +431,7 @@ func (ca *CurationAuditCommand) CommandName() string {
 }
 
 func (ca *CurationAuditCommand) SetRepo(tech techutils.Technology) error {
-	resolverParams, err := ca.getRepoParams(audit.TechType[tech])
+	resolverParams, err := ca.getRepoParams(techutils.TechToProjectType[tech])
 	if err != nil {
 		return err
 	}

@@ -29,19 +29,21 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanner := &jas.JasScanner{}
-	_, err = jas.CreateJasScanner(scanner, &jas.FakeServerDetails)
+	_, err = jas.CreateJasScanner(scanner, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars(""))
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
-	scanner := &jas.JasScanner{}
-	jasScanner, err := jas.CreateJasScanner(scanner, &jas.FakeServerDetails)
-	assert.NoError(t, err)
 	targetResults := results.NewCommandResults("", true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
+
+	scanner := &jas.JasScanner{}
+	jasScanner, err := jas.CreateJasScanner(scanner, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
+	assert.NoError(t, err)
+
 	targetResults.NewScaScanResults(&jas.FakeBasicXrayResults[0])
-	err = AddJasScannersTasks(securityParallelRunnerForTest, jfrogappsconfig.Module{}, targetResults, targetResults.GetTechnologies(), &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, "", jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, utils.GetAllSupportedScans())
+	err = AddJasScannersTasks(securityParallelRunnerForTest, jfrogappsconfig.Module{}, targetResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, utils.GetAllSupportedScans())
 	assert.NoError(t, err)
 }
 
@@ -50,7 +52,7 @@ func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner := &jas.JasScanner{}
-	scanner, _ = jas.CreateJasScanner(scanner, &jas.FakeServerDetails)
+	scanner, _ = jas.CreateJasScanner(scanner, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars(""))
 	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
 		scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 

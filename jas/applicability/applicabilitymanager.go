@@ -191,7 +191,7 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for
 // advance security feature
 func (asm *ApplicabilityScanManager) runAnalyzerManager() error {
-	return asm.scanner.AnalyzerManager.Exec(asm.configFileName, applicabilityScanCommand, filepath.Dir(asm.scanner.AnalyzerManager.AnalyzerManagerFullPath), asm.scanner.ServerDetails)
+	return asm.scanner.AnalyzerManager.Exec(asm.configFileName, applicabilityScanCommand, filepath.Dir(asm.scanner.AnalyzerManager.AnalyzerManagerFullPath), asm.scanner.ServerDetails, asm.scanner.EnvVars)
 }
 
 func removeElementFromSlice(skipDirs []string, element string) []string {

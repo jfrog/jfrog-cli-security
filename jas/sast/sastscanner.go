@@ -105,7 +105,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 }
 
 func (ssm *SastScanManager) runAnalyzerManager(wd string) error {
-	return ssm.scanner.AnalyzerManager.ExecWithOutputFile(ssm.configFileName, sastScanCommand, wd, ssm.resultsFileName, ssm.scanner.ServerDetails)
+	return ssm.scanner.AnalyzerManager.ExecWithOutputFile(ssm.configFileName, sastScanCommand, wd, ssm.resultsFileName, ssm.scanner.ServerDetails, ssm.scanner.EnvVars)
 }
 
 // In the Sast scanner, there can be multiple results with the same location.

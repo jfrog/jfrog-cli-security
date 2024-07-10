@@ -13,6 +13,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -48,6 +49,21 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 )
+
+// Associates a technology with project type (used in config commands for the package-managers).
+// Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
+var TechToProjectType = map[Technology]project.ProjectType{
+	Maven:  project.Maven,
+	Gradle: project.Gradle,
+	Npm:    project.Npm,
+	Yarn:   project.Yarn,
+	Go:     project.Go,
+	Pip:    project.Pip,
+	Pipenv: project.Pipenv,
+	Poetry: project.Poetry,
+	Nuget:  project.Nuget,
+	Dotnet: project.Dotnet,
+}
 
 var packageTypes = map[string]string{
 	"gav":      "Maven",
