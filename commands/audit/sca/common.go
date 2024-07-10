@@ -8,19 +8,17 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
-
-var DefaultExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
 
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
@@ -28,24 +26,21 @@ var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree f
 func GetExcludePattern(params utils.AuditParams) string {
 	exclusions := params.Exclusions()
 	if len(exclusions) == 0 {
-		exclusions = append(exclusions, DefaultExcludePatterns...)
+		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree *xrayUtils.GraphNode, progress ioUtils.ProgressMgr, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
-	scanGraphParams.XrayGraphScanParams().DependenciesGraph = dependencyTree
+func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {
 		xscGitInfoContext.Technologies = []string{technology.String()}
 	}
 	scanMessage := fmt.Sprintf("Scanning %d %s dependencies", len(dependencyTree.Nodes), technology)
-	if progress != nil {
-		progress.SetHeadlineMsg(scanMessage)
-	}
 	log.Info(scanMessage + "...")
 	var scanResults *services.ScanResponse
-	xrayManager, err := utils.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 	if err != nil {
 		return nil, err
 	}
