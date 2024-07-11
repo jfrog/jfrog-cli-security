@@ -266,6 +266,8 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 	return vulnerabilitiesRows, nil
 }
 
+// sortVulnerabilityOrViolationRows is sorting in the following order:
+// Severity -> Applicability -> JFrog Research Score -> XRAY ID
 func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow) {
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
@@ -274,8 +276,10 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 		if rows[i].Applicable != rows[j].Applicable {
 			return jasutils.ConvertApplicableToScore(rows[i].Applicable) > jasutils.ConvertApplicableToScore(rows[j].Applicable)
 		}
-		if getJfrogResearchPriority(rows[i].JfrogResearchInformation) != getJfrogResearchPriority(rows[j].JfrogResearchInformation) {
-			return getJfrogResearchPriority(rows[i].JfrogResearchInformation) > getJfrogResearchPriority(rows[j].JfrogResearchInformation)
+		priorityI := getJfrogResearchPriority(rows[i].JfrogResearchInformation)
+		priorityJ := getJfrogResearchPriority(rows[j].JfrogResearchInformation)
+		if priorityI != priorityJ {
+			return priorityI > priorityJ
 		}
 		return rows[i].IssueId > rows[j].IssueId
 	})
