@@ -51,7 +51,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -59,7 +59,7 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -69,7 +69,7 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -79,7 +79,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -105,7 +105,7 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, scanArgs...)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -189,7 +189,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		if assert.NotEmpty(t, output) {
 			validations.VerifyJsonResults(t, output, validations.ValidationParams{
 				Vulnerabilities: minVulnerabilities,
-				Licenses: minLicenses,
+				Licenses:        minLicenses,
 			})
 		}
 		// Run docker scan on image with watch

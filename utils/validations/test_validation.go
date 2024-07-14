@@ -102,8 +102,6 @@ func validateStrContent(t *testing.T, expected, actual string, actualValue bool,
 	}
 }
 
-
-
 // func VerifyJsonScanResults(t *testing.T, content string, minViolations, minVulnerabilities, minLicenses int) {
 // 	var results []services.ScanResponse
 // 	err := json.Unmarshal([]byte(content), &results)

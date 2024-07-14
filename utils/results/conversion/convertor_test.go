@@ -116,7 +116,7 @@ func validateSarifConversion(t *testing.T, expectedContent []byte, inputResults 
 		return
 	}
 	validationParams.Actual = actualResults
-	
+
 	validations.ValidateCommandSarifOutput(t, validationParams)
 }
 
@@ -148,6 +148,6 @@ func validateSummaryConversion(t *testing.T, expectedContent []byte, inputResult
 		return
 	}
 	validationParams.Actual = actualResults
-	
+
 	validations.ValidateCommandSummaryOutput(t, validationParams)
 }

@@ -82,8 +82,8 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
-	validatePairs(t, exactMatch, ValidationPair{ Expected: expected.MultiScanId, Actual: actual.MultiScanId, ErrMsg: "MultiScanId mismatch" })
-	validatePairs(t, false, ValidationPair{ Expected: len(expected.Errors), Actual: len(actual.Errors), ErrMsg: "Errors count mismatch" })
+	validatePairs(t, exactMatch, ValidationPair{Expected: expected.MultiScanId, Actual: actual.MultiScanId, ErrMsg: "MultiScanId mismatch"})
+	validatePairs(t, false, ValidationPair{Expected: len(expected.Errors), Actual: len(actual.Errors), ErrMsg: "Errors count mismatch"})
 	// Validate vulnerabilities
 	for _, expectedVulnerability := range expected.Vulnerabilities {
 		vulnerability := getVulnerabilityOrViolationByIssueId(expectedVulnerability.IssueId, actual.Vulnerabilities)
@@ -112,25 +112,25 @@ func getVulnerabilityOrViolationByIssueId(issueId string, content []formats.Vuln
 }
 
 func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected, actual formats.VulnerabilityOrViolationRow) {
-	validatePairs(t, exactMatch, 
-		ValidationPair{ Expected: expected.Summary, Actual: actual.Summary, ErrMsg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.Severity, Actual: actual.Severity, ErrMsg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.Applicable, Actual: actual.Applicable, ErrMsg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.Technology, Actual: actual.Technology, ErrMsg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.References, Actual: actual.References, ErrMsg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId) },
+	validatePairs(t, exactMatch,
+		ValidationPair{Expected: expected.Summary, Actual: actual.Summary, ErrMsg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.Severity, Actual: actual.Severity, ErrMsg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.Applicable, Actual: actual.Applicable, ErrMsg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.Technology, Actual: actual.Technology, ErrMsg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.References, Actual: actual.References, ErrMsg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId)},
 
-		ValidationPair{ Expected: expected.ImpactedDependencyName, Actual: actual.ImpactedDependencyName, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyName mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.ImpactedDependencyVersion, Actual: actual.ImpactedDependencyVersion, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyVersion mismatch", expected.IssueId) },
-		ValidationPair{ Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId) },
+		ValidationPair{Expected: expected.ImpactedDependencyName, Actual: actual.ImpactedDependencyName, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyName mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.ImpactedDependencyVersion, Actual: actual.ImpactedDependencyVersion, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyVersion mismatch", expected.IssueId)},
+		ValidationPair{Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId)},
 
-		ValidationPair{ Expected: expected.FixedVersions, Actual: actual.FixedVersions, ErrMsg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId) },
+		ValidationPair{Expected: expected.FixedVersions, Actual: actual.FixedVersions, ErrMsg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId)},
 	)
-	if validatePairs(t, exactMatch, ValidationPair{ Expected: expected.JfrogResearchInformation, Actual: actual.JfrogResearchInformation}) && expected.JfrogResearchInformation != nil {
-		validatePairs(t, exactMatch, 
-			ValidationPair{ Expected: expected.JfrogResearchInformation.Summary, Actual: actual.JfrogResearchInformation.Summary, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Summary mismatch", expected.IssueId) },
-			ValidationPair{ Expected: expected.JfrogResearchInformation.Severity, Actual: actual.JfrogResearchInformation.Severity, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Severity mismatch", expected.IssueId) },
-			ValidationPair{ Expected: expected.JfrogResearchInformation.Remediation, Actual: actual.JfrogResearchInformation.Remediation, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Remediation mismatch", expected.IssueId) },
-			ValidationPair{ Expected: expected.JfrogResearchInformation.SeverityReasons, Actual: actual.JfrogResearchInformation.SeverityReasons, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.SeverityReasons mismatch", expected.IssueId) },
+	if validatePairs(t, exactMatch, ValidationPair{Expected: expected.JfrogResearchInformation, Actual: actual.JfrogResearchInformation}) && expected.JfrogResearchInformation != nil {
+		validatePairs(t, exactMatch,
+			ValidationPair{Expected: expected.JfrogResearchInformation.Summary, Actual: actual.JfrogResearchInformation.Summary, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Summary mismatch", expected.IssueId)},
+			ValidationPair{Expected: expected.JfrogResearchInformation.Severity, Actual: actual.JfrogResearchInformation.Severity, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Severity mismatch", expected.IssueId)},
+			ValidationPair{Expected: expected.JfrogResearchInformation.Remediation, Actual: actual.JfrogResearchInformation.Remediation, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Remediation mismatch", expected.IssueId)},
+			ValidationPair{Expected: expected.JfrogResearchInformation.SeverityReasons, Actual: actual.JfrogResearchInformation.SeverityReasons, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.SeverityReasons mismatch", expected.IssueId)},
 		)
 	}
 	validateComponentRows(t, expected.IssueId, exactMatch, expected.Components, actual.Components)
@@ -156,11 +156,11 @@ func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expect
 }
 
 func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.ComponentRow) {
-	validatePairs(t, exactMatch, 
-		ValidationPair{ Expected: expected.Location, Actual: actual.Location, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version) },
+	validatePairs(t, exactMatch,
+		ValidationPair{Expected: expected.Location, Actual: actual.Location, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
 	)
 	if expected.Location != nil {
-		validatePairs(t, exactMatch, ValidationPair{ Expected: expected.Location.File, Actual: actual.Location.File, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version) })
+		validatePairs(t, exactMatch, ValidationPair{Expected: expected.Location.File, Actual: actual.Location.File, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
 }
 
@@ -187,15 +187,15 @@ func validateCveRows(t *testing.T, issueId string, exactMatch bool, expected, ac
 }
 
 func validateCveRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.CveRow) {
-	validatePairs(t, exactMatch, 
-		ValidationPair{ Expected: expected.CvssV2, Actual: actual.CvssV2, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id) },
-		ValidationPair{ Expected: expected.CvssV3, Actual: actual.CvssV3, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id) },
+	validatePairs(t, exactMatch,
+		ValidationPair{Expected: expected.CvssV2, Actual: actual.CvssV2, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id)},
+		ValidationPair{Expected: expected.CvssV3, Actual: actual.CvssV3, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id)},
 	)
-	if validatePairs(t, exactMatch, ValidationPair{ Expected: expected.Applicability, Actual: actual.Applicability, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id) }) && expected.Applicability != nil {
-		validatePairs(t, exactMatch, 
-			ValidationPair{ Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id) },
-			ValidationPair{ Expected: expected.Applicability.ScannerDescription, Actual: actual.Applicability.ScannerDescription, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.ScannerDescription mismatch", issueId, expected.Id) },
-			ValidationPair{ Expected: expected.Applicability.Evidence, Actual: actual.Applicability.Evidence, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Evidence mismatch", issueId, expected.Id) },
+	if validatePairs(t, exactMatch, ValidationPair{Expected: expected.Applicability, Actual: actual.Applicability, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id)}) && expected.Applicability != nil {
+		validatePairs(t, exactMatch,
+			ValidationPair{Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id)},
+			ValidationPair{Expected: expected.Applicability.ScannerDescription, Actual: actual.Applicability.ScannerDescription, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.ScannerDescription mismatch", issueId, expected.Id)},
+			ValidationPair{Expected: expected.Applicability.Evidence, Actual: actual.Applicability.Evidence, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Evidence mismatch", issueId, expected.Id)},
 		)
 	}
 }
@@ -208,8 +208,6 @@ func getCve(cve string, content []formats.CveRow) *formats.CveRow {
 	}
 	return nil
 }
-
-
 
 // func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets,
 // 	minApplicable, minUndetermined, minNotCovered, minNotApplicable int) {

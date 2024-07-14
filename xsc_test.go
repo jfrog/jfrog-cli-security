@@ -60,7 +60,7 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	output := testAuditNpm(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		SecurityViolations: 1,
-		Licenses: 1,
+		Licenses:           1,
 	})
 }
 
@@ -70,7 +70,7 @@ func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	output := testAuditNpm(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		SecurityViolations: 1,
-		Licenses: 1,
+		Licenses:           1,
 	})
 }
 
@@ -80,7 +80,7 @@ func TestXscAuditMavenJson(t *testing.T) {
 	output := testXscAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 
@@ -90,7 +90,7 @@ func TestXscAuditMavenSimpleJson(t *testing.T) {
 	output := testXscAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
-		Licenses: 1,
+		Licenses:        1,
 	})
 }
 

@@ -35,7 +35,7 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sa
 	// var sast, iac, secrets, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
 	// for _, run := range results.Runs {
 	// 	for _, result := range run.Results {
-			
+
 	// 	}
 	// }
 
