@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,29 @@ func InitSecurityTest(t *testing.T, xrayMinVersion string) {
 		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
 	}
 	ValidateXrayVersion(t, xrayMinVersion)
+}
+
+func ValidateXrayVersion(t *testing.T, minVersion string) {
+	xrayVersion, err := getTestsXrayVersion()
+	if err != nil {
+		assert.NoError(t, err)
+		return
+	}
+	err = clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion.GetVersion(), minVersion)
+	if err != nil {
+		t.Skip(err)
+	}
+}
+
+func ValidateXscVersion(t *testing.T, minVersion string) {
+	xscVersion, err := getTestsXscVersion()
+	if err != nil {
+		t.Skip(err)
+	}
+	err = clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion.GetVersion(), minVersion)
+	if err != nil {
+		t.Skip(err)
+	}
 }
 
 func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func(t *testing.T) components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
@@ -76,12 +100,12 @@ func removeDirs(dirs ...string) {
 	}
 }
 
-func getXrayVersion() (version.Version, error) {
+func getTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
 }
 
-func getXscVersion() (version.Version, error) {
+func getTestsXscVersion() (version.Version, error) {
 	xscVersion, err := configTests.XscAuth.GetVersion()
 	return *version.NewVersion(xscVersion), err
 }
@@ -91,6 +115,12 @@ func ChangeWD(t *testing.T, newPath string) string {
 	assert.NoError(t, err, "Failed to get current dir")
 	clientTests.ChangeDirAndAssert(t, newPath)
 	return prevDir
+}
+
+func ReadOutputFromFile(t *testing.T, path string) string {
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {

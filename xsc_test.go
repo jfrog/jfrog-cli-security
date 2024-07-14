@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
@@ -57,28 +58,40 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testAuditNpm(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		SecurityViolations: 1,
+		Licenses: 1,
+	})
 }
 
 func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testAuditNpm(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		SecurityViolations: 1,
+		Licenses: 1,
+	})
 }
 
 func TestXscAuditMavenJson(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testXscAuditMaven(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses: 1,
+	})
 }
 
 func TestXscAuditMavenSimpleJson(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testXscAuditMaven(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses: 1,
+	})
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {

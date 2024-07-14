@@ -22,7 +22,7 @@ func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
 
 func (tc *CmdResultsTableConverter) Get() *formats.ResultsTables {
 	simpleJsonFormat := tc.simpleJsonConvertor.Get()
-	if simpleJsonFormat != nil {
+	if simpleJsonFormat == nil {
 		return &formats.ResultsTables{}
 	}
 	return &formats.ResultsTables{

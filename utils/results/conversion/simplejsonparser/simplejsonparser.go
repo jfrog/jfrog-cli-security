@@ -57,7 +57,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target string, _ techu
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
-	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, violations, sjc.entitledForJas, sjc.pretty, applicabilityRuns...)
+	secViolationsSimpleJson, licViolationsSimpleJson, opRiskViolationsSimpleJson, err := PrepareSimpleJsonViolations(target, violations, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
 	if err != nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseVulnerabilities(target string, _ 
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
-	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, vulnerabilities, sjc.entitledForJas, sjc.pretty, applicabilityRuns...)
+	vulSimpleJson, err := PrepareSimpleJsonVulnerabilities(target, vulnerabilities, sjc.pretty, sjc.entitledForJas, applicabilityRuns...)
 	if err != nil || len(vulSimpleJson) == 0 {
 		return
 	}
@@ -136,15 +136,15 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(target string, sast ...*sari
 	return
 }
 
-func PrepareSimpleJsonViolations(target string, violations []services.Violation, jasEntitled, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+func PrepareSimpleJsonViolations(target string, violations []services.Violation, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
 	var licenseViolationsRows []formats.LicenseRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
 	err := results.PrepareScaViolations(
 		target,
 		violations,
-		jasEntitled,
 		pretty,
+		jasEntitled,
 		applicabilityRuns,
 		addSimpleJsonSecurityViolation(&securityViolationsRows, pretty),
 		addSimpleJsonLicenseViolation(&licenseViolationsRows, pretty),
@@ -153,13 +153,13 @@ func PrepareSimpleJsonViolations(target string, violations []services.Violation,
 	return securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err
 }
 
-func PrepareSimpleJsonVulnerabilities(target string, vulnerabilities []services.Vulnerability, entitledForJas, pretty bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
+func PrepareSimpleJsonVulnerabilities(target string, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
 	err := results.PrepareScaVulnerabilities(
 		target,
 		vulnerabilities,
-		entitledForJas,
 		pretty,
+		entitledForJas,
 		applicabilityRuns,
 		addSimpleJsonVulnerability(&vulnerabilitiesRows, pretty),
 	)
@@ -360,19 +360,13 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 		})
 	}
 	if len(simpleJsonResults.Secrets) > 0 {
-		sort.Slice(simpleJsonResults.Secrets, func(i, j int) bool {
-			return simpleJsonResults.Secrets[i].SeverityNumValue > simpleJsonResults.Secrets[j].SeverityNumValue
-		})
+		sortSourceCodeRow(simpleJsonResults.Secrets)
 	}
 	if len(simpleJsonResults.Iacs) > 0 {
-		sort.Slice(simpleJsonResults.Iacs, func(i, j int) bool {
-			return simpleJsonResults.Iacs[i].SeverityNumValue > simpleJsonResults.Iacs[j].SeverityNumValue
-		})
+		sortSourceCodeRow(simpleJsonResults.Iacs)
 	}
 	if len(simpleJsonResults.Sast) > 0 {
-		sort.Slice(simpleJsonResults.Sast, func(i, j int) bool {
-			return simpleJsonResults.Sast[i].SeverityNumValue > simpleJsonResults.Sast[j].SeverityNumValue
-		})
+		sortSourceCodeRow(simpleJsonResults.Sast)
 	}
 }
 
@@ -382,6 +376,15 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
 		}
 		return len(rows[i].FixedVersions) > 0 && len(rows[j].FixedVersions) > 0
+	})
+}
+
+func sortSourceCodeRow(rows []formats.SourceCodeRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
+			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
+		}
+		return rows[i].Location.File > rows[j].Location.File
 	})
 }
 

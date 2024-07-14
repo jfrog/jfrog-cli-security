@@ -386,7 +386,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					targetResults.AddError(err)
 					return
 				} else {
-					targetResults.NewScaScanResults(graphScanResults)
+					targetResults.NewScaScanResults(*graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {

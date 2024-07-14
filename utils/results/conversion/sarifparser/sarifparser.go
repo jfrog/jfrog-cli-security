@@ -167,8 +167,8 @@ func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*
 }
 
 func PrepareSarifScaViolations(target string, run *sarif.Run, pretty, entitledForJas bool, violations []services.Violation, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
-	var sarifResults []*sarif.Result
-	var rules map[string]*sarif.ReportingDescriptor
+	sarifResults := []*sarif.Result{}
+	rules := map[string]*sarif.ReportingDescriptor{}
 	err := results.PrepareScaViolations(
 		target,
 		violations,
@@ -184,8 +184,8 @@ func PrepareSarifScaViolations(target string, run *sarif.Run, pretty, entitledFo
 }
 
 func PrepareSarifScaVulnerabilities(target string, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
-	var sarifResults []*sarif.Result
-	var rules map[string]*sarif.ReportingDescriptor
+	sarifResults := []*sarif.Result{}
+	rules := map[string]*sarif.ReportingDescriptor{}
 	err := results.PrepareScaVulnerabilities(
 		target,
 		vulnerabilities,

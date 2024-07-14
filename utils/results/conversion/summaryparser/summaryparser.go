@@ -56,17 +56,11 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(target string, _ techutils
 	if sc.currentScan == nil {
 		return results.ConvertorNewScanErr
 	}
-	if sc.currentScan.Vulnerabilities == nil {
-		sc.currentScan.Vulnerabilities = &formats.ScanVulnerabilitiesSummary{}
-	}
-	if sc.currentScan.Vulnerabilities.ScaScanResults == nil {
-		sc.currentScan.Vulnerabilities.ScaScanResults = &formats.ScanScaResult{}
-	}
 	err = results.PrepareScaViolations(
 		target,
 		violations,
-		sc.entitledForJas,
 		false,
+		sc.entitledForJas,
 		applicabilityRuns,
 		sc.getScaViolationHandler(),
 		sc.getScaViolationHandler(),
@@ -77,6 +71,12 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(target string, _ techutils
 
 func (sc *CmdResultsSummaryConverter) getScaViolationHandler() results.PrepareScaViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		if sc.currentScan.Violations == nil {
+			sc.currentScan.Violations = formats.TwoLevelSummaryCount{}
+		}
+		if sc.currentScan.Violations[violation.ViolationType] == nil {
+			sc.currentScan.Violations[violation.ViolationType] = formats.SummaryCount{}
+		}
 		for i := 0; i < len(getCveIds(cves, violation.IssueId)); i++ {
 			sc.currentScan.Violations[violation.ViolationType][severity.String()]++
 		}
@@ -91,31 +91,41 @@ func (sc *CmdResultsSummaryConverter) ParseVulnerabilities(target string, tech t
 	if sc.currentScan == nil {
 		return results.ConvertorNewScanErr
 	}
-	if sc.currentScan.Vulnerabilities == nil {
-		sc.currentScan.Vulnerabilities = &formats.ScanVulnerabilitiesSummary{}
-	}
-	if sc.currentScan.Vulnerabilities.ScaScanResults == nil {
-		sc.currentScan.Vulnerabilities.ScaScanResults = &formats.ScanScaResult{}
-	}
 	err = results.PrepareScaVulnerabilities(
 		target,
 		vulnerabilities,
-		sc.entitledForJas,
 		false,
+		sc.entitledForJas,
 		applicabilityRuns,
 		func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 			for _, id := range getCveIds(cves, vulnerability.IssueId) {
-				issueId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, id)
-				if !sc.currentCveUnique.Exists(issueId) {
-					sc.currentScan.Vulnerabilities.ScaScanResults.UniqueFindings++
-					sc.currentCveUnique.Add(issueId)
-				}
-				sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount[severity.String()][applicabilityStatus.String()]++
+				sc.addVulnerabilityToScanSummaryResult(id, impactedPackagesName, impactedPackagesVersion, severity, applicabilityStatus)
 			}
 			return nil
 		},
 	)
 	return
+}
+
+func (sc *CmdResultsSummaryConverter) addVulnerabilityToScanSummaryResult(id, impactedPackagesName, impactedPackagesVersion string, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus) {
+	if sc.currentScan.Vulnerabilities == nil {
+		sc.currentScan.Vulnerabilities = &formats.ScanVulnerabilitiesSummary{}
+	}
+	if sc.currentScan.Vulnerabilities.ScaScanResults == nil {
+		sc.currentScan.Vulnerabilities.ScaScanResults = &formats.ScanScaResult{SummaryCount: formats.TwoLevelSummaryCount{}}
+	}
+	if sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount == nil {
+		sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount = formats.TwoLevelSummaryCount{}
+	}
+	if sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount[severity.String()] == nil {
+		sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount[severity.String()] = formats.SummaryCount{}
+	}
+	issueId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, id)
+	if !sc.currentCveUnique.Exists(issueId) {
+		sc.currentScan.Vulnerabilities.ScaScanResults.UniqueFindings++
+		sc.currentCveUnique.Add(issueId)
+	}
+	sc.currentScan.Vulnerabilities.ScaScanResults.SummaryCount[severity.String()][applicabilityStatus.String()]++
 }
 
 func getCveIds(cves []formats.CveRow, issueId string) []string {

@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -30,19 +31,19 @@ func TestCalcShouldReportEvents(t *testing.T) {
 	defer reportUsageCallback()
 
 	// Minimum Xsc version.
-	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
 
 	// Lower Xsc version.
-	mockServerLowerVersion, serverDetails := utils.XscServer(t, lowerAnalyticsMetricsMinXscVersion)
+	mockServerLowerVersion, serverDetails := validations.XscServer(t, lowerAnalyticsMetricsMinXscVersion)
 	defer mockServerLowerVersion.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.False(t, am.calcShouldReportEvents())
 
 	// Higher Xsc version.
-	mockServerHigherVersion, serverDetails := utils.XscServer(t, higherAnalyticsMetricsMinXscVersion)
+	mockServerHigherVersion, serverDetails := validations.XscServer(t, higherAnalyticsMetricsMinXscVersion)
 	defer mockServerHigherVersion.Close()
 	am = NewAnalyticsMetricsService(serverDetails)
 	assert.True(t, am.calcShouldReportEvents())
@@ -61,11 +62,11 @@ func TestAddGeneralEvent(t *testing.T) {
 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
 	defer usageCallback()
 	// Successful flow.
-	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, utils.TestMsi, am.GetMsi())
+	assert.Equal(t, validations.TestMsi, am.GetMsi())
 
 	// In case cli should not report analytics, verify that request won't be sent.
 	am.shouldReportEvents = false
@@ -88,7 +89,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
 		{name: "Scan failed no findings.", auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
 	}
-	mockServer, serverDetails := utils.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
 	defer mockServer.Close()
 	am := NewAnalyticsMetricsService(serverDetails)
 	am.SetStartTime()
@@ -110,7 +111,7 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 
 	cmdResults := results.NewCommandResults("", true)
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
-	scanResults.NewScaScanResults(&services.ScanResponse{Vulnerabilities: vulnerabilities})
+	scanResults.NewScaScanResults(services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
 		scanResults.JasResults.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}

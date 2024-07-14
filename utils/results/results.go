@@ -230,14 +230,13 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(responses ...*services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) NewScaScanResults(responses ...services.ScanResponse) *ScaScanResults {
 	results := sr.ScaResults
 	if results == nil {
 		results = &ScaScanResults{}
+		sr.ScaResults = results
 	}
-	for _, response := range responses {
-		results.XrayResults = append(results.XrayResults, *response)
-	}
+	results.XrayResults = append(results.XrayResults, responses...)
 	return results
 }
 

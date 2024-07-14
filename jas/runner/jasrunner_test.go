@@ -42,7 +42,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	jasScanner, err := jas.CreateJasScanner(scanner, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	assert.NoError(t, err)
 
-	targetResults.NewScaScanResults(&jas.FakeBasicXrayResults[0])
+	targetResults.NewScaScanResults(jas.FakeBasicXrayResults[0])
 	err = AddJasScannersTasks(securityParallelRunnerForTest, jfrogappsconfig.Module{}, targetResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, utils.GetAllSupportedScans())
 	assert.NoError(t, err)
 }
