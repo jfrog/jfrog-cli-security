@@ -167,9 +167,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 	if sr.ScaResults == nil {
 		return
 	}
-	for _, scaResult := range sr.ScaResults.XrayResults {
-		results = append(results, scaResult)
-	}
+	results = append(results, sr.ScaResults.XrayResults...)
 	return
 }
 

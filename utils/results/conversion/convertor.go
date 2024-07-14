@@ -111,7 +111,9 @@ func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormat
 	if c.Params.IsMultipleRoots != nil {
 		multipleTargets = *c.Params.IsMultipleRoots
 	}
-	parser.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled)
+	if err = parser.Reset(cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled); err != nil {
+		return
+	}
 	for _, targetScansResults := range cmdResults.Targets {
 		if err = parser.ParseNewScanResultsMetadata(targetScansResults.Target, targetScansResults.Errors...); err != nil {
 			return

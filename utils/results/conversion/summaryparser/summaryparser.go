@@ -27,7 +27,9 @@ func (sc *CmdResultsSummaryConverter) Get() *formats.SummaryResults {
 		return &formats.SummaryResults{}
 	}
 	// Flush the last scan
-	sc.ParseNewScanResultsMetadata("", nil)
+	if err := sc.ParseNewScanResultsMetadata("", nil); err != nil {
+		return &formats.SummaryResults{}
+	}
 	return sc.current
 }
 

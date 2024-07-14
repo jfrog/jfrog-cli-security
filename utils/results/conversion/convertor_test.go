@@ -27,7 +27,7 @@ const (
 
 type conversionFormat string
 
-func getValidationParams(t *testing.T) validations.ValidationParams {
+func getValidationParams() validations.ValidationParams {
 	return validations.ValidationParams{
 		ExactResultsMatch: true,
 
@@ -71,7 +71,7 @@ func TestConvertResults(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("Convert to %s", testCase.contentFormat), func(t *testing.T) {
-			validationParams := getValidationParams(t)
+			validationParams := getValidationParams()
 			convertor := NewCommandResultsConvertor(ResultConvertParams{})
 
 			switch testCase.contentFormat {

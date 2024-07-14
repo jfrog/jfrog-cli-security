@@ -414,7 +414,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 	}
 }
 
-func getJasScanner(filePath string, serverDetails *config.ServerDetails, targetResults *results.TargetResults) (*jas.JasScanner, error) {
+func getJasScanner(_ string, serverDetails *config.ServerDetails, targetResults *results.TargetResults) (*jas.JasScanner, error) {
 	scanner, err := jas.CreateJasScanner(&jas.JasScanner{}, serverDetails, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))

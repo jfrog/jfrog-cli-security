@@ -327,5 +327,4 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			}
 		}
 	}
-	return
 }

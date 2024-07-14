@@ -44,7 +44,9 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 		return sarifutils.NewReport()
 	}
 	// Flush the current run
-	sc.ParseNewScanResultsMetadata("", nil)
+	if err := sc.ParseNewScanResultsMetadata("", nil); err != nil {
+		return sarifutils.NewReport()
+	}
 	return sc.current, nil
 }
 
@@ -282,7 +284,7 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 	}
 }
 
-func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, fixedVersions []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor, e error) {
+func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, fixedVersions []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor, e error) {
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
 	// Add rule if not exists
