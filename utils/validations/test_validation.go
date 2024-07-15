@@ -57,25 +57,29 @@ func (vp ValidationPair) ErrMsgs(t *testing.T) []string {
 
 func validatePairs(t *testing.T, exactMatch bool, pairs ...ValidationPair) bool {
 	for _, pair := range pairs {
-		switch pair.Expected.(type) {
+		switch expected := pair.Expected.(type) {
 		case string:
-			if !validateStrContent(t, pair.Expected.(string), pair.Actual.(string), exactMatch, pair.ErrMsgs(t)) {
+			actual, ok := pair.Actual.(string)
+			if !ok {
+				return assert.Fail(t, "Expected a string value, but got a different type.", pair.ErrMsgs(t))
+			}
+			if !validateStrContent(t, expected, actual, exactMatch, pair.ErrMsgs(t)) {
 				return false
 			}
 		case *interface{}:
-			if !validatePointers(t, pair.Expected, pair.Actual, exactMatch, pair.ErrMsgs(t)) {
+			if !validatePointers(t, expected, pair.Actual, exactMatch, pair.ErrMsgs(t)) {
 				return false
 			}
 		case []interface{}:
 			if exactMatch {
-				if !assert.ElementsMatch(t, pair.Expected, pair.Actual, pair.ErrMsgs(t)) {
+				if !assert.ElementsMatch(t, expected, pair.Actual, pair.ErrMsgs(t)) {
 					return false
 				}
-			} else if !assert.Subset(t, pair.Expected, pair.Actual, pair.ErrMsgs(t)) {
+			} else if !assert.Subset(t, expected, pair.Actual, pair.ErrMsgs(t)) {
 				return false
 			}
 		default:
-			return assert.Equal(t, pair.Expected, pair.Actual, pair.ErrMsgs(t))
+			return assert.Equal(t, expected, pair.Actual, pair.ErrMsgs(t))
 		}
 	}
 	return true
