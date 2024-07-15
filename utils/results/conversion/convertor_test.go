@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	testDataDir = filepath.Join("..", "..", "..", "testdata", "other", "output", "formats")
+	testDataDir = filepath.Join("..", "..", "..", "tests", "testdata", "other", "output", "formats")
 )
 
 const (
