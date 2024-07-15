@@ -209,10 +209,7 @@ func addSarifScaVulnerability(sarifResults *[]*sarif.Result, rules *map[string]*
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule, err := parseScaToSarifFormat(vulnerability.IssueId, vulnerability.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
-		if err != nil {
-			return err
-		}
+		currentResults, currentRule := parseScaToSarifFormat(vulnerability.IssueId, vulnerability.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, vulnerability.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -233,10 +230,7 @@ func addSarifScaSecurityViolation(sarifResults *[]*sarif.Result, rules *map[stri
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule, err := parseScaToSarifFormat(violation.IssueId, violation.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
-		if err != nil {
-			return err
-		}
+		currentResults, currentRule := parseScaToSarifFormat(violation.IssueId, violation.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -257,7 +251,7 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule, err := parseScaToSarifFormat(
+		currentResults, currentRule := parseScaToSarifFormat(
 			violation.LicenseKey,
 			getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
 			markdownDescription,
@@ -271,9 +265,6 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 			fixedVersions,
 			directComponents,
 		)
-		if err != nil {
-			return err
-		}
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.LicenseKey, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -284,7 +275,7 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 	}
 }
 
-func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, _ []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor, e error) {
+func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, _ []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
 	// Add rule if not exists
