@@ -112,7 +112,9 @@ func (r *SecurityCommandResults) GetErrors() (err error) {
 func (r *SecurityCommandResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
 	for _, scan := range r.Targets {
+		r.targetsMutex.Lock()
 		technologies.AddElements(scan.GetTechnologies()...)
+		r.targetsMutex.Unlock()
 	}
 	return technologies.ToSlice()
 }
