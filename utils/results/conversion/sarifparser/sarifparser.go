@@ -284,7 +284,7 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 	}
 }
 
-func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, fixedVersions []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor, e error) {
+func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, _ []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor, e error) {
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
 	// Add rule if not exists
