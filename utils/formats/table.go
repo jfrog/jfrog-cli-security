@@ -5,7 +5,7 @@ package formats
 // Use the conversion methods in this package to convert from the API structs to the table structs.
 
 type ResultsTables struct {
-	SecurityVulnerabilitiesTable   []VulnerabilityTableRow
+	SecurityVulnerabilitiesTable   []vulnerabilityTableRow
 	LicensesTable                  []licenseTableRow
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow
@@ -16,7 +16,7 @@ type ResultsTables struct {
 }
 
 // Used for vulnerabilities and security violations
-type VulnerabilityTableRow struct {
+type vulnerabilityTableRow struct {
 	severity   string `col-name:"Severity"`
 	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting

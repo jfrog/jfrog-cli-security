@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func ConvertSecurityTableRowToScanTableRow(tableRows []VulnerabilityTableRow) (scanTableRows []vulnerabilityScanTableRow) {
+func ConvertSecurityTableRowToScanTableRow(tableRows []vulnerabilityTableRow) (scanTableRows []vulnerabilityScanTableRow) {
 	for i := range tableRows {
 		scanTableRows = append(scanTableRows, vulnerabilityScanTableRow{
 			severity:               tableRows[i].severity,
@@ -83,9 +83,9 @@ func convertToComponentScanTableRow(rows []directDependenciesTableRow) (tableRow
 	return
 }
 
-func ConvertToVulnerabilityTableRow(rows []VulnerabilityOrViolationRow) (tableRows []VulnerabilityTableRow) {
+func ConvertToVulnerabilityTableRow(rows []VulnerabilityOrViolationRow) (tableRows []vulnerabilityTableRow) {
 	for i := range rows {
-		tableRows = append(tableRows, VulnerabilityTableRow{
+		tableRows = append(tableRows, vulnerabilityTableRow{
 			severity:                  rows[i].Severity,
 			severityNumValue:          rows[i].SeverityNumValue,
 			applicable:                rows[i].Applicable,
