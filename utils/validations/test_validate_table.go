@@ -23,17 +23,10 @@ func ValidateCommandTableOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(formats.ResultsTables)
 	if assert.True(t, ok) {
 		ValidateTableIssuesCount(t, params, results)
-		// if params.Expected != nil {
-		// 	expectedResults, ok := params.Expected.(sarif.Report)
-		// 	if assert.True(t, ok) {
-		// 		ValidateScanResponses(t, params.ExactResultsMatch, expectedResults, results)
-		// 	}
-		// }
 	}
 }
 
 func ValidateTableIssuesCount(t *testing.T, params ValidationParams, results formats.ResultsTables) {
-
 	if params.ExactResultsMatch {
 		assert.Len(t, results.SastTable, params.Sast, fmt.Sprintf("Expected %d sast issues in table, but got %d sast.", params.Sast, len(results.SastTable)))
 		assert.Len(t, results.SecretsTable, params.Secrets, fmt.Sprintf("Expected %d secrets issues in table, but got %d secrets.", params.Secrets, len(results.SecretsTable)))

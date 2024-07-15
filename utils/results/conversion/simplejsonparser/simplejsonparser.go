@@ -396,7 +396,6 @@ func getJfrogResearchPriority(vulnerabilityOrViolation formats.VulnerabilityOrVi
 	if vulnerabilityOrViolation.JfrogResearchInformation == nil {
 		return vulnerabilityOrViolation.SeverityNumValue
 	}
-
 	return vulnerabilityOrViolation.JfrogResearchInformation.SeverityNumValue
 }
 
