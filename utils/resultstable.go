@@ -265,13 +265,34 @@ func prepareVulnerabilities(vulnerabilities []services.Vulnerability, results *R
 	return vulnerabilitiesRows, nil
 }
 
+// sortVulnerabilityOrViolationRows is sorting in the following order:
+// Severity -> Applicability -> JFrog Research Score -> XRAY ID
 func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow) {
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
 		}
-		return len(rows[i].FixedVersions) > 0 && len(rows[j].FixedVersions) > 0
+		if rows[i].Applicable != rows[j].Applicable {
+			return jasutils.ConvertApplicableToScore(rows[i].Applicable) > jasutils.ConvertApplicableToScore(rows[j].Applicable)
+		}
+		priorityI := getJfrogResearchPriority(rows[i])
+		priorityJ := getJfrogResearchPriority(rows[j])
+		if priorityI != priorityJ {
+			return priorityI > priorityJ
+		}
+		return rows[i].IssueId > rows[j].IssueId
 	})
+}
+
+// getJfrogResearchPriority returns the score of JFrog Research Severity.
+// If there is no such severity will return the normal severity score.
+// When vulnerability with JFrog Reasearch to a vulnerability without we'll compare the JFrog Research Severity to the normal severity
+func getJfrogResearchPriority(vulnerabilityOrViolation formats.VulnerabilityOrViolationRow) int {
+	if vulnerabilityOrViolation.JfrogResearchInformation == nil {
+		return vulnerabilityOrViolation.SeverityNumValue
+	}
+
+	return vulnerabilityOrViolation.JfrogResearchInformation.SeverityNumValue
 }
 
 // PrintLicensesTable prints the licenses in a table.
