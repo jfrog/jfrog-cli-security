@@ -40,6 +40,7 @@ type TargetResults struct {
 	// All scan results for the target
 	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	scansMutex sync.Mutex 	 `json:"-"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -111,11 +112,11 @@ func (r *SecurityCommandResults) GetErrors() (err error) {
 
 func (r *SecurityCommandResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()
+	r.targetsMutex.Lock()
 	for _, scan := range r.Targets {
-		r.targetsMutex.Lock()
 		technologies.AddElements(scan.GetTechnologies()...)
-		r.targetsMutex.Unlock()
 	}
+	r.targetsMutex.Unlock()
 	return technologies.ToSlice()
 }
 
@@ -178,6 +179,7 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	if sr.Technology != "" {
 		technologiesSet.Add(sr.Technology)
 	}
+	sr.scansMutex.Lock()
 	if sr.ScaResults == nil {
 		return technologiesSet.ToSlice()
 	}
@@ -186,6 +188,7 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 			technologiesSet.Add(techutils.Technology(strings.ToLower(scaResult.ScannedPackageType)))
 		}
 	}
+	sr.scansMutex.Unlock()
 	return technologiesSet.ToSlice()
 }
 
@@ -232,10 +235,12 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 
 func (sr *TargetResults) NewScaScanResults(responses ...services.ScanResponse) *ScaScanResults {
 	results := sr.ScaResults
+	sr.scansMutex.Lock()
 	if results == nil {
 		results = &ScaScanResults{}
 		sr.ScaResults = results
 	}
+	sr.scansMutex.Unlock()
 	results.XrayResults = append(results.XrayResults, responses...)
 	return results
 }
