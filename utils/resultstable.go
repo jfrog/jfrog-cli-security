@@ -30,7 +30,6 @@ const (
 	directDependencyPathLength = 2
 	nodeModules                = "node_modules"
 	NpmPackageTypeIdentifier   = "npm://"
-	noJfrogResearchInformation = -1
 )
 
 // PrintViolationsTable prints the violations in 4 tables: security violations, license compliance violations, operational risk violations and ignore rule URLs.
@@ -276,8 +275,8 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 		if rows[i].Applicable != rows[j].Applicable {
 			return jasutils.ConvertApplicableToScore(rows[i].Applicable) > jasutils.ConvertApplicableToScore(rows[j].Applicable)
 		}
-		priorityI := getJfrogResearchPriority(rows[i].JfrogResearchInformation)
-		priorityJ := getJfrogResearchPriority(rows[j].JfrogResearchInformation)
+		priorityI := getJfrogResearchPriority(rows[i])
+		priorityJ := getJfrogResearchPriority(rows[j])
 		if priorityI != priorityJ {
 			return priorityI > priorityJ
 		}
@@ -286,13 +285,14 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 }
 
 // getJfrogResearchPriority returns the score of JFrog Research Severity.
-// If there is no such severity will return the const value noJfrogResearchInformation which is less than all possible scores
-func getJfrogResearchPriority(jfrogResearchInformation *formats.JfrogResearchInformation) int {
-	if jfrogResearchInformation == nil {
-		return noJfrogResearchInformation
+// If there is no such severity will return the normal severity score.
+// When vulnerability with JFrog Reasearch to a vulnerability without we'll compare the JFrog Research Severity to the normal severity
+func getJfrogResearchPriority(vulnerabilityOrViolation formats.VulnerabilityOrViolationRow) int {
+	if vulnerabilityOrViolation.JfrogResearchInformation == nil {
+		return vulnerabilityOrViolation.SeverityNumValue
 	}
 
-	return jfrogResearchInformation.SeverityNumValue
+	return vulnerabilityOrViolation.JfrogResearchInformation.SeverityNumValue
 }
 
 // PrintLicensesTable prints the licenses in a table.
