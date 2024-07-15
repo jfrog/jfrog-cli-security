@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	EnrichMinimumVersionXray = "3.90"
+	EnrichMinimumVersionXray = "3.101.3"
 )
 
 func RunImportGraphAndGetResults(params *EnrichGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
