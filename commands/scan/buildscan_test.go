@@ -10,7 +10,7 @@ func TestTrimUrlFunc(t *testing.T) {
 	// Test empty string
 	emptyUrl := ""
 	url, endpoint, err := trimBuildScanResultUrl(emptyUrl)
-	assert.NotNil(t, err)
+	assert.NoError(t, err)
 	assert.True(t, url == "")
 	assert.True(t, endpoint == "")
 

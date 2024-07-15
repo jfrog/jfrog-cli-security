@@ -187,10 +187,6 @@ func (bsc *BuildScanCommand) CommandName() string {
 }
 
 func trimBuildScanResultUrl(fullUrl string) (string, string, error) {
-
-	if fullUrl == "" {
-		return "", "", fmt.Errorf("URL to trim is empty")
-	}
 	// Parse through the url and endpoint
 	parsedUrl, err := url.Parse(fullUrl)
 	if err != nil {
