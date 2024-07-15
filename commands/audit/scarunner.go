@@ -299,6 +299,9 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 }
 
 func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+	if serverDetails, err = params.ServerDetails(); err != nil {
+		return
+	}
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
 		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return

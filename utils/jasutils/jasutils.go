@@ -73,3 +73,18 @@ func CveToApplicabilityRuleId(cveId string) string {
 func ApplicabilityRuleIdToCve(sarifRuleId string) string {
 	return strings.TrimPrefix(sarifRuleId, ApplicabilityRuleIdPrefix)
 }
+
+var applicableMapToScore = map[string]int{
+	"Applicable":                4,
+	"ApplicabilityUndetermined": 3,
+	"NotScanned":                2,
+	"NotCovered":                1,
+	"NotApplicable":             0,
+}
+
+func ConvertApplicableToScore(applicability string) int {
+	if level, ok := applicableMapToScore[strings.ToLower(applicability)]; ok {
+		return level
+	}
+	return -1
+}
