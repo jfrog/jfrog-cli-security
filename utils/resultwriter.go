@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/beevik/etree"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -19,7 +18,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -58,7 +56,7 @@ func NewResultsWriter(scanResults *Results) *ResultsWriter {
 	return &ResultsWriter{results: scanResults}
 }
 
-func getScaScanFileName(r *Results) string {
+func GetScaScanFileName(r *Results) string {
 	if len(r.ScaResults) > 0 {
 		return r.ScaResults[0].Target
 	}
@@ -127,56 +125,6 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Sarif:
 		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses)
 	}
-	return nil
-}
-
-func AppendVulnsToJson(results *Results) error {
-	fileName := getScaScanFileName(results)
-	fileContent, err := os.ReadFile(fileName)
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return err
-	}
-	var data map[string]interface{}
-	err = json.Unmarshal(fileContent, &data)
-	if err != nil {
-		fmt.Println("Error parsing XML:", err)
-		return err
-	}
-	var vulnerabilities []map[string]string
-	xrayResults := results.GetScaScansXrayResults()[0]
-	for _, vuln := range xrayResults.Vulnerabilities {
-		for component := range vuln.Components {
-			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
-			vulnerabilities = append(vulnerabilities, vulnerability)
-		}
-	}
-	data["vulnerabilities"] = vulnerabilities
-	return PrintJson(data)
-}
-
-func AppendVulnsToXML(results *Results) error {
-	fileName := getScaScanFileName(results)
-	result := etree.NewDocument()
-	err := result.ReadFromFile(fileName)
-	if err != nil {
-		return err
-	}
-	destination := result.FindElements("//bom")[0]
-	xrayResults := results.GetScaScansXrayResults()[0]
-	vulns := destination.CreateElement("vulnerabilities")
-	for _, vuln := range xrayResults.Vulnerabilities {
-		for component := range vuln.Components {
-			addVuln := vulns.CreateElement("vulnerability")
-			addVuln.CreateAttr("bom-ref", component)
-			id := addVuln.CreateElement("id")
-			id.CreateText(vuln.Cves[0].Id)
-		}
-	}
-	result.IndentTabs()
-	result.Indent(2)
-	stringReturn, _ := result.WriteToString()
-	log.Output(stringReturn)
 	return nil
 }
 

@@ -1,8 +1,11 @@
 package enrich
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"errors"
+	"fmt"
+	"github.com/beevik/etree"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -59,6 +62,56 @@ func (enrichCmd *EnrichCommand) SetSpec(spec *spec.SpecFiles) *EnrichCommand {
 
 func (enrichCmd *EnrichCommand) ServerDetails() (*config.ServerDetails, error) {
 	return enrichCmd.serverDetails, nil
+}
+
+func AppendVulnsToJson(results *utils.Results) error {
+	fileName := utils.GetScaScanFileName(results)
+	fileContent, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return err
+	}
+	var data map[string]interface{}
+	err = json.Unmarshal(fileContent, &data)
+	if err != nil {
+		fmt.Println("Error parsing XML:", err)
+		return err
+	}
+	var vulnerabilities []map[string]string
+	xrayResults := results.GetScaScansXrayResults()[0]
+	for _, vuln := range xrayResults.Vulnerabilities {
+		for component := range vuln.Components {
+			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
+			vulnerabilities = append(vulnerabilities, vulnerability)
+		}
+	}
+	data["vulnerabilities"] = vulnerabilities
+	return utils.PrintJson(data)
+}
+
+func AppendVulnsToXML(results *utils.Results) error {
+	fileName := utils.GetScaScanFileName(results)
+	result := etree.NewDocument()
+	err := result.ReadFromFile(fileName)
+	if err != nil {
+		return err
+	}
+	destination := result.FindElements("//bom")[0]
+	xrayResults := results.GetScaScansXrayResults()[0]
+	vulns := destination.CreateElement("vulnerabilities")
+	for _, vuln := range xrayResults.Vulnerabilities {
+		for component := range vuln.Components {
+			addVuln := vulns.CreateElement("vulnerability")
+			addVuln.CreateAttr("bom-ref", component)
+			id := addVuln.CreateElement("id")
+			id.CreateText(vuln.Cves[0].Id)
+		}
+	}
+	result.IndentTabs()
+	result.Indent(2)
+	stringReturn, _ := result.WriteToString()
+	log.Output(stringReturn)
+	return nil
 }
 
 func isXML(scaResults []*utils.ScaScanResult) (bool, error) {
@@ -146,11 +199,11 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		return
 	}
 	if isxml {
-		if err = utils.AppendVulnsToXML(scanResults); err != nil {
+		if err = AppendVulnsToXML(scanResults); err != nil {
 			return
 		}
 	} else {
-		if err = utils.AppendVulnsToJson(scanResults); err != nil {
+		if err = AppendVulnsToJson(scanResults); err != nil {
 			return
 		}
 	}
