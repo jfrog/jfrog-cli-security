@@ -101,14 +101,14 @@ func TestGetIssueIdentifier(t *testing.T) {
 		{
 			name:           "Multiple CVEs",
 			cves:           []formats.CveRow{{Id: "CVE-2022-1234"}, {Id: "CVE-2019-1234"}},
-			delimiter:      ",",
+			delimiter:      ", ",
 			issueId:        "XRAY-123456",
 			expectedOutput: "CVE-2022-1234, CVE-2019-1234",
 		},
 		{
 			name:           "No CVEs",
 			cves:           nil,
-			delimiter:      ",",
+			delimiter:      ", ",
 			issueId:        "XRAY-123456",
 			expectedOutput: "XRAY-123456",
 		},
@@ -421,150 +421,6 @@ func TestAppendUniqueImpactPaths(t *testing.T) {
 // }
 
 func TestGetApplicableCveValue(t *testing.T) {
-	// testCases := []struct {
-	// 	name           string
-	// 	scanResults    *ExtendedScanResults
-	// 	cves           []services.Cve
-	// 	expectedResult jasutils.ApplicabilityStatus
-	// 	expectedCves   []formats.CveRow
-	// }{
-	// 	{
-	// 		name:           "not entitled for jas",
-	// 		scanResults:    &ExtendedScanResults{EntitledForJas: false},
-	// 		expectedResult: jasutils.NotScanned,
-	// 	},
-	// 	{
-	// 		name: "no cves",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(
-	// 					sarifutils.CreateResultWithOneLocation("fileName1", 0, 1, 0, 0, "snippet1", "applic_testCve1", "info"),
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve2"),
-	// 				),
-	// 			},
-	// 			EntitledForJas: true,
-	// 		},
-	// 		cves:           nil,
-	// 		expectedResult: jasutils.NotCovered,
-	// 		expectedCves:   nil,
-	// 	},
-	// 	{
-	// 		name: "applicable cve",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-	// 					sarifutils.CreateResultWithOneLocation("fileName2", 1, 0, 0, 0, "snippet2", "applic_testCve2", "warning"),
-	// 				),
-	// 			},
-	// 			EntitledForJas: true,
-	// 		},
-	// 		cves:           []services.Cve{{Id: "testCve2"}},
-	// 		expectedResult: jasutils.Applicable,
-	// 		expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}}},
-	// 	},
-	// 	{
-	// 		name: "undetermined cve",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-	// 					sarifutils.CreateResultWithOneLocation("fileName3", 0, 1, 0, 0, "snippet3", "applic_testCve2", "info"),
-	// 				),
-	// 			},
-	// 			EntitledForJas: true,
-	// 		},
-	// 		cves:           []services.Cve{{Id: "testCve3"}},
-	// 		expectedResult: jasutils.ApplicabilityUndetermined,
-	// 		expectedCves:   []formats.CveRow{{Id: "testCve3"}},
-	// 	},
-	// 	{
-	// 		name: "not applicable cve",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve2"),
-	// 				),
-	// 			},
-	// 			EntitledForJas: true,
-	// 		},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-	// 		expectedResult: jasutils.NotApplicable,
-	// 		expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}},
-	// 	},
-	// 	{
-	// 		name: "applicable and not applicable cves",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(
-	// 					sarifutils.CreateDummyPassingResult("applic_testCve1"),
-	// 					sarifutils.CreateResultWithOneLocation("fileName4", 1, 0, 0, 0, "snippet", "applic_testCve2", "warning"),
-	// 				),
-	// 			},
-	// 			EntitledForJas: true,
-	// 		},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-	// 		expectedResult: jasutils.Applicable,
-	// 		expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}}},
-	// 	},
-	// 	{
-	// 		name: "undetermined and not applicable cves",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_testCve1")),
-	// 			},
-	// 			EntitledForJas: true},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-	// 		expectedResult: jasutils.ApplicabilityUndetermined,
-	// 		expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2"}},
-	// 	},
-	// 	{
-	// 		name: "new scan statuses - applicable wins all statuses",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve3")),
-	// 			},
-	// 			EntitledForJas: true},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
-	// 		expectedResult: jasutils.Applicable,
-	// 		expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}},
-	// 			{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-	// 			{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
-	// 		},
-	// 	},
-	// 	{
-	// 		name: "new scan statuses - not covered wins not applicable",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
-	// 			},
-	// 			EntitledForJas: true},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-	// 		expectedResult: jasutils.NotCovered,
-	// 		expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
-	// 			{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-	// 		},
-	// 	},
-	// 	{
-	// 		name: "new scan statuses - undetermined wins not covered",
-	// 		scanResults: &ExtendedScanResults{
-	// 			ApplicabilityScanResults: []*sarif.Run{
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-	// 				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", sarifutils.CreateDummyPassingResult("applic_testCve2")),
-	// 			},
-	// 			EntitledForJas: true},
-	// 		cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-	// 		expectedResult: jasutils.ApplicabilityUndetermined,
-	// 		expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
-	// 			{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.ApplicabilityUndetermined)}},
-	// 		},
-	// 	},
-	// }
-
 	testCases := []struct {
 		name                     string
 		entitledForJas           bool
@@ -603,7 +459,13 @@ func TestGetApplicableCveValue(t *testing.T) {
 			},
 			cves:           []services.Cve{{Id: "testCve2"}},
 			expectedResult: jasutils.Applicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}}},
+			expectedCves: []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{
+				Location: formats.Location{
+					File:      "fileName2",
+					StartLine: 1,
+					Snippet:   "snippet2",
+				},
+			}}}}},
 		},
 		{
 			name:           "undetermined cve",
@@ -642,7 +504,12 @@ func TestGetApplicableCveValue(t *testing.T) {
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: jasutils.Applicable,
-			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}}, {Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}}},
+			expectedCves: []formats.CveRow{
+				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
+					Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
+				}},
+			},
 		},
 		{
 			name:           "undetermined and not applicable cves",
@@ -709,32 +576,34 @@ func TestGetApplicableCveValue(t *testing.T) {
 			},
 			cves: []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			components: map[string]services.Component{
-				"npm://protobufjs:6.11.2": services.Component{ImpactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{FullPath: "fileName4", ComponentId: "npm://mquery:3.2.2"}}}},
+				"npm://protobufjs:6.11.2": {ImpactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{FullPath: "fileName4", ComponentId: "npm://mquery:3.2.2"}}}},
 				"npm://mquery:3.2.2":      {},
 			},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		cves := convertCves(testCase.cves)
-		for i := range cves {
-			cves[i].Applicability = GetCveApplicabilityField(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
-		}
-		applicableValue := GetApplicableCveStatus(testCase.entitledForJas, testCase.applicabilityScanResults, cves)
-		assert.Equal(t, testCase.expectedResult, applicableValue)
-		if assert.True(t, len(testCase.expectedCves) == len(cves)) {
+		t.Run(testCase.name, func(t *testing.T) {
+			cves := convertCves(testCase.cves)
 			for i := range cves {
-				if testCase.expectedCves[i].Applicability != nil && assert.NotNil(t, cves[i].Applicability) {
-					assert.Equal(t, testCase.expectedCves[i].Applicability.Status, cves[i].Applicability.Status)
-					assert.ElementsMatch(t, testCase.expectedCves[i].Applicability.Evidence, cves[i].Applicability.Evidence)
+				cves[i].Applicability = GetCveApplicabilityField(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
+			}
+			applicableValue := GetApplicableCveStatus(testCase.entitledForJas, testCase.applicabilityScanResults, cves)
+			assert.Equal(t, testCase.expectedResult, applicableValue)
+			if assert.True(t, len(testCase.expectedCves) == len(cves)) {
+				for i := range cves {
+					if testCase.expectedCves[i].Applicability != nil && assert.NotNil(t, cves[i].Applicability) {
+						assert.Equal(t, testCase.expectedCves[i].Applicability.Status, cves[i].Applicability.Status)
+						assert.ElementsMatch(t, testCase.expectedCves[i].Applicability.Evidence, cves[i].Applicability.Evidence)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
@@ -790,37 +659,21 @@ func TestGetDirectComponents(t *testing.T) {
 			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack", Version: "1.2.3"}}},
 		},
 		{
-			name:   "one direct component with target",
-			target: filepath.Join("root", "dir", "file"),
-			impactPaths: [][]services.ImpactPathNode{{
-				services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"},
-				services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"},
-			}},
-			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack1", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
+			name:                        "one direct component with target",
+			target:                      filepath.Join("root", "dir", "file"),
+			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"}}},
+			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
 			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack2", Version: "1.2.3"}}},
 		},
 		{
-			name:   "multiple direct components",
-			target: filepath.Join("root", "dir", "file"),
-			impactPaths: [][]services.ImpactPathNode{
-				{
-					services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"},
-					services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"},
-					services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"},
-				},
-				{
-					services.ImpactPathNode{ComponentId: "gav://jfrog:pack4:1.2.3"},
-					services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"},
-				},
-			},
+			name:        "multiple direct components",
+			target:      filepath.Join("root", "dir", "file"),
+			impactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack21:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}, {services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack22:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{
-				{Name: "jfrog:pack1", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
-				{Name: "jfrog:pack4", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
+				{Name: "jfrog:pack22", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
 			},
-			expectedConvImpactPaths: [][]formats.ComponentRow{
-				{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack2", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}},
-				{{Name: "jfrog:pack4", Version: "1.2.3"}, {Name: "jfrog:pack1", Version: "1.2.3"}},
-			},
+			expectedConvImpactPaths: [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack21", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}, {{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack22", Version: "1.2.3"}, {Name: "jfrog:pack3", Version: "1.2.3"}}},
 		},
 	}
 

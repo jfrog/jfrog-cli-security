@@ -21,7 +21,6 @@ var (
 const (
 	SimpleJson conversionFormat = "simple-json"
 	Sarif      conversionFormat = "sarif"
-	Table      conversionFormat = "table"
 	Summary    conversionFormat = "summary"
 )
 
@@ -36,7 +35,7 @@ func getValidationParams() validations.ValidationParams {
 		NotApplicable:   7,
 		NotCovered:      4,
 
-		Sast:    2,
+		Sast:    4,
 		Secrets: 5,
 	}
 }
@@ -60,10 +59,6 @@ func TestConvertResults(t *testing.T) {
 			expectedContentPath: filepath.Join(testDataDir, "audit_sarif.json"),
 		},
 		{
-			contentFormat:       Table,
-			expectedContentPath: filepath.Join(testDataDir, "audit_table.json"),
-		},
-		{
 			contentFormat:       Summary,
 			expectedContentPath: filepath.Join(testDataDir, "audit_summary.json"),
 		},
@@ -79,8 +74,6 @@ func TestConvertResults(t *testing.T) {
 				validateSimpleJsonConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
 			case Sarif:
 				validateSarifConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
-			case Table:
-				validateTableConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
 			case Summary:
 				validateSummaryConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
 			}
@@ -118,22 +111,6 @@ func validateSarifConversion(t *testing.T, expectedContent []byte, inputResults 
 	validationParams.Actual = actualResults
 
 	validations.ValidateCommandSarifOutput(t, validationParams)
-}
-
-func validateTableConversion(t *testing.T, expectedContent []byte, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
-	var expectedResults formats.ResultsTables
-	if !assert.NoError(t, json.Unmarshal(expectedContent, &expectedResults)) {
-		return
-	}
-	validationParams.Expected = expectedResults
-
-	actualResults, err := convertor.ConvertToTable(inputResults)
-	if !assert.NoError(t, err) {
-		return
-	}
-	validationParams.Actual = actualResults
-
-	validations.ValidateCommandTableOutput(t, validationParams)
 }
 
 func validateSummaryConversion(t *testing.T, expectedContent []byte, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {

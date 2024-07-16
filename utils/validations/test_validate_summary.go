@@ -16,7 +16,7 @@ func VerifySummaryResults(t *testing.T, content string, params ValidationParams)
 	err := json.Unmarshal([]byte(content), &results)
 	assert.NoError(t, err)
 	params.Actual = results
-	ValidateCommandTableOutput(t, params)
+	ValidateCommandSummaryOutput(t, params)
 }
 
 func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {

@@ -1,6 +1,7 @@
 {
     "xray_version": "3.98.2",
     "jas_entitled": true,
+    "multi_scan_id": "7d5e4733-3f93-11ef-8147-e610d09d7daa",
     "targets": [
       {
         "target": "/Users/user/ejs-frog-demo",
