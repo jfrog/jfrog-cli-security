@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -21,6 +18,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -55,6 +54,13 @@ type ResultsWriter struct {
 
 func NewResultsWriter(scanResults *Results) *ResultsWriter {
 	return &ResultsWriter{results: scanResults}
+}
+
+func GetScaScanFileName(r *Results) string {
+	if len(r.ScaResults) > 0 {
+		return r.ScaResults[0].Target
+	}
+	return ""
 }
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
@@ -121,6 +127,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	}
 	return nil
 }
+
 func (rw *ResultsWriter) printScanResultsTables() (err error) {
 	printMessages(rw.messages)
 	violations, vulnerabilities, licenses := SplitScanResults(rw.results.ScaResults)

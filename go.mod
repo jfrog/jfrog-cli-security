@@ -3,6 +3,7 @@ module github.com/jfrog/jfrog-cli-security
 go 1.22.3
 
 require (
+	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.9.29
@@ -115,7 +116,7 @@ require (
 
 //replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
+replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240715134305-9de1ac3f72f7
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 

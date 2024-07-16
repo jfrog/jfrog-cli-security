@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,6 +28,20 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
+
+func UnmarshalJson(t *testing.T, output string) formats.EnrichJson {
+	var jsonMap formats.EnrichJson
+	err := json.Unmarshal([]byte(output), &jsonMap)
+	assert.NoError(t, err)
+	return jsonMap
+}
+
+func UnmarshalXML(t *testing.T, output string) formats.Bom {
+	var xmlMap formats.Bom
+	err := xml.Unmarshal([]byte(output), &xmlMap)
+	assert.NoError(t, err)
+	return xmlMap
+}
 
 func InitSecurityTest(t *testing.T, xrayMinVersion string) {
 	if !*configTests.TestSecurity {
