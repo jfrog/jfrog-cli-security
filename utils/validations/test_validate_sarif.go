@@ -19,9 +19,9 @@ func VerifySarifResults(t *testing.T, content string, params ValidationParams) {
 }
 
 func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
-	results, ok := params.Actual.(sarif.Report)
+	results, ok := params.Actual.(*sarif.Report)
 	if assert.True(t, ok) {
-		ValidateSarifIssuesCount(t, params, &results)
+		ValidateSarifIssuesCount(t, params, results)
 		// if params.Expected != nil {
 		// 	expectedResults, ok := params.Expected.(sarif.Report)
 		// 	if assert.True(t, ok) {
