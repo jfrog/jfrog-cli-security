@@ -718,8 +718,8 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/gailazar300/froggit-go v0.0.0-20240717083851-25ca0068338a h1:uZPuNMZwMl23meoCBx45RsPFvQ63gXbJ6wO5s4jyMhk=
-github.com/gailazar300/froggit-go v0.0.0-20240717083851-25ca0068338a/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
+github.com/gailazar300/froggit-go v0.0.0-20240717085211-9e296a9a0ab4 h1:lusaeZlOgChElZq5ip7/jE+TRCxdHlQGxxqmaNlGVW0=
+github.com/gailazar300/froggit-go v0.0.0-20240717085211-9e296a9a0ab4/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
 github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab h1:+7KwW/yy/ThnRXW9khailFFncxJiiFpxyk5BI9GK9pI=
 github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab/go.mod h1:IqOZzks2wlWCIai0esXnZPdPwxF2yOz0HcCYw5I4pCg=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
