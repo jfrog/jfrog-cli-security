@@ -2,7 +2,11 @@ package git
 
 import (
 	"github.com/jfrog/froggit-go/vcsclient"
+	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/stretchr/testify/assert"
+	"path"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -26,6 +30,10 @@ func getCommitsListForTest(t *testing.T) []vcsclient.CommitInfo {
 			Timestamp:   convertDateStrToTimestamp(t, "2023-02-21T10:00:00Z"),
 		},
 	}
+}
+
+func GetTestDataPath() string {
+	return filepath.Join("..", "..", "tests", "testdata", "git")
 }
 
 func TestCountContributorsCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
@@ -78,7 +86,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
 			},
 		},
 	}
-	gc := &CountContributorsCommand{CountContributorsParams: CountContributorsParams{DetailedSummery: true}}
+	gc := &VcsCountContributors{params: CountContributorsParams{DetailedSummery: true}}
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
@@ -122,7 +130,8 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 				},
 			},
 		},
-		{name: "1 repo with commits and one without",
+		{
+			name: "1 repo with commits and one without",
 			args: args{
 				commitsRepo: []commitsRepo{{repoName: "repo1", commits: []vcsclient.CommitInfo{}}, {repoName: "repo2", commits: getCommitsListForTest(t)}},
 				uniqueContributorsVerificationFunc: func(t *testing.T, uniqueContributors []Contributor) {
@@ -290,6 +299,9 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 	}
 
 	cc := &CountContributorsCommand{CountContributorsParams: CountContributorsParams{DetailedSummery: true}}
+	vcc, err := cc.getVcsCountContributors()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(vcc))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			uniqueContributors := make(map[BasicContributor]Contributor)
@@ -297,7 +309,7 @@ func TestCountContributorsCommand_saveCommitsInfoInMaps_MultipleRepos(t *testing
 			detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
 
 			for _, it := range tt.args.commitsRepo {
-				cc.saveCommitsInfoInMaps(it.repoName, it.commits, uniqueContributors, detailedContributors, detailedRepos)
+				vcc[0].saveCommitsInfoInMaps(it.repoName, it.commits, uniqueContributors, detailedContributors, detailedRepos)
 			}
 			report := cc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
 			tt.args.uniqueContributorsVerificationFunc(t, report.UniqueContributorsList)
@@ -311,4 +323,69 @@ func convertDateStrToTimestamp(t *testing.T, dateStr string) int64 {
 	date, err := time.Parse(time.RFC3339, dateStr)
 	assert.NoError(t, err)
 	return date.Unix()
+}
+
+func TestCountContributorsCommand_InputFile(t *testing.T) {
+	type args struct {
+		inputFile        string
+		gitServersNumber int
+		expectedError    string
+		expectedResult   []BasicGitServerParams
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "empty list",
+			args: args{
+				inputFile:        "empty_list.yaml",
+				gitServersNumber: 0,
+				expectedError:    "No git servers data was provided in the input file",
+			},
+		},
+		{
+			name: "one git server",
+			args: args{
+				inputFile:        "one_server.yaml",
+				gitServersNumber: 1,
+				expectedError:    "",
+				expectedResult:   []BasicGitServerParams{{ScmType: vcsutils.GitHub, ScmApiUrl: "https://api.github.com", Token: "token", Owner: "owner", Repositories: []string{"repo1"}}},
+			},
+		},
+		{
+			name: "multiple servers",
+			args: args{
+				inputFile:        "multiple_servers.yaml",
+				gitServersNumber: 2,
+				expectedError:    "",
+				expectedResult: []BasicGitServerParams{
+					{ScmType: vcsutils.BitbucketServer, ScmApiUrl: "https://api.bitbucket.url", Token: "token", Owner: "owner", Repositories: []string{"repo1", "repo2"}},
+					{ScmType: vcsutils.GitLab, ScmApiUrl: "https://api.gitlab.com", Token: "token", Owner: "owner", Repositories: []string{}},
+				},
+			},
+		},
+		{
+			name: "bad scm type",
+			args: args{
+				inputFile:        "bad_scm_type.yaml",
+				gitServersNumber: 0,
+				expectedError:    "invalid VcsProvider",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inputFilePath := path.Join(GetTestDataPath(), "inputfiles", tt.args.inputFile)
+			cc := &CountContributorsCommand{CountContributorsParams: CountContributorsParams{InputFile: inputFilePath}}
+			vcc, err := cc.getVcsCountContributors()
+			assert.Equal(t, tt.args.gitServersNumber, len(vcc))
+			if tt.args.expectedError != "" {
+				assert.ErrorContains(t, err, tt.args.expectedError)
+			} else {
+				reflect.DeepEqual(tt.args.expectedResult, vcc)
+			}
+		})
+	}
 }
