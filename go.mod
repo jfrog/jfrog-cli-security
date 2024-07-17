@@ -120,4 +120,4 @@ replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev
+replace github.com/jfrog/froggit-go => github.com/gailazar300/froggit-go v0.0.0-20240717083851-25ca0068338a

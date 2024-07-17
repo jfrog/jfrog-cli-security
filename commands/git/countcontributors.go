@@ -122,12 +122,7 @@ type CountContributorsParams struct {
 }
 
 func NewCountContributorsCommand(params *CountContributorsParams) (*CountContributorsCommand, error) {
-	client, err := vcsclient.NewClientBuilder(params.ScmType).ApiEndpoint(params.ScmApiUrl).Token(params.Token).Build()
-	if err != nil {
-		return nil, err
-	}
 	return &CountContributorsCommand{
-		vcsClient:               client,
 		CountContributorsParams: *params,
 	}, nil
 }
