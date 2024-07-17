@@ -211,7 +211,7 @@ func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContrib
 		return nil, err
 	}
 	if len(gitServersList.ServersList) == 0 {
-		return nil, errors.New(fmt.Sprintf("No git servers data was provided in the input file %s.", cc.InputFile))
+		return nil, fmt.Errorf("no git servers data was provided in the input file %s", cc.InputFile)
 	}
 	var contributors []VcsCountContributors
 	for _, param := range gitServersList.ServersList {
