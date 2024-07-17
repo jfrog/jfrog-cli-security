@@ -82,6 +82,8 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	}
 
 	// Optional flags
+	// Repository name
+	params.Repository = c.GetStringFlagValue(flags.RepoName)
 	// Months
 	if !c.IsFlagSet(flags.Months) {
 		params.MonthsNum = git.DefaultContContributorsMonths

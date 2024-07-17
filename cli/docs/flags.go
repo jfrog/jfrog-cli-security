@@ -22,6 +22,7 @@ const (
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
 	GitCountContributors = "count-contributors"
+	Enrich               = "sbom-enrich"
 
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
@@ -134,6 +135,9 @@ var commandFlags = map[string][]string{
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
 		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+	},
+	Enrich: {
+		url, user, password, accessToken, ServerId, Threads,
 	},
 	BuildScan: {
 		url, user, password, accessToken, ServerId, Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan,

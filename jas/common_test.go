@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -113,41 +114,76 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 	}
 }
 
-func TestSetAnalyticsMetricsDataForAnalyzerManager(t *testing.T) {
-	type args struct {
-		msi          string
-		technologies []techutils.Technology
-	}
+func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
 	tests := []struct {
-		name string
-		args args
-		want func()
+		name           string
+		serverDetails  *config.ServerDetails
+		expectedOutput map[string]string
 	}{
-		{name: "One valid technology", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven}}, want: func() {
-			assert.Equal(t, string(techutils.Maven), os.Getenv(JfPackageManagerEnvVariable))
-			assert.Equal(t, string(techutils.Java), os.Getenv(JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
-		}},
-		{name: "Multiple technologies", args: args{msi: "msi", technologies: []techutils.Technology{techutils.Maven, techutils.Npm}}, want: func() {
-			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
-		}},
-		{name: "Zero technologies", args: args{msi: "msi", technologies: []techutils.Technology{}}, want: func() {
-			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
-			assert.Equal(t, "msi", os.Getenv(utils.JfMsiEnvVariable))
-		}},
+		{
+			name: "Valid server details",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable: "url",
+				jfUserEnvVariable:        "user",
+				jfPasswordEnvVariable:    "password",
+				jfTokenEnvVariable:       "token",
+			},
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			callback := SetAnalyticsMetricsDataForAnalyzerManager(tt.args.msi, tt.args.technologies)
-			tt.want()
-			callback()
-			assert.Equal(t, "", os.Getenv(JfPackageManagerEnvVariable))
-			assert.Equal(t, "", os.Getenv(JfLanguageEnvVariable))
-			assert.Equal(t, "", os.Getenv(utils.JfMsiEnvVariable))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			envVars, err := GetAnalyzerManagerEnvVariables(test.serverDetails)
+			assert.NoError(t, err)
+			for expectedKey, expectedValue := range test.expectedOutput {
+				assert.Equal(t, expectedValue, envVars[expectedKey])
+			}
+		})
+	}
+}
 
+func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
+	tests := []struct {
+		name           string
+		msi            string
+		technologies   []techutils.Technology
+		expectedOutput map[string]string
+	}{
+		{
+			name:         "One valid technology",
+			msi:          "msi",
+			technologies: []techutils.Technology{techutils.Maven},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Maven),
+				JfLanguageEnvVariable:       string(techutils.Java),
+				utils.JfMsiEnvVariable:      "msi",
+			},
+		},
+		{
+			name:         "Multiple technologies",
+			msi:          "msi",
+			technologies: []techutils.Technology{techutils.Maven, techutils.Npm},
+			expectedOutput: map[string]string{
+				utils.JfMsiEnvVariable: "msi",
+			},
+		},
+		{
+			name:         "Zero technologies",
+			msi:          "msi",
+			technologies: []techutils.Technology{},
+			expectedOutput: map[string]string{
+				utils.JfMsiEnvVariable: "msi",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.technologies...))
 		})
 	}
 }
