@@ -18,7 +18,7 @@ import (
 
 const (
 	FixedVersionSarifPropertyKey = "fixedVersion"
-	WatchSarifPropertyKey		= "watch"
+	WatchSarifPropertyKey        = "watch"
 
 	ScaToolName               = "JFrog Xray SCA"
 	SastToolName              = "USAF"

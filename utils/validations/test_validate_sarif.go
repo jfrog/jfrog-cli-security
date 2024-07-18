@@ -37,11 +37,11 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sarif.Report) {
 	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
-	
+
 	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.IacToolName)...)
 	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SecretsToolName)...)
 	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SastToolName)...)
-	
+
 	scaRuns := sarifutils.GetRunsByToolName(results, sarifparser.ScaToolName)
 	for _, run := range scaRuns {
 		for _, result := range run.Results {

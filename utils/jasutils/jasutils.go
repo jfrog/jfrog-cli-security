@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ApplicabilityRuleIdPrefix = "applic_"
+	ApplicabilityRuleIdPrefix     = "applic_"
 	ApplicabilitySarifPropertyKey = "applicability"
 )
 

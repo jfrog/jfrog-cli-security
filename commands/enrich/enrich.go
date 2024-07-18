@@ -5,15 +5,20 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+
 	"github.com/beevik/etree"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	xrutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -22,17 +27,10 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"os"
-	"os/exec"
 )
 
 type FileContext func(string) parallel.TaskFunc
 type indexFileHandlerFunc func(file string)
-
-type ScanInfo struct {
-	Target string
-	Result *services.ScanResponse
-}
 
 type EnrichCommand struct {
 	serverDetails *config.ServerDetails
@@ -64,8 +62,15 @@ func (enrichCmd *EnrichCommand) ServerDetails() (*config.ServerDetails, error) {
 	return enrichCmd.serverDetails, nil
 }
 
-func AppendVulnsToJson(results *utils.Results) error {
-	fileName := utils.GetScaScanFileName(results)
+func getScaScanFileName(cmdResults *results.SecurityCommandResults) string {
+	if len(cmdResults.Targets) > 0 {
+		return cmdResults.Targets[0].Target
+	}
+	return ""
+}
+
+func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
+	fileName := getScaScanFileName(cmdResults)
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
@@ -78,7 +83,7 @@ func AppendVulnsToJson(results *utils.Results) error {
 		return err
 	}
 	var vulnerabilities []map[string]string
-	xrayResults := results.GetScaScansXrayResults()[0]
+	xrayResults := cmdResults.GetScaScansXrayResults()[0]
 	for _, vuln := range xrayResults.Vulnerabilities {
 		for component := range vuln.Components {
 			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
@@ -86,18 +91,18 @@ func AppendVulnsToJson(results *utils.Results) error {
 		}
 	}
 	data["vulnerabilities"] = vulnerabilities
-	return utils.PrintJson(data)
+	return output.PrintJson(data)
 }
 
-func AppendVulnsToXML(results *utils.Results) error {
-	fileName := utils.GetScaScanFileName(results)
+func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
+	fileName := getScaScanFileName(cmdResults)
 	result := etree.NewDocument()
 	err := result.ReadFromFile(fileName)
 	if err != nil {
 		return err
 	}
 	destination := result.FindElements("//bom")[0]
-	xrayResults := results.GetScaScansXrayResults()[0]
+	xrayResults := cmdResults.GetScaScansXrayResults()[0]
 	vulns := destination.CreateElement("vulnerabilities")
 	for _, vuln := range xrayResults.Vulnerabilities {
 		for component := range vuln.Components {
@@ -114,7 +119,7 @@ func AppendVulnsToXML(results *utils.Results) error {
 	return nil
 }
 
-func isXML(scaResults []*utils.ScaScanResult) (bool, error) {
+func isXML(scaResults []*results.TargetResults) (bool, error) {
 	if len(scaResults) == 0 {
 		return false, errors.New("unable to retrieve file")
 	}
@@ -156,8 +161,8 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		threads = enrichCmd.threads
 	}
 
-	// resultsArr is a two-dimensional array. Each array in it contains a list of ScanResponses that were requested and collected by a specific thread.
-	resultsArr := make([][]*ScanInfo, threads)
+	scanResults := results.NewCommandResults(xrayVersion, false)
+
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
 	fileProducerErrors := make([][]formats.SimpleJsonError, threads)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
@@ -165,16 +170,9 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)
 	// Start walking on the filesystem to "produce" files that match the given pattern
 	// while the consumer uses the indexer to index those files.
-	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, resultsArr, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
+	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, scanResults, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
 	enrichCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
-	// Handle results
-	var flatResults []*xrutils.ScaScanResult
-	for _, arr := range resultsArr {
-		for _, res := range arr {
-			flatResults = append(flatResults, &xrutils.ScaScanResult{Target: res.Target, XrayResults: []services.ScanResponse{*res.Result}})
-		}
-	}
 	if enrichCmd.progress != nil {
 		if err = enrichCmd.progress.Quit(); err != nil {
 			return err
@@ -190,11 +188,9 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	scanErrors = appendErrorSlice(scanErrors, fileProducerErrors)
 	scanErrors = appendErrorSlice(scanErrors, indexedFileProducerErrors)
 
-	scanResults := xrutils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.ScaResults = flatResults
 
-	isxml, err := isXML(scanResults.ScaResults)
+	isxml, err := isXML(scanResults.Targets)
 	if err != nil {
 		return
 	}
@@ -227,13 +223,13 @@ func (enrichCmd *EnrichCommand) CommandName() string {
 	return "xr_enrich"
 }
 
-func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
+func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
 	go func() {
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
 		specFiles := enrichCmd.spec.Files
-		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, resultsArr, indexedFileErrors, xrayVersion)
+		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, cmdResults, indexedFileErrors, xrayVersion)
 		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
 		err := FileForEnriching(specFiles[0], taskHandler)
@@ -244,14 +240,18 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 	}()
 }
 
-func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, resultsArr [][]*ScanInfo, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			// Add a new task to the second producer/consumer
 			// which will send the indexed binary to Xray and then will store the received result.
 			taskFunc := func(threadId int) (err error) {
-				fileContent, err := os.ReadFile(filePath)
+				// Create a scan target for the file.
+				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: filepath.Base(filePath)})
+				log.Debug(clientutils.GetLogMsgPrefix(threadId, false)+"enrich file:", targetResults.Target)
+				fileContent, err := os.ReadFile(targetResults.Target)
 				if err != nil {
+					targetResults.AddError(err)
 					return err
 				}
 				params := &services.XrayGraphImportParams{
@@ -264,14 +264,16 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SetXrayVersion(xrayVersion)
 				xrayManager, err := xray.CreateXrayServiceManager(importGraphParams.ServerDetails())
 				if err != nil {
+					targetResults.AddError(err)
 					return err
 				}
 				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
-					indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					targetResults.AddError(err)
 					return
 				}
-				resultsArr[threadId] = append(resultsArr[threadId], &ScanInfo{Target: filePath, Result: scanResults})
+				targetResults.NewScaScanResults(*scanResults)
+				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)
 				return
 			}
 
