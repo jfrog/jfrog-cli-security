@@ -110,7 +110,15 @@ func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (fil
 		}
 	}
 	return
+}
 
+func GetRunsByToolName(report *sarif.Report, toolName string) (filteredRuns []*sarif.Run) {
+	for _, run := range report.Runs {
+		if run.Tool.Driver != nil && run.Tool.Driver.Name == toolName {
+			filteredRuns = append(filteredRuns, run)
+		}
+	}
+	return
 }
 
 func GetResultMsgText(result *sarif.Result) string {

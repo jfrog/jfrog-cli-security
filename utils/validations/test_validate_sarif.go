@@ -2,8 +2,12 @@ package validations
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -32,55 +36,77 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 }
 
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sarif.Report) {
-	// var sast, iac, secrets, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
-	// for _, run := range results.Runs {
-	// 	for _, result := range run.Results {
+	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
+	
+	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.IacToolName)...)
+	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SecretsToolName)...)
+	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SastToolName)...)
+	
+	scaRuns := sarifutils.GetRunsByToolName(results, sarifparser.ScaToolName)
+	for _, run := range scaRuns {
+		for _, result := range run.Results {
+			// If watch property exists, add to security violations or license violations else add to vulnerabilities
+			if _, ok := result.Properties[sarifparser.WatchSarifPropertyKey]; ok {
+				if isSecurityIssue(result) {
+					securityViolations++
+				} else {
+					licenseViolations++
+					// No more work needed for license violations
+					continue
+				}
+			} else {
+				vulnerabilities++
+			}
+			// Get the applicability status in the result properties (convert to string) and add count to the appropriate category
+			applicabilityProperty := result.Properties[jasutils.ApplicabilitySarifPropertyKey]
+			if applicability, ok := applicabilityProperty.(string); ok {
+				switch applicability {
+				case jasutils.Applicable.String():
+					applicableResults++
+				case jasutils.NotApplicable.String():
+					notApplicableResults++
+				case jasutils.ApplicabilityUndetermined.String():
+					undeterminedResults++
+				case jasutils.NotCovered.String():
+					notCoveredResults++
+				}
+			}
+		}
+	}
 
-	// 	}
-	// }
+	if params.ExactResultsMatch {
+		assert.Equal(t, params.Sast, sast, "Expected %d sast in scan responses, but got %d sast.", params.Sast, sast)
+		assert.Equal(t, params.Secrets, secrets, "Expected %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
+		assert.Equal(t, params.Iac, iac, "Expected %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
+		assert.Equal(t, params.Applicable, applicableResults, "Expected %d applicable results in scan responses, but got %d applicable results.", params.Applicable, applicableResults)
+		assert.Equal(t, params.Undetermined, undeterminedResults, "Expected %d undetermined results in scan responses, but got %d undetermined results.", params.Undetermined, undeterminedResults)
+		assert.Equal(t, params.NotCovered, notCoveredResults, "Expected %d not covered results in scan responses, but got %d not covered results.", params.NotCovered, notCoveredResults)
+		assert.Equal(t, params.NotApplicable, notApplicableResults, "Expected %d not applicable results in scan responses, but got %d not applicable results.", params.NotApplicable, notApplicableResults)
+		assert.Equal(t, params.SecurityViolations, securityViolations, "Expected %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, securityViolations)
+		assert.Equal(t, params.LicenseViolations, licenseViolations, "Expected %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, licenseViolations)
+		assert.Equal(t, params.Vulnerabilities, vulnerabilities, "Expected %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
+	} else {
+		assert.GreaterOrEqual(t, sast, params.Sast, "Expected at least %d sast in scan responses, but got %d sast.", params.Sast, sast)
+		assert.GreaterOrEqual(t, secrets, params.Secrets, "Expected at least %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
+		assert.GreaterOrEqual(t, iac, params.Iac, "Expected at least %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
+		assert.GreaterOrEqual(t, applicableResults, params.Applicable, "Expected at least %d applicable results in scan responses, but got %d applicable results.", params.Applicable, applicableResults)
+		assert.GreaterOrEqual(t, undeterminedResults, params.Undetermined, "Expected at least %d undetermined results in scan responses, but got %d undetermined results.", params.Undetermined, undeterminedResults)
+		assert.GreaterOrEqual(t, notCoveredResults, params.NotCovered, "Expected at least %d not covered results in scan responses, but got %d not covered results.", params.NotCovered, notCoveredResults)
+		assert.GreaterOrEqual(t, notApplicableResults, params.NotApplicable, "Expected at least %d not applicable results in scan responses, but got %d not applicable results.", params.NotApplicable, notApplicableResults)
+		assert.GreaterOrEqual(t, securityViolations, params.SecurityViolations, "Expected at least %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, securityViolations)
+		assert.GreaterOrEqual(t, licenseViolations, params.LicenseViolations, "Expected at least %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, licenseViolations)
+	}
+}
 
-	// for _, vuln := range results.Vulnerabilities {
-	// 	switch vuln.Applicable {
-	// 	case string(jasutils.NotApplicable):
-	// 		notApplicableResults++
-	// 	case string(jasutils.Applicable):
-	// 		applicableResults++
-	// 	case string(jasutils.NotCovered):
-	// 		notCoveredResults++
-	// 	case string(jasutils.ApplicabilityUndetermined):
-	// 		undeterminedResults++
-	// 	}
-	// }
+func isSecurityIssue(result *sarif.Result) bool {
+	// If the rule id starts with CVE or XRAY, it is a security issue
+	if result.RuleID == nil {
+		return false
+	}
+	ruleID := *result.RuleID
 
-	// if params.ExactResultsMatch {
-	// 	assert.Equal(t, params.Sast, len(results.Sast), "Expected %d sast in scan responses, but got %d sast.", params.Sast, len(results.Sast))
-	// 	assert.Equal(t, params.Secrets, len(results.Secrets), "Expected %d secrets in scan responses, but got %d secrets.", params.Secrets, len(results.Secrets))
-	// 	assert.Equal(t, params.Iac, len(results.Iacs), "Expected %d IaC in scan responses, but got %d IaC.", params.Iac, len(results.Iacs))
-
-	// 	assert.Equal(t, params.Applicable, applicableResults, "Expected %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-	// 	assert.Equal(t, params.Undetermined, undeterminedResults, "Expected %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-	// 	assert.Equal(t, params.NotCovered, notCoveredResults, "Expected %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-	// 	assert.Equal(t, params.NotApplicable, notApplicableResults, "Expected %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
-
-	// 	assert.Equal(t, params.SecurityViolations, len(results.SecurityViolations), "Expected %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, len(results.SecurityViolations))
-	// 	assert.Equal(t, params.LicenseViolations, len(results.LicensesViolations), "Expected %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(results.LicensesViolations))
-	// 	assert.Equal(t, params.OperationalViolations, len(results.OperationalRiskViolations), "Expected %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(results.OperationalRiskViolations))
-
-	// 	assert.Equal(t, params.Licenses, len(results.Licenses), "Expected %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(results.Licenses))
-	// } else {
-	// 	assert.GreaterOrEqual(t, len(results.Sast), params.Sast, "Expected at least %d sast in scan responses, but got %d sast.", params.Sast, len(results.Sast))
-	// 	assert.GreaterOrEqual(t, len(results.Secrets), params.Secrets, "Expected at least %d secrets in scan responses, but got %d secrets.", params.Secrets, len(results.Secrets))
-	// 	assert.GreaterOrEqual(t, len(results.Iacs), params.Iac, "Expected at least %d IaC in scan responses, but got %d IaC.", params.Iac, len(results.Iacs))
-
-	// 	assert.GreaterOrEqual(t, applicableResults, params.Applicable, "Expected at least %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-	// 	assert.GreaterOrEqual(t, undeterminedResults, params.Undetermined, "Expected at least %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-	// 	assert.GreaterOrEqual(t, notCoveredResults, params.NotCovered, "Expected at least %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-	// 	assert.GreaterOrEqual(t, notApplicableResults, params.NotApplicable, "Expected at least %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
-
-	// 	assert.GreaterOrEqual(t, len(results.SecurityViolations), params.SecurityViolations, "Expected at least %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, len(results.SecurityViolations))
-	// 	assert.GreaterOrEqual(t, len(results.LicensesViolations), params.LicenseViolations, "Expected at least %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(results.LicensesViolations))
-	// 	assert.GreaterOrEqual(t, len(results.OperationalRiskViolations), params.OperationalViolations, "Expected at least %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(results.OperationalRiskViolations))
-
-	// 	assert.GreaterOrEqual(t, len(results.Licenses), params.Licenses, "Expected at least %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(results.Licenses))
-	// }
+	if strings.HasPrefix(ruleID, "CVE") || strings.HasPrefix(ruleID, "XRAY") {
+		return true
+	}
+	return false
 }

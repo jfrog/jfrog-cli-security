@@ -17,7 +17,14 @@ import (
 )
 
 const (
-	ScaToolName = "JFrog Xray SCA"
+	FixedVersionSarifPropertyKey = "fixedVersion"
+	WatchSarifPropertyKey		= "watch"
+
+	ScaToolName               = "JFrog Xray SCA"
+	SastToolName              = "USAF"
+	IacToolName               = "JFrog Terraform scanner"
+	SecretsToolName           = "JFrog Secrets scanner"
+	ContexualAnalysisToolName = "JFrog Applicability Scanner"
 )
 
 type CmdResultsSarifConverter struct {
@@ -275,10 +282,12 @@ func addSarifScaLicenseViolation(sarifResults *[]*sarif.Result, rules *map[strin
 	}
 }
 
-func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, _ jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, _ []string, directComponents []formats.ComponentRow) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
+func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, fixedVersions []string, directComponents []formats.ComponentRow, watches ...string) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
+	// General information
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
-	// Add rule if not exists
+	level := severityutils.SeverityToSarifSeverityLevel(severity)
+	// Add rule fpr the cve if not exists
 	rule = getScaIssueSarifRule(
 		cveImpactedComponentRuleId,
 		generateTitleFunc(impactedPackagesName, impactedPackagesVersion, issueId),
@@ -286,14 +295,23 @@ func parseScaToSarifFormat(xrayId, summary, markdownDescription, cveScore string
 		summary,
 		markdownDescription,
 	)
-	// Add result for each component
-	level := severityutils.SeverityToSarifSeverityLevel(severity)
 	for _, directDependency := range directComponents {
-		msg := generateTitleFunc(directDependency.Name, directDependency.Version, issueId)
-		issueLocation := getComponentSarifLocation(directDependency)
+		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
-			WithMessage(sarif.NewTextMessage(msg)).
+			WithMessage(sarif.NewTextMessage(generateTitleFunc(directDependency.Name, directDependency.Version, issueId))).
 			WithLevel(level.String())
+		// Add properties
+		resultsProperties := sarif.NewPropertyBag()
+		if applicabilityStatus != jasutils.NotScanned {
+			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, applicabilityStatus.String())
+		}
+		if len(watches) > 0 {
+			resultsProperties.Add(WatchSarifPropertyKey, strings.Join(watches, ", "))
+		}
+		resultsProperties.Add(FixedVersionSarifPropertyKey, getFixedVersionString(fixedVersions))
+		issueResult.AttachPropertyBag(resultsProperties)
+		// Add location
+		issueLocation := getComponentSarifLocation(directDependency)
 		if issueLocation != nil {
 			issueResult.AddLocation(issueLocation)
 		}
@@ -336,16 +354,20 @@ func getScaIssueMarkdownDescription(directDependencies []formats.ComponentRow, c
 	if err != nil {
 		return "", err
 	}
-	descriptionFixVersions := "No fix available"
-	if len(fixedVersions) > 0 {
-		descriptionFixVersions = strings.Join(fixedVersions, ", ")
-	}
+	descriptionFixVersions := getFixedVersionString(fixedVersions)
 	if applicableStatus == jasutils.NotScanned {
 		return fmt.Sprintf("| Severity Score | Direct Dependencies | Fixed Versions     |\n| :---:        |    :----:   |          :---: |\n| %s      | %s       | %s   |",
 			cveScore, formattedDirectDependencies, descriptionFixVersions), nil
 	}
 	return fmt.Sprintf("| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| %s      | %s       | %s       | %s   |",
 		cveScore, applicableStatus.String(), formattedDirectDependencies, descriptionFixVersions), nil
+}
+
+func getFixedVersionString(fixedVersions []string) string {
+	if len(fixedVersions) == 0 {
+		return "No fix available"
+	}
+	return strings.Join(fixedVersions, ", ")
 }
 
 func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (string, error) {

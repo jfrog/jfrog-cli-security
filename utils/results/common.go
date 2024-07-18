@@ -519,8 +519,8 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
-	if rule.Properties["applicability"] != nil {
-		status, ok := rule.Properties["applicability"].(string)
+	if rule.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
+		status, ok := rule.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
 		if !ok {
 			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", rule.ID))
 		}

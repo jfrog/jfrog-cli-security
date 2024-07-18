@@ -8,6 +8,7 @@ import (
 
 const (
 	ApplicabilityRuleIdPrefix = "applic_"
+	ApplicabilitySarifPropertyKey = "applicability"
 )
 
 const (
