@@ -341,7 +341,7 @@ func TestCountContributorsCommand_InputFile(t *testing.T) {
 			args: args{
 				inputFile:        "empty_list.yaml",
 				gitServersNumber: 0,
-				expectedError:    "No git servers data was provided in the input file",
+				expectedError:    "no git servers data was provided in the input file",
 			},
 		},
 		{
