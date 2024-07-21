@@ -32,9 +32,19 @@ func TestGetRepositoriesList(t *testing.T) {
 			expected: []string{},
 		},
 		{
+			name:     "One coma",
+			input:    ";",
+			expected: []string{},
+		},
+		{
 			name:     "Multiple commas",
 			input:    "repo1;;repo2;;;repo3",
 			expected: []string{"repo1", "repo2", "repo3"},
+		},
+		{
+			name:     "One repo with coma",
+			input:    "repo1;",
+			expected: []string{"repo1"},
 		},
 	}
 

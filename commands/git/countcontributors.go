@@ -274,11 +274,10 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debug(fmt.Sprintf("owners and their matching repositories map recived for %s: \n %v", cc.params.ScmApiUrl, reposMap))
-
 	return cc.getOwnersMatchingRepos(reposMap)
 }
 
+// getOwnersMatchingRepos gets all projects and their repo map and look for thr specific owner.
 func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
 	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {
