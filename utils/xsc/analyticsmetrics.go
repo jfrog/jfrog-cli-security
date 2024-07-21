@@ -164,7 +164,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	if auditResults.GetErrors() != nil {
 		eventStatus = xscservices.Failed
 	}
-	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{}).ConvertToSummary(auditResults)
+		summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{}).ConvertToSummary(auditResults)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to convert audit results to summary. %s", err.Error()))
 	}

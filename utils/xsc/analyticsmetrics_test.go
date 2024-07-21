@@ -107,7 +107,7 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 }
 
 func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityCommandResults {
-	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
+	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
 	cmdResults := results.NewCommandResults("", true)
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})

@@ -457,6 +457,16 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 					},
 				},
+
+				{
+					IssueId:       "XRAY-2",
+					Summary:       "summary-2",
+					Severity:      "Low",
+					WatchName:     "watch-1",
+					ViolationType: "license",
+					LicenseKey:    "license-1",
+					Components:    map[string]services.Component{"component-B": {}},
+				},
 			},
 		},
 		{
