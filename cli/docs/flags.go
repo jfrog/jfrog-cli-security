@@ -254,7 +254,7 @@ var flagsMap = map[string]components.Flag{
 	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 
 	// Git flags
-	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers."),
+	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
 	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString())),
 	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'."),
 	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars())),

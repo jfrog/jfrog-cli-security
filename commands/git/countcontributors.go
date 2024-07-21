@@ -281,7 +281,7 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
 	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {
-		// Matching without considering lower/upper cases.
+		// Matching owner name without considering lower/upper cases.
 		normalizedSearchKey := strings.ToUpper(cc.params.Owner)
 		for owner, repoList := range reposMap {
 			if strings.ToUpper(owner) == normalizedSearchKey {
