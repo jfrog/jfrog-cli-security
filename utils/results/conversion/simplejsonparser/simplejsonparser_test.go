@@ -13,6 +13,100 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
+var (
+	testScaScanVulnerabilities = []services.Vulnerability{
+		{
+			IssueId:  "XRAY-1",
+			Summary:  "summary-1",
+			Severity: "High",
+			Cves:     []services.Cve{{Id: "CVE-1"}},
+			Components: map[string]services.Component{
+				"component-A": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-A"},
+					}},
+				},
+				"component-B": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-B"},
+					}},
+				},
+			},
+		},
+		{
+			IssueId:  "XRAY-2",
+			Summary:  "summary-2",
+			Severity: "Low",
+			Cves:     []services.Cve{{Id: "CVE-2"}},
+			Components: map[string]services.Component{
+				"component-B": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-B"},
+					}},
+				},
+			},
+		},
+	}
+	testScaScanViolation = []services.Violation{
+		{
+			IssueId:       "XRAY-1",
+			Summary:       "summary-1",
+			Severity:      "High",
+			WatchName:     "watch-name",
+			ViolationType: "security",
+			Cves:          []services.Cve{{Id: "CVE-1"}},
+			Components: map[string]services.Component{
+				"component-A": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-A"},
+					}},
+				},
+				"component-B": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-B"},
+					}},
+				},
+			},
+		},
+		{
+			IssueId:       "XRAY-2",
+			Summary:       "summary-2",
+			Severity:      "Low",
+			WatchName:     "watch-name",
+			ViolationType: "security",
+			Cves:          []services.Cve{{Id: "CVE-2"}},
+			Components: map[string]services.Component{
+				"component-B": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-B"},
+					}},
+				},
+			},
+		},
+		{
+			IssueId:       "XRAY-3",
+			Summary:       "summary-3",
+			Severity:      "Low",
+			ViolationType: "license",
+			LicenseKey:    "license-1",
+			Components: map[string]services.Component{
+				"component-B": {
+					ImpactPaths: [][]services.ImpactPathNode{{
+						{ComponentId: "root"},
+						{ComponentId: "component-B"},
+					}},
+				},
+			},
+		},
+	}
+)
+
 func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -171,81 +265,75 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 }
 
 func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
-	testScaScanResults := []services.Vulnerability{
-		{
-			IssueId:    "XRAY-1",
-			Summary:    "summary-1",
-			Severity:   "High",
-			Cves:       []services.Cve{{Id: "CVE-1"}},
-			Components: map[string]services.Component{"component-A": {}, "component-B": {}},
-		},
-		{
-			IssueId:    "XRAY-2",
-			Summary:    "summary-2",
-			Severity:   "Low",
-			Cves:       []services.Cve{{Id: "CVE-2"}},
-			Components: map[string]services.Component{"component-B": {}},
-		},
-	}
-
 	testCases := []struct {
 		name             string
 		input            []services.Vulnerability
 		target           string
 		entitledForJas   bool
-		pretty           bool
 		applicablityRuns []*sarif.Run
 		expectedOutput   []formats.VulnerabilityOrViolationRow
 	}{
 		{
-			name:             "No vulnerabilities",
-			input:            []services.Vulnerability{},
-			target:           "target",
-			entitledForJas:   false,
-			pretty:           false,
-			applicablityRuns: []*sarif.Run{},
-			expectedOutput:   []formats.VulnerabilityOrViolationRow{},
+			name:   "No vulnerabilities",
+			target: "target",
 		},
 		{
-			name:             "Vulnerabilities with no applicability",
-			input:            testScaScanResults,
-			target:           "target",
-			entitledForJas:   false,
-			pretty:           false,
-			applicablityRuns: []*sarif.Run{},
+			name:   "Vulnerabilities not entitled for JAS",
+			input:  testScaScanVulnerabilities,
+			target: "target",
 			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
+					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-A",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-A",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
 				},
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
+					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 				{
 					Summary: "summary-2",
 					IssueId: "XRAY-2",
+					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
 						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 			},
 		},
 		{
-			name:           "Vulnerabilities with applicability",
-			input:          testScaScanResults,
+			name:           "Vulnerabilities with Jas",
+			input:          testScaScanVulnerabilities,
 			target:         "target",
 			entitledForJas: true,
-			pretty:         false,
 			applicablityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(
 					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
@@ -256,79 +344,61 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 			},
 			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
+					Applicable: jasutils.NotApplicable.String(),
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
-						Components:             []formats.ComponentRow{{Name: "component-A", Location: &formats.Location{File: "target"}}},
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-A",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
-					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1"}},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
 				},
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
-						ImpactedDependencyName: "component-B",
-						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
-					},
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1"}},
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
+						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
+					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 				{
-					Summary: "summary-2",
-					IssueId: "XRAY-2",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
-						ImpactedDependencyName: "component-B",
-						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
-					},
-					Applicable: jasutils.Applicability.String(),
+					Summary:    "summary-2",
+					IssueId:    "XRAY-2",
+					Applicable: jasutils.Applicable.String(),
 					Cves: []formats.CveRow{{
 						Id: "CVE-2",
 						Applicability: &formats.Applicability{
-							Status: jasutils.Applicability.String(),
-							Evidence: []formats.Evidence{formats.Evidence{
-								Location: formats.Location{File: "target/file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+							Status: jasutils.Applicable.String(),
+							Evidence: []formats.Evidence{{
+								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+								Reason:   "applic_CVE-2",
 							}},
 						},
 					}},
-				},
-			},
-		},
-		{
-			name:             "Vulnerabilities only - with allowed licenses",
-			input:            testScaScanResults,
-			target:           "target",
-			entitledForJas:   false,
-			pretty:           false,
-			applicablityRuns: []*sarif.Run{},
-			expectedOutput: []formats.VulnerabilityOrViolationRow{
-				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "high"},
-						ImpactedDependencyName: "component-A",
-					},
-				},
-				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "high"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
 						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
-				},
-				{
-					Summary: "summary-2",
-					IssueId: "XRAY-2",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "low"},
-						ImpactedDependencyName: "component-B",
-					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 			},
 		},
@@ -336,7 +406,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := PrepareSimpleJsonVulnerabilities(tc.target, tc.input, tc.pretty, tc.entitledForJas, tc.applicablityRuns...)
+			out, err := PrepareSimpleJsonVulnerabilities(tc.target, tc.input, false, tc.entitledForJas, tc.applicablityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})
@@ -349,44 +419,19 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 		input                         []services.Violation
 		target                        string
 		entitledForJas                bool
-		pretty                        bool
 		applicablityRuns              []*sarif.Run
 		expectedSecurityOutput        []formats.VulnerabilityOrViolationRow
 		expectedLicenseOutput         []formats.LicenseRow
 		expectedOperationalRiskOutput []formats.OperationalRiskViolationRow
 	}{
 		{
-			name:                   "No violations",
-			input:                  []services.Violation{},
-			target:                 "target",
-			entitledForJas:         false,
-			pretty:                 false,
-			applicablityRuns:       []*sarif.Run{},
-			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{},
+			name:   "No violations",
+			target: "target",
 		},
 		{
-			name: "Violations with no applicability",
-			input: []services.Violation{
-				{
-					IssueId:       "XRAY-1",
-					Summary:       "summary-1",
-					Severity:      "High",
-					ViolationType: "security",
-					Components:    map[string]services.Component{"component-A": {}, "component-B": {}},
-				},
-				{
-					IssueId:       "XRAY-2",
-					Summary:       "summary-2",
-					Severity:      "Low",
-					ViolationType: "license",
-					LicenseKey:    "license-1",
-					Components:    map[string]services.Component{"component-B": {}},
-				},
-			},
-			target:           "target",
-			entitledForJas:   false,
-			pretty:           false,
-			applicablityRuns: []*sarif.Run{},
+			name:   "Violations not entitled for JAS",
+			input:  testScaScanViolation,
+			target: "target",
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
 					Summary: "summary-1",
@@ -437,7 +482,6 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 			},
 			target:         "target",
 			entitledForJas: true,
-			pretty:         false,
 			applicablityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(
 					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
@@ -475,7 +519,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						ImpactedDependencyName: "component-B",
 						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
-					Applicable: jasutils.Applicability.String(),
+					Applicable: jasutils.Applicable.String(),
 				},
 			},
 		},
@@ -486,7 +530,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, tc.input, tc.pretty, tc.entitledForJas, tc.applicablityRuns...)
+			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, tc.input, false, tc.entitledForJas, tc.applicablityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedSecurityOutput, securityOutput)
 			assert.ElementsMatch(t, tc.expectedLicenseOutput, licenseOutput)

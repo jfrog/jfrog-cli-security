@@ -46,6 +46,7 @@ type TargetResults struct {
 }
 
 type ScaScanResults struct {
+	ScanTarget
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`

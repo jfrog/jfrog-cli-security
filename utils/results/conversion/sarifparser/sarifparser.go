@@ -70,7 +70,7 @@ func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas 
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, _ ...error) (err error) {
+func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, errors ...error) (err error) {
 	if sc.current == nil {
 		return results.ConvertorResetErr
 	}
@@ -82,6 +82,11 @@ func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, _
 	}
 	sc.scaCurrentRun = sarif.NewRunWithInformationURI(ScaToolName, utils.BaseDocumentationURL+"sca")
 	sc.scaCurrentRun.Tool.Driver.Version = &sc.xrayVersion
+	// Add target as working directory in the run invocation
+	sc.scaCurrentRun.Invocations = append(sc.scaCurrentRun.Invocations, sarif.NewInvocation().
+		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(target)).
+		WithExecutionSuccess(len(errors) == 0),
+	)
 	return
 }
 
@@ -385,7 +390,7 @@ func getScaIssueSarifHeadline(depName, version, issueId string) string {
 }
 
 func getXrayLicenseSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("License violation [%s] %s %s", key, depName, version)
+	return fmt.Sprintf("License violation [%s] in %s %s", key, depName, version)
 }
 
 func getLicenseViolationSummary(depName, version, key string) string {
@@ -397,5 +402,5 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("**The following direct dependencies are utilizing the `%s %s` dependency with `%s` license violation:**\n%s", depName, version, key, formattedDirectDependencies), nil
+	return fmt.Sprintf("%s<br/>Direct dependencies:<br/>%s", getLicenseViolationSummary(depName, version, key), formattedDirectDependencies), nil
 }

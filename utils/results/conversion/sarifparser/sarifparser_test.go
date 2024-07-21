@@ -109,7 +109,7 @@ func TestGetSarifTableDescription(t *testing.T) {
 			cveScore:            "3.0",
 			applicableStatus:    jasutils.NotCovered,
 			fixedVersions:       []string{"3.0.1"},
-			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not covered       | `example-package 3.0.0`       | 3.0.1   |",
+			expectedDescription: "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.0      | Not Covered       | `example-package 3.0.0`       | 3.0.1   |",
 		},
 		{
 			name: "Undetermined vulnerability",

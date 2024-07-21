@@ -82,8 +82,8 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
-	validatePairs(t, exactMatch, ValidationPair{Expected: expected.MultiScanId, Actual: actual.MultiScanId, ErrMsg: "MultiScanId mismatch"})
-	validatePairs(t, false, ValidationPair{Expected: len(expected.Errors), Actual: len(actual.Errors), ErrMsg: "Errors count mismatch"})
+	validateContent(t, exactMatch, StringValidation{Expected: expected.MultiScanId, Actual: actual.MultiScanId, Msg: "MultiScanId mismatch"})
+	validateContent(t, false, NumberValidation[int]{Expected: len(expected.Errors), Actual: len(actual.Errors), Msg: "Errors count mismatch"})
 	// Validate vulnerabilities
 	for _, expectedVulnerability := range expected.Vulnerabilities {
 		vulnerability := getVulnerabilityOrViolationByIssueId(expectedVulnerability.IssueId, actual.Vulnerabilities)
@@ -112,25 +112,25 @@ func getVulnerabilityOrViolationByIssueId(issueId string, content []formats.Vuln
 }
 
 func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected, actual formats.VulnerabilityOrViolationRow) {
-	validatePairs(t, exactMatch,
-		ValidationPair{Expected: expected.Summary, Actual: actual.Summary, ErrMsg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.Severity, Actual: actual.Severity, ErrMsg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.Applicable, Actual: actual.Applicable, ErrMsg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.Technology, Actual: actual.Technology, ErrMsg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.References, Actual: actual.References, ErrMsg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId)},
+	validateContent(t, exactMatch,
+		StringValidation{Expected: expected.Summary, Actual: actual.Summary, Msg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.Severity, Actual: actual.Severity, Msg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.Applicable, Actual: actual.Applicable, Msg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.Technology.String(), Actual: actual.Technology.String(), Msg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId)},
+		ListValidation[string]{Expected: expected.References, Actual: actual.References, Msg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId)},
 
-		ValidationPair{Expected: expected.ImpactedDependencyName, Actual: actual.ImpactedDependencyName, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyName mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.ImpactedDependencyVersion, Actual: actual.ImpactedDependencyVersion, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyVersion mismatch", expected.IssueId)},
-		ValidationPair{Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, ErrMsg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.ImpactedDependencyName, Actual: actual.ImpactedDependencyName, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyName mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.ImpactedDependencyVersion, Actual: actual.ImpactedDependencyVersion, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyVersion mismatch", expected.IssueId)},
+		StringValidation{Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId)},
 
-		ValidationPair{Expected: expected.FixedVersions, Actual: actual.FixedVersions, ErrMsg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId)},
+		ListValidation[string]{Expected: expected.FixedVersions, Actual: actual.FixedVersions, Msg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId)},
 	)
-	if validatePairs(t, exactMatch, ValidationPair{Expected: expected.JfrogResearchInformation, Actual: actual.JfrogResearchInformation}) && expected.JfrogResearchInformation != nil {
-		validatePairs(t, exactMatch,
-			ValidationPair{Expected: expected.JfrogResearchInformation.Summary, Actual: actual.JfrogResearchInformation.Summary, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Summary mismatch", expected.IssueId)},
-			ValidationPair{Expected: expected.JfrogResearchInformation.Severity, Actual: actual.JfrogResearchInformation.Severity, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Severity mismatch", expected.IssueId)},
-			ValidationPair{Expected: expected.JfrogResearchInformation.Remediation, Actual: actual.JfrogResearchInformation.Remediation, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Remediation mismatch", expected.IssueId)},
-			ValidationPair{Expected: expected.JfrogResearchInformation.SeverityReasons, Actual: actual.JfrogResearchInformation.SeverityReasons, ErrMsg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.SeverityReasons mismatch", expected.IssueId)},
+	if ValidatePointersAndNotNil(t, exactMatch, PointerValidation[formats.JfrogResearchInformation]{Expected: expected.JfrogResearchInformation, Actual: actual.JfrogResearchInformation, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation mismatch", expected.IssueId)}) {
+		validateContent(t, exactMatch,
+			StringValidation{Expected: expected.JfrogResearchInformation.Summary, Actual: actual.JfrogResearchInformation.Summary, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Summary mismatch", expected.IssueId)},
+			StringValidation{Expected: expected.JfrogResearchInformation.Severity, Actual: actual.JfrogResearchInformation.Severity, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Severity mismatch", expected.IssueId)},
+			StringValidation{Expected: expected.JfrogResearchInformation.Remediation, Actual: actual.JfrogResearchInformation.Remediation, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Remediation mismatch", expected.IssueId)},
+			ListValidation[formats.JfrogResearchSeverityReason]{Expected: expected.JfrogResearchInformation.SeverityReasons, Actual: actual.JfrogResearchInformation.SeverityReasons, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.SeverityReasons mismatch", expected.IssueId)},
 		)
 	}
 	validateComponentRows(t, expected.IssueId, exactMatch, expected.Components, actual.Components)
@@ -156,11 +156,11 @@ func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expect
 }
 
 func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.ComponentRow) {
-	validatePairs(t, exactMatch,
-		ValidationPair{Expected: expected.Location, Actual: actual.Location, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
+	validateContent(t, exactMatch,
+		PointerValidation[formats.Location]{Expected: expected.Location, Actual: actual.Location, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
 	)
 	if expected.Location != nil {
-		validatePairs(t, exactMatch, ValidationPair{Expected: expected.Location.File, Actual: actual.Location.File, ErrMsg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
+		validateContent(t, exactMatch, StringValidation{Expected: expected.Location.File, Actual: actual.Location.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
 }
 
@@ -187,15 +187,15 @@ func validateCveRows(t *testing.T, issueId string, exactMatch bool, expected, ac
 }
 
 func validateCveRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.CveRow) {
-	validatePairs(t, exactMatch,
-		ValidationPair{Expected: expected.CvssV2, Actual: actual.CvssV2, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id)},
-		ValidationPair{Expected: expected.CvssV3, Actual: actual.CvssV3, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id)},
+	validateContent(t, exactMatch,
+		StringValidation{Expected: expected.CvssV2, Actual: actual.CvssV2, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id)},
+		StringValidation{Expected: expected.CvssV3, Actual: actual.CvssV3, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id)},
 	)
-	if validatePairs(t, exactMatch, ValidationPair{Expected: expected.Applicability, Actual: actual.Applicability, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id)}) && expected.Applicability != nil {
-		validatePairs(t, exactMatch,
-			ValidationPair{Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id)},
-			ValidationPair{Expected: expected.Applicability.ScannerDescription, Actual: actual.Applicability.ScannerDescription, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.ScannerDescription mismatch", issueId, expected.Id)},
-			ValidationPair{Expected: expected.Applicability.Evidence, Actual: actual.Applicability.Evidence, ErrMsg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Evidence mismatch", issueId, expected.Id)},
+	if ValidatePointersAndNotNil(t, exactMatch, PointerValidation[formats.Applicability]{Expected: expected.Applicability, Actual: actual.Applicability, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id)}) {
+		validateContent(t, exactMatch,
+			StringValidation{Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id)},
+			StringValidation{Expected: expected.Applicability.ScannerDescription, Actual: actual.Applicability.ScannerDescription, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.ScannerDescription mismatch", issueId, expected.Id)},
+			ListValidation[formats.Evidence]{Expected: expected.Applicability.Evidence, Actual: actual.Applicability.Evidence, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Evidence mismatch", issueId, expected.Id)},
 		)
 	}
 }

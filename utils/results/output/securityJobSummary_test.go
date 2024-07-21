@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	summaryExpectedContentDir = filepath.Join("..", "tests", "testdata", "other", "jobSummary")
+	summaryExpectedContentDir = filepath.Join("..", "..", "..", "tests", "testdata", "other", "output", "jobSummary")
 )
 
 func TestConvertSummaryToString(t *testing.T) {

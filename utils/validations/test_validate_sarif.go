@@ -2,6 +2,7 @@ package validations
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -26,12 +27,12 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(*sarif.Report)
 	if assert.True(t, ok) {
 		ValidateSarifIssuesCount(t, params, results)
-		// if params.Expected != nil {
-		// 	expectedResults, ok := params.Expected.(sarif.Report)
-		// 	if assert.True(t, ok) {
-		// 		ValidateScanResponses(t, params.ExactResultsMatch, expectedResults, results)
-		// 	}
-		// }
+		if params.Expected != nil {
+			expectedResults, ok := params.Expected.(*sarif.Report)
+			if assert.True(t, ok) {
+				ValidateSarifResults(t, params.ExactResultsMatch, expectedResults, results)
+			}
+		}
 	}
 }
 
@@ -109,4 +110,119 @@ func isSecurityIssue(result *sarif.Result) bool {
 		return true
 	}
 	return false
+}
+
+func ValidateSarifResults(t *testing.T, exactMatch bool, expected, actual *sarif.Report) {
+	validateContent(t, exactMatch, StringValidation{Expected: expected.Version, Actual: actual.Version, Msg: "Sarif version mismatch"})
+	for _, run := range expected.Runs {
+		// expect Invocation
+		if !assert.Len(t, run.Invocations, 1, "Expected exactly one invocation for run with tool name %s", run.Tool.Driver.Name) {
+			continue
+		}
+		actualRun := getRunByInvocationTargetAndToolName(sarifutils.GetInvocationWorkingDirectory(run.Invocations[0]), run.Tool.Driver.Name, actual.Runs)
+		if !assert.NotNil(t, actualRun, "Expected run with tool name %s and working directory %s not found", run.Tool.Driver.Name, sarifutils.GetInvocationWorkingDirectory(run.Invocations[0])) {
+			continue
+		}
+		validateSarifRun(t, exactMatch, run, actualRun)
+	}
+}
+
+func getRunByInvocationTargetAndToolName(target, toolName string, content []*sarif.Run) *sarif.Run {
+	potentialRuns := sarifutils.GetRunsByWorkingDirectory(target, content...)
+	for _, run := range potentialRuns {
+		if run.Tool.Driver != nil && run.Tool.Driver.Name == toolName {
+			return run
+		}
+	}
+	return nil
+}
+
+func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run) {
+	validateContent(t, exactMatch,
+		PointerValidation[string]{Expected: expected.Tool.Driver.InformationURI, Actual: actual.Tool.Driver.InformationURI, Msg: fmt.Sprintf("Run tool information URI mismatch for tool %s", expected.Tool.Driver.Name)},
+		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", expected.Tool.Driver.Name)},
+	)
+	// validate rules
+	for _, expectedRule := range expected.Tool.Driver.Rules {
+		rule, err := actual.GetRuleById(expectedRule.ID)
+		if !(assert.NoError(t, err, fmt.Sprintf("Run tool %s: Expected rule with ID %s not found", expected.Tool.Driver.Name, expectedRule.ID)) ||
+			assert.NotNil(t, rule, fmt.Sprintf("Run tool %s: Expected rule with ID %s not found", expected.Tool.Driver.Name, expectedRule.ID))) {
+			continue
+		}
+		validateSarifRule(t, exactMatch, expected.Tool.Driver.Name, expectedRule, rule)
+	}
+	// validate results
+	for _, expectedResult := range expected.Results {
+		result := getResultByResultId(expectedResult, actual.Results)
+		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found", expected.Tool.Driver.Name, *expectedResult.RuleID)) {
+			continue
+		}
+		validateSarifResult(t, exactMatch, expected.Tool.Driver.Name, expectedResult, result)
+	}
+}
+
+func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.ReportingDescriptor) {
+	validateContent(t, exactMatch,
+		StringValidation{Expected: sarifutils.GetRuleFullDescription(expected), Actual: sarifutils.GetRuleFullDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description mismatch for rule %s", toolName, expected.ID)},
+		StringValidation{Expected: sarifutils.GetRuleFullDescriptionMarkdown(expected), Actual: sarifutils.GetRuleFullDescriptionMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description markdown mismatch for rule %s", toolName, expected.ID)},
+		StringValidation{Expected: sarifutils.GetRuleShortDescription(expected), Actual: sarifutils.GetRuleShortDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule short description mismatch for rule %s", toolName, expected.ID)},
+		StringValidation{Expected: sarifutils.GetRuleHelp(expected), Actual: sarifutils.GetRuleHelp(actual), Msg: fmt.Sprintf("Run tool %s: Rule help mismatch for rule %s", toolName, expected.ID)},
+		StringValidation{Expected: sarifutils.GetRuleHelpMarkdown(expected), Actual: sarifutils.GetRuleHelpMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule help markdown mismatch for rule %s", toolName, expected.ID)},
+	)
+	// validate properties
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, expected.ID)
+}
+
+func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.Result {
+	for _, result := range actual {
+		// TODO: Need to be improved to handle secrets results (have one result for each location with same info, so need to compare the locations)
+		if result.RuleID == expected.RuleID &&
+			len(result.Locations) == len(expected.Locations) &&
+			sarifutils.GetResultMsgText(result) == sarifutils.GetResultMsgText(expected) {
+			return result
+		}
+	}
+	return nil
+}
+
+func validateSarifResult(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.Result) {
+	validateContent(t, exactMatch,
+		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, *expected.RuleID)},
+	)
+	// validate properties
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, *expected.RuleID)
+	// validate locations
+	for _, expectedLocation := range expected.Locations {
+		location := getLocationById(expectedLocation, actual.Locations)
+		if !assert.NotNil(t, location, "Expected location with physical location %s not found", expectedLocation.PhysicalLocation) {
+			continue
+		}
+	}
+}
+
+func getLocationById(expected *sarif.Location, actual []*sarif.Location) *sarif.Location {
+	for _, location := range actual {
+		if sarifutils.GetLocationId(location) == sarifutils.GetLocationId(expected) {
+			return location
+		}
+	}
+	return nil
+}
+
+func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual map[string]interface{}, toolName, ruleID string) {
+	for key, expectedValue := range expected {
+		actualValue, ok := actual[key]
+		if !assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s not found for rule %s", toolName, key, ruleID)) {
+			continue
+		}
+		// If the property is a string, compare the string values
+		if expectedStr, ok := expectedValue.(string); ok {
+			actualStr, ok := actualValue.(string)
+			if assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s is not a string for rule %s", toolName, key, ruleID)) {
+				validateContent(t, exactMatch, StringValidation{Expected: expectedStr, Actual: actualStr, Msg: fmt.Sprintf("Run tool %s: Rule property mismatch for rule %s", toolName, ruleID)})
+				continue
+			}
+			assert.Fail(t, fmt.Sprintf("Run tool %s: Expected property with key %s is a string for rule %s", toolName, key, ruleID))
+		}
+	}
 }

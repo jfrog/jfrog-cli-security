@@ -203,14 +203,6 @@ func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus ja
 	return
 }
 
-func ParseToSeverityDetails(severity string, sarifSeverity, pretty bool, applicabilityStatus jasutils.ApplicabilityStatus) (out formats.SeverityDetails, err error) {
-	parsed, err := ParseSeverity(severity, sarifSeverity)
-	if err != nil {
-		return
-	}
-	return GetSeverityDetails(parsed, applicabilityStatus).ToDetails(parsed, pretty), nil
-}
-
 // -- Getters functions (With default values) --
 
 func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus, pretty bool) formats.SeverityDetails {
@@ -218,6 +210,9 @@ func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityS
 }
 
 func GetSeverityDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) *SeverityDetails {
+	if applicabilityStatus == jasutils.NotScanned {
+		applicabilityStatus = jasutils.Applicable
+	}
 	details, err := ParseForDetails(severity.String(), false, applicabilityStatus)
 	if err != nil {
 		return &SeverityDetails{Priority: 0, Score: 0}

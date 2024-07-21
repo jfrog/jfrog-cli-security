@@ -242,6 +242,35 @@ func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
 	return ""
 }
 
+func GetRuleFullDescriptionMarkdown(rule *sarif.ReportingDescriptor) string {
+	if rule.FullDescription != nil && rule.FullDescription.Markdown != nil {
+		return *rule.FullDescription.Markdown
+	}
+	return ""
+
+}
+
+func GetRuleHelp(rule *sarif.ReportingDescriptor) string {
+	if rule.Help != nil && rule.Help.Text != nil {
+		return *rule.Help.Text
+	}
+	return ""
+}
+
+func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
+	if rule.Help != nil && rule.Help.Markdown != nil {
+		return *rule.Help.Markdown
+	}
+	return ""
+}
+
+func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
+	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+		return *rule.ShortDescription.Text
+	}
+	return ""
+}
+
 func GetRunRules(run *sarif.Run) []*sarif.ReportingDescriptor {
 	if run != nil && run.Tool.Driver != nil {
 		return run.Tool.Driver.Rules

@@ -32,57 +32,79 @@ type ValidationParams struct {
 	Secrets               int
 }
 
-type ValidationPair struct {
-	Expected interface{}
-	Actual   interface{}
-	ErrMsg   string
+// type ValidationPair struct {
+// 	Expected interface{}
+// 	Actual   interface{}
+// 	ErrMsg   string
+// }
+
+type Validation interface {
+	Validate(t *testing.T, exactMatch bool) bool
+	ErrMsgs(t *testing.T) []string
 }
 
-func (vp ValidationPair) ErrMsgs(t *testing.T) []string {
-	expectedStr := fmt.Sprintf("%v", vp.Expected)
-	var err error
-	// If the expected value is a struct, convert it to a JSON string.
-	if _, ok := vp.Expected.(string); !ok {
-		expectedStr, err = utils.GetAsJsonString(vp.Expected)
-		assert.NoError(t, err)
-	}
-	actualStr := fmt.Sprintf("%v", vp.Actual)
-	// If the actual value is a struct, convert it to a JSON string.
-	if _, ok := vp.Actual.(string); !ok {
-		actualStr, err = utils.GetAsJsonString(vp.Actual)
-		assert.NoError(t, err)
-	}
-	return []string{vp.ErrMsg, fmt.Sprintf("\n* Expected:\n%s\n\n* Actual:\n%s\n", expectedStr, actualStr)}
+type StringValidation struct {
+	Expected string
+	Actual   string
+	Msg      string
 }
 
-func validatePairs(t *testing.T, exactMatch bool, pairs ...ValidationPair) bool {
-	for _, pair := range pairs {
-		switch expected := pair.Expected.(type) {
-		case string:
-			actual, ok := pair.Actual.(string)
-			if !ok {
-				return assert.Fail(t, "Expected a string value, but got a different type.", pair.ErrMsgs(t))
-			}
-			if !validateStrContent(t, expected, actual, exactMatch, pair.ErrMsgs(t)) {
-				return false
-			}
-		case *interface{}:
-			if !validatePointers(t, expected, pair.Actual, exactMatch, pair.ErrMsgs(t)) {
-				return false
-			}
-		case []interface{}:
-			if exactMatch {
-				if !assert.ElementsMatch(t, expected, pair.Actual, pair.ErrMsgs(t)) {
-					return false
-				}
-			} else if !assert.Subset(t, expected, pair.Actual, pair.ErrMsgs(t)) {
-				return false
-			}
-		default:
-			return assert.Equal(t, expected, pair.Actual, pair.ErrMsgs(t))
-		}
+func (sv StringValidation) Validate(t *testing.T, exactMatch bool) bool {
+	return validateStrContent(t, sv.Expected, sv.Actual, exactMatch, sv.ErrMsgs(t))
+}
+
+func validateStrContent(t *testing.T, expected, actual string, actualValue bool, msgAndArgs ...interface{}) bool {
+	if actualValue {
+		return assert.Equal(t, expected, actual, msgAndArgs...)
 	}
-	return true
+	if expected != "" {
+		return assert.NotEmpty(t, actual, msgAndArgs...)
+	} else {
+		return assert.Empty(t, actual, msgAndArgs...)
+	}
+}
+
+func (sv StringValidation) ErrMsgs(_ *testing.T) []string {
+	return errMsg(sv.Expected, sv.Actual, sv.Msg)
+}
+
+type NumberValidation[T any] struct {
+	Expected T
+	Actual   T
+	Msg      string
+}
+
+func (nvp NumberValidation[T]) Validate(t *testing.T, exactMatch bool) bool {
+	return validateNumberContent(t, nvp.Expected, nvp.Actual, exactMatch, nvp.ErrMsgs(t))
+}
+
+func validateNumberContent(t *testing.T, expected, actual interface{}, actualValue bool, msgAndArgs ...interface{}) bool {
+	if actualValue {
+		return assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+	if expected != 0 {
+		return assert.NotZero(t, actual, msgAndArgs...)
+	} else {
+		return assert.Zero(t, actual, msgAndArgs...)
+	}
+}
+
+func (nvp NumberValidation[T]) ErrMsgs(_ *testing.T) []string {
+	return errMsg(fmt.Sprintf("%v", nvp.Expected), fmt.Sprintf("%v", nvp.Actual), nvp.Msg)
+}
+
+type PointerValidation[T any] struct {
+	Expected *T
+	Actual   *T
+	Msg      string
+}
+
+func (pvp PointerValidation[T]) Validate(t *testing.T, exactMatch bool) bool {
+	return validatePointers(t, pvp.Expected, pvp.Actual, exactMatch, pvp.ErrMsgs(t))
+}
+
+func ValidatePointersAndNotNil[T any](t *testing.T, exactMatch bool, pair PointerValidation[T]) bool {
+	return validatePointers(t, pair.Expected, pair.Actual, exactMatch, pair.Msg) && pair.Expected != nil
 }
 
 func validatePointers(t *testing.T, expected, actual interface{}, actualValue bool, msgAndArgs ...interface{}) bool {
@@ -95,13 +117,105 @@ func validatePointers(t *testing.T, expected, actual interface{}, actualValue bo
 	return assert.Nil(t, actual, msgAndArgs...)
 }
 
-func validateStrContent(t *testing.T, expected, actual string, actualValue bool, msgAndArgs ...interface{}) bool {
-	if actualValue {
-		return assert.Equal(t, expected, actual, msgAndArgs...)
+func (pvp PointerValidation[T]) ErrMsgs(t *testing.T) []string {
+	return jsonErrMsg(t, pvp.Expected, pvp.Actual, pvp.Msg)
+}
+
+type ListValidation[T any] struct {
+	Expected []T
+	Actual   []T
+	Msg      string
+}
+
+func (lvp ListValidation[T]) Validate(t *testing.T, exactMatch bool) bool {
+	return validateLists(t, lvp.Expected, lvp.Actual, exactMatch, lvp.ErrMsgs(t))
+}
+
+func validateLists(t *testing.T, expected, actual interface{}, exactMatch bool, msgAndArgs ...interface{}) bool {
+	if exactMatch {
+		return assert.ElementsMatch(t, expected, actual, msgAndArgs...)
 	}
-	if expected != "" {
-		return assert.NotEmpty(t, actual, msgAndArgs...)
-	} else {
-		return assert.Empty(t, actual, msgAndArgs...)
+	return assert.Subset(t, actual, expected, msgAndArgs...)
+}
+
+func (lvp ListValidation[T]) ErrMsgs(t *testing.T) []string {
+	return jsonErrMsg(t, lvp.Expected, lvp.Actual, lvp.Msg)
+}
+
+func jsonErrMsg(t *testing.T, expected, actual any, msg string) []string {
+	var expectedStr, actualStr string
+	var err error
+	if expected != nil {
+		expectedStr, err = utils.GetAsJsonString(expected)
+		assert.NoError(t, err)
 	}
+	if actual != nil {
+		actualStr, err = utils.GetAsJsonString(actual)
+		assert.NoError(t, err)
+	}
+	return errMsg(expectedStr, actualStr, msg)
+}
+
+func errMsg(expected, actual string, msg string) []string {
+	return []string{msg, fmt.Sprintf("\n* Expected:\n'%s'\n\n* Actual:\n%s\n", expected, actual)}
+}
+
+// func (vp ValidationPair) ErrMsgs(t *testing.T) []string {
+// 	expectedStr := fmt.Sprintf("%v", vp.Expected)
+// 	var err error
+// 	// If the expected value is a struct, convert it to a JSON string.
+// 	if _, ok := vp.Expected.(string); !ok {
+// 		expectedStr, err = utils.GetAsJsonString(vp.Expected)
+// 		assert.NoError(t, err)
+// 	}
+// 	actualStr := fmt.Sprintf("%v", vp.Actual)
+// 	// If the actual value is a struct, convert it to a JSON string.
+// 	if _, ok := vp.Actual.(string); !ok {
+// 		actualStr, err = utils.GetAsJsonString(vp.Actual)
+// 		assert.NoError(t, err)
+// 	}
+// 	return []string{vp.ErrMsg, fmt.Sprintf("\n* Expected:\n%s\n\n* Actual:\n%s\n", expectedStr, actualStr)}
+// }
+
+// func validatePairAndNotNil(t *testing.T, exactMatch bool, pair ValidationPair) bool {
+// 	validated := validatePairs(t, exactMatch, pair)
+// 	return validated && pair.Expected != nil
+// }
+
+func validateContent(t *testing.T, exactMatch bool, pairs ...Validation) bool {
+	for _, pair := range pairs {
+		if !pair.Validate(t, exactMatch) {
+			return false
+		}
+	}
+	return true
+
+	// for _, pair := range pairs {
+	// 	// Problem, should have reflecT!!!!! Use template instead!
+	// 	switch expected := pair.Expected.(type) {
+	// 	case string:
+	// 		actual, ok := pair.Actual.(string)
+	// 		if !ok {
+	// 			return assert.Fail(t, "Expected a string value, but got a different type.", pair.ErrMsgs(t))
+	// 		}
+	// 		if !validateStrContent(t, expected, actual, exactMatch, pair.ErrMsgs(t)) {
+	// 			return false
+	// 		}
+	// 	case *interface{}:
+	// 		if !validatePointers(t, expected, pair.Actual, exactMatch, pair.ErrMsgs(t)) {
+	// 			return false
+	// 		}
+	// 	case []interface{}:
+	// 		if exactMatch {
+	// 			if !assert.ElementsMatch(t, expected, pair.Actual, pair.ErrMsgs(t)) {
+	// 				return false
+	// 			}
+	// 		} else if !assert.Subset(t, expected, pair.Actual, pair.ErrMsgs(t)) {
+	// 			return false
+	// 		}
+	// 	default:
+	// 		return assert.Equal(t, expected, pair.Actual, pair.ErrMsgs(t))
+	// 	}
+	// }
+	// return true
 }

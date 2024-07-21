@@ -148,8 +148,12 @@ func TestDetectScansToPreform(t *testing.T) {
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				for i := range results.Targets {
-					sort.Strings(results.Targets[i].ScaResults.Descriptors)
-					sort.Strings(test.expected[i].ScaResults.Descriptors)
+					if results.Targets[i].ScaResults != nil {
+						sort.Strings(results.Targets[i].ScaResults.Descriptors)
+					}
+					if test.expected[i].ScaResults != nil {
+						sort.Strings(test.expected[i].ScaResults.Descriptors)
+					}
 				}
 			}
 			assert.ElementsMatch(t, test.expected, results.Targets)
