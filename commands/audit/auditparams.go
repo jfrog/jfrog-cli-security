@@ -63,6 +63,11 @@ func (params *AuditParams) SetFixableOnly(fixable bool) *AuditParams {
 	return params
 }
 
+func (params *AuditParams) SetSecretValidation(secretValidation bool) *AuditParams {
+	params.AuditBasicParams.SetSecretValidation(secretValidation)
+	return params
+}
+
 func (params *AuditParams) MinSeverityFilter() severityutils.Severity {
 	return params.minSeverityFilter
 }

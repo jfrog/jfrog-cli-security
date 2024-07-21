@@ -46,6 +46,7 @@ type AuditBasicParams struct {
 	serverDetails                    *config.ServerDetails
 	outputFormat                     format.OutputFormat
 	progress                         ioUtils.ProgressMgr
+	ValidateSecrets                  bool
 	useJas                           bool
 	excludeTestDependencies          bool
 	useWrapper                       bool
@@ -80,6 +81,11 @@ func (abp *AuditBasicParams) ServerDetails() (*config.ServerDetails, error) {
 
 func (abp *AuditBasicParams) SetServerDetails(serverDetails *config.ServerDetails) *AuditBasicParams {
 	abp.serverDetails = serverDetails
+	return abp
+}
+
+func (abp *AuditBasicParams) SetSecretValidation(secretValidation bool) *AuditBasicParams {
+	abp.ValidateSecrets = secretValidation
 	return abp
 }
 

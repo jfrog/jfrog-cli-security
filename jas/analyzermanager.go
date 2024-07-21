@@ -42,6 +42,7 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	JfSecretValidationEnvVariable             = "JF_VERIFY_SECRETS"
 )
 
 var exitCodeErrorsMap = map[int]string{

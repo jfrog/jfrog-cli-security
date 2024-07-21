@@ -195,6 +195,7 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	}
 	results.XrayVersion = auditParams.xrayVersion
 	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams)
+	results.ExtendedScanResults.EntitledForJas = true
 	if err != nil {
 		return
 	}
@@ -264,7 +265,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err = jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
+	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, auditParams.AuditBasicParams.ValidateSecrets, scanResults.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}

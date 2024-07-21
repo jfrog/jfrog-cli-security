@@ -213,7 +213,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -270,8 +270,30 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func addValidateSecretsEnvVar(envVars map[string]string, validateSecrets bool) {
+	// Ordered By importance
+
+	// first check for flag
+	if validateSecrets {
+		envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
+		return
+	}
+
+	// second check for env var
+	if os.Getenv("JF_VERIFY_SECRETS") == "true" {
+		envVars[JfSecretValidationEnvVariable] = "true"
+		return
+	}
+	// third check for platform api
+	// INSERT_API_CALL HERE
+
+	// at this point secret validation will be false
+	envVars[JfSecretValidationEnvVariable] = "false"
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	addValidateSecretsEnvVar(envVars, validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}

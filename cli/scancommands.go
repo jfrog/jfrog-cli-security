@@ -458,7 +458,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
+		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
