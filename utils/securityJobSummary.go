@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	Build   SecuritySummarySection = "Builds"
-	Binary  SecuritySummarySection = "Artifacts"
-	Modules SecuritySummarySection = "Modules"
+	Build    SecuritySummarySection = "Builds"
+	Binary   SecuritySummarySection = "Artifacts"
+	Modules  SecuritySummarySection = "Modules"
+	Curation SecuritySummarySection = "Curation"
 )
 
 type SecuritySummarySection string
@@ -36,6 +37,7 @@ type SecurityCommandsSummary struct {
 	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands"`
 	ScanCommands      []formats.SummaryResults `json:"scanCommands"`
 	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
+	CurationCommands  []formats.SummaryResults `json:"curationCommands"`
 }
 
 // Manage the job summary for security commands
@@ -85,6 +87,8 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 			scs.ScanCommands = append(scs.ScanCommands, results)
 		case Modules:
 			scs.AuditCommands = append(scs.AuditCommands, results)
+		case Curation:
+			scs.CurationCommands = append(scs.CurationCommands, results)
 		}
 	}
 	return
@@ -100,6 +104,9 @@ func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []
 	if len(scs.AuditCommands) > 0 {
 		sections = append(sections, Modules)
 	}
+	if len(scs.CurationCommands) > 0 {
+		sections = append(sections, Curation)
+	}
 	return
 
 }
@@ -112,6 +119,8 @@ func (scs *SecurityCommandsSummary) getSectionSummaries(section SecuritySummaryS
 		summaries = scs.ScanCommands
 	case Modules:
 		summaries = scs.AuditCommands
+	case Curation:
+		summaries = scs.CurationCommands
 	}
 	return
 }
@@ -179,6 +188,10 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 }
 
 func getDetailsString(summary formats.ScanSummaryResult) string {
+	// if summary includes curation issues, then it means only curation issues are in this summary, no need to continue
+	if summary.HasBlockedCuration() {
+		return getBlockedCurationSummaryString(summary)
+	}
 	violationContent := getViolationSummaryString(summary)
 	vulnerabilitiesContent := getVulnerabilitiesSummaryString(summary)
 	delimiter := ""
@@ -186,6 +199,25 @@ func getDetailsString(summary formats.ScanSummaryResult) string {
 		delimiter = "<br>"
 	}
 	return violationContent + delimiter + vulnerabilitiesContent
+}
+
+func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content string) {
+	if !summary.HasBlockedCuration() {
+		return
+	}
+	content += fmt.Sprintf("Total number of packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
+	content += fmt.Sprintf("<br>🟢 Total Number of Approved: <b>%d</b>", summary.CuratedPackages.GetTotalPackages()-summary.CuratedPackages.Blocked.GetCountOfKeys(false))
+	content += fmt.Sprintf("<br>🔴 Total Number of Blocked: <b>%d</b>", summary.CuratedPackages.Blocked.GetTotal())
+	if summary.CuratedPackages.Blocked.GetTotal() > 0 {
+		index := 0
+		for blockTypeName, blockTypeValue := range summary.CuratedPackages.Blocked {
+			subScanPrefix := fmt.Sprintf("<br>%s", getListItemPrefix(index, len(summary.CuratedPackages.Blocked)))
+			subScanPrefix += blockTypeName
+			content += fmt.Sprintf("%s (%d)", subScanPrefix, blockTypeValue.GetTotal())
+			index++
+		}
+	}
+	return
 }
 
 func getViolationSummaryString(summary formats.ScanSummaryResult) (content string) {

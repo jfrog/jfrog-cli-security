@@ -3,6 +3,7 @@ package curation
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -456,7 +457,7 @@ func TestDoCurationAudit(t *testing.T) {
 			curationCmd.SetIsCurationCmd(true)
 			curationCmd.parallelRequests = 3
 			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
-			results := map[string][]*PackageStatus{}
+			results := map[string]CurationReport{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
 			} else {
@@ -476,8 +477,8 @@ func TestDoCurationAudit(t *testing.T) {
 
 			// Add the mock server to the expected blocked message url
 			for key := range tt.expectedResp {
-				for index := range tt.expectedResp[key] {
-					tt.expectedResp[key][index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[key][index].BlockedPackageUrl)
+				for index := range tt.expectedResp[key].packagesStatus {
+					tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
 				}
 			}
 			assert.Equal(t, tt.expectedResp, results)
@@ -502,7 +503,7 @@ type testCase struct {
 	expectedBuildRequest     map[string]bool
 	expectedRequest          map[string]bool
 	requestToFail            map[string]bool
-	expectedResp             map[string][]*PackageStatus
+	expectedResp             map[string]CurationReport
 	requestToError           map[string]bool
 	expectedError            string
 	cleanDependencies        func() error
@@ -529,24 +530,25 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
 			},
-			expectedResp: map[string][]*PackageStatus{
-				"github.com/you/hello": {{
-					Action:            "blocked",
-					ParentName:        "rsc.io/quote",
-					ParentVersion:     "v1.5.2",
-					BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
-					PackageName:       "rsc.io/sampler",
-					PackageVersion:    "v1.3.0",
-					BlockingReason:    "Policy violations",
-					DepRelation:       "indirect",
-					PkgType:           "go",
-					Policy: []Policy{
-						{
-							Policy:    "pol1",
-							Condition: "cond1",
+			expectedResp: map[string]CurationReport{
+				"github.com/you/hello": CurationReport{packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "rsc.io/quote",
+						ParentVersion:     "v1.5.2",
+						BlockedPackageUrl: "/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+						PackageName:       "rsc.io/sampler",
+						PackageVersion:    "v1.3.0",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "indirect",
+						PkgType:           "go",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
 						},
 					},
-				},
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/sampler",
@@ -565,8 +567,11 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
+					totalNumberOfPackages: 3,
+				},
 			},
 		},
+
 		{
 			name:       "python tree - one blocked package",
 			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
@@ -580,8 +585,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
 			},
-			expectedResp: map[string][]*PackageStatus{
-				"pip-curation": {
+			expectedResp: map[string]CurationReport{
+				"pip-curation": CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "4.8.0",
@@ -599,6 +604,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
+				},
+					totalNumberOfPackages: 3,
 				},
 			},
 		},
@@ -627,8 +634,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar": false,
 			},
-			expectedResp: map[string][]*PackageStatus{
-				"test:my-app:1.0.0": {
+			expectedResp: map[string]CurationReport{
+				"test:my-app:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -647,6 +654,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
+					totalNumberOfPackages: 2,
+				},
 			},
 			requestToError: nil,
 			expectedError:  "",
@@ -662,8 +671,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
-			expectedResp: map[string][]*PackageStatus{
-				"npm_test:1.0.0": {
+			expectedResp: map[string]CurationReport{
+				"npm_test:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -682,6 +691,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
+					totalNumberOfPackages: 2,
+				},
 			},
 		},
 		{
@@ -698,8 +709,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToError: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
-			expectedResp: map[string][]*PackageStatus{
-				"npm_test:1.0.0": {
+			expectedResp: map[string]CurationReport{
+				"npm_test:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -717,6 +728,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
+				},
+					totalNumberOfPackages: 2,
 				},
 			},
 			expectedError: fmt.Sprintf("failed sending HEAD request to %s for package '%s'. Status-code: %v. "+
@@ -822,6 +835,139 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
 			assert.Equal(t, tt.compName, gotName)
 			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
+}
+
+func Test_convertResultsToSummary(t *testing.T) {
+	type args struct {
+		results map[string]CurationReport
+	}
+	tests := []struct {
+		name     string
+		input    map[string]CurationReport
+		expected formats.SummaryResults
+	}{
+		{
+			name: "results for one result",
+			input: map[string]CurationReport{
+				"project1": {
+					packagesStatus: []*PackageStatus{
+						{
+							PackageName:    "test1",
+							PackageVersion: "1.0.0",
+							ParentVersion:  "1.0.0",
+							ParentName:     "parent-test1",
+
+							Action: "blocked",
+							Policy: []Policy{
+								{
+									Policy:    "policy1",
+									Condition: "cond1",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 5,
+				},
+			},
+			expected: formats.SummaryResults{
+				[]formats.ScanSummaryResult{
+					{
+						Target: "project1",
+						CuratedPackages: &formats.CuratedPackages{
+							Blocked: formats.TwoLevelSummaryCount{
+								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
+									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
+								},
+							},
+							Approved: 4,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "results for three result - aggregate one, same component in two policies",
+			input: map[string]CurationReport{
+				"project1": {
+					packagesStatus: []*PackageStatus{
+						{
+							PackageName:    "test1",
+							PackageVersion: "1.0.0",
+							ParentVersion:  "1.0.0",
+							ParentName:     "parent-test1",
+
+							Action: "blocked",
+							Policy: []Policy{
+								{
+									Policy:    "policy1",
+									Condition: "cond1",
+								},
+								{
+									Policy:    "policy2",
+									Condition: "cond2",
+								},
+							},
+						},
+						{
+							PackageName:    "test2",
+							PackageVersion: "2.0.0",
+							ParentVersion:  "2.0.0",
+							ParentName:     "parent-test2",
+
+							Action: "blocked",
+							Policy: []Policy{
+								{
+									Policy:    "policy2",
+									Condition: "cond2",
+								},
+							},
+						},
+						{
+							PackageName:    "test3",
+							PackageVersion: "3.0.0",
+							ParentVersion:  "3.0.0",
+							ParentName:     "parent-test3",
+
+							Action: "blocked",
+							Policy: []Policy{
+								{
+									Policy:    "policy2",
+									Condition: "cond2",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 5,
+				},
+			},
+			expected: formats.SummaryResults{
+				[]formats.ScanSummaryResult{
+					{
+						Target: "project1",
+						CuratedPackages: &formats.CuratedPackages{
+							Blocked: formats.TwoLevelSummaryCount{
+								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
+									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
+								},
+								formatPolicyAndCond("policy2", "cond2"): formats.SummaryCount{
+									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
+									uniqPkgAppearanceId("parent-test2", "2.0.0", "test2", "2.0.0"): 1,
+									uniqPkgAppearanceId("parent-test3", "3.0.0", "test3", "3.0.0"): 1,
+								},
+							},
+							Approved: 2,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := convertResultsToSummary(tt.input)
+			assert.Equal(t, tt.expected, results)
 		})
 	}
 }

@@ -1,5 +1,7 @@
 package formats
 
+import "golang.org/x/exp/maps"
+
 const (
 	ScaScan     SummarySubScanType = "SCA"
 	IacScan     SummarySubScanType = "IAC"
@@ -33,6 +35,12 @@ type ScanSummaryResult struct {
 	Target          string                      `json:"target,omitempty"`
 	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
 	Violations      TwoLevelSummaryCount        `json:"violations,omitempty"`
+	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
+}
+
+type CuratedPackages struct {
+	Blocked  TwoLevelSummaryCount `json:"blocked,omitempty"`
+	Approved int                  `json:"approved,omitempty"`
 }
 
 type ScanVulnerabilitiesSummary struct {
@@ -48,7 +56,7 @@ type ScanScaResult struct {
 }
 
 func (s *ScanSummaryResult) HasIssues() bool {
-	return s.HasViolations() || s.HasSecurityVulnerabilities()
+	return s.HasViolations() || s.HasSecurityVulnerabilities() || s.HasBlockedCuration()
 }
 
 func (s *ScanSummaryResult) HasViolations() bool {
@@ -57,6 +65,10 @@ func (s *ScanSummaryResult) HasViolations() bool {
 
 func (s *ScanSummaryResult) HasSecurityVulnerabilities() bool {
 	return s.Vulnerabilities != nil && s.Vulnerabilities.GetTotalIssueCount() > 0
+}
+
+func (s *ScanSummaryResult) HasBlockedCuration() bool {
+	return s.CuratedPackages != nil && s.CuratedPackages.Blocked.GetTotal() > 0
 }
 
 func (s *ScanSummaryResult) GetTotalIssueCount() (total int) {
@@ -78,6 +90,10 @@ func (s *ScanVulnerabilitiesSummary) GetTotalUniqueIssueCount() (total int) {
 
 func (s *ScanVulnerabilitiesSummary) GetTotalIssueCount() (total int) {
 	return s.getTotalIssueCount(false)
+}
+
+func (s *CuratedPackages) GetTotalPackages() int {
+	return s.Approved + s.Blocked.GetTotal()
 }
 
 func (s *ScanVulnerabilitiesSummary) getTotalIssueCount(unique bool) (total int) {
@@ -160,4 +176,17 @@ func (sc TwoLevelSummaryCount) GetCombinedLowerLevel() (oneLvlCounts SummaryCoun
 		}
 	}
 	return
+}
+
+func (sc TwoLevelSummaryCount) GetCountOfKeys(firstLevel bool) int {
+	if firstLevel {
+		return len(sc)
+	}
+	count := map[string]struct{}{}
+	for _, value := range sc {
+		for key := range value {
+			count[key] = struct{}{}
+		}
+	}
+	return len(maps.Keys(count))
 }
