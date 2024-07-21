@@ -242,6 +242,11 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	var curationCachePip string
 	var reportFileName string
 	if auditPython.IsCurationCmd {
+		// upgrade pip
+		err = executeCommand("python", "-m", "pip", "install", "--upgrade", "pip")
+		if err != nil {
+			log.Warn(err)
+		}
 		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
