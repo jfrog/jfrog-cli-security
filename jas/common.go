@@ -160,7 +160,7 @@ func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
 
 func addScoreToRunRules(sarifRun *sarif.Run) {
 	for _, sarifResult := range sarifRun.Results {
-		if rule, err := sarifRun.GetRuleById(*sarifResult.RuleID); err == nil {
+		if rule, err := sarifRun.GetRuleById(sarifutils.GetResultRuleId(sarifResult)); err == nil {
 			// Add to the rule security-severity score based on results severity
 			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
 			if err != nil {

@@ -65,7 +65,7 @@ func validateStrContent(t *testing.T, expected, actual string, actualValue bool,
 }
 
 func (sv StringValidation) ErrMsgs(_ *testing.T) []string {
-	return errMsg(sv.Expected, sv.Actual, sv.Msg)
+	return []string{sv.Msg}
 }
 
 type NumberValidation[T any] struct {
@@ -90,7 +90,7 @@ func validateNumberContent(t *testing.T, expected, actual interface{}, actualVal
 }
 
 func (nvp NumberValidation[T]) ErrMsgs(_ *testing.T) []string {
-	return errMsg(fmt.Sprintf("%v", nvp.Expected), fmt.Sprintf("%v", nvp.Actual), nvp.Msg)
+	return []string{nvp.Msg}
 }
 
 type PointerValidation[T any] struct {

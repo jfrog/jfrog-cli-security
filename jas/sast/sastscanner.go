@@ -139,13 +139,6 @@ func getResultLocationStr(result *sarif.Result) string {
 		sarifutils.GetLocationEndColumn(location))
 }
 
-func getResultRuleId(result *sarif.Result) string {
-	if result.RuleID == nil {
-		return ""
-	}
-	return *result.RuleID
-}
-
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
+	return sarifutils.GetResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }

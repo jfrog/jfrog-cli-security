@@ -46,7 +46,7 @@ type TargetResults struct {
 }
 
 type ScaScanResults struct {
-	ScanTarget
+	// ScanTarget
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
@@ -158,6 +158,7 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	if r.EntitledForJas {
 		targetResults.JasResults = &JasScansResults{}
 	}
+	
 	r.targetsMutex.Lock()
 	r.Targets = append(r.Targets, targetResults)
 	r.targetsMutex.Unlock()
@@ -223,19 +224,17 @@ func (sr *TargetResults) AddError(err error) {
 
 func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	if sr.ScaResults == nil {
-		return sr
+		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.Descriptors = descriptors
 	return sr
 }
 
 func (sr *TargetResults) NewScaScanResults(responses ...services.ScanResponse) *ScaScanResults {
-	results := sr.ScaResults
-	if results == nil {
-		results = &ScaScanResults{}
-		sr.ScaResults = results
+	if sr.ScaResults == nil {
+		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.XrayResults = append(results.XrayResults, responses...)
+	sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, responses...)
 	return sr.ScaResults
 }
 

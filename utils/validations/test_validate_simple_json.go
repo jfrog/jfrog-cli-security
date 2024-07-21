@@ -187,10 +187,12 @@ func validateCveRows(t *testing.T, issueId string, exactMatch bool, expected, ac
 }
 
 func validateCveRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.CveRow) {
-	validateContent(t, exactMatch,
+	if !validateContent(t, exactMatch,
 		StringValidation{Expected: expected.CvssV2, Actual: actual.CvssV2, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id)},
 		StringValidation{Expected: expected.CvssV3, Actual: actual.CvssV3, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id)},
-	)
+	) {
+		return
+	}
 	if ValidatePointersAndNotNil(t, exactMatch, PointerValidation[formats.Applicability]{Expected: expected.Applicability, Actual: actual.Applicability, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id)}) {
 		validateContent(t, exactMatch,
 			StringValidation{Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id)},

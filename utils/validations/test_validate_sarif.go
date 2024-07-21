@@ -154,7 +154,7 @@ func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run
 	// validate results
 	for _, expectedResult := range expected.Results {
 		result := getResultByResultId(expectedResult, actual.Results)
-		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found", expected.Tool.Driver.Name, *expectedResult.RuleID)) {
+		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found", expected.Tool.Driver.Name, sarifutils.GetResultRuleId(expectedResult))) {
 			continue
 		}
 		validateSarifResult(t, exactMatch, expected.Tool.Driver.Name, expectedResult, result)
@@ -175,22 +175,36 @@ func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected,
 
 func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.Result {
 	for _, result := range actual {
-		// TODO: Need to be improved to handle secrets results (have one result for each location with same info, so need to compare the locations)
-		if result.RuleID == expected.RuleID &&
-			len(result.Locations) == len(expected.Locations) &&
-			sarifutils.GetResultMsgText(result) == sarifutils.GetResultMsgText(expected) {
+		if isPotentialSimilarResults(expected, result) && hasSameLocations(expected, result) {
 			return result
 		}
 	}
 	return nil
 }
 
+func isPotentialSimilarResults(expected, actual *sarif.Result) bool {
+	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultMsgText(actual) == sarifutils.GetResultMsgText(expected)
+}
+
+func hasSameLocations(expected, actual *sarif.Result) bool {
+	if len(expected.Locations) != len(actual.Locations) {
+		return false
+	}
+	for _, expectedLocation := range expected.Locations {
+		location := getLocationById(expectedLocation, actual.Locations)
+		if location == nil {
+			return false
+		}
+	}
+	return true
+}
+
 func validateSarifResult(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.Result) {
 	validateContent(t, exactMatch,
-		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, *expected.RuleID)},
+		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, sarifutils.GetResultRuleId(expected))},
 	)
 	// validate properties
-	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, *expected.RuleID)
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, sarifutils.GetResultRuleId(expected))
 	// validate locations
 	for _, expectedLocation := range expected.Locations {
 		location := getLocationById(expectedLocation, actual.Locations)

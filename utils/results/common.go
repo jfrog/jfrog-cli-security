@@ -63,7 +63,7 @@ func PrepareJasIssues(target string, runs []*sarif.Run, entitledForJas bool, han
 			if err != nil {
 				return err
 			}
-			rule, err := run.GetRuleById(*result.RuleID)
+			rule, err := run.GetRuleById(sarifutils.GetResultRuleId(result))
 			if errorutils.CheckError(err) != nil {
 				return err
 			}
@@ -268,11 +268,6 @@ func GetScaIssueId(depName, version, issueId string) string {
 
 func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, applicabilityRuns []*sarif.Run, components map[string]services.Component) (convertedCves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus) {
 	convertedCves = convertCves(cves)
-	applicabilityStatus = jasutils.NotScanned
-	if !entitledForJas {
-		return
-	}
-	applicabilityStatus = jasutils.ApplicabilityUndetermined
 	for i := range convertedCves {
 		convertedCves[i].Applicability = GetCveApplicabilityField(convertedCves[i].Id, applicabilityRuns, components)
 	}

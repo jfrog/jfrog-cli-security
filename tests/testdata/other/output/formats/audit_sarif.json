@@ -78,7 +78,7 @@
           "arguments": [
             "/Users/assafa/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721283016-528285823/Secrets_1721283016/config.yaml"
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721411216-1033191970/Secrets_1721411216/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
@@ -223,7 +223,7 @@
           "arguments": [
             "/Users/assafa/.jfrog/dependencies/analyzerManager/iac_scanner/tf_scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721283016-528285823/IaC_1721283029/config.yaml"
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721411216-1033191970/IaC_1721411227/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
@@ -301,8 +301,8 @@
           "arguments": [
             "/Users/assafa/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721283016-528285823/Sast_1721283031/results.sarif",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721283016-528285823/Sast_1721283031/config.yaml"
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721411216-1033191970/Sast_1721411231/results.sarif",
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721411216-1033191970/Sast_1721411231/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
@@ -311,66 +311,6 @@
         }
       ],
       "results": [
-        {
-          "ruleId": "js-insecure-random",
-          "level": "note",
-          "message": {
-            "text": "Use of Insecure Random"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.js"
-                },
-                "region": {
-                  "startLine": 136,
-                  "startColumn": 22,
-                  "endLine": 136,
-                  "endColumn": 35,
-                  "snippet": {
-                    "text": "Math.random()"
-                  }
-                }
-              },
-              "logicalLocations": [
-                {
-                  "fullyQualifiedName": "public.js.bootstrap.^_0.Util.getUID"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "ruleId": "js-insecure-random",
-          "level": "note",
-          "message": {
-            "text": "Use of Insecure Random"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
-                },
-                "region": {
-                  "startLine": 135,
-                  "startColumn": 22,
-                  "endLine": 135,
-                  "endColumn": 35,
-                  "snippet": {
-                    "text": "Math.random()"
-                  }
-                }
-              },
-              "logicalLocations": [
-                {
-                  "fullyQualifiedName": "public.js.bootstrap\u003cdot\u003ebundle.^_0.Util.getUID"
-                }
-              ]
-            }
-          ]
-        },
         {
           "ruleId": "js-express-without-helmet",
           "level": "note",
@@ -509,6 +449,66 @@
               ]
             }
           ]
+        },
+        {
+          "ruleId": "js-insecure-random",
+          "level": "note",
+          "message": {
+            "text": "Use of Insecure Random"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.js"
+                },
+                "region": {
+                  "startLine": 136,
+                  "startColumn": 22,
+                  "endLine": 136,
+                  "endColumn": 35,
+                  "snippet": {
+                    "text": "Math.random()"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "public.js.bootstrap.^_0.Util.getUID"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "ruleId": "js-insecure-random",
+          "level": "note",
+          "message": {
+            "text": "Use of Insecure Random"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
+                },
+                "region": {
+                  "startLine": 135,
+                  "startColumn": 22,
+                  "endLine": 135,
+                  "endColumn": 35,
+                  "snippet": {
+                    "text": "Math.random()"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "public.js.bootstrap\u003cdot\u003ebundle.^_0.Util.getUID"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -519,16 +519,29 @@
           "name": "JFrog Xray SCA",
           "rules": [
             {
-              "id": "CVE-2022-29078_ejs_3.1.6",
+              "id": "CVE-2021-23337_lodash_4.17.0",
               "shortDescription": {
-                "text": "[CVE-2022-29078] ejs 3.1.6"
+                "text": "[CVE-2021-23337] lodash 4.17.0"
               },
               "help": {
-                "text": "The ejs (aka Embedded JavaScript templates) package 3.1.6 for Node.js allows server-side template injection in settings[view options][outputFunctionName]. This is parsed as an internal option, and overwrites the outputFunctionName option with an arbitrary OS command (which is executed upon template compilation).",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Applicable       | `ejs 3.1.6`       | [3.1.7]   |"
+                "text": "Lodash versions prior to 4.17.21 are vulnerable to Command Injection via the template function.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 7.2      | Not Applicable       | `lodash 4.17.0`       | [4.17.21]   |"
               },
               "properties": {
-                "security-severity": "9.8"
+                "security-severity": "7.2"
+              }
+            },
+            {
+              "id": "CVE-2018-16487_lodash_4.17.0",
+              "shortDescription": {
+                "text": "[CVE-2018-16487] lodash 4.17.0"
+              },
+              "help": {
+                "text": "A prototype pollution vulnerability was found in lodash \u003c4.17.11 where the functions merge, mergeWith, and defaultsDeep can be tricked into adding or modifying properties of Object.prototype.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 5.6      | Applicable       | `lodash 4.17.0`       | [4.17.11]   |"
+              },
+              "properties": {
+                "security-severity": "5.6"
               }
             },
             {
@@ -558,6 +571,19 @@
               }
             },
             {
+              "id": "CVE-2019-1010266_lodash_4.17.0",
+              "shortDescription": {
+                "text": "[CVE-2019-1010266] lodash 4.17.0"
+              },
+              "help": {
+                "text": "lodash prior to 4.17.11 is affected by: CWE-400: Uncontrolled Resource Consumption. The impact is: Denial of service. The component is: Date handler. The attack vector is: Attacker provides very long strings, which the library attempts to match using a regular expression. The fixed version is: 4.17.11.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.5      | Not Covered       | `lodash 4.17.0`       | [4.17.11]   |"
+              },
+              "properties": {
+                "security-severity": "6.5"
+              }
+            },
+            {
               "id": "CVE-2020-28500_lodash_4.17.0",
               "shortDescription": {
                 "text": "[CVE-2020-28500] lodash 4.17.0"
@@ -571,42 +597,42 @@
               }
             },
             {
-              "id": "CVE-2021-23337_lodash_4.17.0",
+              "id": "CVE-2018-3721_lodash_4.17.0",
               "shortDescription": {
-                "text": "[CVE-2021-23337] lodash 4.17.0"
+                "text": "[CVE-2018-3721] lodash 4.17.0"
               },
               "help": {
-                "text": "Lodash versions prior to 4.17.21 are vulnerable to Command Injection via the template function.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 7.2      | Not Applicable       | `lodash 4.17.0`       | [4.17.21]   |"
+                "text": "lodash node module before 4.17.5 suffers from a Modification of Assumed-Immutable Data (MAID) vulnerability via defaultsDeep, merge, and mergeWith functions, which allows a malicious user to modify the prototype of \"Object\" via __proto__, causing the addition or modification of an existing property that will exist on all objects.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.5      | Not Covered       | `lodash 4.17.0`       | [4.17.5]   |"
               },
               "properties": {
-                "security-severity": "7.2"
+                "security-severity": "6.5"
               }
             },
             {
-              "id": "CVE-2018-16487_lodash_4.17.0",
+              "id": "CVE-2022-29078_ejs_3.1.6",
               "shortDescription": {
-                "text": "[CVE-2018-16487] lodash 4.17.0"
+                "text": "[CVE-2022-29078] ejs 3.1.6"
               },
               "help": {
-                "text": "A prototype pollution vulnerability was found in lodash \u003c4.17.11 where the functions merge, mergeWith, and defaultsDeep can be tricked into adding or modifying properties of Object.prototype.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 5.6      | Applicable       | `lodash 4.17.0`       | [4.17.11]   |"
+                "text": "The ejs (aka Embedded JavaScript templates) package 3.1.6 for Node.js allows server-side template injection in settings[view options][outputFunctionName]. This is parsed as an internal option, and overwrites the outputFunctionName option with an arbitrary OS command (which is executed upon template compilation).",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Applicable       | `ejs 3.1.6`       | [3.1.7]   |"
               },
               "properties": {
-                "security-severity": "5.6"
+                "security-severity": "9.8"
               }
             },
             {
-              "id": "CVE-2024-39249_async_3.2.4",
+              "id": "CVE-2024-33883_ejs_3.1.6",
               "shortDescription": {
-                "text": "[CVE-2024-39249] async 3.2.4"
+                "text": "[CVE-2024-33883] ejs 3.1.6"
               },
               "help": {
-                "text": "Async \u003c= 2.6.4 and \u003c= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function. NOTE: this is disputed by the supplier because there is no realistic threat model: regular expressions are not used with untrusted input.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Not Covered       | `ejs 3.1.6`       | No fix available   |"
+                "text": "The ejs (aka Embedded JavaScript templates) package before 3.1.10 for Node.js lacks certain pollution protection.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.9      | Not Applicable       | `ejs 3.1.6`       | [3.1.10]   |"
               },
               "properties": {
-                "security-severity": "0.0"
+                "security-severity": "6.9"
               }
             },
             {
@@ -636,122 +662,41 @@
               }
             },
             {
-              "id": "CVE-2018-3721_lodash_4.17.0",
+              "id": "CVE-2024-39249_async_3.2.4",
               "shortDescription": {
-                "text": "[CVE-2018-3721] lodash 4.17.0"
+                "text": "[CVE-2024-39249] async 3.2.4"
               },
               "help": {
-                "text": "lodash node module before 4.17.5 suffers from a Modification of Assumed-Immutable Data (MAID) vulnerability via defaultsDeep, merge, and mergeWith functions, which allows a malicious user to modify the prototype of \"Object\" via __proto__, causing the addition or modification of an existing property that will exist on all objects.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.5      | Not Covered       | `lodash 4.17.0`       | [4.17.5]   |"
+                "text": "Async \u003c= 2.6.4 and \u003c= 3.2.5 are vulnerable to ReDoS (Regular Expression Denial of Service) while parsing function in autoinject function. NOTE: this is disputed by the supplier because there is no realistic threat model: regular expressions are not used with untrusted input.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Not Covered       | `ejs 3.1.6`       | No fix available   |"
               },
               "properties": {
-                "security-severity": "6.5"
-              }
-            },
-            {
-              "id": "CVE-2024-33883_ejs_3.1.6",
-              "shortDescription": {
-                "text": "[CVE-2024-33883] ejs 3.1.6"
-              },
-              "help": {
-                "text": "The ejs (aka Embedded JavaScript templates) package before 3.1.10 for Node.js lacks certain pollution protection.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.9      | Not Applicable       | `ejs 3.1.6`       | [3.1.10]   |"
-              },
-              "properties": {
-                "security-severity": "6.9"
-              }
-            },
-            {
-              "id": "CVE-2019-1010266_lodash_4.17.0",
-              "shortDescription": {
-                "text": "[CVE-2019-1010266] lodash 4.17.0"
-              },
-              "help": {
-                "text": "lodash prior to 4.17.11 is affected by: CWE-400: Uncontrolled Resource Consumption. The impact is: Denial of service. The component is: Date handler. The attack vector is: Attacker provides very long strings, which the library attempts to match using a regular expression. The fixed version is: 4.17.11.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 6.5      | Not Covered       | `lodash 4.17.0`       | [4.17.11]   |"
-              },
-              "properties": {
-                "security-severity": "6.5"
+                "security-severity": "0.0"
               }
             }
           ],
-          "version": "3.98.5"
+          "version": "3.98.2"
         }
       },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "workingDirectory": {
+            "uri": "/Users/user/ejs-frog-demo"
+          }
+        }
+      ],
       "results": [
         {
           "properties": {
-            "applicability": "Not Covered",
-            "fixedVersion": "No fix available"
+            "applicability": "Applicable",
+            "fixedVersion": "[4.17.11]"
           },
-          "ruleId": "CVE-2024-39249_async_3.2.4",
-          "ruleIndex": 6,
-          "level": "none",
-          "message": {
-            "text": "[CVE-2024-39249] ejs 3.1.6"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "file:///Users/user/ejs-frog-demo"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "properties": {
-            "applicability": "Not Applicable",
-            "fixedVersion": "[3.1.10]"
-          },
-          "ruleId": "CVE-2024-33883_ejs_3.1.6",
-          "ruleIndex": 10,
+          "ruleId": "CVE-2018-16487_lodash_4.17.0",
+          "ruleIndex": 1,
           "level": "warning",
           "message": {
-            "text": "[CVE-2024-33883] ejs 3.1.6"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "file:///Users/user/ejs-frog-demo"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "properties": {
-            "applicability": "Applicable",
-            "fixedVersion": "No fix available"
-          },
-          "ruleId": "CVE-2023-29827_ejs_3.1.6",
-          "ruleIndex": 7,
-          "level": "error",
-          "message": {
-            "text": "[CVE-2023-29827] ejs 3.1.6"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "file:///Users/user/ejs-frog-demo"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "properties": {
-            "applicability": "Applicable",
-            "fixedVersion": "[3.1.7]"
-          },
-          "ruleId": "CVE-2022-29078_ejs_3.1.6",
-          "ruleIndex": 0,
-          "level": "error",
-          "message": {
-            "text": "[CVE-2022-29078] ejs 3.1.6"
+            "text": "[CVE-2018-16487] lodash 4.17.0"
           },
           "locations": [
             {
@@ -769,7 +714,7 @@
             "fixedVersion": "[4.17.19]"
           },
           "ruleId": "CVE-2020-8203_lodash_4.17.0",
-          "ruleIndex": 1,
+          "ruleIndex": 2,
           "level": "error",
           "message": {
             "text": "[CVE-2020-8203] lodash 4.17.0"
@@ -790,7 +735,7 @@
             "fixedVersion": "[4.17.12]"
           },
           "ruleId": "CVE-2019-10744_lodash_4.17.0",
-          "ruleIndex": 2,
+          "ruleIndex": 3,
           "level": "error",
           "message": {
             "text": "[CVE-2019-10744] lodash 4.17.0"
@@ -811,7 +756,7 @@
             "fixedVersion": "[4.17.11]"
           },
           "ruleId": "CVE-2019-1010266_lodash_4.17.0",
-          "ruleIndex": 11,
+          "ruleIndex": 4,
           "level": "warning",
           "message": {
             "text": "[CVE-2019-1010266] lodash 4.17.0"
@@ -832,7 +777,7 @@
             "fixedVersion": "[4.17.21]"
           },
           "ruleId": "CVE-2020-28500_lodash_4.17.0",
-          "ruleIndex": 3,
+          "ruleIndex": 5,
           "level": "warning",
           "message": {
             "text": "[CVE-2020-28500] lodash 4.17.0"
@@ -853,7 +798,7 @@
             "fixedVersion": "[4.17.5]"
           },
           "ruleId": "CVE-2018-3721_lodash_4.17.0",
-          "ruleIndex": 9,
+          "ruleIndex": 6,
           "level": "warning",
           "message": {
             "text": "[CVE-2018-3721] lodash 4.17.0"
@@ -874,7 +819,7 @@
             "fixedVersion": "[4.17.21]"
           },
           "ruleId": "CVE-2021-23337_lodash_4.17.0",
-          "ruleIndex": 4,
+          "ruleIndex": 0,
           "level": "error",
           "message": {
             "text": "[CVE-2021-23337] lodash 4.17.0"
@@ -892,13 +837,55 @@
         {
           "properties": {
             "applicability": "Applicable",
-            "fixedVersion": "[4.17.11]"
+            "fixedVersion": "[3.1.7]"
           },
-          "ruleId": "CVE-2018-16487_lodash_4.17.0",
-          "ruleIndex": 5,
+          "ruleId": "CVE-2022-29078_ejs_3.1.6",
+          "ruleIndex": 7,
+          "level": "error",
+          "message": {
+            "text": "[CVE-2022-29078] ejs 3.1.6"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "file:///Users/user/ejs-frog-demo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "properties": {
+            "applicability": "Not Applicable",
+            "fixedVersion": "[3.1.10]"
+          },
+          "ruleId": "CVE-2024-33883_ejs_3.1.6",
+          "ruleIndex": 8,
           "level": "warning",
           "message": {
-            "text": "[CVE-2018-16487] lodash 4.17.0"
+            "text": "[CVE-2024-33883] ejs 3.1.6"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "file:///Users/user/ejs-frog-demo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2023-29827_ejs_3.1.6",
+          "ruleIndex": 9,
+          "level": "error",
+          "message": {
+            "text": "[CVE-2023-29827] ejs 3.1.6"
           },
           "locations": [
             {
@@ -916,10 +903,31 @@
             "fixedVersion": "[4.19.2], [5.0.0-beta.3]"
           },
           "ruleId": "CVE-2024-29041_express_4.18.2",
-          "ruleIndex": 8,
+          "ruleIndex": 10,
           "level": "warning",
           "message": {
             "text": "[CVE-2024-29041] express 4.18.2"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "file:///Users/user/ejs-frog-demo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "properties": {
+            "applicability": "Not Covered",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-39249_async_3.2.4",
+          "ruleIndex": 11,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-39249] ejs 3.1.6"
           },
           "locations": [
             {
@@ -1068,20 +1076,6 @@
               }
             },
             {
-              "id": "applic_CVE-2018-3721",
-              "name": "CVE-2018-3721",
-              "shortDescription": {
-                "text": "Scanner for uncovered CVE-2018-3721"
-              },
-              "fullDescription": {
-                "text": "",
-                "markdown": ""
-              },
-              "properties": {
-                "applicability": "not_covered"
-              }
-            },
-            {
               "id": "applic_CVE-2024-29041",
               "name": "CVE-2024-29041",
               "shortDescription": {
@@ -1125,6 +1119,20 @@
               }
             },
             {
+              "id": "applic_CVE-2018-3721",
+              "name": "CVE-2018-3721",
+              "shortDescription": {
+                "text": "Scanner for uncovered CVE-2018-3721"
+              },
+              "fullDescription": {
+                "text": "",
+                "markdown": ""
+              },
+              "properties": {
+                "applicability": "not_covered"
+              }
+            },
+            {
               "id": "applic_CVE-2024-39249",
               "name": "CVE-2024-39249",
               "shortDescription": {
@@ -1147,7 +1155,7 @@
           "arguments": [
             "/Users/assafa/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721283016-528285823/Applicability_1721283031/config.yaml"
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721411216-1033191970/Applicability_1721411231/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {

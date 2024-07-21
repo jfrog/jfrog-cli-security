@@ -121,6 +121,13 @@ func GetRunsByToolName(report *sarif.Report, toolName string) (filteredRuns []*s
 	return
 }
 
+func GetResultRuleId(result *sarif.Result) string {
+	if result.RuleID == nil {
+		return ""
+	}
+	return *result.RuleID
+}
+
 func GetResultMsgText(result *sarif.Result) string {
 	if result.Message.Text != nil {
 		return *result.Message.Text

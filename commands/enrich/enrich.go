@@ -156,21 +156,14 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	log.Info("JFrog Xray version is:", xrayVersion)
 
-	threads := 1
-	if enrichCmd.threads > 1 {
-		threads = enrichCmd.threads
-	}
-
 	scanResults := results.NewCommandResults(xrayVersion, false)
 
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
-	fileProducerErrors := make([][]formats.SimpleJsonError, threads)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
-	indexedFileProducerErrors := make([][]formats.SimpleJsonError, threads)
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)
 	// Start walking on the filesystem to "produce" files that match the given pattern
 	// while the consumer uses the indexer to index those files.
-	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, scanResults, indexedFileProducerErrors, fileCollectingErrorsQueue, xrayVersion)
+	enrichCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, scanResults, fileCollectingErrorsQueue, xrayVersion)
 	enrichCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer)
 
 	if enrichCmd.progress != nil {
@@ -181,14 +174,9 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	}
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
-	var scanErrors []formats.SimpleJsonError
 	if fileCollectingErr != nil {
-		scanErrors = append(scanErrors, formats.SimpleJsonError{ErrorMessage: fileCollectingErr.Error()})
+		scanResults.Error = errors.Join(scanResults.Error, fileCollectingErr)
 	}
-	scanErrors = appendErrorSlice(scanErrors, fileProducerErrors)
-	scanErrors = appendErrorSlice(scanErrors, indexedFileProducerErrors)
-
-	scanResults.XrayVersion = xrayVersion
 
 	isxml, err := isXML(scanResults.Targets)
 	if err != nil {
@@ -207,9 +195,8 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	if err != nil {
 		return err
 	}
-
-	if len(scanErrors) > 0 {
-		return errorutils.CheckErrorf(scanErrors[0].ErrorMessage)
+	if scanResults.GetErrors() != nil {
+		return errorutils.CheckErrorf(scanResults.GetErrors().Error())
 	}
 	log.Info("Enrich process completed successfully.")
 	return nil
@@ -223,13 +210,13 @@ func (enrichCmd *EnrichCommand) CommandName() string {
 	return "xr_enrich"
 }
 
-func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, indexedFileErrors [][]formats.SimpleJsonError, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
+func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, fileCollectingErrorsQueue *clientutils.ErrorsQueue, xrayVersion string) {
 	go func() {
 		defer fileProducer.Done()
 		// Iterate over file-spec groups and produce indexing tasks.
 		// When encountering an error, log and move to next group.
 		specFiles := enrichCmd.spec.Files
-		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, cmdResults, indexedFileErrors, xrayVersion)
+		artifactHandlerFunc := enrichCmd.createIndexerHandlerFunc(indexedFileProducer, cmdResults, xrayVersion)
 		taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 
 		err := FileForEnriching(specFiles[0], taskHandler)
@@ -240,7 +227,7 @@ func (enrichCmd *EnrichCommand) prepareScanTasks(fileProducer, indexedFileProduc
 	}()
 }
 
-func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, indexedFileErrors [][]formats.SimpleJsonError, xrayVersion string) FileContext {
+func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer parallel.Runner, cmdResults *results.SecurityCommandResults, xrayVersion string) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			// Add a new task to the second producer/consumer
