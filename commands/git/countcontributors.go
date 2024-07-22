@@ -12,6 +12,8 @@ import (
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
+	"gopkg.in/yaml.v3"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -75,21 +77,42 @@ type Report struct {
 }
 
 type CountContributorsCommand struct {
-	vcsClient vcsclient.VcsClient
 	CountContributorsParams
+	// Progress bar.
+	Progress ioUtils.ProgressMgr
+}
+
+// VcsCountContributors combine all the count contributors functionality for one specific VCS.
+type VcsCountContributors struct {
+	vcsClient vcsclient.VcsClient
+	params    CountContributorsParams
+}
+
+type GitServersList struct {
+	ServersList []BasicGitServerParams `yaml:"git-servers-list"`
+}
+
+// BasicGitServerParams basic parameters needed for calling git providers APIs.
+type BasicGitServerParams struct {
+	// SCM type.
+	ScmType vcsutils.VcsProvider `yaml:"scm-type"`
+	// SCM API URL. For example: 'https://api.github.com'.
+	ScmApiUrl string `yaml:"scm-api-url"`
+	// SCM API token.
+	Token string `yaml:"token"`
+	// The format of the owner key depends on the Git provider:
+	// - On GitHub and GitLab, the owner is typically an individual or an organization.
+	// - On Bitbucket, the owner can also be a project. In the case of a private instance,
+	//   the individual or organization name should be prefixed with '~'.
+	Owner string `yaml:"owner"`
+	// List of specific repositories names to analyze, If not provided all repositories in the project will be analyzed.
+	Repositories []string `yaml:"repositories,omitempty"`
 }
 
 type CountContributorsParams struct {
-	// SCM type.
-	ScmType vcsutils.VcsProvider
-	// SCM API URL. For example: 'https://api.github.com'.
-	ScmApiUrl string
-	// SCM API token.
-	Token string
-	// Depends on the git provider - on GitHub and GitLab the owner is usually an individual or an organization, on bitbucket it is a project.
-	Owner string
-	// Specific repository name to analyze, If not provided all repositories in the project will be analyzed.
-	Repository string
+	BasicGitServerParams
+	// Path to a file contains multiple git providers to analyze.
+	InputFile string
 	// Number of months to analyze.
 	MonthsNum int
 	// Detailed summery flag.
@@ -99,18 +122,13 @@ type CountContributorsParams struct {
 }
 
 func NewCountContributorsCommand(params *CountContributorsParams) (*CountContributorsCommand, error) {
-	client, err := vcsclient.NewClientBuilder(params.ScmType).ApiEndpoint(params.ScmApiUrl).Token(params.Token).Build()
-	if err != nil {
-		return nil, err
-	}
 	return &CountContributorsCommand{
-		vcsClient:               client,
 		CountContributorsParams: *params,
 	}, nil
 }
 
-func (ccp *CountContributorsParams) SetProgress(progress ioUtils.ProgressMgr) {
-	ccp.Progress = progress
+func (cc *CountContributorsCommand) SetProgress(progress ioUtils.ProgressMgr) {
+	cc.Progress = progress
 }
 
 // ScmType represents the valid values that can be provided to the 'scmTypeName' flag.
@@ -148,26 +166,71 @@ func (cc *CountContributorsCommand) Run() error {
 	uniqueContributors := make(map[BasicContributor]Contributor)
 	detailedContributors := make(map[string]map[string]ContributorDetailedSummary)
 	detailedRepos := make(map[string]map[string]RepositoryDetailedSummary)
-
-	repositories, err := cc.getRepositoriesListToScan()
+	var totalScannedRepos []string
+	var totalSkippedRepos []string
+	totalCommitsNumber := 0
+	vcsCountContributors, err := cc.getVcsCountContributors()
 	if err != nil {
 		return err
 	}
-	scannedRepos, skippedRepos, totalCommits := cc.scanAndCollectCommitsInfo(repositories, uniqueContributors, detailedContributors, detailedRepos)
+	// Scan all repos from all provided git servers.
+	for _, vcc := range vcsCountContributors {
+		repositories, err := vcc.getRepositoriesListToScan()
+		if err != nil {
+			return err
+		}
+		scannedRepos, skippedRepos, commitsNumber := vcc.scanAndCollectCommitsInfo(repositories, uniqueContributors, detailedContributors, detailedRepos)
+		totalScannedRepos = append(totalScannedRepos, scannedRepos...)
+		totalSkippedRepos = append(totalSkippedRepos, skippedRepos...)
+		totalCommitsNumber += commitsNumber
+	}
 
 	// Create the report.
 	report := cc.aggregateReportResults(uniqueContributors, detailedContributors, detailedRepos)
-	report.TotalCommits = totalCommits
-	report.ScannedRepos = scannedRepos
-	report.SkippedRepos = skippedRepos
+	report.TotalCommits = totalCommitsNumber
+	report.ScannedRepos = totalScannedRepos
+	report.SkippedRepos = totalSkippedRepos
 
 	return utils.PrintJson(report)
 }
 
-func (cc *CountContributorsCommand) scanAndCollectCommitsInfo(repositories []string, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) (scannedRepos, skippedRepos []string, totalCommits int) {
+func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContributors, error) {
+	if cc.InputFile == "" {
+		vcsClient, err := vcsclient.NewClientBuilder(cc.ScmType).ApiEndpoint(cc.ScmApiUrl).Token(cc.Token).Build()
+		if err != nil {
+			return nil, err
+		}
+		return []VcsCountContributors{{params: cc.CountContributorsParams, vcsClient: vcsClient}}, nil
+	}
+	// Handle the case of provided input file.
+	data, err := os.ReadFile(cc.InputFile)
+	if err != nil {
+		return nil, err
+	}
+	var gitServersList GitServersList
+	err = yaml.Unmarshal(data, &gitServersList)
+	if err != nil {
+		return nil, err
+	}
+	if len(gitServersList.ServersList) == 0 {
+		return nil, fmt.Errorf("no git servers data was provided in the input file %s", cc.InputFile)
+	}
+	var contributors []VcsCountContributors
+	for _, param := range gitServersList.ServersList {
+		p := CountContributorsParams{BasicGitServerParams: param, MonthsNum: cc.MonthsNum, DetailedSummery: cc.DetailedSummery}
+		vcsClient, err := vcsclient.NewClientBuilder(param.ScmType).ApiEndpoint(param.ScmApiUrl).Token(param.Token).Build()
+		if err != nil {
+			return nil, err
+		}
+		contributors = append(contributors, VcsCountContributors{params: p, vcsClient: vcsClient})
+	}
+	return contributors, nil
+}
+
+func (cc *VcsCountContributors) scanAndCollectCommitsInfo(repositories []string, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) (scannedRepos, skippedRepos []string, totalCommits int) {
 	// initialize commits query options.
 	commitsListOptions := vcsclient.GitCommitsQueryOptions{
-		Since: time.Now().AddDate(0, -1*cc.MonthsNum, 0),
+		Since: time.Now().AddDate(0, -1*cc.params.MonthsNum, 0),
 		ListOptions: vcsclient.ListOptions{
 			Page:    1,
 			PerPage: vcsutils.NumberOfCommitsToFetch,
@@ -198,22 +261,41 @@ func (cc *CountContributorsCommand) scanAndCollectCommitsInfo(repositories []str
 }
 
 // getRepositoriesListToScan returns a list of repositories to scan.
-// If a specific repository was provided by the user, return it.
+// If specific repositories were provided by the user, return them.
 // otherwise, return the list of all the repositories related to the group/project.
-func (cc *CountContributorsCommand) getRepositoriesListToScan() ([]string, error) {
-	if cc.Repository != "" {
-		return []string{cc.Repository}, nil
+func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
+	if len(cc.params.Repositories) > 0 {
+		return cc.params.Repositories, nil
+	}
+	if cc.vcsClient == nil {
+		return nil, errors.New("failed to get repositories list, missing vcs client")
 	}
 	reposMap, err := cc.vcsClient.ListRepositories(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	return reposMap[cc.Owner], nil
+	return cc.getOwnersMatchingRepos(reposMap)
 }
 
-func (cc *CountContributorsCommand) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
+// getOwnersMatchingRepos gets all projects and their repo map and look for thr specific owner.
+func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
+	repos := reposMap[cc.params.Owner]
+	if len(repos) == 0 {
+		// Matching owner name without considering lower/upper cases.
+		normalizedSearchKey := strings.ToUpper(cc.params.Owner)
+		for owner, repoList := range reposMap {
+			if strings.ToUpper(owner) == normalizedSearchKey {
+				return repoList, nil
+			}
+		}
+		return nil, fmt.Errorf(fmt.Sprintf("No repositories found for owner %s in %s at URL %s", cc.params.Owner, cc.params.ScmType, cc.params.ScmApiUrl))
+	}
+	return repos, nil
+}
+
+func (cc *VcsCountContributors) GetCommitsWithQueryOptions(repo string, options vcsclient.GitCommitsQueryOptions) ([]vcsclient.CommitInfo, error) {
 	for i := 0; i < getCommitsRetryNumber; i++ {
-		commits, err := cc.vcsClient.GetCommitsWithQueryOptions(context.Background(), cc.Owner, repo, options)
+		commits, err := cc.vcsClient.GetCommitsWithQueryOptions(context.Background(), cc.params.Owner, repo, options)
 		if err != nil {
 			// Handling a possible known GitHub rate limit error.
 			var rateLimitError *github.RateLimitError
@@ -232,13 +314,13 @@ func (cc *CountContributorsCommand) GetCommitsWithQueryOptions(repo string, opti
 	return nil, errors.New("GetCommitsWithQueryOptions retries exceeded")
 }
 
-func (cc *CountContributorsCommand) saveCommitsInfoInMaps(repoName string, commits []vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
+func (cc *VcsCountContributors) saveCommitsInfoInMaps(repoName string, commits []vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
 	for _, commit := range commits {
 		cc.saveCommitInfoInMaps(repoName, commit, uniqueContributors, detailedContributors, detailedRepos)
 	}
 }
 
-func (cc *CountContributorsCommand) saveCommitInfoInMaps(repoName string, commit vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
+func (cc *VcsCountContributors) saveCommitInfoInMaps(repoName string, commit vcsclient.CommitInfo, uniqueContributors map[BasicContributor]Contributor, detailedContributors map[string]map[string]ContributorDetailedSummary, detailedRepos map[string]map[string]RepositoryDetailedSummary) {
 	authorName := commit.AuthorName
 	authorEmail := commit.AuthorEmail
 	lastCommit := LastCommit{
@@ -257,7 +339,7 @@ func (cc *CountContributorsCommand) saveCommitInfoInMaps(repoName string, commit
 		}
 	}
 
-	if cc.DetailedSummery {
+	if cc.params.DetailedSummery {
 		// Save the last commit of every contributor in every repository where he has contributed.
 		if detailedContributors[authorEmail] == nil {
 			detailedContributors[authorEmail] = make(map[string]ContributorDetailedSummary)
