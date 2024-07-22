@@ -158,7 +158,7 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	if r.EntitledForJas {
 		targetResults.JasResults = &JasScansResults{}
 	}
-	
+
 	r.targetsMutex.Lock()
 	r.Targets = append(r.Targets, targetResults)
 	r.targetsMutex.Unlock()

@@ -20,9 +20,9 @@ const (
 	FixedVersionSarifPropertyKey = "fixedVersion"
 	WatchSarifPropertyKey        = "watch"
 
-	ScaToolName               = "JFrog Xray SCA"
-	SastToolName              = "USAF"
-	IacToolName               = "JFrog Terraform scanner"
+	ScaToolName  = "JFrog Xray SCA"
+	SastToolName = "USAF"
+	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
 	SecretsToolName           = "JFrog Secrets scanner"
 	ContexualAnalysisToolName = "JFrog Applicability Scanner"

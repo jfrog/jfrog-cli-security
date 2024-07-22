@@ -335,9 +335,13 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 			target:         "target",
 			entitledForJas: true,
 			applicablityRuns: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
-					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(
+					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
+				}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(
+					"applicability", "applicable", sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
 				}),
@@ -434,107 +438,152 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 			target: "target",
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
+					Cves:       []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-A",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-A",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
 				},
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
+					Cves:       []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 				{
-					Summary: "summary-2",
-					IssueId: "XRAY-2",
+					Summary:    "summary-2",
+					IssueId:    "XRAY-2",
+					Cves: []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
 						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
-
+			},
+			expectedLicenseOutput: []formats.LicenseRow{
 				{
-					IssueId:       "XRAY-2",
-					Summary:       "summary-2",
-					Severity:      "Low",
-					WatchName:     "watch-1",
-					ViolationType: "license",
-					LicenseKey:    "license-1",
-					Components:    map[string]services.Component{"component-B": {}},
+					LicenseKey: "license-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						ImpactedDependencyName: "component-B",
+						Components: []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+					},
 				},
 			},
 		},
 		{
 			name: "Violations with applicability",
-			input: []services.Violation{
-				{
-					IssueId:       "XRAY-1",
-					Summary:       "summary-1",
-					Severity:      "High",
-					WatchName:     "watch-1",
-					ViolationType: "security",
-					Components:    map[string]services.Component{"component-A": {}, "component-B": {}},
-				},
-				{
-					IssueId:       "XRAY-2",
-					Summary:       "summary-2",
-					Severity:      "Low",
-					WatchName:     "watch-1",
-					ViolationType: "license",
-					LicenseKey:    "license-1",
-					Components:    map[string]services.Component{"component-B": {}},
-				},
-			},
+			input: testScaScanViolation,
 			target:         "target",
 			entitledForJas: true,
 			applicablityRuns: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
-					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(
+					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
+				}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(
+					"applicability", "applicable", sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
 				).WithInvocations([]*sarif.Invocation{
 					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
 				}),
 			},
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
+					Applicable: jasutils.NotApplicable.String(),
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
-						Components:             []formats.ComponentRow{{Name: "component-A", Location: &formats.Location{File: "target"}}},
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-A",
+							Location: &formats.Location{File: "target"},
+						}},
 					},
-					Applicable: jasutils.NotApplicable.String(),
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
 				},
 				{
-					Summary: "summary-1",
-					IssueId: "XRAY-1",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High"},
-						ImpactedDependencyName: "component-B",
-						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
-					},
+					Summary:    "summary-1",
+					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
+						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
+					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 				{
-					Summary: "summary-2",
-					IssueId: "XRAY-2",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
-						ImpactedDependencyName: "component-B",
-						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
-					},
+					Summary:    "summary-2",
+					IssueId:    "XRAY-2",
 					Applicable: jasutils.Applicable.String(),
+					Cves: []formats.CveRow{{
+						Id: "CVE-2",
+						Applicability: &formats.Applicability{
+							Status: jasutils.Applicable.String(),
+							Evidence: []formats.Evidence{{
+								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+								Reason:   "applic_CVE-2",
+							}},
+						},
+					}},
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
+					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 			},
-		},
-		{
-			name: "Violations - override allowed licenses",
+			expectedLicenseOutput: []formats.LicenseRow{
+				{
+					LicenseKey: "license-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
+						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
+					},
+				},
+			},
 		},
 	}
 

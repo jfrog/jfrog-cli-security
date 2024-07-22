@@ -242,6 +242,15 @@ func IsResultKindNotPass(result *sarif.Result) bool {
 	return !(result.Kind != nil && *result.Kind == "pass")
 }
 
+func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {
+	for _, rule := range GetRunRules(run) {
+		if rule.ID == ruleId {
+			return rule
+		}
+	}
+	return nil
+}
+
 func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
 	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
