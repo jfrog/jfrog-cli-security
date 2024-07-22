@@ -840,9 +840,6 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 }
 
 func Test_convertResultsToSummary(t *testing.T) {
-	type args struct {
-		results map[string]CurationReport
-	}
 	tests := []struct {
 		name     string
 		input    map[string]CurationReport
@@ -872,7 +869,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 				},
 			},
 			expected: formats.SummaryResults{
-				[]formats.ScanSummaryResult{
+				Scans: []formats.ScanSummaryResult{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
@@ -943,7 +940,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 				},
 			},
 			expected: formats.SummaryResults{
-				[]formats.ScanSummaryResult{
+				Scans: []formats.ScanSummaryResult{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{

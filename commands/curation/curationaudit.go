@@ -188,9 +188,8 @@ func NewCurationAuditCommand() *CurationAuditCommand {
 	}
 }
 
-func (ca *CurationAuditCommand) setPackageManagerConfig(pkgMangerConfig *project.RepositoryConfig) *CurationAuditCommand {
+func (ca *CurationAuditCommand) setPackageManagerConfig(pkgMangerConfig *project.RepositoryConfig) {
 	ca.PackageManagerConfig = pkgMangerConfig
-	return ca
 }
 
 func (ca *CurationAuditCommand) SetWorkingDirs(dirs []string) *CurationAuditCommand {
@@ -307,7 +306,7 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]CurationReport)
 			return err
 		}
 		ca.setPackageManagerConfig(nil)
-		ca.SetDepsRepo("")
+		ca.AuditParams = ca.SetDepsRepo("")
 
 	}
 	return nil
