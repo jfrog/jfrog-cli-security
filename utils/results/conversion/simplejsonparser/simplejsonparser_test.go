@@ -438,9 +438,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 			target: "target",
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
-					Summary:    "summary-1",
-					IssueId:    "XRAY-1",
-					Cves:       []formats.CveRow{{Id: "CVE-1"}},
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-A",
@@ -453,9 +453,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
 				},
 				{
-					Summary:    "summary-1",
-					IssueId:    "XRAY-1",
-					Cves:       []formats.CveRow{{Id: "CVE-1"}},
+					Summary: "summary-1",
+					IssueId: "XRAY-1",
+					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
 						ImpactedDependencyName: "component-B",
@@ -468,9 +468,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
 				},
 				{
-					Summary:    "summary-2",
-					IssueId:    "XRAY-2",
-					Cves: []formats.CveRow{{Id: "CVE-2"}},
+					Summary: "summary-2",
+					IssueId: "XRAY-2",
+					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
 						ImpactedDependencyName: "component-B",
@@ -489,14 +489,14 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
 						ImpactedDependencyName: "component-B",
-						Components: []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
 				},
 			},
 		},
 		{
-			name: "Violations with applicability",
-			input: testScaScanViolation,
+			name:           "Violations with applicability",
+			input:          testScaScanViolation,
 			target:         "target",
 			entitledForJas: true,
 			applicablityRuns: []*sarif.Run{
