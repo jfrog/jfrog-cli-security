@@ -256,7 +256,7 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
 	var results *sarif.Report
-	if !assert.NoError(t, json.Unmarshal(content, results)) {
+	if !assert.NoError(t, json.Unmarshal(content, &results)) {
 		return &sarif.Report{}
 	}
 	// replace paths separators

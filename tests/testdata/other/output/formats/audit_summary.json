@@ -1,7 +1,7 @@
 {
     "scans": [
         {
-            "target": "ejs-frog-demo",
+            "target": "/Users/user/ejs-frog-demo",
             "vulnerabilities": {
                 "sca": {
                     "sca": {
