@@ -244,7 +244,9 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	var reportFileName string
 	if auditPython.IsCurationCmd {
 		// upgrade pip version to 23.0.0, as it is required for the curation command.
-		err = upgradePipVersion("23.0.0")
+		if err = upgradePipVersion("23.0.0"); err != nil {
+			log.Warn(fmt.Sprintf("Failed to upgrade pip version, err: %v", err))
+		}
 		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
@@ -272,10 +274,10 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	return
 }
 
-func upgradePipVersion(atLeastVersion string) error {
+func upgradePipVersion(atLeastVersion string) (err error) {
 	output, err := executeCommandWithOutput("python", "-m", "pip", "--version")
 	if err != nil {
-		log.Warn(err)
+		return
 	}
 	outputVersion := ""
 	if splitVersion := strings.Split(output, " "); len(splitVersion) > 1 {
@@ -283,13 +285,13 @@ func upgradePipVersion(atLeastVersion string) error {
 	}
 	log.Debug("Current pip version in virtual env:", outputVersion)
 	if version.NewVersion(outputVersion).AtLeast(atLeastVersion) {
-		return nil
+		return
 	}
 	err = executeCommand("python", "-m", "pip", "install", "--upgrade", "pip")
 	if err != nil {
-		log.Warn(err)
+		return
 	}
-	return err
+	return
 }
 
 func executeCommand(executable string, args ...string) error {
