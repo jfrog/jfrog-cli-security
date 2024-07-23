@@ -308,10 +308,3 @@ func FileForEnriching(fileData spec.File, dataHandlerFunc indexFileHandlerFunc) 
 	}
 	return errors.New("directory instead of a single file")
 }
-
-func appendErrorSlice(scanErrors []formats.SimpleJsonError, errorsToAdd [][]formats.SimpleJsonError) []formats.SimpleJsonError {
-	for _, errorSlice := range errorsToAdd {
-		scanErrors = append(scanErrors, errorSlice...)
-	}
-	return scanErrors
-}
