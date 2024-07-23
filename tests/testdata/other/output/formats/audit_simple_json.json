@@ -10,7 +10,7 @@
           "name": "ejs",
           "version": "3.1.6",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -88,7 +88,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -133,7 +133,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -178,7 +178,7 @@
           "name": "express",
           "version": "4.18.2",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -224,7 +224,7 @@
           "name": "ejs",
           "version": "3.1.6",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -300,7 +300,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -377,7 +377,7 @@
           "name": "ejs",
           "version": "3.1.6",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -453,7 +453,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -523,7 +523,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -586,7 +586,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -663,7 +663,7 @@
           "name": "ejs",
           "version": "3.1.6",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],
@@ -729,7 +729,7 @@
           "name": "lodash",
           "version": "4.17.0",
           "location": {
-            "file": "/dir/ejs-frog-demo/package.json"
+            "file": "ejs-frog-demo/package.json"
           }
         }
       ],

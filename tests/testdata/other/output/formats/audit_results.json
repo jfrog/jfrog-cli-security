@@ -4,12 +4,12 @@
     "multi_scan_id": "7d5e4733-3f93-11ef-8147-e610d09d7daa",
     "targets": [
       {
-        "target": "/dir/ejs-frog-demo",
+        "target": "ejs-frog-demo",
         "technology": "npm",
         "sca_scans": {
           "is_multiple_root_project": false,
           "descriptors": [
-          "/dir/ejs-frog-demo/package.json"
+          "ejs-frog-demo/package.json"
         ],
           "xray_scan": [
             {
@@ -964,7 +964,7 @@
                   ],
                   "executionSuccessful": true,
                   "workingDirectory": {
-                    "uri": "/dir/ejs-frog-demo"
+                    "uri": "ejs-frog-demo"
                   }
                 }
               ],
@@ -978,7 +978,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 1,
@@ -1009,7 +1009,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 1,
@@ -1061,7 +1061,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 1,
@@ -1099,7 +1099,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 15,
@@ -1123,7 +1123,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 27,
@@ -1229,7 +1229,7 @@
                   ],
                   "executionSuccessful": true,
                   "workingDirectory": {
-                    "uri": "/dir/ejs-frog-demo"
+                    "uri": "ejs-frog-demo"
                   }
                 }
               ],
@@ -1243,7 +1243,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/fake-creds.txt"
+                          "uri": "file://ejs-frog-demo/fake-creds.txt"
                         },
                         "region": {
                           "startLine": 1,
@@ -1267,7 +1267,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/fake-creds.txt"
+                          "uri": "file://ejs-frog-demo/fake-creds.txt"
                         },
                         "region": {
                           "startLine": 2,
@@ -1291,7 +1291,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/fake-creds.txt"
+                          "uri": "file://ejs-frog-demo/fake-creds.txt"
                         },
                         "region": {
                           "startLine": 3,
@@ -1315,7 +1315,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 10,
@@ -1339,7 +1339,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 11,
@@ -1376,7 +1376,7 @@
                   ],
                   "executionSuccessful": true,
                   "workingDirectory": {
-                    "uri": "/dir/ejs-frog-demo"
+                    "uri": "ejs-frog-demo"
                   }
                 }
               ],
@@ -1457,7 +1457,7 @@
                   ],
                   "executionSuccessful": true,
                   "workingDirectory": {
-                    "uri": "/dir/ejs-frog-demo"
+                    "uri": "ejs-frog-demo"
                   }
                 }
               ],
@@ -1472,7 +1472,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/public/js/bootstrap.js"
+                          "uri": "file://ejs-frog-demo/public/js/bootstrap.js"
                         },
                         "region": {
                           "startLine": 136,
@@ -1502,7 +1502,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/public/js/bootstrap.bundle.js"
+                          "uri": "file://ejs-frog-demo/public/js/bootstrap.bundle.js"
                         },
                         "region": {
                           "startLine": 135,
@@ -1532,7 +1532,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 8,
@@ -1562,7 +1562,7 @@
                     {
                       "physicalLocation": {
                         "artifactLocation": {
-                          "uri": "file:///dir/ejs-frog-demo/server.js"
+                          "uri": "file://ejs-frog-demo/server.js"
                         },
                         "region": {
                           "startLine": 26,
@@ -1590,7 +1590,7 @@
                               "location": {
                                 "physicalLocation": {
                                   "artifactLocation": {
-                                    "uri": "file:///dir/ejs-frog-demo/server.js"
+                                    "uri": "file://ejs-frog-demo/server.js"
                                   },
                                   "region": {
                                     "startLine": 22,
@@ -1613,7 +1613,7 @@
                               "location": {
                                 "physicalLocation": {
                                   "artifactLocation": {
-                                    "uri": "file:///dir/ejs-frog-demo/server.js"
+                                    "uri": "file://ejs-frog-demo/server.js"
                                   },
                                   "region": {
                                     "startLine": 27,
@@ -1636,7 +1636,7 @@
                               "location": {
                                 "physicalLocation": {
                                   "artifactLocation": {
-                                    "uri": "file:///dir/ejs-frog-demo/server.js"
+                                    "uri": "file://ejs-frog-demo/server.js"
                                   },
                                   "region": {
                                     "startLine": 27,

@@ -136,7 +136,6 @@ func ChangeWD(t *testing.T, newPath string) string {
 
 func ReadOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
-
 	assert.NoError(t, err)
 	return strings.ReplaceAll(filepath.FromSlash(strings.ReplaceAll(string(content), "\r\n", "\n")), "<"+string(filepath.Separator), "</")
 }
