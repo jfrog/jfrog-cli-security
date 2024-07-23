@@ -37,6 +37,7 @@ type CmdResultsSarifConverter struct {
 	current               *sarif.Report
 	scaCurrentRun         *sarif.Run
 	currentApplicableRuns *datastructures.Set[*sarif.Run]
+
 	// General information on the current command results
 	entitledForJas bool
 	xrayVersion    string
