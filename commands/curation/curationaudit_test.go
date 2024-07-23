@@ -478,7 +478,15 @@ func TestDoCurationAudit(t *testing.T) {
 			// Add the mock server to the expected blocked message url
 			for key := range tt.expectedResp {
 				for index := range tt.expectedResp[key].packagesStatus {
-					tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s", strings.TrimSuffix(config.GetArtifactoryUrl(), "/"), tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
+					tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s",
+						strings.TrimSuffix(config.GetArtifactoryUrl(), "/"),
+						tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
+				}
+			}
+			// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
+			if tt.tech == techutils.Pip {
+				for _, res := range results {
+					res.totalNumberOfPackages = 0
 				}
 			}
 			assert.Equal(t, tt.expectedResp, results)
@@ -507,6 +515,7 @@ type testCase struct {
 	requestToError           map[string]bool
 	expectedError            string
 	cleanDependencies        func() error
+	tech                     techutils.Technology
 	createServerWithoutCreds bool
 }
 
@@ -514,6 +523,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
 		{
 			name:                     "go tree - one blocked package",
+			tech:                     techutils.Go,
 			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "curation-project", ".jfrog"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
@@ -574,6 +584,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 
 		{
 			name:       "python tree - one blocked package",
+			tech:       techutils.Pip,
 			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
 			serveResources: map[string]string{
 				"pip":                                   filepath.Join("resources", "pip-resp"),
@@ -611,6 +622,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		},
 		{
 			name:          "maven tree - one blocked package",
+			tech:          techutils.Maven,
 			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
@@ -662,6 +674,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		},
 		{
 			name:                   "npm tree - two blocked package ",
+			tech:                   techutils.Npm,
 			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
@@ -697,6 +710,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		},
 		{
 			name:                   "npm tree - two blocked one error",
+			tech:                   techutils.Npm,
 			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
