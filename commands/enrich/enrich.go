@@ -121,7 +121,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 
 func isXML(scaResults []*results.TargetResults) (bool, error) {
 	if len(scaResults) == 0 {
-		return false, errors.New("unable to retrieve file")
+		return false, errors.New("unable to retrieve results")
 	}
 	fileName := scaResults[0].Target
 	var x interface{}

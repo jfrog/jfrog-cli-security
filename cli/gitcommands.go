@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
+	"strings"
 )
 
 func getGitNameSpaceCommands() []components.Command {
@@ -26,58 +27,61 @@ func getGitNameSpaceCommands() []components.Command {
 
 func GetCountContributorsParams(c *components.Context) (*git.CountContributorsParams, error) {
 	params := git.CountContributorsParams{}
-	// Mandatory flags
-	scmTypes := git.NewScmType()
-	// ScmType
-	scmType := c.GetStringFlagValue(flags.ScmType)
-	if scmType == "" {
-		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmType)
-	} else {
-		if scmTypeVal, ok := scmTypes.ScmTypeMap[scmType]; ok {
-			params.ScmType = scmTypeVal
+	params.InputFile = c.GetStringFlagValue(flags.InputFile)
+	if params.InputFile == "" {
+		// Mandatory flags in case no input file was provided.
+		scmTypes := git.NewScmType()
+		// ScmType
+		scmType := c.GetStringFlagValue(flags.ScmType)
+		if scmType == "" {
+			return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmType)
 		} else {
-			return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
+			if scmTypeVal, ok := scmTypes.ScmTypeMap[scmType]; ok {
+				params.ScmType = scmTypeVal
+			} else {
+				return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
+			}
 		}
-	}
-	// Token
-	params.Token = c.GetStringFlagValue(flags.Token)
-	if params.Token == "" {
-		var envVarToken string
-		switch params.ScmType {
-		case vcsutils.BitbucketServer:
-			envVarToken = os.Getenv(git.BitbucketTokenEnvVar)
-		case vcsutils.GitLab:
-			envVarToken = os.Getenv(git.GitlabTokenEnvVar)
-		case vcsutils.GitHub:
-			envVarToken = os.Getenv(git.GithubTokenEnvVar)
-		default:
-			return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
-		}
-		if envVarToken != "" {
-			params.Token = envVarToken
-		} else {
-			envVarToken = os.Getenv(git.GenericGitTokenEnvVar)
+		// Token
+		params.Token = c.GetStringFlagValue(flags.Token)
+		if params.Token == "" {
+			var envVarToken string
+			switch params.ScmType {
+			case vcsutils.BitbucketServer:
+				envVarToken = os.Getenv(git.BitbucketTokenEnvVar)
+			case vcsutils.GitLab:
+				envVarToken = os.Getenv(git.GitlabTokenEnvVar)
+			case vcsutils.GitHub:
+				envVarToken = os.Getenv(git.GithubTokenEnvVar)
+			default:
+				return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
+			}
 			if envVarToken != "" {
 				params.Token = envVarToken
 			} else {
-				return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token enviromment variable %s, or coresponding provider enviromment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
+				envVarToken = os.Getenv(git.GenericGitTokenEnvVar)
+				if envVarToken != "" {
+					params.Token = envVarToken
+				} else {
+					return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token enviromment variable %s, or coresponding provider enviromment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
+				}
 			}
 		}
-	}
-	// Owner
-	params.Owner = c.GetStringFlagValue(flags.Owner)
-	if params.Owner == "" {
-		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.Owner)
-	}
-	// ScmApiUrl
-	params.ScmApiUrl = c.GetStringFlagValue(flags.ScmApiUrl)
-	if params.ScmApiUrl == "" {
-		return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmApiUrl)
+		// Owner
+		params.Owner = c.GetStringFlagValue(flags.Owner)
+		if params.Owner == "" {
+			return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.Owner)
+		}
+		// ScmApiUrl
+		params.ScmApiUrl = c.GetStringFlagValue(flags.ScmApiUrl)
+		if params.ScmApiUrl == "" {
+			return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmApiUrl)
+		}
+		// Repositories names
+		params.Repositories = getRepositoriesList(c.GetStringFlagValue(flags.RepoName))
 	}
 
 	// Optional flags
-	// Repository name
-	params.Repository = c.GetStringFlagValue(flags.RepoName)
 	// Months
 	if !c.IsFlagSet(flags.Months) {
 		params.MonthsNum = git.DefaultContContributorsMonths
@@ -94,6 +98,19 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	// DetailedSummery
 	params.DetailedSummery = c.GetBoolFlagValue(flags.DetailedSummary)
 	return &params, nil
+}
+
+func getRepositoriesList(reposStr string) []string {
+	reposSlice := strings.Split(reposStr, ";")
+	// Trim spaces and create a clean list of repo names
+	repos := []string{}
+	for _, repo := range reposSlice {
+		trimmedRepo := strings.TrimSpace(repo)
+		if trimmedRepo != "" {
+			repos = append(repos, trimmedRepo)
+		}
+	}
+	return repos
 }
 
 func GitCountContributorsCmd(c *components.Context) error {
