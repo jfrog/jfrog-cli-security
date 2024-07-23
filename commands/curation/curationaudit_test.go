@@ -457,7 +457,7 @@ func TestDoCurationAudit(t *testing.T) {
 			curationCmd.SetIsCurationCmd(true)
 			curationCmd.parallelRequests = 3
 			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
-			results := map[string]CurationReport{}
+			results := map[string]*CurationReport{}
 			if tt.requestToError == nil {
 				assert.NoError(t, curationCmd.doCurateAudit(results))
 			} else {
@@ -485,8 +485,9 @@ func TestDoCurationAudit(t *testing.T) {
 			}
 			// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
 			if tt.tech == techutils.Pip {
-				for _, res := range results {
-					res.totalNumberOfPackages = 0
+				for key := range results {
+					result := results[key]
+					result.totalNumberOfPackages = 0
 				}
 			}
 			assert.Equal(t, tt.expectedResp, results)
@@ -511,7 +512,7 @@ type testCase struct {
 	expectedBuildRequest     map[string]bool
 	expectedRequest          map[string]bool
 	requestToFail            map[string]bool
-	expectedResp             map[string]CurationReport
+	expectedResp             map[string]*CurationReport
 	requestToError           map[string]bool
 	expectedError            string
 	cleanDependencies        func() error
@@ -540,8 +541,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
 			},
-			expectedResp: map[string]CurationReport{
-				"github.com/you/hello": CurationReport{packagesStatus: []*PackageStatus{
+			expectedResp: map[string]*CurationReport{
+				"github.com/you/hello": &CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",
@@ -596,8 +597,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
 			},
-			expectedResp: map[string]CurationReport{
-				"pip-curation": CurationReport{packagesStatus: []*PackageStatus{
+			expectedResp: map[string]*CurationReport{
+				"pip-curation": &CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "4.8.0",
@@ -616,7 +617,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 						},
 					},
 				},
-					totalNumberOfPackages: 3,
 				},
 			},
 		},
@@ -646,8 +646,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar": false,
 			},
-			expectedResp: map[string]CurationReport{
-				"test:my-app:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
+			expectedResp: map[string]*CurationReport{
+				"test:my-app:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -684,8 +684,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToFail: map[string]bool{
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
-			expectedResp: map[string]CurationReport{
-				"npm_test:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
+			expectedResp: map[string]*CurationReport{
+				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -723,8 +723,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			requestToError: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
-			expectedResp: map[string]CurationReport{
-				"npm_test:1.0.0": CurationReport{packagesStatus: []*PackageStatus{
+			expectedResp: map[string]*CurationReport{
+				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -856,12 +856,12 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 func Test_convertResultsToSummary(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]CurationReport
+		input    map[string]*CurationReport
 		expected formats.SummaryResults
 	}{
 		{
 			name: "results for one result",
-			input: map[string]CurationReport{
+			input: map[string]*CurationReport{
 				"project1": {
 					packagesStatus: []*PackageStatus{
 						{
@@ -900,7 +900,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 		},
 		{
 			name: "results for three result - aggregate one, same component in two policies",
-			input: map[string]CurationReport{
+			input: map[string]*CurationReport{
 				"project1": {
 					packagesStatus: []*PackageStatus{
 						{

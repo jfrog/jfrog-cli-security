@@ -216,7 +216,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	} else {
 		ca.workingDirs = append(ca.workingDirs, rootDir)
 	}
-	results := map[string]CurationReport{}
+	results := map[string]*CurationReport{}
 	for _, workDir := range ca.workingDirs {
 		var absWd string
 		absWd, err = filepath.Abs(workDir)
@@ -245,7 +245,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	return
 }
 
-func convertResultsToSummary(results map[string]CurationReport) formats.SummaryResults {
+func convertResultsToSummary(results map[string]*CurationReport) formats.SummaryResults {
 	summaryResults := formats.SummaryResults{}
 	for projectPath, packagesStatus := range results {
 		blocked := convertBlocked(packagesStatus.packagesStatus)
@@ -285,7 +285,7 @@ func uniqPkgAppearanceId(parentName, parentVersion, packageName, packageVersion 
 		parentName, parentVersion, packageName, packageVersion)
 }
 
-func (ca *CurationAuditCommand) doCurateAudit(results map[string]CurationReport) error {
+func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := techutils.DetectedTechnologiesList()
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
@@ -342,7 +342,7 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 	return ca.AuditParams
 }
 
-func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]CurationReport) error {
+func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	params := ca.getAuditParamsByTech(tech)
 	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
 	if err != nil {
@@ -413,7 +413,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	sort.Slice(packagesStatus, func(i, j int) bool {
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
-	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = CurationReport{
+	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = &CurationReport{
 		packagesStatus:        packagesStatus,
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
 	}
