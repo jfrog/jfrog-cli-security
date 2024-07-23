@@ -46,7 +46,6 @@ type TargetResults struct {
 }
 
 type ScaScanResults struct {
-	// ScanTarget
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
@@ -105,17 +104,6 @@ func (r *SecurityCommandResults) GetErrors() (err error) {
 	}
 	return
 }
-
-// func (r *SecurityCommandResults) GetTechnologyScaScans(technology techutils.Technology) (scans []*ScaScanResults) {
-// 	for _, scan := range r.Targets {
-// 		for _, scaResult := range scan.ScaResults {
-// 			if scaResult.Technology == technology {
-// 				scans = append(scans, scaResult)
-// 			}
-// 		}
-// 	}
-// 	return
-// }
 
 func (r *SecurityCommandResults) GetTechnologies() []techutils.Technology {
 	technologies := datastructures.MakeSet[techutils.Technology]()

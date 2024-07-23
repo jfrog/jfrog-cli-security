@@ -136,8 +136,9 @@ func ChangeWD(t *testing.T, newPath string) string {
 
 func ReadOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
+
 	assert.NoError(t, err)
-	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
+	return strings.ReplaceAll(filepath.FromSlash(strings.ReplaceAll(string(content), "\r\n", "\n")), "<"+string(filepath.Separator), "</")
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {

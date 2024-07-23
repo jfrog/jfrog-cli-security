@@ -32,12 +32,6 @@ type ValidationParams struct {
 	Secrets               int
 }
 
-// type ValidationPair struct {
-// 	Expected interface{}
-// 	Actual   interface{}
-// 	ErrMsg   string
-// }
-
 type Validation interface {
 	Validate(t *testing.T, exactMatch bool) bool
 	ErrMsgs(t *testing.T) []string
@@ -160,28 +154,6 @@ func errMsg(expected, actual string, msg string) []string {
 	return []string{msg, fmt.Sprintf("\n* Expected:\n'%s'\n\n* Actual:\n%s\n", expected, actual)}
 }
 
-// func (vp ValidationPair) ErrMsgs(t *testing.T) []string {
-// 	expectedStr := fmt.Sprintf("%v", vp.Expected)
-// 	var err error
-// 	// If the expected value is a struct, convert it to a JSON string.
-// 	if _, ok := vp.Expected.(string); !ok {
-// 		expectedStr, err = utils.GetAsJsonString(vp.Expected)
-// 		assert.NoError(t, err)
-// 	}
-// 	actualStr := fmt.Sprintf("%v", vp.Actual)
-// 	// If the actual value is a struct, convert it to a JSON string.
-// 	if _, ok := vp.Actual.(string); !ok {
-// 		actualStr, err = utils.GetAsJsonString(vp.Actual)
-// 		assert.NoError(t, err)
-// 	}
-// 	return []string{vp.ErrMsg, fmt.Sprintf("\n* Expected:\n%s\n\n* Actual:\n%s\n", expectedStr, actualStr)}
-// }
-
-// func validatePairAndNotNil(t *testing.T, exactMatch bool, pair ValidationPair) bool {
-// 	validated := validatePairs(t, exactMatch, pair)
-// 	return validated && pair.Expected != nil
-// }
-
 func validateContent(t *testing.T, exactMatch bool, pairs ...Validation) bool {
 	for _, pair := range pairs {
 		if !pair.Validate(t, exactMatch) {
@@ -189,33 +161,4 @@ func validateContent(t *testing.T, exactMatch bool, pairs ...Validation) bool {
 		}
 	}
 	return true
-
-	// for _, pair := range pairs {
-	// 	// Problem, should have reflecT!!!!! Use template instead!
-	// 	switch expected := pair.Expected.(type) {
-	// 	case string:
-	// 		actual, ok := pair.Actual.(string)
-	// 		if !ok {
-	// 			return assert.Fail(t, "Expected a string value, but got a different type.", pair.ErrMsgs(t))
-	// 		}
-	// 		if !validateStrContent(t, expected, actual, exactMatch, pair.ErrMsgs(t)) {
-	// 			return false
-	// 		}
-	// 	case *interface{}:
-	// 		if !validatePointers(t, expected, pair.Actual, exactMatch, pair.ErrMsgs(t)) {
-	// 			return false
-	// 		}
-	// 	case []interface{}:
-	// 		if exactMatch {
-	// 			if !assert.ElementsMatch(t, expected, pair.Actual, pair.ErrMsgs(t)) {
-	// 				return false
-	// 			}
-	// 		} else if !assert.Subset(t, expected, pair.Actual, pair.ErrMsgs(t)) {
-	// 			return false
-	// 		}
-	// 	default:
-	// 		return assert.Equal(t, expected, pair.Actual, pair.ErrMsgs(t))
-	// 	}
-	// }
-	// return true
 }
