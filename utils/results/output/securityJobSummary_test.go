@@ -3,6 +3,7 @@ package output
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -123,12 +124,17 @@ func TestConvertSummaryToString(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Read expected content from file
-			expectedContent := utils.ReadOutputFromFile(t, testCase.expectedContentPath)
+			expectedContent := readOutputFile(t, testCase.expectedContentPath)
 			summary, err := ConvertSummaryToString(testCase.summary)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedContent, summary)
 		})
 	}
+}
+
+func readOutputFile(t *testing.T, path string) string {
+	expectedContent := utils.ReadOutputFromFile(t, path)
+	return strings.ReplaceAll(expectedContent, "<"+string(filepath.Separator), "</")
 }
 
 func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) SecurityCommandsSummary {
