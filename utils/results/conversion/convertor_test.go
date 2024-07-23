@@ -1,15 +1,16 @@
 package conversion
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
+
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -41,10 +42,7 @@ func getValidationParams() validations.ValidationParams {
 }
 
 func TestConvertResults(t *testing.T) {
-	var inputResults *results.SecurityCommandResults
-	if !assert.NoError(t, json.Unmarshal([]byte(utils.ReadOutputFromFile(t, filepath.Join(testDataDir, "audit_results.json"))), &inputResults)) {
-		return
-	}
+	inputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "audit_results.json"))
 
 	testCases := []struct {
 		contentFormat       conversionFormat
@@ -71,21 +69,17 @@ func TestConvertResults(t *testing.T) {
 
 			switch testCase.contentFormat {
 			case SimpleJson:
-				validateSimpleJsonConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
+				validateSimpleJsonConversion(t, testUtils.ReadSimpleJsonResults(t, testCase.expectedContentPath), inputResults, convertor, validationParams)
 			case Sarif:
-				validateSarifConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
+				validateSarifConversion(t, testUtils.ReadSarifResults(t, testCase.expectedContentPath), inputResults, convertor, validationParams)
 			case Summary:
-				validateSummaryConversion(t, []byte(utils.ReadOutputFromFile(t, testCase.expectedContentPath)), inputResults, convertor, validationParams)
+				validateSummaryConversion(t, testUtils.ReadSummaryResults(t, testCase.expectedContentPath), inputResults, convertor, validationParams)
 			}
 		})
 	}
 }
 
-func validateSimpleJsonConversion(t *testing.T, expectedContent []byte, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
-	var expectedResults formats.SimpleJsonResults
-	if !assert.NoError(t, json.Unmarshal(expectedContent, &expectedResults)) {
-		return
-	}
+func validateSimpleJsonConversion(t *testing.T, expectedResults formats.SimpleJsonResults, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
 	validationParams.Expected = expectedResults
 
 	actualResults, err := convertor.ConvertToSimpleJson(inputResults)
@@ -97,11 +91,7 @@ func validateSimpleJsonConversion(t *testing.T, expectedContent []byte, inputRes
 	validations.ValidateCommandSimpleJsonOutput(t, validationParams)
 }
 
-func validateSarifConversion(t *testing.T, expectedContent []byte, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
-	var expectedResults *sarif.Report
-	if !assert.NoError(t, json.Unmarshal(expectedContent, &expectedResults)) {
-		return
-	}
+func validateSarifConversion(t *testing.T, expectedResults *sarif.Report, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
 	validationParams.Expected = expectedResults
 
 	actualResults, err := convertor.ConvertToSarif(inputResults)
@@ -113,11 +103,7 @@ func validateSarifConversion(t *testing.T, expectedContent []byte, inputResults 
 	validations.ValidateCommandSarifOutput(t, validationParams)
 }
 
-func validateSummaryConversion(t *testing.T, expectedContent []byte, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
-	var expectedResults formats.SummaryResults
-	if !assert.NoError(t, json.Unmarshal(expectedContent, &expectedResults)) {
-		return
-	}
+func validateSummaryConversion(t *testing.T, expectedResults formats.SummaryResults, inputResults *results.SecurityCommandResults, convertor *CommandResultsConvertor, validationParams validations.ValidationParams) {
 	validationParams.Expected = expectedResults
 
 	actualResults, err := convertor.ConvertToSummary(inputResults)

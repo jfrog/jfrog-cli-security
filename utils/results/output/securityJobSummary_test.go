@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/stretchr/testify/assert"
 )
@@ -124,7 +123,7 @@ func TestConvertSummaryToString(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Read expected content from file
-			expectedContent := readOutputFile(t, testCase.expectedContentPath)
+			expectedContent := readOutputFromFile(t, testCase.expectedContentPath)
 			summary, err := ConvertSummaryToString(testCase.summary)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedContent, summary)
@@ -132,9 +131,10 @@ func TestConvertSummaryToString(t *testing.T) {
 	}
 }
 
-func readOutputFile(t *testing.T, path string) string {
-	expectedContent := utils.ReadOutputFromFile(t, path)
-	return strings.ReplaceAll(expectedContent, "<"+string(filepath.Separator), "</")
+func readOutputFromFile(t *testing.T, path string) string {
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	return strings.ReplaceAll(filepath.FromSlash(strings.ReplaceAll(string(content), "\r\n", "\n")), "<"+string(filepath.Separator), "</")
 }
 
 func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) SecurityCommandsSummary {

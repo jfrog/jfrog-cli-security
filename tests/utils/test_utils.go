@@ -5,13 +5,16 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -134,10 +137,145 @@ func ChangeWD(t *testing.T, newPath string) string {
 	return prevDir
 }
 
-func ReadOutputFromFile(t *testing.T, path string) string {
+func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResults {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	return filepath.FromSlash(strings.ReplaceAll(string(content), "\r\n", "\n"))
+	var cmdResults *results.SecurityCommandResults
+	if !assert.NoError(t, json.Unmarshal(content, &cmdResults)) {
+		return &results.SecurityCommandResults{}
+	}
+	// replace paths separators
+	for _, targetResults := range cmdResults.Targets {
+		targetResults.Target = filepath.FromSlash(targetResults.Target)
+		if targetResults.ScaResults != nil {
+			for i, descriptor := range targetResults.ScaResults.Descriptors {
+				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
+			}
+		}
+		if targetResults.JasResults != nil {
+			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResults.SecretsScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResults.IacScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResults.SastScanResults...)
+		}
+	}
+	return cmdResults
+}
+
+func convertSarifRunPathsForOS(runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, invocation := range run.Invocations {
+			if invocation.WorkingDirectory != nil && invocation.WorkingDirectory.URI != nil {
+				*invocation.WorkingDirectory.URI = filepath.FromSlash(sarifutils.GetInvocationWorkingDirectory(invocation))
+			}
+		}
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				if location != nil && location.PhysicalLocation != nil && location.PhysicalLocation.ArtifactLocation != nil && location.PhysicalLocation.ArtifactLocation.URI != nil {
+					*location.PhysicalLocation.ArtifactLocation.URI = filepath.FromSlash(sarifutils.GetLocationFileName(location))
+				}
+			}
+		}
+	}
+}
+
+func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults {
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	var results formats.SimpleJsonResults
+	if !assert.NoError(t, json.Unmarshal(content, &results)) {
+		return formats.SimpleJsonResults{}
+	}
+	// replace paths separators
+	for _, vulnerability := range results.Vulnerabilities {
+		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails)
+	}
+	for _, violation := range results.SecurityViolations {
+		convertScaSimpleJsonPathsForOS(&violation.Components, &violation.ImpactPaths, &violation.ImpactedDependencyDetails)
+	}
+	for _, licenseViolation := range results.LicensesViolations {
+		convertScaSimpleJsonPathsForOS(&licenseViolation.Components, &licenseViolation.ImpactPaths, &licenseViolation.ImpactedDependencyDetails)
+	}
+	for _, orViolation := range results.OperationalRiskViolations {
+		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails)
+	}
+	for _, secret := range results.Secrets {
+		convertJasSimpleJsonPathsForOS(&secret)
+	}
+	for _, sast := range results.Sast {
+		convertJasSimpleJsonPathsForOS(&sast)
+	}
+	for _, iac := range results.Iacs {
+		convertJasSimpleJsonPathsForOS(&iac)
+	}
+	return results
+}
+
+func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
+	if jas == nil {
+		return
+	}
+	jas.Location.File = filepath.FromSlash(jas.Location.File)
+	for _, codeFlow := range jas.CodeFlow {
+		for _, location := range codeFlow {
+			location.File = filepath.FromSlash(location.File)
+		}
+	}
+}
+
+func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow, potentialImpactPaths *[][]formats.ComponentRow, potentialImpactedDependencyDetails *formats.ImpactedDependencyDetails) {
+	if potentialComponents != nil {
+		components := *potentialComponents
+		for _, component := range components {
+			if component.Location != nil {
+				component.Location.File = filepath.FromSlash(component.Location.File)
+			}
+		}
+	}
+	if potentialImpactPaths != nil {
+		impactPaths := *potentialImpactPaths
+		for _, impactPath := range impactPaths {
+			for _, pathComponent := range impactPath {
+				if pathComponent.Location != nil {
+					pathComponent.Location.File = filepath.FromSlash(pathComponent.Location.File)
+				}
+			}
+		}
+	}
+	if potentialImpactedDependencyDetails != nil {
+		impactedDependencyDetails := *potentialImpactedDependencyDetails
+		for _, component := range impactedDependencyDetails.Components {
+			if component.Location != nil {
+				component.Location.File = filepath.FromSlash(component.Location.File)
+			}
+		}
+	}
+}
+
+func ReadSarifResults(t *testing.T, path string) *sarif.Report {
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	var results *sarif.Report
+	if !assert.NoError(t, json.Unmarshal(content, results)) {
+		return &sarif.Report{}
+	}
+	// replace paths separators
+	convertSarifRunPathsForOS(results.Runs...)
+	return results
+}
+
+func ReadSummaryResults(t *testing.T, path string) formats.SummaryResults {
+	content, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	var results formats.SummaryResults
+	if !assert.NoError(t, json.Unmarshal(content, &results)) {
+		return formats.SummaryResults{}
+	}
+	// replace paths separators
+	for _, targetResults := range results.Scans {
+		targetResults.Target = filepath.FromSlash(targetResults.Target)
+	}
+	return results
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
