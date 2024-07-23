@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/gofrog/version"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -242,11 +243,8 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	var curationCachePip string
 	var reportFileName string
 	if auditPython.IsCurationCmd {
-		// upgrade pip
-		err = executeCommand("python", "-m", "pip", "install", "--upgrade", "pip")
-		if err != nil {
-			log.Warn(err)
-		}
+		// upgrade pip version to 23.0.0, as it is required for the curation command.
+		err = upgradePipVersion("23.0.0")
 		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
@@ -274,6 +272,26 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	return
 }
 
+func upgradePipVersion(atLeastVersion string) error {
+	output, err := executeCommandWithOutput("python", "-m", "pip", "--version")
+	if err != nil {
+		log.Warn(err)
+	}
+	outputVersion := ""
+	if splitVersion := strings.Split(output, " "); len(splitVersion) > 1 {
+		outputVersion = splitVersion[1]
+	}
+	log.Debug("Current pip version in virtual env:", outputVersion)
+	if version.NewVersion(outputVersion).AtLeast(atLeastVersion) {
+		return nil
+	}
+	err = executeCommand("python", "-m", "pip", "install", "--upgrade", "pip")
+	if err != nil {
+		log.Warn(err)
+	}
+	return err
+}
+
 func executeCommand(executable string, args ...string) error {
 	installCmd := exec.Command(executable, args...)
 	maskedCmdString := coreutils.GetMaskedCommandString(installCmd)
@@ -284,6 +302,18 @@ func executeCommand(executable string, args ...string) error {
 		return errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
 	}
 	return nil
+}
+
+func executeCommandWithOutput(executable string, args ...string) (string, error) {
+	installCmd := exec.Command(executable, args...)
+	maskedCmdString := coreutils.GetMaskedCommandString(installCmd)
+	log.Debug("Running", maskedCmdString)
+	output, err := installCmd.CombinedOutput()
+	if err != nil {
+		sca.LogExecutableVersion(executable)
+		return string(output), errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
+	}
+	return string(output), nil
 }
 
 func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName string, customArgs ...string) []string {
