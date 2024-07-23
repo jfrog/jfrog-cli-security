@@ -76,13 +76,13 @@
       "invocations": [
         {
           "arguments": [
-            "/Users/assafa/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
+            "analyzerManager/jas_scanner/jas_scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721657068-1669763637/Secrets_1721657068/config.yaml"
+            "Secrets/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
-            "uri": "Users/user/ejs-frog-demo"
+            "uri": "user/ejs-frog-demo"
           }
         }
       ],
@@ -96,7 +96,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/fake-creds.txt"
+                  "uri": "file:/user/ejs-frog-demo/fake-creds.txt"
                 },
                 "region": {
                   "startLine": 1,
@@ -120,7 +120,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/fake-creds.txt"
+                  "uri": "file:/user/ejs-frog-demo/fake-creds.txt"
                 },
                 "region": {
                   "startLine": 2,
@@ -144,7 +144,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/fake-creds.txt"
+                  "uri": "file:/user/ejs-frog-demo/fake-creds.txt"
                 },
                 "region": {
                   "startLine": 3,
@@ -168,7 +168,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/server.js"
+                  "uri": "file:/user/ejs-frog-demo/server.js"
                 },
                 "region": {
                   "startLine": 10,
@@ -192,7 +192,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/server.js"
+                  "uri": "file:/user/ejs-frog-demo/server.js"
                 },
                 "region": {
                   "startLine": 11,
@@ -221,13 +221,13 @@
       "invocations": [
         {
           "arguments": [
-            "/Users/assafa/.jfrog/dependencies/analyzerManager/iac_scanner/tf_scanner",
+            "analyzerManager/iac_scanner/tf_scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721657068-1669763637/IaC_1721657081/config.yaml"
+            "/IaC/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
-            "uri": "Users/user/ejs-frog-demo"
+            "uri": "user/ejs-frog-demo"
           }
         }
       ],
@@ -299,14 +299,14 @@
       "invocations": [
         {
           "arguments": [
-            "/Users/assafa/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
+            "analyzerManager/zd_scanner/scanner",
             "scan",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721657068-1669763637/Sast_1721657083/results.sarif",
-            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1721657068-1669763637/Sast_1721657083/config.yaml"
+            "Sast/results.sarif",
+            "Sast/config.yaml"
           ],
           "executionSuccessful": true,
           "workingDirectory": {
-            "uri": "Users/user/ejs-frog-demo"
+            "uri": "user/ejs-frog-demo"
           }
         }
       ],
@@ -321,7 +321,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/public/js/bootstrap.js"
+                  "uri": "file:/user/ejs-frog-demo/public/js/bootstrap.js"
                 },
                 "region": {
                   "startLine": 136,
@@ -351,7 +351,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
+                  "uri": "file:/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
                 },
                 "region": {
                   "startLine": 135,
@@ -381,7 +381,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/server.js"
+                  "uri": "file:/user/ejs-frog-demo/server.js"
                 },
                 "region": {
                   "startLine": 8,
@@ -411,7 +411,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/server.js"
+                  "uri": "file:/user/ejs-frog-demo/server.js"
                 },
                 "region": {
                   "startLine": 26,
@@ -439,7 +439,7 @@
                       "location": {
                         "physicalLocation": {
                           "artifactLocation": {
-                            "uri": "file://Users/user/ejs-frog-demo/server.js"
+                            "uri": "file:/user/ejs-frog-demo/server.js"
                           },
                           "region": {
                             "startLine": 21,
@@ -462,7 +462,7 @@
                       "location": {
                         "physicalLocation": {
                           "artifactLocation": {
-                            "uri": "file://Users/user/ejs-frog-demo/server.js"
+                            "uri": "file:/user/ejs-frog-demo/server.js"
                           },
                           "region": {
                             "startLine": 26,
@@ -485,7 +485,7 @@
                       "location": {
                         "physicalLocation": {
                           "artifactLocation": {
-                            "uri": "file://Users/user/ejs-frog-demo/server.js"
+                            "uri": "file:/user/ejs-frog-demo/server.js"
                           },
                           "region": {
                             "startLine": 26,
@@ -682,7 +682,7 @@
         {
           "executionSuccessful": true,
           "workingDirectory": {
-            "uri": "Users/user/ejs-frog-demo"
+            "uri": "user/ejs-frog-demo"
           }
         }
       ],
@@ -702,7 +702,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -723,7 +723,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -744,7 +744,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -765,7 +765,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -786,7 +786,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -807,7 +807,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -828,7 +828,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -849,7 +849,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -870,7 +870,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -891,7 +891,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -912,7 +912,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
@@ -933,7 +933,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "file://Users/user/ejs-frog-demo/package.json"
+                  "uri": "file:/user/ejs-frog-demo/package.json"
                 }
               }
             }
