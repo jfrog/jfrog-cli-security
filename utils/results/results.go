@@ -72,6 +72,13 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 
 // --- Aggregated results for all targets ---
 
+func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {
+	for _, scan := range r.Targets {
+		paths = append(paths, scan.Target)
+	}
+	return
+}
+
 func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scan := range r.Targets {
 		results = append(results, scan.GetScaScansXrayResults()...)

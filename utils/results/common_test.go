@@ -77,13 +77,6 @@ func TestFindMaxCVEScore(t *testing.T) {
 }
 
 func TestGetIssueIdentifier(t *testing.T) {
-	// issueId := "XRAY-123456"
-	// cvesRow := []formats.CveRow{{Id: "CVE-2022-1234"}}
-	// assert.Equal(t, "CVE-2022-1234", GetIssueIdentifier(cvesRow, issueId))
-	// cvesRow = append(cvesRow, formats.CveRow{Id: "CVE-2019-1234"})
-	// assert.Equal(t, "CVE-2022-1234, CVE-2019-1234", GetIssueIdentifier(cvesRow, issueId))
-	// assert.Equal(t, issueId, GetIssueIdentifier(nil, issueId))
-
 	testCases := []struct {
 		name           string
 		cves           []formats.CveRow
@@ -365,60 +358,6 @@ func TestAppendUniqueImpactPaths(t *testing.T) {
 		})
 	}
 }
-
-// func TestGetXrayIssueLocationIfValidExists(t *testing.T) {
-// 	testDir, cleanup := tests.CreateTempDirWithCallbackAndAssert(t)
-// 	defer cleanup()
-// 	invocation := sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(testDir))
-// 	file, err := os.Create(filepath.Join(testDir, "go.mod"))
-// 	assert.NoError(t, err)
-// 	assert.NotNil(t, file)
-// 	defer func() { assert.NoError(t, file.Close()) }()
-// 	file2, err := os.Create(filepath.Join(testDir, "build.gradle.kts"))
-// 	assert.NoError(t, err)
-// 	assert.NotNil(t, file2)
-// 	defer func() { assert.NoError(t, file2.Close()) }()
-
-// 	testCases := []struct {
-// 		name           string
-// 		tech           techutils.Technology
-// 		run            *sarif.Run
-// 		expectedOutput *sarif.Location
-// 	}{
-// 		{
-// 			name:           "No descriptor information",
-// 			tech:           techutils.Pip,
-// 			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
-// 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://Package-Descriptor"))),
-// 		},
-// 		{
-// 			name:           "One descriptor information",
-// 			tech:           techutils.Go,
-// 			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
-// 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filepath.Join(testDir, "go.mod")))),
-// 		},
-// 		{
-// 			name:           "One descriptor information - no invocation",
-// 			tech:           techutils.Go,
-// 			run:            sarifutils.CreateRunWithDummyResults(),
-// 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://go.mod"))),
-// 		},
-// 		{
-// 			name:           "Multiple descriptor information",
-// 			tech:           techutils.Gradle,
-// 			run:            sarifutils.CreateRunWithDummyResults().WithInvocations([]*sarif.Invocation{invocation}),
-// 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filepath.Join(testDir, "build.gradle.kts")))),
-// 		},
-// 	}
-// 	for _, tc := range testCases {
-// 		t.Run(tc.name, func(t *testing.T) {
-// 			output, err := getXrayIssueLocationIfValidExists(tc.tech, tc.run)
-// 			if assert.NoError(t, err) {
-// 				assert.Equal(t, tc.expectedOutput, output)
-// 			}
-// 		})
-// 	}
-// }
 
 func TestGetApplicableCveValue(t *testing.T) {
 	testCases := []struct {

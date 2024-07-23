@@ -202,7 +202,7 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 	}
 	// Initialize Results struct
 	cmdResults = initCmdResults(entitledForJas, auditParams)
-	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
+	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
 	if err != nil {
 		return cmdResults, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
 	}
@@ -320,12 +320,10 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
 				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
-				// scansToPreform = append(scansToPreform, &results.ScanTarget{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
 				cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech}).SetDescriptors(descriptors...)
-				// scansToPreform = append(scansToPreform, &results.ScanTarget{Target: workingDir, Technology: tech, Descriptors: descriptors})
 			}
 		}
 	}

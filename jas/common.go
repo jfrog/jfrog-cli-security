@@ -32,10 +32,9 @@ import (
 )
 
 type JasScanner struct {
-	TempDir         string
-	AnalyzerManager AnalyzerManager
-	ServerDetails   *config.ServerDetails
-	// JFrogAppsConfig       *jfrogappsconfig.JFrogAppsConfig
+	TempDir               string
+	AnalyzerManager       AnalyzerManager
+	ServerDetails         *config.ServerDetails
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
 	Exclusions            []string
@@ -58,7 +57,6 @@ func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, 
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
-	// scanner.JFrogAppsConfig = jfrogAppsConfig
 	scanner.Exclusions = exclusions
 	return scanner, err
 }
@@ -76,9 +74,9 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
 		// jfrog-apps-config.yml exist in the workspace
-		for _, module := range jfrogAppsConfig.Modules {
+		for i := range jfrogAppsConfig.Modules {
 			// converting to absolute path before starting the scan flow
-			module.SourceRoot, err = filepath.Abs(module.SourceRoot)
+			jfrogAppsConfig.Modules[i].SourceRoot, err = filepath.Abs(jfrogAppsConfig.Modules[i].SourceRoot)
 			if err != nil {
 				return nil, errorutils.CheckError(err)
 			}

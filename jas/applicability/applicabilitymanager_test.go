@@ -42,7 +42,6 @@ func TestNewApplicabilityScanManager_DependencyTreeDoesntExist(t *testing.T) {
 	// Assert
 	if assert.NotNil(t, applicabilityManager) {
 		assert.NotNil(t, applicabilityManager.scanner.ScannerDirCleanupFunc)
-		// assert.Len(t, applicabilityManager.scanner.JFrogAppsConfig.Modules, 1)
 		assert.NotEmpty(t, applicabilityManager.configFileName)
 		assert.NotEmpty(t, applicabilityManager.resultsFileName)
 		assert.Empty(t, applicabilityManager.directDependenciesCves)

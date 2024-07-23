@@ -95,39 +95,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	return
 }
 
-// // Calculate the scans to preform
-// func getScaScansToPreform(params *AuditParams) (scansToPreform []*results.ScanTarget) {
-// 	for _, requestedDirectory := range params.workingDirs {
-// 		if !fileutils.IsPathExists(requestedDirectory, false) {
-// 			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
-// 			continue
-// 		}
-// 		// Detect descriptors and technologies in the requested directory.
-// 		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
-// 		if err != nil {
-// 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
-// 			continue
-// 		}
-// 		// Create scans to preform
-// 		for tech, workingDirs := range techToWorkingDirs {
-// 			if tech == techutils.Dotnet {
-// 				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-// 				// We don't need to scan for both and get duplicate results.
-// 				continue
-// 			}
-// 			if len(workingDirs) == 0 {
-// 				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-// 				scansToPreform = append(scansToPreform, &results.ScanTarget{Target: requestedDirectory, Technology: tech})
-// 			}
-// 			for workingDir, descriptors := range workingDirs {
-// 				// Add scan for each detected working directory.
-// 				scansToPreform = append(scansToPreform, &results.ScanTarget{Target: workingDir, Technology: tech, Descriptors: descriptors})
-// 			}
-// 		}
-// 	}
-// 	return
-// }
-
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
 	requestedDescriptors := map[techutils.Technology][]string{}
 	if params.PipRequirementsFile() != "" {
