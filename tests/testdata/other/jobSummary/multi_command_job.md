@@ -17,5 +17,5 @@
 #### Curation
 | Status | Id | Details |
 |--------|----|---------|
-| ❌ | /application1 | <pre>Total number of packages: <b>6</b><br>🟢 Total Number of Approved: <b>4</b><br>🔴 Total Number of Blocked: <b>2</b><br>├── Policy: Malicious, Condition: Malicious package (1)<br>└── Policy: cvss_score, Condition:cvss score higher than 4.0 (1)</pre> |
+| ❌ | /application1 | <pre>Total number of packages: <b>6</b><br>🟢 Total Number of Approved: <b>4</b><br>🔴 Total Number of Blocked: <b>2</b><br>├── Policy: cvss_score, Condition:cvss score higher than 4.0 (1)<br>└── Policy: Malicious, Condition: Malicious package (1)</pre> |
 | ❌ | /application2 | <pre>Total number of packages: <b>6</b><br>🟢 Total Number of Approved: <b>4</b><br>🔴 Total Number of Blocked: <b>2</b><br>├── Policy: License, Condition: GPL (1)<br>└── Policy: Aged, Condition: Package is aged (1)</pre> |
