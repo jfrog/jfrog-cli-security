@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,7 +173,7 @@ func convertSarifRunPathsForOS(runs ...*sarif.Run) {
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
 				if location != nil && location.PhysicalLocation != nil && location.PhysicalLocation.ArtifactLocation != nil && location.PhysicalLocation.ArtifactLocation.URI != nil {
-					*location.PhysicalLocation.ArtifactLocation.URI = filepath.FromSlash(sarifutils.GetLocationFileName(location))
+					*location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(location))
 				}
 			}
 		}
@@ -188,16 +189,16 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	}
 	// replace paths separators
 	for _, vulnerability := range results.Vulnerabilities {
-		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails)
+		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails, &vulnerability.Cves)
 	}
 	for _, violation := range results.SecurityViolations {
-		convertScaSimpleJsonPathsForOS(&violation.Components, &violation.ImpactPaths, &violation.ImpactedDependencyDetails)
+		convertScaSimpleJsonPathsForOS(&violation.Components, &violation.ImpactPaths, &violation.ImpactedDependencyDetails, &violation.Cves)
 	}
 	for _, licenseViolation := range results.LicensesViolations {
-		convertScaSimpleJsonPathsForOS(&licenseViolation.Components, &licenseViolation.ImpactPaths, &licenseViolation.ImpactedDependencyDetails)
+		convertScaSimpleJsonPathsForOS(&licenseViolation.Components, &licenseViolation.ImpactPaths, &licenseViolation.ImpactedDependencyDetails, nil)
 	}
 	for _, orViolation := range results.OperationalRiskViolations {
-		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails)
+		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails, nil)
 	}
 	for _, secret := range results.Secrets {
 		convertJasSimpleJsonPathsForOS(&secret)
@@ -215,15 +216,15 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 	if jas == nil {
 		return
 	}
-	jas.Location.File = filepath.FromSlash(jas.Location.File)
+	jas.Location.File = getJasConvertedPath(jas.Location.File)
 	for _, codeFlow := range jas.CodeFlow {
 		for _, location := range codeFlow {
-			location.File = filepath.FromSlash(location.File)
+			location.File = getJasConvertedPath(location.File)
 		}
 	}
 }
 
-func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow, potentialImpactPaths *[][]formats.ComponentRow, potentialImpactedDependencyDetails *formats.ImpactedDependencyDetails) {
+func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow, potentialImpactPaths *[][]formats.ComponentRow, potentialImpactedDependencyDetails *formats.ImpactedDependencyDetails, potentialCves *[]formats.CveRow) {
 	if potentialComponents != nil {
 		components := *potentialComponents
 		for _, component := range components {
@@ -247,6 +248,16 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		for _, component := range impactedDependencyDetails.Components {
 			if component.Location != nil {
 				component.Location.File = filepath.FromSlash(component.Location.File)
+			}
+		}
+	}
+	if potentialCves != nil {
+		cves := *potentialCves
+		for _, cve := range cves {
+			if cve.Applicability != nil {
+				for _, evidence := range cve.Applicability.Evidence {
+					evidence.Location.File = filepath.FromSlash(evidence.Location.File)
+				}
 			}
 		}
 	}
@@ -276,6 +287,10 @@ func ReadSummaryResults(t *testing.T, path string) formats.SummaryResults {
 		targetResults.Target = filepath.FromSlash(targetResults.Target)
 	}
 	return results
+}
+
+func getJasConvertedPath(pathToConvert string) string {
+	return fmt.Sprintf("file://%s", filepath.FromSlash(strings.TrimPrefix(pathToConvert, "file://")))
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
