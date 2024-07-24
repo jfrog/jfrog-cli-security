@@ -13,14 +13,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
 )
 
-func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, technologiesList []techutils.Technology, directDependencies *[]string,
-	serverDetails *config.ServerDetails, thirdPartyApplicabilityScan bool, msi string, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error), scansToPreform []utils.SubScanType) (err error) {
+func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, directDependencies *[]string,
+	serverDetails *config.ServerDetails, thirdPartyApplicabilityScan bool, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType, secretsScanType secrets.SecretsScanType, errHandlerFunc func(error), scansToPreform []utils.SubScanType) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -31,10 +30,6 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 		runAllScanners = true
 	}
 	// Set environments variables for analytics in analyzers manager.
-	callback := jas.SetAnalyticsMetricsDataForAnalyzerManager(msi, technologiesList)
-	defer func() {
-		callback()
-	}()
 	// Don't execute other scanners when scanning third party dependencies.
 	if !thirdPartyApplicabilityScan {
 		for _, module := range scanner.JFrogAppsConfig.Modules {

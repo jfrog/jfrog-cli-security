@@ -105,5 +105,5 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclu
 }
 
 func (iac *IacScanManager) runAnalyzerManager() error {
-	return iac.scanner.AnalyzerManager.Exec(iac.configFileName, iacScanCommand, filepath.Dir(iac.scanner.AnalyzerManager.AnalyzerManagerFullPath), iac.scanner.ServerDetails)
+	return iac.scanner.AnalyzerManager.Exec(iac.configFileName, iacScanCommand, filepath.Dir(iac.scanner.AnalyzerManager.AnalyzerManagerFullPath), iac.scanner.ServerDetails, iac.scanner.EnvVars)
 }

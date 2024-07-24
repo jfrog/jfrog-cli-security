@@ -3,6 +3,8 @@ package scan
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -120,6 +122,19 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	if err != nil {
 		return false, err
 	}
+
+	// A patch for Xray issue where it returns Base URL from the API but it is somtimes not the URL that is configured in the CLI
+	// More info in https://jfrog-int.atlassian.net/browse/XRAY-77451
+	url, endpoint, trimerr := trimBuildScanResultUrl(buildScanResults.MoreDetailsUrl)
+	if trimerr != nil {
+		return false, err
+	}
+	// Check that the response url from scan build API is the same url as the one that was inserted to the CLI in config
+	if url != bsc.serverDetails.Url {
+		// if URL from XRAY API is different than the URL in CLI config change the printed url to the CLI config URL and the endpoint from API
+		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s", url, bsc.serverDetails.Url))
+		buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
+	}
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
@@ -169,4 +184,21 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
+}
+
+func trimBuildScanResultUrl(fullUrl string) (string, string, error) {
+	if fullUrl == "" {
+		return "", "", nil
+	}
+	// Parse through the url and endpoint
+	parsedUrl, err := url.Parse(fullUrl)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Separate to BaseUrl http(s)://<JFROG-URL> and endpoint of the API request
+	baseUrl := fmt.Sprintf("%s://%s/", parsedUrl.Scheme, parsedUrl.Host)
+	endpoint := strings.TrimPrefix(fullUrl, baseUrl)
+
+	return baseUrl, endpoint, nil
 }

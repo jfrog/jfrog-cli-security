@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"os"
 	"strings"
 
@@ -36,8 +38,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
-const auditScanCategory = "Audit & Scan"
-
 const dockerScanCmdHiddenName = "dockerscan"
 
 func getAuditAndScansCommands() []components.Command {
@@ -48,8 +48,17 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.XrScan),
 			Description: scanDocs.GetDescription(),
 			Arguments:   scanDocs.GetArguments(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      ScanCmd,
+		},
+		{
+			Name:        "sbom-enrich",
+			Aliases:     []string{"se"},
+			Flags:       flags.GetCommandFlags(flags.Enrich),
+			Description: enrichDocs.GetDescription(),
+			Arguments:   enrichDocs.GetArguments(),
+			Category:    securityCategory,
+			Action:      EnrichCmd,
 		},
 		{
 			Name:        "build-scan",
@@ -57,7 +66,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.BuildScan),
 			Description: buildScanDocs.GetDescription(),
 			Arguments:   buildScanDocs.GetArguments(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      BuildScan,
 		},
 		{
@@ -78,7 +87,7 @@ func getAuditAndScansCommands() []components.Command {
 			Aliases:     []string{"aud"},
 			Flags:       flags.GetCommandFlags(flags.Audit),
 			Description: auditDocs.GetDescription(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      AuditCmd,
 		},
 		{
@@ -86,7 +95,7 @@ func getAuditAndScansCommands() []components.Command {
 			Aliases:     []string{"ca"},
 			Flags:       flags.GetCommandFlags(flags.CurationAudit),
 			Description: curationDocs.GetDescription(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      CurationCmd,
 		},
 
@@ -152,6 +161,32 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 	}
+}
+
+func EnrichCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 {
+		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	if err = validateXrayContext(c, serverDetails); err != nil {
+		return err
+	}
+	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+	if err = spec.ValidateSpec(specFile.Files, false, false); err != nil {
+		return err
+	}
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	EnrichCmd := enrich.NewEnrichCommand().
+		SetServerDetails(serverDetails).
+		SetThreads(threads).
+		SetSpec(specFile)
+	return commandsCommon.Exec(EnrichCmd)
 }
 
 func ScanCmd(c *components.Context) error {

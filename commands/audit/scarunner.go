@@ -145,8 +145,8 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
 		}
 		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
-		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		auditParallelRunner.ResultsMu.Lock()
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		auditParallelRunner.ResultsMu.Unlock()
 		return
@@ -299,6 +299,9 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 }
 
 func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+	if serverDetails, err = params.ServerDetails(); err != nil {
+		return
+	}
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
 		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
