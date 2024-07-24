@@ -5,6 +5,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 )
 
+const securityCategory = "Security"
+
 func GetJfrogCliSecurityApp() components.App {
 	app := components.CreateEmbeddedApp(
 		"security",
