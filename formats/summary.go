@@ -1,6 +1,8 @@
 package formats
 
-import "golang.org/x/exp/maps"
+import (
+	"github.com/jfrog/gofrog/datastructures"
+)
 
 const (
 	ScaScan     SummarySubScanType = "SCA"
@@ -182,11 +184,11 @@ func (sc TwoLevelSummaryCount) GetCountOfKeys(firstLevel bool) int {
 	if firstLevel {
 		return len(sc)
 	}
-	count := map[string]struct{}{}
+	count := datastructures.MakeSet[string]()
 	for _, value := range sc {
 		for key := range value {
-			count[key] = struct{}{}
+			count.Add(key)
 		}
 	}
-	return len(maps.Keys(count))
+	return count.Size()
 }

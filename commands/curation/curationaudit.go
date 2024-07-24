@@ -241,6 +241,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
+
 	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
 	return
 }
@@ -414,7 +415,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
 	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = &CurationReport{
-		packagesStatus:        packagesStatus,
+		packagesStatus: packagesStatus,
+		// We subtract 1 because the root node is not a package.
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
 	}
 	return err

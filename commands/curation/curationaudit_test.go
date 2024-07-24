@@ -542,7 +542,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"github.com/you/hello": &CurationReport{packagesStatus: []*PackageStatus{
+				"github.com/you/hello": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentName:        "rsc.io/quote",

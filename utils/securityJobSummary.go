@@ -188,7 +188,7 @@ func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (c
 }
 
 func getDetailsString(summary formats.ScanSummaryResult) string {
-	// if summary includes curation issues, then it means only curation issues are in this summary, no need to continue
+	// If summary includes curation issues, then it means only curation issues are in this summary, no need to continue
 	if summary.HasBlockedCuration() {
 		return getBlockedCurationSummaryString(summary)
 	}
@@ -206,7 +206,7 @@ func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content
 		return
 	}
 	content += fmt.Sprintf("Total number of packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
-	content += fmt.Sprintf("<br>🟢 Total Number of Approved: <b>%d</b>", summary.CuratedPackages.GetTotalPackages()-summary.CuratedPackages.Blocked.GetCountOfKeys(false))
+	content += fmt.Sprintf("<br>🟢 Total Number of Approved: <b>%d</b>", summary.CuratedPackages.Approved)
 	content += fmt.Sprintf("<br>🔴 Total Number of Blocked: <b>%d</b>", summary.CuratedPackages.Blocked.GetTotal())
 	if summary.CuratedPackages.Blocked.GetTotal() > 0 {
 		index := 0
