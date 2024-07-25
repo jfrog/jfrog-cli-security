@@ -306,6 +306,7 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		if err := ca.auditTree(techutils.Technology(tech), results); err != nil {
 			return err
 		}
+		// clear the package manager config to avoid using the same config for the next tech
 		ca.setPackageManagerConfig(nil)
 		ca.AuditParams = ca.SetDepsRepo("")
 
