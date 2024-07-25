@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -772,18 +773,7 @@ func simplifyViolations(scanViolations []services.Violation, multipleRoots bool)
 				}
 				continue
 			}
-			uniqueViolations[packageKey] = &services.Violation{
-				Summary:       violation.Summary,
-				Severity:      violation.Severity,
-				ViolationType: violation.ViolationType,
-				Components:    map[string]services.Component{vulnerableComponentId: violation.Components[vulnerableComponentId]},
-				WatchName:     violation.WatchName,
-				IssueId:       violation.IssueId,
-				Cves:          violation.Cves,
-				LicenseKey:    violation.LicenseKey,
-				LicenseName:   violation.LicenseName,
-				Technology:    violation.Technology,
-			}
+			uniqueViolations[packageKey] = copyViolationWithComponentId(violation, vulnerableComponentId)
 		}
 	}
 	// convert map to slice
@@ -792,6 +782,22 @@ func simplifyViolations(scanViolations []services.Violation, multipleRoots bool)
 		result = append(result, *v)
 	}
 	return result
+}
+
+func copyViolationWithComponentId(violation services.Violation, vulnerableComponentId string) *services.Violation {
+	newViolation := services.Violation{}
+	v := reflect.ValueOf(&violation).Elem()
+	nv := reflect.ValueOf(&newViolation).Elem()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		nv.Field(i).Set(field)
+	}
+
+	// Handle the Components field separately
+	newViolation.Components = map[string]services.Component{vulnerableComponentId: violation.Components[vulnerableComponentId]}
+
+	return &newViolation
 }
 
 // appendImpactPathsWithoutDuplicates appends the elements of a source [][]ImpactPathNode struct to a target [][]ImpactPathNode, without adding any duplicate elements.
