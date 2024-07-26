@@ -92,7 +92,7 @@ func TestSimplifyViolation(t *testing.T) {
 	}
 	simpliedViolations := simplifyViolations(violations, true)
 
-	//assert that the length of simplified violations is length of violation without the similar componentID
+	// assert that the length of simplified violations is length of violation without the similar componentID
 	assert.Equal(t, len(violations)-1, len(simpliedViolations))
 }
 
