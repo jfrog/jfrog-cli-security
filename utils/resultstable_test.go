@@ -83,26 +83,42 @@ func TestGetDirectComponents(t *testing.T) {
 	}
 }
 
+func TestSimplifyViolation(t *testing.T) {
+	violations := []services.Violation{
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}, FailBuild: true},
+	}
+	simpliedViolations := simplifyViolations(violations, true)
+
+	//assert that the length of simplified violations is length of violation without the similar componentID
+	assert.Equal(t, len(violations)-1, len(simpliedViolations))
+}
+
 func TestGetOperationalRiskReadableData(t *testing.T) {
 	tests := []struct {
 		violation       services.Violation
 		expectedResults *operationalRiskViolationReadableData
 	}{
 		{
-			services.Violation{IsEol: nil, LatestVersion: "", NewerVersions: nil,
+			services.Violation{Components: map[string]services.Component{"gav://antparent:ant:1.6.4": {}}, IsEol: nil, LatestVersion: "", NewerVersions: nil,
 				Cadence: nil, Commits: nil, Committers: nil, RiskReason: "", EolMessage: ""},
 			&operationalRiskViolationReadableData{"N/A", "N/A", "N/A", "N/A", "", "", "N/A", "N/A"},
 		},
 		{
-			services.Violation{IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
+			services.Violation{Components: map[string]services.Component{"gav://antparent:ant:1.6.5": {}}, IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
 				Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
 			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
 		},
 	}
+	simplifiedViolations := simplifyViolations([]services.Violation{tests[0].violation, tests[1].violation}, true)
 
-	for _, test := range tests {
+	for i, test := range tests {
 		results := getOperationalRiskViolationReadableData(test.violation)
+		simplifiedResults := getOperationalRiskViolationReadableData(simplifiedViolations[i])
 		assert.Equal(t, test.expectedResults, results)
+		assert.Equal(t, test.expectedResults, simplifiedResults)
 	}
 }
 
