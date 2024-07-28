@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"golang.org/x/exp/slices"
+
+	"os"
+	"time"
 
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -22,9 +24,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
-	"github.com/jfrog/jfrog-cli-security/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -32,18 +37,22 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
+	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
+		log.Debug("Skipping SCA scan as requested by input...")
+		return
+	}
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
-	serverDetails, err := params.ServerDetails()
+	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
 	}
 
-	scans := getScaScansToPreform(params)
+	scans := getScaScansToPreform(auditParams)
 	if len(scans) == 0 {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 		return
@@ -55,18 +64,28 @@ func runScaScan(params *AuditParams, results *xrayutils.Results) (err error) {
 	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
 
 	defer func() {
-		// Make sure to return to the original working directory, executeScaScan may change it
+		// Make sure to return to the original working directory, buildDependencyTree may change it
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
 	}()
 	for _, scan := range scans {
-		// Run the scan
-		log.Info("Running SCA scan for", scan.Technology, "vulnerable dependencies in", scan.Target, "directory...")
-		if wdScanErr := executeScaScan(serverDetails, params, scan); wdScanErr != nil {
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, wdScanErr.Error()))
+		// Get the dependency tree for the technology in the working directory.
+		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
+		if bdtErr != nil {
+			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error()))
 			continue
 		}
+		// Create sca scan task
+		auditParallelRunner.ScaScansWg.Add(1)
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
+			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+		})
+		if taskErr != nil {
+			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
+		}
 		// Add the scan to the results
-		results.ScaResults = append(results.ScaResults, *scan)
+		auditParallelRunner.ResultsMu.Lock()
+		results.ScaResults = append(results.ScaResults, scan)
+		auditParallelRunner.ResultsMu.Unlock()
 	}
 	return
 }
@@ -113,38 +132,36 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 }
 
 // Preform the SCA scan for the given scan information.
-// This method will change the working directory to the scan's working directory.
-func executeScaScan(serverDetails *config.ServerDetails, params *AuditParams, scan *xrayutils.ScaScanResult) (err error) {
-	// Get the dependency tree for the technology in the working directory.
-	if err = os.Chdir(scan.Target); err != nil {
-		return errorutils.CheckError(err)
+func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
+	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
+	return func(threadId int) (err error) {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
+		defer func() {
+			auditParallelRunner.ScaScansWg.Done()
+		}()
+		// Scan the dependency tree.
+		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
+		if xrayErr != nil {
+			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
+		}
+		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		auditParallelRunner.ResultsMu.Lock()
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
+		scan.XrayResults = append(scan.XrayResults, scanResults...)
+		auditParallelRunner.ResultsMu.Unlock()
+		return
 	}
-	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, scan.Technology)
-	if techErr != nil {
-		return fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
-	}
-	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
-		return errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
-	}
-	// Scan the dependency tree.
-	scanResults, xrayErr := runScaWithTech(scan.Technology, params, serverDetails, treeResult.FlatTree, treeResult.FullDepTrees)
-	if xrayErr != nil {
-		return fmt.Errorf("'%s' Xray dependency tree scan request failed:\n%s", scan.Technology, xrayErr.Error())
-	}
-	scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
-	addThirdPartyDependenciesToParams(params, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
-	scan.XrayResults = append(scan.XrayResults, scanResults...)
-	return
 }
 
-func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
+	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(params.xrayGraphScanParams).
+		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
 		SetXrayVersion(params.xrayVersion).
 		SetFixableOnly(params.fixableOnly).
-		SetSeverityLevel(params.minSeverityFilter)
-	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, params.Progress(), tech, scanGraphParams)
+		SetSeverityLevel(params.minSeverityFilter.String())
+	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
 	if err != nil {
 		return
 	}
@@ -194,7 +211,7 @@ type DependencyTreeResult struct {
 	DownloadUrls map[string]string
 }
 
-func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
+func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -207,22 +224,14 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 		params.Progress().SetHeadlineMsg(logMessage)
 	}
 
-	err = SetResolutionRepoIfExists(params, tech)
-	if err != nil {
-		return
-	}
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
 	var uniqueDeps []string
-	var uniqDepsWithTypes map[string]*xrayutils.DepTreeNode
+	var uniqDepsWithTypes map[string]*xray.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
-			Server:                  serverDetails,
+			Server:                  artifactoryServerDetails,
 			DepsRepo:                params.DepsRepo(),
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
 			UseWrapper:              params.UseWrapper(),
@@ -240,10 +249,11 @@ func GetTechDependencyTree(params xrayutils.AuditParams, tech techutils.Technolo
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
 		depTreeResult.FullDepTrees, uniqueDeps,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(&python.AuditPython{
-			Server:              serverDetails,
+			Server:              artifactoryServerDetails,
 			Tool:                pythonutils.PythonTool(tech),
 			RemotePypiRepo:      params.DepsRepo(),
 			PipRequirementsFile: params.PipRequirementsFile(),
+			InstallCommandArgs:  params.InstallCommandArgs(),
 			IsCurationCmd:       params.IsCurationCmd(),
 		})
 	case techutils.Nuget:
@@ -288,70 +298,29 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 	return logMessage, curationCacheFolder, err
 }
 
-// Associates a technology with another of a different type in the structure.
-// Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
-var TechType = map[techutils.Technology]project.ProjectType{
-	techutils.Maven: project.Maven, techutils.Gradle: project.Gradle, techutils.Npm: project.Npm, techutils.Yarn: project.Yarn, techutils.Go: project.Go, techutils.Pip: project.Pip,
-	techutils.Pipenv: project.Pipenv, techutils.Poetry: project.Poetry, techutils.Nuget: project.Nuget, techutils.Dotnet: project.Dotnet,
-}
-
-// Verifies the existence of depsRepo. If it doesn't exist, it searches for a configuration file based on the technology type. If found, it assigns depsRepo in the AuditParams.
-func SetResolutionRepoIfExists(params xrayutils.AuditParams, tech techutils.Technology) (err error) {
+func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+	if serverDetails, err = params.ServerDetails(); err != nil {
+		return
+	}
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
+		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
 	}
-	configFilePath, exists, err := project.GetProjectConfFilePath(TechType[tech])
+	artifactoryDetails, err := artifactory.GetResolutionRepoIfExists(tech)
 	if err != nil {
-		err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
 		return
 	}
-	if !exists {
-		// Nuget and Dotnet are identified similarly in the detection process. To prevent redundancy, Dotnet is filtered out earlier in the process, focusing solely on detecting Nuget.
-		// Consequently, it becomes necessary to verify the presence of dotnet.yaml when Nuget detection occurs.
-		if tech == techutils.Nuget {
-			configFilePath, exists, err = project.GetProjectConfFilePath(TechType[techutils.Dotnet])
-			if err != nil {
-				err = fmt.Errorf("failed while searching for %s.yaml config file: %s", tech.String(), err.Error())
-				return
-			}
-			if !exists {
-				log.Debug(fmt.Sprintf("No %s.yaml nor %s.yaml configuration file was found. Resolving dependencies from %s default registry", techutils.Nuget.String(), techutils.Dotnet.String(), tech.String()))
-				return
-			}
-		} else {
-			log.Debug(fmt.Sprintf("No %s.yaml configuration file was found. Resolving dependencies from %s default registry", tech.String(), tech.String()))
-			return
-		}
+	if artifactoryDetails == nil {
+		return params.ServerDetails()
 	}
-
-	log.Debug("Using resolver config from", configFilePath)
-	repoConfig, err := project.ReadResolutionOnlyConfiguration(configFilePath)
-	if err != nil {
-		var missingResolverErr *project.MissingResolverErr
-		if !errors.As(err, &missingResolverErr) {
-			err = fmt.Errorf("failed while reading %s.yaml config file: %s", tech.String(), err.Error())
-			return
-		}
-		// When the resolver repository is absent from the configuration file, ReadResolutionOnlyConfiguration throws an error.
-		// However, this situation isn't considered an error here as the resolver repository isn't mandatory for constructing the dependencies tree.
-		err = nil
-	}
-
-	// If the resolver repository doesn't exist and triggers a MissingResolverErr in ReadResolutionOnlyConfiguration, the repoConfig becomes nil. In this scenario, there is no depsRepo to set, nor is there a necessity to do so.
-	if repoConfig != nil {
-		log.Debug("Using resolver config from", configFilePath)
-		details, e := repoConfig.ServerDetails()
-		if e != nil {
-			err = fmt.Errorf("failed getting server details: %s", e.Error())
-		} else {
-			params.SetServerDetails(details)
-			params.SetDepsRepo(repoConfig.TargetRepo())
-		}
-	}
+	// If the configuration file is found, the server details and the target repository are extracted from it.
+	params.SetDepsRepo(artifactoryDetails.TargetRepository)
+	params.SetServerDetails(artifactoryDetails.ServerDetails)
+	serverDetails = artifactoryDetails.ServerDetails
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xrayutils.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
 	if err := logDeps(uniqueDeps); err != nil {
 		return nil, err
 	}
@@ -390,4 +359,23 @@ func logDeps(uniqueDeps any) (err error) {
 	log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
 
 	return
+}
+
+// This method will change the working directory to the scan's working directory.
+func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
+	if err := os.Chdir(scan.Target); err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	serverDetails, err := SetResolutionRepoIfExists(params.AuditBasicParams, scan.Technology)
+	if err != nil {
+		return nil, err
+	}
+	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
+	if techErr != nil {
+		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
+	}
+	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
+	}
+	return &treeResult, nil
 }

@@ -1,8 +1,10 @@
-package utils
+package xsc
 
 import (
 	"fmt"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -14,12 +16,18 @@ import (
 const minXscVersionForErrorReport = "1.7.7"
 
 func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServicesManager, error) {
+	certsPath, err := coreutils.GetJfrogCertsDir()
+	if err != nil {
+		return nil, err
+	}
 	xscDetails, err := serviceDetails.CreateXscAuthConfig()
 	if err != nil {
 		return nil, err
 	}
 	serviceConfig, err := clientconfig.NewConfigBuilder().
 		SetServiceDetails(xscDetails).
+		SetCertificatesPath(certsPath).
+		SetInsecureTls(serviceDetails.InsecureTls).
 		Build()
 	if err != nil {
 		return nil, err

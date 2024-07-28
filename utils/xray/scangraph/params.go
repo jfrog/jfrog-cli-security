@@ -13,6 +13,17 @@ type ScanGraphParams struct {
 	severityLevel       int
 }
 
+type CommonGraphScanParams struct {
+	RepoPath               string
+	ProjectKey             string
+	Watches                []string
+	ScanType               services.ScanType
+	IncludeVulnerabilities bool
+	IncludeLicenses        bool
+	XscVersion             string
+	MultiScanId            string
+}
+
 func NewScanGraphParams() *ScanGraphParams {
 	return &ScanGraphParams{}
 }

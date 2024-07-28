@@ -9,7 +9,7 @@ import (
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,7 +27,7 @@ func TestCreateJFrogAppsConfig(t *testing.T) {
 
 	for _, testCase := range createJFrogAppsConfigCases {
 		t.Run(fmt.Sprintf("%v", testCase.workingDirs), func(t *testing.T) {
-			jfrogAppsConfig, err := createJFrogAppsConfig(testCase.workingDirs)
+			jfrogAppsConfig, err := CreateJFrogAppsConfig(testCase.workingDirs)
 			assert.NoError(t, err)
 			assert.NotNil(t, jfrogAppsConfig)
 			if len(testCase.workingDirs) == 0 {
@@ -49,7 +49,7 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 	chdirCallback := clientTestUtils.ChangeDirWithCallback(t, wd, "testdata")
 	defer chdirCallback()
 
-	jfrogAppsConfig, err := createJFrogAppsConfig([]string{})
+	jfrogAppsConfig, err := CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	assert.NotNil(t, jfrogAppsConfig)
 	assert.Equal(t, "1.0", jfrogAppsConfig.Version)
@@ -58,11 +58,11 @@ func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
 
 func TestShouldSkipScanner(t *testing.T) {
 	module := jfrogappsconfig.Module{}
-	assert.False(t, ShouldSkipScanner(module, utils.IaC))
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
 
 	module = jfrogappsconfig.Module{ExcludeScanners: []string{"sast"}}
-	assert.False(t, ShouldSkipScanner(module, utils.IaC))
-	assert.True(t, ShouldSkipScanner(module, utils.Sast))
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
 }
 
 var getSourceRootsCases = []struct {

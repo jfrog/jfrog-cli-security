@@ -5,6 +5,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 )
 
+const securityCategory = "Security"
+
 func GetJfrogCliSecurityApp() components.App {
 	app := components.CreateEmbeddedApp(
 		"security",
@@ -14,6 +16,12 @@ func GetJfrogCliSecurityApp() components.App {
 		Name:        string(cliutils.Xr),
 		Description: "Xray commands.",
 		Commands:    getXrayNameSpaceCommands(),
+		Category:    "Command Namespaces",
+	})
+	app.Subcommands = append(app.Subcommands, components.Namespace{
+		Name:        "git",
+		Description: "Git commands.",
+		Commands:    getGitNameSpaceCommands(),
 		Category:    "Command Namespaces",
 	})
 	return app

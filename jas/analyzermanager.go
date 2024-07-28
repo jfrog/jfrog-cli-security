@@ -1,4 +1,4 @@
-package utils
+package jas
 
 import (
 	"errors"
@@ -8,6 +8,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -21,7 +25,7 @@ const (
 	EntitlementsMinVersion                    = "3.66.5"
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "[RELEASE]"
+	defaultAnalyzerManagerVersion             = "1.8.3"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -36,59 +40,9 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
-	JfMsiEnvVariable                          = "JF_MSI"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 )
-
-type ApplicabilityStatus string
-
-const (
-	Applicable                ApplicabilityStatus = "Applicable"
-	NotApplicable             ApplicabilityStatus = "Not Applicable"
-	ApplicabilityUndetermined ApplicabilityStatus = "Undetermined"
-	NotCovered                ApplicabilityStatus = "Not Covered"
-	NotScanned                ApplicabilityStatus = ""
-)
-
-func (as ApplicabilityStatus) String() string {
-	return string(as)
-}
-
-func convertToApplicabilityStatus(status string) ApplicabilityStatus {
-	switch status {
-	case Applicable.String():
-		return Applicable
-	case NotApplicable.String():
-		return NotApplicable
-	case ApplicabilityUndetermined.String():
-		return ApplicabilityUndetermined
-	case NotCovered.String():
-		return NotCovered
-	default:
-		return NotScanned
-	}
-}
-
-type JasScanType string
-
-const (
-	Applicability JasScanType = "Applicability"
-	Secrets       JasScanType = "Secrets"
-	IaC           JasScanType = "IaC"
-	Sast          JasScanType = "Sast"
-)
-
-func (jst JasScanType) String() string {
-	return string(jst)
-}
-
-func (jst JasScanType) FormattedError(err error) error {
-	if err != nil {
-		return fmt.Errorf(ErrFailedScannerRun, jst, err.Error())
-	}
-	return nil
-}
 
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
@@ -101,16 +55,13 @@ type AnalyzerManager struct {
 	MultiScanId             string
 }
 
-func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails) (err error) {
-	return am.ExecWithOutputFile(configFile, scanCommand, workingDir, "", serverDetails)
+func (am *AnalyzerManager) Exec(configFile, scanCommand, workingDir string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
+	return am.ExecWithOutputFile(configFile, scanCommand, workingDir, "", serverDetails, envVars)
 }
 
-func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails) (err error) {
-	if err = SetAnalyzerManagerEnvVariables(serverDetails); err != nil {
-		return
-	}
+func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDir, outputFile string, serverDetails *config.ServerDetails, envVars map[string]string) (err error) {
 	var cmd *exec.Cmd
-	multiScanId := os.Getenv(JfMsiEnvVariable)
+	multiScanId := envVars[utils.JfMsiEnvVariable]
 	if len(outputFile) > 0 {
 		log.Debug("Executing", am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile, multiScanId)
 		cmd = exec.Command(am.AnalyzerManagerFullPath, scanCommand, configFile, outputFile)
@@ -125,6 +76,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 			}
 		}
 	}()
+	cmd.Env = utils.ToCommandEnvVars(envVars)
 	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
 	if isCI() || err != nil {
@@ -187,35 +139,24 @@ func isCI() bool {
 	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
 }
 
-func SetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) error {
-	if serverDetails == nil {
-		return errors.New("cant get xray server details")
-	}
-	if err := os.Setenv(jfUserEnvVariable, serverDetails.User); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfPasswordEnvVariable, serverDetails.Password); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfPlatformUrlEnvVariable, serverDetails.Url); errorutils.CheckError(err) != nil {
-		return err
-	}
-	if err := os.Setenv(jfTokenEnvVariable, serverDetails.AccessToken); errorutils.CheckError(err) != nil {
-		return err
+func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
+	envVars = map[string]string{
+		jfUserEnvVariable:        serverDetails.User,
+		jfPasswordEnvVariable:    serverDetails.Password,
+		jfPlatformUrlEnvVariable: serverDetails.Url,
+		jfTokenEnvVariable:       serverDetails.AccessToken,
 	}
 	if !isCI() {
 		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err = os.Setenv(logDirEnvVariable, analyzerManagerLogFolder); errorutils.CheckError(err) != nil {
-			return err
-		}
+		envVars[logDirEnvVariable] = analyzerManagerLogFolder
 	}
-	return nil
+	return
 }
 
-func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
+func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
 		exitCode := exitError.ExitCode()
@@ -224,12 +165,15 @@ func ParseAnalyzerManagerError(scanner JasScanType, err error) error {
 			return nil
 		}
 	}
-	return scanner.FormattedError(err)
+	if err != nil {
+		return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+	}
+	return
 }
 
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
-func DownloadAnalyzerManagerIfNeeded() error {
+func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
@@ -271,7 +215,7 @@ func DownloadAnalyzerManagerIfNeeded() error {
 		}
 	}
 	// Download & unzip the analyzer manager files
-	log.Debug("The 'Analyzer Manager' app is not cached locally. Downloading it now...")
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
 	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
 		return err
 	}

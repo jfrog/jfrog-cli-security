@@ -1,6 +1,7 @@
 package java
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -10,10 +11,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -70,7 +72,7 @@ func NewMavenDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *Mav
 	}
 }
 
-func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*utils.DepTreeNode, err error) {
+func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
 	manager := NewMavenDepTreeManager(params, Tree)
 	outputFilePaths, clearMavenDepTreeRun, err := manager.RunMavenDepTree()
 	if err != nil {
@@ -229,10 +231,26 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 	if err != nil {
 		return err
 	}
-	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
-	settingsXmlContent := fmt.Sprintf(settingsXmlTemplate, username, password, remoteRepositoryFullPath)
 
-	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, []byte(settingsXmlContent), 0600))
+	mdt.settingsXmlPath = filepath.Join(settingsXmlPath, settingsXmlFile)
+	SettingsTemplate, err := template.New("settings").Parse(settingsXmlTemplate)
+	if err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	err = SettingsTemplate.Execute(buf, struct {
+		Username                 string
+		Password                 string
+		RemoteRepositoryFullPath string
+	}{
+		Username:                 username,
+		Password:                 password,
+		RemoteRepositoryFullPath: remoteRepositoryFullPath,
+	})
+	if err != nil {
+		return err
+	}
+	return errorutils.CheckError(os.WriteFile(mdt.settingsXmlPath, buf.Bytes(), 0600))
 }
 
 // Creates a temporary directory.

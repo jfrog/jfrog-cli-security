@@ -1,0 +1,12 @@
+git-servers-list:
+  - scm-type: bitbucket
+    scm-api-url: "https://api.bitbucket.url"
+    token: "token"
+    owner: "owner"
+    repositories:
+      - "repo1"
+      - "repo2"
+  - scm-type: gitlab
+    scm-api-url: "https://api.github.com"
+    token: "token"
+    owner: "owner"
