@@ -3,7 +3,7 @@ package curation
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"net/http"
 	"net/http/httptest"
 	"os"

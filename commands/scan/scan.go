@@ -180,7 +180,7 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(func(cmdResults *results.SecurityCommandResults) error {
-		return output.RecordSecurityCommandOutput(output.Binary, cmdResults)
+		return output.RecordSecurityCommandResultOutput(output.Binary, cmdResults)
 	})
 }
 
