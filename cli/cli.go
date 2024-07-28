@@ -24,7 +24,7 @@ func GetJfrogCliSecurityApp() components.App {
 		},
 		components.Namespace{
 			Name:        "app",
-			Description: "Application commands detect information about the user application.",
+			Description: "Application commands.",
 			Hidden:      true,
 			Commands:    getAppsCommands(),
 			Category:    cmdNamespace,

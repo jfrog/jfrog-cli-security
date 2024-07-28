@@ -13,17 +13,20 @@ import (
 )
 
 const (
-	// Security Commands Keys
+	// Xray Commands Keys
 	XrCurl               = "xr-curl"
 	OfflineUpdate        = "offline-update"
+	// Application Commands Keys
+	Detect = "detect"
+	// Git Commands Keys
+	GitCountContributors = "count-contributors"
+	// Security scan Commands Keys
 	XrScan               = "xr-scan"
 	BuildScan            = "build-scan"
 	DockerScan           = "docker scan"
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
-	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
-
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn    = "audit-maven"
 	AuditGradle = "audit-gradle"
@@ -47,6 +50,7 @@ const (
 )
 
 const (
+	// Scan Types flags
 	Sca       = "sca"
 	Iac       = "iac"
 	Sast      = "sast"
@@ -127,56 +131,6 @@ const (
 	Months          = "months"
 	DetailedSummary = "detailed-summary"
 )
-
-// Mapping between security commands (key) and their flags (key).
-var commandFlags = map[string][]string{
-	XrCurl:        {ServerId},
-	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
-	XrScan: {
-		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
-	},
-	Enrich: {
-		url, user, password, accessToken, ServerId, Threads,
-	},
-	BuildScan: {
-		url, user, password, accessToken, ServerId, Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan,
-	},
-	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
-	},
-	Audit: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
-		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
-		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA,
-	},
-	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile,
-	},
-	GitCountContributors: {
-		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
-	},
-	// TODO: Deprecated commands (remove at next CLI major version)
-	AuditMvn: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
-	},
-	AuditGradle: {
-		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
-	},
-	AuditNpm: {
-		url, user, password, accessToken, ServerId, DepType, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
-	},
-	AuditGo: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
-	},
-	AuditPip: {
-		url, user, password, accessToken, ServerId, RequirementsFile, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
-	},
-	AuditPipenv: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
-	},
-}
 
 // Security Flag keys mapped to their corresponding components.Flag definition.
 var flagsMap = map[string]components.Flag{
@@ -267,3 +221,49 @@ var flagsMap = map[string]components.Flag{
 func GetCommandFlags(cmdKey string) []components.Flag {
 	return pluginsCommon.GetCommandFlags(cmdKey, commandFlags, flagsMap)
 }
+
+// Flags to configure the connection to the JFrog Platform.
+func getPlatformConnectionFlags() []string {
+	return []string{url, user, password, accessToken, ServerId}
+}
+// Flags to configure the violation context (if exists, violations will be created).
+func getViolationContextFlags() []string {
+	return []string{Project, Watches, RepoPath}
+}
+
+// Mapping between security commands (key) and their flags (key).
+var commandFlags = map[string][]string{
+	// Xray Commands Keys
+	XrCurl:        {ServerId},
+	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
+	// Application Commands Keys
+	Detect: getPlatformConnectionFlags(),
+	// Security scan Commands Keys
+	XrScan: append(append(
+		getPlatformConnectionFlags(), 
+		getViolationContextFlags()...), 
+		SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+	),
+	Enrich: append(getPlatformConnectionFlags(), Threads),
+	BuildScan: append(getPlatformConnectionFlags(),Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan),
+	DockerScan: append(getViolationContextFlags(), ServerId, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly),
+	Audit: append(getPlatformConnectionFlags(), InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
+		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Sca, Iac, Sast, Secrets, WithoutCA),
+	CurationAudit: {
+		CurationOutput, WorkingDirs, Threads, RequirementsFile,
+	},
+	// TODO: Deprecated commands (remove at next CLI major version)
+	AuditMvn: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), InsecureTls, ExclusionsAudit, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit),
+	AuditGradle: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, Licenses, OutputFormat, Fail, ExtendedTable),
+	AuditNpm: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), DepType, ExclusionsAudit, Licenses, OutputFormat, Fail, ExtendedTable),
+	AuditGo: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), ExclusionsAudit, Licenses, OutputFormat, Fail, ExtendedTable),
+	AuditPip: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), RequirementsFile, ExclusionsAudit, Licenses, OutputFormat, Fail, ExtendedTable),
+	AuditPipenv: append(append(getPlatformConnectionFlags(), getViolationContextFlags()...), ExclusionsAudit, Licenses, OutputFormat, ExtendedTable),
+	// Git Commands Keys
+	GitCountContributors: {
+		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
+	},
+}
+
