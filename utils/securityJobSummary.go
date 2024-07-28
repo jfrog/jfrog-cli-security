@@ -206,9 +206,9 @@ func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content
 	if !summary.HasBlockedCuration() {
 		return
 	}
-	content += fmt.Sprintf("Total number of packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
-	content += fmt.Sprintf("<br>🟢 Total Number of Approved: <b>%d</b>", summary.CuratedPackages.Approved)
-	content += fmt.Sprintf("<br>🔴 Total Number of Blocked: <b>%d</b>", summary.CuratedPackages.Blocked.GetTotal())
+	content += fmt.Sprintf("Total Number of Packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
+	content += fmt.Sprintf("<br>🟢 Total Number of Approved Packages: <b>%d</b>", summary.CuratedPackages.Approved)
+	content += fmt.Sprintf("<br>🔴 Total Number of Blocked Packages: <b>%d</b>", summary.CuratedPackages.Blocked.GetCountOfKeys(false))
 	if summary.CuratedPackages.Blocked.GetTotal() > 0 {
 		var blocked []struct {
 			BlockedName  string

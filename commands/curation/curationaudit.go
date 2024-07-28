@@ -269,7 +269,7 @@ func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
 			if _, ok := blocked[polAndCond]; !ok {
 				blocked[polAndCond] = formats.SummaryCount{}
 			}
-			uniqId := uniqPkgAppearanceId(pkg.ParentName, pkg.ParentVersion, pkg.PackageName, pkg.PackageVersion)
+			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
 			blocked[polAndCond][uniqId]++
 		}
 	}
@@ -281,9 +281,8 @@ func formatPolicyAndCond(policy, cond string) string {
 }
 
 // The unique identifier of a package includes both the package name with its version and the parent package with its version
-func uniqPkgAppearanceId(parentName, parentVersion, packageName, packageVersion string) string {
-	return fmt.Sprintf("%s:%s-%s:%s",
-		parentName, parentVersion, packageName, packageVersion)
+func getPackageId(packageName, packageVersion string) string {
+	return fmt.Sprintf("%s:%s", packageName, packageVersion)
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
