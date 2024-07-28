@@ -280,7 +280,7 @@ func formatPolicyAndCond(policy, cond string) string {
 	return fmt.Sprintf("Policy: %s, Condition: %s", policy, cond)
 }
 
-// The unique identifier of a package includes both the package name with its version and the parent package with its version
+// The unique identifier of a package includes the package name with its version
 func getPackageId(packageName, packageVersion string) string {
 	return fmt.Sprintf("%s:%s", packageName, packageVersion)
 }
