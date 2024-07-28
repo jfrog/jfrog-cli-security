@@ -116,6 +116,33 @@ func TestConvertSummaryToString(t *testing.T) {
 						},
 					}},
 				},
+				ScanCommandSummaryResult{
+					Section:          Curation,
+					WorkingDirectory: wd,
+					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
+						{
+							Target: filepath.Join(wd, "application1"),
+							CuratedPackages: &formats.CuratedPackages{
+								Blocked: formats.TwoLevelSummaryCount{
+									"Policy: Malicious, Condition: Malicious package":          formats.SummaryCount{"npm://lodash:1.0.0": 1},
+									"Policy: cvss_score, Condition:cvss score higher than 4.0": formats.SummaryCount{"npm://underscore:1.0.0": 1},
+								},
+								Approved: 4,
+							},
+						},
+						{
+							Target: filepath.Join(wd, "application2"),
+							CuratedPackages: &formats.CuratedPackages{
+								Blocked: formats.TwoLevelSummaryCount{
+									"Policy: License, Condition: GPL":          formats.SummaryCount{"npm://test:1.0.0": 1},
+									"Policy: Aged, Condition: Package is aged": formats.SummaryCount{"npm://test2:1.0.0": 1},
+								},
+								Approved: 4,
+							},
+						},
+					},
+					},
+				},
 			),
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "multi_command_job.md"),
 		},
@@ -154,6 +181,8 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 			summary.ScanCommands = append(summary.ScanCommands, cmdResult.Results)
 		case Modules:
 			summary.AuditCommands = append(summary.AuditCommands, cmdResult.Results)
+		case Curation:
+			summary.CurationCommands = append(summary.CurationCommands, cmdResult.Results)
 		}
 	}
 	return summary
