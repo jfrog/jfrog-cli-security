@@ -416,16 +416,16 @@ func getOperationalRiskViolationReadableData(violation services.Violation) *oper
 // The uniqueness of the violations is determined by the GetUniqueKey function
 func removeScaDuplications(issues []formats.VulnerabilityOrViolationRow, multipleRoots bool) []formats.VulnerabilityOrViolationRow {
 	var uniqueIssues = make(map[string]*formats.VulnerabilityOrViolationRow)
-	for _, issue := range issues {
-		packageKey := results.GetUniqueKey(issue.ImpactedDependencyDetails.ImpactedDependencyName, issue.ImpactedDependencyDetails.ImpactedDependencyVersion, issue.IssueId, len(issue.FixedVersions) > 0)
+	for i := range issues {
+		packageKey := results.GetUniqueKey(issues[i].ImpactedDependencyDetails.ImpactedDependencyName, issues[i].ImpactedDependencyDetails.ImpactedDependencyVersion, issues[i].IssueId, len(issues[i].FixedVersions) > 0)
 		if uniqueIssue, exist := uniqueIssues[packageKey]; exist {
 			// combine attributes from the same issue
-			uniqueIssue.FixedVersions = utils.UniqueUnion(uniqueIssue.FixedVersions, issue.FixedVersions...)
-			uniqueIssue.ImpactPaths = AppendImpactPathsIfUnique(uniqueIssue.ImpactPaths, issue.ImpactPaths, multipleRoots)
-			uniqueIssue.ImpactedDependencyDetails.Components = AppendComponentIfUnique(uniqueIssue.ImpactedDependencyDetails.Components, issue.ImpactedDependencyDetails.Components)
+			uniqueIssue.FixedVersions = utils.UniqueUnion(uniqueIssue.FixedVersions, issues[i].FixedVersions...)
+			uniqueIssue.ImpactPaths = AppendImpactPathsIfUnique(uniqueIssue.ImpactPaths, issues[i].ImpactPaths, multipleRoots)
+			uniqueIssue.ImpactedDependencyDetails.Components = AppendComponentIfUnique(uniqueIssue.ImpactedDependencyDetails.Components, issues[i].ImpactedDependencyDetails.Components)
 			continue
 		}
-		uniqueIssues[packageKey] = &issue
+		uniqueIssues[packageKey] = &issues[i]
 	}
 	// convert map to slice
 	result := make([]formats.VulnerabilityOrViolationRow, 0, len(uniqueIssues))
