@@ -53,13 +53,13 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 		return sarifutils.NewReport()
 	}
 	// Flush the current run
-	if err := sc.ParseNewScanResultsMetadata("", nil); err != nil {
+	if err := sc.ParseNewTargetResults("", nil); err != nil {
 		return sarifutils.NewReport()
 	}
 	return sc.current, nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas bool) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas, _ bool) (err error) {
 	sc.current, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -72,7 +72,7 @@ func (sc *CmdResultsSarifConverter) Reset(_, xrayVersion string, entitledForJas 
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseNewScanResultsMetadata(target string, errors ...error) (err error) {
+func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target string, errors ...error) (err error) {
 	if sc.current == nil {
 		return results.ConvertorResetErr
 	}

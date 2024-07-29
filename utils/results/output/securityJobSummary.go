@@ -79,7 +79,15 @@ func CreateCommandSummaryResult(section SecuritySummarySection, cmdResults *resu
 }
 
 // Record the security command output
-func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *results.SecurityCommandResults) (err error) {
+func RecordSecurityCommandResultOutput(section SecuritySummarySection, cmdResults *results.SecurityCommandResults) (err error) {
+	summary, err := CreateCommandSummaryResult(section, cmdResults)
+	if err != nil {
+		return
+	}
+	return RecordSecurityCommandOutput(summary)
+}
+
+func RecordSecurityCommandOutput(summary ScanCommandSummaryResult) (err error) {
 	if !commandsummary.ShouldRecordSummary() {
 		return
 	}
@@ -88,10 +96,6 @@ func RecordSecurityCommandOutput(section SecuritySummarySection, cmdResults *res
 		return
 	}
 	wd, err := coreutils.GetWorkingDirectory()
-	if err != nil {
-		return
-	}
-	summary, err := CreateCommandSummaryResult(section, cmdResults)
 	if err != nil {
 		return
 	}
@@ -263,9 +267,9 @@ func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content
 	if !summary.HasBlockedCuration() {
 		return
 	}
-	content += fmt.Sprintf("Total number of packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
-	content += fmt.Sprintf("<br>🟢 Total Number of Approved: <b>%d</b>", summary.CuratedPackages.Approved)
-	content += fmt.Sprintf("<br>🔴 Total Number of Blocked: <b>%d</b>", summary.CuratedPackages.Blocked.GetTotal())
+	content += fmt.Sprintf("Total Number of Packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
+	content += fmt.Sprintf("<br>🟢 Total Number of Approved Packages: <b>%d</b>", summary.CuratedPackages.Approved)
+	content += fmt.Sprintf("<br>🔴 Total Number of Blocked Packages: <b>%d</b>", summary.CuratedPackages.Blocked.GetCountOfKeys(false))
 	if summary.CuratedPackages.Blocked.GetTotal() > 0 {
 		var blocked []struct {
 			BlockedName  string

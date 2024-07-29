@@ -27,20 +27,20 @@ func (sc *CmdResultsSummaryConverter) Get() *formats.SummaryResults {
 		return &formats.SummaryResults{}
 	}
 	// Flush the last scan
-	if err := sc.ParseNewScanResultsMetadata("", nil); err != nil {
+	if err := sc.ParseNewTargetResults("", nil); err != nil {
 		return &formats.SummaryResults{}
 	}
 	return sc.current
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_, _ string, entitledForJas bool) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_, _ string, entitledForJas, _ bool) (err error) {
 	sc.current = &formats.SummaryResults{}
 	sc.entitledForJas = entitledForJas
 	sc.currentCveUnique = datastructures.MakeSet[string]()
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseNewScanResultsMetadata(target string, _ ...error) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseNewTargetResults(target string, _ ...error) (err error) {
 	if sc.current == nil {
 		return results.ConvertorResetErr
 	}

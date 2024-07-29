@@ -177,8 +177,16 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 		return technologiesSet.ToSlice()
 	}
 	for _, scaResult := range sr.ScaResults.XrayResults {
-		if scaResult.ScannedPackageType != "" {
-			technologiesSet.Add(techutils.Technology(strings.ToLower(scaResult.ScannedPackageType)))
+		for _, vulnerability := range scaResult.Vulnerabilities {
+			// if tech, ok := techutils.Technology(vulnerability.Technology); ok {
+			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
+				technologiesSet.Add(tech)
+			}
+		}
+		for _, violation := range scaResult.Violations {
+			if tech := techutils.Technology(strings.ToLower(violation.Technology)); tech != "" {
+				technologiesSet.Add(tech)
+			}
 		}
 	}
 	return technologiesSet.ToSlice()

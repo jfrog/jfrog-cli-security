@@ -114,10 +114,9 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// add_hidden_namespace
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20240728055757-31e39f393689
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240729065529-2b249c484570
 
-// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
+replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240728112256-a0d079c45259
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 

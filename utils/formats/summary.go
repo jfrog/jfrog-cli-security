@@ -95,7 +95,7 @@ func (s *ScanVulnerabilitiesSummary) GetTotalIssueCount() (total int) {
 }
 
 func (s *CuratedPackages) GetTotalPackages() int {
-	return s.Approved + s.Blocked.GetTotal()
+	return s.Approved + s.Blocked.GetCountOfKeys(false)
 }
 
 func (s *ScanVulnerabilitiesSummary) getTotalIssueCount(unique bool) (total int) {

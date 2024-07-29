@@ -104,7 +104,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			cmdResults.Targets[i].Name = dsc.imageTag
 			// scanResults.Scans[i].Target = dsc.imageTag
 		}
-		return output.RecordSecurityCommandOutput(output.Binary, cmdResults)
+		return output.RecordSecurityCommandResultOutput(output.Binary, cmdResults)
 	})
 }
 

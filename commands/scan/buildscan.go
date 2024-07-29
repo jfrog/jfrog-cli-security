@@ -177,7 +177,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-	err = output.RecordSecurityCommandOutput(output.Build, cmdResults)
+	err = output.RecordSecurityCommandResultOutput(output.Build, cmdResults)
 	return
 }
 

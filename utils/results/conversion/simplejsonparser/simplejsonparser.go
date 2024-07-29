@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -17,31 +18,39 @@ import (
 type CmdResultsSimpleJsonConverter struct {
 	// If supported, pretty print the output text
 	pretty bool
+	// If true, the output will contain only unique issues (ignoring the same issue in different locations)
+	uniqueScaIssues bool
 	// Current stream parse cache information
 	current *formats.SimpleJsonResults
 	// General information on the current command results
 	entitledForJas bool
+	multipleRoots  bool
 }
 
-func NewCmdResultsSimpleJsonConverter(pretty bool) *CmdResultsSimpleJsonConverter {
-	return &CmdResultsSimpleJsonConverter{pretty: pretty}
+func NewCmdResultsSimpleJsonConverter(pretty, uniqueScaIssues bool) *CmdResultsSimpleJsonConverter {
+	return &CmdResultsSimpleJsonConverter{pretty: pretty, uniqueScaIssues: uniqueScaIssues}
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) Get() *formats.SimpleJsonResults {
 	if sjc.current == nil {
 		return nil
 	}
+	if sjc.uniqueScaIssues {
+		sjc.current.Vulnerabilities = removeScaDuplications(sjc.current.Vulnerabilities, sjc.multipleRoots)
+		sjc.current.SecurityViolations = removeScaDuplications(sjc.current.SecurityViolations, sjc.multipleRoots)
+	}
 	sortResults(sjc.current)
 	return sjc.current
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(multiScanId, _ string, entitledForJas bool) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(multiScanId, _ string, entitledForJas, multipleTargets bool) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
+	sjc.multipleRoots = multipleTargets
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseNewScanResultsMetadata(target string, errors ...error) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target string, errors ...error) (err error) {
 	if sjc.current == nil {
 		return results.ConvertorResetErr
 	}
@@ -339,6 +348,195 @@ func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invoca
 	return
 }
 
+func convertJfrogResearchInformation(extendedInfo *services.ExtendedInformation) *formats.JfrogResearchInformation {
+	if extendedInfo == nil {
+		return nil
+	}
+	var severityReasons []formats.JfrogResearchSeverityReason
+	for _, severityReason := range extendedInfo.JfrogResearchSeverityReasons {
+		severityReasons = append(severityReasons, formats.JfrogResearchSeverityReason{
+			Name:        severityReason.Name,
+			Description: severityReason.Description,
+			IsPositive:  severityReason.IsPositive,
+		})
+	}
+	return &formats.JfrogResearchInformation{
+		Summary:         extendedInfo.ShortDescription,
+		Details:         extendedInfo.FullDescription,
+		SeverityDetails: formats.SeverityDetails{Severity: extendedInfo.JfrogResearchSeverity},
+		SeverityReasons: severityReasons,
+		Remediation:     extendedInfo.Remediation,
+	}
+}
+
+type operationalRiskViolationReadableData struct {
+	isEol         string
+	cadence       string
+	commits       string
+	committers    string
+	eolMessage    string
+	riskReason    string
+	latestVersion string
+	newerVersions string
+}
+
+func getOperationalRiskViolationReadableData(violation services.Violation) *operationalRiskViolationReadableData {
+	isEol, cadence, commits, committers, newerVersions, latestVersion := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+	if violation.IsEol != nil {
+		isEol = strconv.FormatBool(*violation.IsEol)
+	}
+	if violation.Cadence != nil {
+		cadence = strconv.FormatFloat(*violation.Cadence, 'f', -1, 64)
+	}
+	if violation.Committers != nil {
+		committers = strconv.FormatInt(int64(*violation.Committers), 10)
+	}
+	if violation.Commits != nil {
+		commits = strconv.FormatInt(*violation.Commits, 10)
+	}
+	if violation.NewerVersions != nil {
+		newerVersions = strconv.FormatInt(int64(*violation.NewerVersions), 10)
+	}
+	if violation.LatestVersion != "" {
+		latestVersion = violation.LatestVersion
+	}
+	return &operationalRiskViolationReadableData{
+		isEol:         isEol,
+		cadence:       cadence,
+		commits:       commits,
+		committers:    committers,
+		eolMessage:    violation.EolMessage,
+		riskReason:    violation.RiskReason,
+		latestVersion: latestVersion,
+		newerVersions: newerVersions,
+	}
+}
+
+// Returns a new slice that contains only the unique issues from the input slice
+// The uniqueness of the violations is determined by the GetUniqueKey function
+func removeScaDuplications(issues []formats.VulnerabilityOrViolationRow, multipleRoots bool) []formats.VulnerabilityOrViolationRow {
+	var uniqueIssues = make(map[string]*formats.VulnerabilityOrViolationRow)
+	for i := range issues {
+		packageKey := results.GetUniqueKey(issues[i].ImpactedDependencyDetails.ImpactedDependencyName, issues[i].ImpactedDependencyDetails.ImpactedDependencyVersion, issues[i].IssueId, len(issues[i].FixedVersions) > 0)
+		if uniqueIssue, exist := uniqueIssues[packageKey]; exist {
+			// combine attributes from the same issue
+			uniqueIssue.FixedVersions = utils.UniqueUnion(uniqueIssue.FixedVersions, issues[i].FixedVersions...)
+			uniqueIssue.ImpactPaths = AppendImpactPathsIfUnique(uniqueIssue.ImpactPaths, issues[i].ImpactPaths, multipleRoots)
+			uniqueIssue.ImpactedDependencyDetails.Components = AppendComponentIfUnique(uniqueIssue.ImpactedDependencyDetails.Components, issues[i].ImpactedDependencyDetails.Components)
+			continue
+		}
+		uniqueIssues[packageKey] = &issues[i]
+	}
+	// convert map to slice
+	result := make([]formats.VulnerabilityOrViolationRow, 0, len(uniqueIssues))
+	for _, v := range uniqueIssues {
+		result = append(result, *v)
+	}
+	return result
+}
+
+func AppendImpactPathsIfUnique(original [][]formats.ComponentRow, toAdd [][]formats.ComponentRow, multipleRoots bool) [][]formats.ComponentRow {
+	if multipleRoots {
+		return AppendImpactPathsIfUniqueForMultipleRoots(original, toAdd)
+	}
+	impactPathMap := make(map[string][]formats.ComponentRow)
+	for _, path := range original {
+		// The first node component id is the key and the value is the whole path
+		impactPathMap[getImpactPathKey(path)] = path
+	}
+	for _, path := range toAdd {
+		key := getImpactPathKey(path)
+		if _, exists := impactPathMap[key]; !exists {
+			impactPathMap[key] = path
+			original = append(original, path)
+		}
+	}
+	return original
+}
+
+func getImpactPathKey(path []formats.ComponentRow) string {
+	key := getComponentKey(path[results.RootIndex])
+	if len(path) == results.DirectDependencyPathLength {
+		key = getComponentKey(path[results.DirectDependencyIndex])
+	}
+	return key
+}
+
+func getComponentKey(component formats.ComponentRow) string {
+	return results.GetDependencyId(component.Name, component.Version)
+}
+
+// getImpactPathKey return a key that is used as a key to identify and deduplicate impact paths.
+// If an impact path length is equal to directDependencyPathLength, then the direct dependency is the key, and it's in the directDependencyIndex place.
+func AppendImpactPathsIfUniqueForMultipleRoots(original [][]formats.ComponentRow, toAdd [][]formats.ComponentRow) [][]formats.ComponentRow {
+	for targetPathIndex, targetPath := range original {
+		for sourcePathIndex, sourcePath := range toAdd {
+			var subset []formats.ComponentRow
+			if len(sourcePath) <= len(targetPath) {
+				subset = isComponentRowIsSubset(targetPath, sourcePath)
+				if len(subset) != 0 {
+					original[targetPathIndex] = subset
+				}
+			} else {
+				subset = isComponentRowIsSubset(sourcePath, targetPath)
+				if len(subset) != 0 {
+					toAdd[sourcePathIndex] = subset
+				}
+			}
+		}
+	}
+	return AppendImpactPathsIfUnique(original, toAdd, false)
+}
+
+// isComponentRowIsSubset checks if targetPath is a subset of sourcePath, and returns the subset if exists
+func isComponentRowIsSubset(target []formats.ComponentRow, source []formats.ComponentRow) []formats.ComponentRow {
+	var subsetImpactPath []formats.ComponentRow
+	impactPathNodesMap := make(map[string]bool)
+	for _, node := range target {
+		impactPathNodesMap[getComponentKey(node)] = true
+	}
+
+	for _, node := range source {
+		if impactPathNodesMap[getComponentKey(node)] {
+			subsetImpactPath = append(subsetImpactPath, node)
+		}
+	}
+
+	if len(subsetImpactPath) == len(target) || len(subsetImpactPath) == len(source) {
+		return subsetImpactPath
+	}
+	return []formats.ComponentRow{}
+}
+
+// AppendComponentIfUnique checks if the component exists in the components (not based on location)
+// Removing location information for all entries as well to combine the same components from different locations
+func AppendComponentIfUnique(target []formats.ComponentRow, source []formats.ComponentRow) []formats.ComponentRow {
+	directComponents := make(map[string]formats.ComponentRow)
+	for i := range target {
+		// Remove location information
+		target[i].Location = nil
+		// Add to the map if not exists
+		key := getComponentKey(target[i])
+		if _, exists := directComponents[key]; !exists {
+			directComponents[getComponentKey(target[i])] = target[i]
+		}
+	}
+	for i := range source {
+		// Remove location information
+		source[i].Location = nil
+		// Add to the map if not exists
+		key := getComponentKey(source[i])
+		if _, exists := directComponents[key]; !exists {
+			directComponents[getComponentKey(source[i])] = source[i]
+		}
+	}
+	result := make([]formats.ComponentRow, 0, len(directComponents))
+	for _, v := range directComponents {
+		result = append(result, v)
+	}
+	return result
+}
+
 func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	if simpleJsonResults == nil {
 		return
@@ -406,68 +604,4 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 		}
 		return rows[i].Location.File > rows[j].Location.File
 	})
-}
-
-func convertJfrogResearchInformation(extendedInfo *services.ExtendedInformation) *formats.JfrogResearchInformation {
-	if extendedInfo == nil {
-		return nil
-	}
-	var severityReasons []formats.JfrogResearchSeverityReason
-	for _, severityReason := range extendedInfo.JfrogResearchSeverityReasons {
-		severityReasons = append(severityReasons, formats.JfrogResearchSeverityReason{
-			Name:        severityReason.Name,
-			Description: severityReason.Description,
-			IsPositive:  severityReason.IsPositive,
-		})
-	}
-	return &formats.JfrogResearchInformation{
-		Summary:         extendedInfo.ShortDescription,
-		Details:         extendedInfo.FullDescription,
-		SeverityDetails: formats.SeverityDetails{Severity: extendedInfo.JfrogResearchSeverity},
-		SeverityReasons: severityReasons,
-		Remediation:     extendedInfo.Remediation,
-	}
-}
-
-type operationalRiskViolationReadableData struct {
-	isEol         string
-	cadence       string
-	commits       string
-	committers    string
-	eolMessage    string
-	riskReason    string
-	latestVersion string
-	newerVersions string
-}
-
-func getOperationalRiskViolationReadableData(violation services.Violation) *operationalRiskViolationReadableData {
-	isEol, cadence, commits, committers, newerVersions, latestVersion := "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
-	if violation.IsEol != nil {
-		isEol = strconv.FormatBool(*violation.IsEol)
-	}
-	if violation.Cadence != nil {
-		cadence = strconv.FormatFloat(*violation.Cadence, 'f', -1, 64)
-	}
-	if violation.Committers != nil {
-		committers = strconv.FormatInt(int64(*violation.Committers), 10)
-	}
-	if violation.Commits != nil {
-		commits = strconv.FormatInt(*violation.Commits, 10)
-	}
-	if violation.NewerVersions != nil {
-		newerVersions = strconv.FormatInt(int64(*violation.NewerVersions), 10)
-	}
-	if violation.LatestVersion != "" {
-		latestVersion = violation.LatestVersion
-	}
-	return &operationalRiskViolationReadableData{
-		isEol:         isEol,
-		cadence:       cadence,
-		commits:       commits,
-		committers:    committers,
-		eolMessage:    violation.EolMessage,
-		riskReason:    violation.RiskReason,
-		latestVersion: latestVersion,
-		newerVersions: newerVersions,
-	}
 }
