@@ -6,12 +6,12 @@ require (
 	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.29
-	github.com/jfrog/froggit-go v1.16.0
-	github.com/jfrog/gofrog v1.7.3
+	github.com/jfrog/build-info-go v1.9.30
+	github.com/jfrog/froggit-go v1.16.1
+	github.com/jfrog/gofrog v1.7.4
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.53.2
-	github.com/jfrog/jfrog-client-go v1.41.2
+	github.com/jfrog/jfrog-cli-core/v2 v2.53.4
+	github.com/jfrog/jfrog-client-go v1.43.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -23,8 +23,8 @@ require (
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
-	github.com/BurntSushi/toml v1.3.2 // indirect
-	github.com/CycloneDX/cyclonedx-go v0.8.0 // indirect
+	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/CycloneDX/cyclonedx-go v0.9.0 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
@@ -93,7 +93,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
 	github.com/urfave/cli v1.22.15 // indirect
-	github.com/vbauerster/mpb/v7 v7.5.3 // indirect
+	github.com/vbauerster/mpb/v8 v8.7.4 // indirect
 	github.com/xanzy/go-gitlab v0.95.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
@@ -114,9 +114,9 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/RobiNino/jfrog-cli-core/v2 v2.0.0-20240718120437-cd595114229e
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20240729065529-2b249c484570
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20240715172903-ac148cd34963
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
