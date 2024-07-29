@@ -890,8 +890,8 @@ github.com/jedib0t/go-pretty/v6 v6.5.9 h1:ACteMBRrrmm1gMsXe9PSTOClQ63IXDUt03H5U+
 github.com/jedib0t/go-pretty/v6 v6.5.9/go.mod h1:zbn98qrYlh95FIhwwsbIip0LYpwSG8SUOScs+v9/t0E=
 github.com/jfrog/archiver/v3 v3.6.1 h1:LOxnkw9pOn45DzCbZNFV6K0+6dCsQ0L8mR3ZcujO5eI=
 github.com/jfrog/archiver/v3 v3.6.1/go.mod h1:VgR+3WZS4N+i9FaDwLZbq+jeU4B4zctXL+gL4EMzfLw=
-github.com/jfrog/build-info-go v1.9.30 h1:RmK3NuDGUoyCjCNJJBlHaCm4vWzO8BLjkuAkMzj6PGE=
-github.com/jfrog/build-info-go v1.9.30/go.mod h1:fxSfpp+kQ8qln/0y7pgV3tg2exWe5OM1np5FF2LlSDg=
+github.com/jfrog/build-info-go v1.8.9-0.20240729055355-5b51bf71e756 h1:xyZEZDZvg/sLS5PH5b8zFnj6b2XBW4aYHXey0sv+F9I=
+github.com/jfrog/build-info-go v1.8.9-0.20240729055355-5b51bf71e756/go.mod h1:fxSfpp+kQ8qln/0y7pgV3tg2exWe5OM1np5FF2LlSDg=
 github.com/jfrog/froggit-go v1.16.1 h1:FBIM1qevX/ag9unfmpGzfmZ36D8ulOJ+DPTSFUk3l5U=
 github.com/jfrog/froggit-go v1.16.1/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
 github.com/jfrog/gofrog v1.7.5 h1:dFgtEDefJdlq9cqTRoe09RLxS5Bxbe1Ev5+E6SmZHcg=
