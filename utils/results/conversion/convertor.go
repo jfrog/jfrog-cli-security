@@ -117,7 +117,7 @@ func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormat
 			return
 		}
 		if targetScansResults.ScaResults != nil {
-			if err = c.parseScaResults(parser, targetScansResults, jasEntitled, multipleTargets); err != nil {
+			if err = c.parseScaResults(parser, targetScansResults, jasEntitled); err != nil {
 				return
 			}
 		}
