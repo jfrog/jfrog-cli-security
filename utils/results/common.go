@@ -21,9 +21,9 @@ import (
 
 const (
 	customLicenseViolationId   = "custom_license_violation"
-	rootIndex                  = 0
-	directDependencyIndex      = 1
-	directDependencyPathLength = 2
+	RootIndex                  = 0
+	DirectDependencyIndex      = 1
+	DirectDependencyPathLength = 2
 	nodeModules                = "node_modules"
 )
 
@@ -262,10 +262,6 @@ func GetIssueIdentifier(cvesRow []formats.CveRow, issueId string, delimiter stri
 	return identifier
 }
 
-func GetScaIssueId(depName, version, issueId string) string {
-	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
-}
-
 func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, applicabilityRuns []*sarif.Run, components map[string]services.Component) (convertedCves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus) {
 	convertedCves = convertCves(cves)
 	for i := range convertedCves {
@@ -403,9 +399,9 @@ func AppendUniqueImpactPaths(target [][]services.ImpactPathNode, source [][]serv
 // getImpactPathKey return a key that is used as a key to identify and deduplicate impact paths.
 // If an impact path length is equal to directDependencyPathLength, then the direct dependency is the key, and it's in the directDependencyIndex place.
 func getImpactPathKey(path []services.ImpactPathNode) string {
-	key := path[rootIndex].ComponentId
-	if len(path) == directDependencyPathLength {
-		key = path[directDependencyIndex].ComponentId
+	key := path[RootIndex].ComponentId
+	if len(path) == DirectDependencyPathLength {
+		key = path[DirectDependencyIndex].ComponentId
 	}
 	return key
 }
@@ -533,6 +529,19 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 		}
 	}
 	return ""
+}
+
+func GetDependencyId(depName, version string) string {
+	return fmt.Sprintf("%s:%s", depName, version)
+}
+
+func GetScaIssueId(depName, version, issueId string) string {
+	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
+}
+
+// GetUniqueKey returns a unique string key of format "vulnerableDependency:vulnerableVersion:xrayID:fixVersionExist"
+func GetUniqueKey(vulnerableDependency, vulnerableVersion, xrayID string, fixVersionExist bool) string {
+	return strings.Join([]string{vulnerableDependency, vulnerableVersion, xrayID, strconv.FormatBool(fixVersionExist)}, ":")
 }
 
 // Relevant only when "third-party-contextual-analysis" flag is on,
