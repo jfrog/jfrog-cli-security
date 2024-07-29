@@ -889,7 +889,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 						CuratedPackages: &formats.CuratedPackages{
 							Blocked: formats.TwoLevelSummaryCount{
 								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
+									getPackageId("test1", "1.0.0"): 1,
 								},
 							},
 							Approved: 4,
@@ -960,12 +960,12 @@ func Test_convertResultsToSummary(t *testing.T) {
 						CuratedPackages: &formats.CuratedPackages{
 							Blocked: formats.TwoLevelSummaryCount{
 								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
+									getPackageId("test1", "1.0.0"): 1,
 								},
 								formatPolicyAndCond("policy2", "cond2"): formats.SummaryCount{
-									uniqPkgAppearanceId("parent-test1", "1.0.0", "test1", "1.0.0"): 1,
-									uniqPkgAppearanceId("parent-test2", "2.0.0", "test2", "2.0.0"): 1,
-									uniqPkgAppearanceId("parent-test3", "3.0.0", "test3", "3.0.0"): 1,
+									getPackageId("test1", "1.0.0"): 1,
+									getPackageId("test2", "2.0.0"): 1,
+									getPackageId("test3", "3.0.0"): 1,
 								},
 							},
 							Approved: 2,
