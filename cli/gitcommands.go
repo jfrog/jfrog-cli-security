@@ -1,15 +1,16 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	gitDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git"
 	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"os"
-	"strings"
 )
 
 func getGitNameSpaceCommands() []components.Command {
@@ -78,7 +79,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 			return nil, errorutils.CheckErrorf("The --%s option is mandatory", flags.ScmApiUrl)
 		}
 		// Repositories names
-		params.Repositories = getRepositoriesList(c.GetStringFlagValue(flags.RepoName))
+		params.Repositories = utils.SplitAndTrim(c.GetStringFlagValue(flags.RepoName), ";")
 	}
 
 	// Optional flags
@@ -98,20 +99,6 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	// DetailedSummery
 	params.DetailedSummery = c.GetBoolFlagValue(flags.DetailedSummary)
 	return &params, nil
-}
-
-// TODO: remove this and use utils.SplitAndTrim
-func getRepositoriesList(reposStr string) []string {
-	reposSlice := strings.Split(reposStr, ";")
-	// Trim spaces and create a clean list of repo names
-	repos := []string{}
-	for _, repo := range reposSlice {
-		trimmedRepo := strings.TrimSpace(repo)
-		if trimmedRepo != "" {
-			repos = append(repos, trimmedRepo)
-		}
-	}
-	return repos
 }
 
 func GitCountContributorsCmd(c *components.Context) error {

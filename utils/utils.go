@@ -123,8 +123,12 @@ func splitEnvVar(envVar string) (key, value string) {
 
 func SplitAndTrim(s, sep string) []string {
 	split := strings.Split(s, sep)
-	for i, str := range split {
-		split[i] = strings.TrimSpace(str)
+	result := []string{}
+	for _, str := range split {
+		trimmed := strings.TrimSpace(str)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
 	}
-	return split
+	return result
 }
