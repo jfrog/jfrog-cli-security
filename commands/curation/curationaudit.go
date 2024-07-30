@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -175,6 +176,11 @@ type CurationAuditCommand struct {
 	utils.AuditParams
 }
 
+type CurationReport struct {
+	packagesStatus        []*PackageStatus
+	totalNumberOfPackages int
+}
+
 func NewCurationAuditCommand() *CurationAuditCommand {
 	return &CurationAuditCommand{
 		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
@@ -182,9 +188,8 @@ func NewCurationAuditCommand() *CurationAuditCommand {
 	}
 }
 
-func (ca *CurationAuditCommand) setPackageManagerConfig(pkgMangerConfig *project.RepositoryConfig) *CurationAuditCommand {
+func (ca *CurationAuditCommand) setPackageManagerConfig(pkgMangerConfig *project.RepositoryConfig) {
 	ca.PackageManagerConfig = pkgMangerConfig
-	return ca
 }
 
 func (ca *CurationAuditCommand) SetWorkingDirs(dirs []string) *CurationAuditCommand {
@@ -211,7 +216,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	} else {
 		ca.workingDirs = append(ca.workingDirs, rootDir)
 	}
-	results := map[string][]*PackageStatus{}
+	results := map[string]*CurationReport{}
 	for _, workDir := range ca.workingDirs {
 		var absWd string
 		absWd, err = filepath.Abs(workDir)
@@ -234,12 +239,53 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	}
 
 	for projectPath, packagesStatus := range results {
-		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus))
+		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
+
+	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
 	return
 }
 
-func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatus) error {
+func convertResultsToSummary(results map[string]*CurationReport) formats.SummaryResults {
+	summaryResults := formats.SummaryResults{}
+	for projectPath, packagesStatus := range results {
+		blocked := convertBlocked(packagesStatus.packagesStatus)
+		approved := packagesStatus.totalNumberOfPackages - blocked.GetCountOfKeys(false)
+
+		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummaryResult{Target: projectPath,
+			CuratedPackages: &formats.CuratedPackages{
+				Blocked:  blocked,
+				Approved: approved,
+			}})
+	}
+	return summaryResults
+}
+
+func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
+	blocked := formats.TwoLevelSummaryCount{}
+	for _, pkg := range pkgStatus {
+		for _, policy := range pkg.Policy {
+			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
+			if _, ok := blocked[polAndCond]; !ok {
+				blocked[polAndCond] = formats.SummaryCount{}
+			}
+			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
+			blocked[polAndCond][uniqId]++
+		}
+	}
+	return blocked
+}
+
+func formatPolicyAndCond(policy, cond string) string {
+	return fmt.Sprintf("Policy: %s, Condition: %s", policy, cond)
+}
+
+// The unique identifier of a package includes the package name with its version
+func getPackageId(packageName, packageVersion string) string {
+	return fmt.Sprintf("%s:%s", packageName, packageVersion)
+}
+
+func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
 	techs := techutils.DetectedTechnologiesList()
 	for _, tech := range techs {
 		supportedFunc, ok := supportedTech[techutils.Technology(tech)]
@@ -259,6 +305,10 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string][]*PackageStatu
 		if err := ca.auditTree(techutils.Technology(tech), results); err != nil {
 			return err
 		}
+		// clear the package manager config to avoid using the same config for the next tech
+		ca.setPackageManagerConfig(nil)
+		ca.AuditParams = ca.SetDepsRepo("")
+
 	}
 	return nil
 }
@@ -293,7 +343,7 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 	return ca.AuditParams
 }
 
-func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string][]*PackageStatus) error {
+func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	params := ca.getAuditParamsByTech(tech)
 	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
 	if err != nil {
@@ -364,7 +414,11 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	sort.Slice(packagesStatus, func(i, j int) bool {
 		return packagesStatus[i].ParentName < packagesStatus[j].ParentName
 	})
-	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = packagesStatus
+	results[strings.TrimSuffix(fmt.Sprintf("%s:%s", projectName, projectVersion), ":")] = &CurationReport{
+		packagesStatus: packagesStatus,
+		// We subtract 1 because the root node is not a package.
+		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
+	}
 	return err
 }
 
