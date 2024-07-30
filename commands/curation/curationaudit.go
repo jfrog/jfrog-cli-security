@@ -204,8 +204,9 @@ func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditC
 }
 
 func (ca *CurationAuditCommand) SetOutputFormat(format outFormat.OutputFormat) *CurationAuditCommand {
-	basicParams := ca.AuditParams.(*utils.AuditBasicParams)
-	basicParams.SetOutputFormat(format)
+	if basicParams, ok := ca.AuditParams.(*utils.AuditBasicParams); ok {
+		basicParams.SetOutputFormat(format)
+	}
 	return ca
 }
 

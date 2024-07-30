@@ -131,18 +131,12 @@ func ParseRequestedScanTypesFlags(context *components.Context) (requestedSubScan
 }
 
 // Expecting flags: --exclude-test-deps, --use-wrapper, --dep-type, --requirements-file
-func ParseTechnologyConfigurationFlags(context *components.Context) (string) {
-
-	// curationAuditCommand.SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-	// 	SetUseWrapper(c.GetBoolFlagValue(UseWrapper)).
-	// 	SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-	// 	SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
-
-	// auditCmd.SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
-	// 	SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-	// 	SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-	// 	SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
-	return ""
+func ParseTechnologyConfigurationFlags(context *components.Context) (useWrapper, gradleExcludeTestDeps bool, npmScope, customRequirementFile string) {
+	useWrapper = context.GetBoolFlagValue(UseWrapper)
+	gradleExcludeTestDeps = context.GetBoolFlagValue(ExcludeTestDeps)
+	npmScope = context.GetStringFlagValue(DepType)
+	customRequirementFile = context.GetStringFlagValue(RequirementsFile)
+	return
 }
 
 // Expecting flags: values from techutils.Technology enum

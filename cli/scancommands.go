@@ -339,16 +339,15 @@ func CurationCmd(c *components.Context) error {
 		return err
 	}
 	curationAuditCommand.SetOutputFormat(format)
+	// Technologies configuration flags
+	useWrapper, gradleExcludeTestDeps, npmScope, customRequirementFile := flags.ParseTechnologyConfigurationFlags(c)
+	curationAuditCommand.SetUseWrapper(useWrapper).SetNpmScope(npmScope).SetExcludeTestDependencies(gradleExcludeTestDeps).SetPipRequirementsFile(customRequirementFile)
 	// Specific flags
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
 	curationAuditCommand.SetParallelRequests(threads).SetIsCurationCmd(true)
-	curationAuditCommand.SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
-		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 	// Run the command
 	return progressbar.ExecWithProgress(curationAuditCommand)
 }
@@ -397,10 +396,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	}
 	auditCmd.SetThreads(threads).SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).SetUseJas(true)
 	// Parse specific technology configuration flags
-	auditCmd.SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
-		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+	useWrapper, gradleExcludeTestDeps, npmScope, customRequirementFile := flags.ParseTechnologyConfigurationFlags(c)
+	auditCmd.SetUseWrapper(useWrapper).SetNpmScope(npmScope).SetExcludeTestDependencies(gradleExcludeTestDeps).SetPipRequirementsFile(customRequirementFile)
 	// Xsc service
 	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 	return auditCmd, err
