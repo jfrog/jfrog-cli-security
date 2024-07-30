@@ -132,13 +132,46 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
 		},
 	}
-	simplifiedViolations := simplifyViolations([]services.Violation{tests[0].violation, tests[1].violation}, true)
 
-	for i, test := range tests {
-		results := getOperationalRiskViolationReadableData(test.violation)
-		simplifiedResults := getOperationalRiskViolationReadableData(simplifiedViolations[i])
-		assert.Equal(t, test.expectedResults, results)
-		assert.Equal(t, test.expectedResults, simplifiedResults)
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			results := getOperationalRiskViolationReadableData(test.violation)
+			assert.Equal(t, test.expectedResults, results)
+		})
+	}
+}
+
+// Test Simplified Violations as this is the data we eventually parse in the tables
+func TestGetOpertionalRiskSimplifiedViolations(t *testing.T) {
+	violations := []services.Violation{
+		{Components: map[string]services.Component{"gav://antparent:ant:1.6.4": {}}, IsEol: nil, LatestVersion: "", NewerVersions: nil,
+			Cadence: nil, Commits: nil, Committers: nil, RiskReason: "", EolMessage: ""},
+		{Components: map[string]services.Component{"gav://antparent:ant:1.6.5": {}}, IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
+			Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
+	}
+	simplifiedViolations := simplifyViolations(violations, true)
+	tests := []struct {
+		testName        string
+		violation       services.Violation
+		expectedResults *operationalRiskViolationReadableData
+	}{
+		{
+			"Empty Operational Risk Violation",
+			simplifiedViolations[0],
+			&operationalRiskViolationReadableData{"N/A", "N/A", "N/A", "N/A", "", "", "N/A", "N/A"},
+		},
+		{
+			"Detailed Operational Risk Violation with all fields",
+			simplifiedViolations[1],
+			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			results := getOperationalRiskViolationReadableData(test.violation)
+			assert.Equal(t, test.expectedResults, results)
+		})
 	}
 }
 
