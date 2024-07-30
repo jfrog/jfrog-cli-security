@@ -12,7 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
-	"github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
@@ -518,8 +518,8 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 
 func getNoJasAuditMockCommand(t *testing.T) components.Command {
 	return components.Command{
-		Name:  docs.Audit,
-		Flags: docs.GetCommandFlags(docs.Audit),
+		Name:  flags.Audit,
+		Flags: flags.GetCommandFlags(flags.Audit),
 		Action: func(c *components.Context) error {
 			auditCmd, err := cli.CreateAuditCmd(c)
 			if err != nil {

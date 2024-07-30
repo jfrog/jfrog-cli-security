@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	securityDocs "github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/stretchr/testify/assert"
@@ -33,9 +33,9 @@ func TestXrayOfflineDBSyncV3(t *testing.T) {
 	assert.EqualError(t, err, "Mandatory flag 'license-id' is missing")
 	// Periodic valid only with stream
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou", "--license-id=123", "--periodic")
-	assert.EqualError(t, err, fmt.Sprintf("the %s option is only valid with %s", securityDocs.Periodic, securityDocs.Stream))
+	assert.EqualError(t, err, fmt.Sprintf("the %s option is only valid with %s", flags.Periodic, flags.Stream))
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou", "--license-id=123", "--stream=", "--periodic")
-	assert.EqualError(t, err, fmt.Sprintf("the %s option is only valid with %s", securityDocs.Periodic, securityDocs.Stream))
+	assert.EqualError(t, err, fmt.Sprintf("the %s option is only valid with %s", flags.Periodic, flags.Stream))
 	// Invalid stream
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou", "--license-id=123", "--stream=bad_name")
 	assert.ErrorContains(t, err, "Invalid stream type")

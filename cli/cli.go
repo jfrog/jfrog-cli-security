@@ -7,7 +7,7 @@ import (
 
 const (
 	securityCategory = "Security"
-	cmdNamespace = "Command Namespaces"
+	cmdNamespace     = "Command Namespaces"
 )
 
 func GetJfrogCliSecurityApp() components.App {
@@ -15,7 +15,7 @@ func GetJfrogCliSecurityApp() components.App {
 		"security",
 		getAuditAndScansCommands(),
 	)
-	app.Subcommands = append(app.Subcommands, 
+	app.Subcommands = append(app.Subcommands,
 		components.Namespace{
 			Name:        string(cliutils.Xr),
 			Description: "Xray commands.",

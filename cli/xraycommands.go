@@ -12,7 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/xray/offlineupdate"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
-	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	curlDocs "github.com/jfrog/jfrog-cli-security/cli/docs/xray/curl"

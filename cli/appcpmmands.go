@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	"github.com/jfrog/jfrog-cli-security/commands/app/detect"
-	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 )
 
 func getAppsCommands() []components.Command {
@@ -22,7 +22,7 @@ func getAppsCommands() []components.Command {
 
 func DetectCmd(c *components.Context) error {
 
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err
 	}

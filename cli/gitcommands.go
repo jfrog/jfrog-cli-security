@@ -4,7 +4,7 @@ import (
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	gitDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"

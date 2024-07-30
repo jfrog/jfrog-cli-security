@@ -120,3 +120,11 @@ func splitEnvVar(envVar string) (key, value string) {
 	}
 	return split[0], strings.Join(split[1:], "=")
 }
+
+func SplitAndTrim(s, sep string) []string {
+	split := strings.Split(s, sep)
+	for i, str := range split {
+		split[i] = strings.TrimSpace(str)
+	}
+	return split
+}

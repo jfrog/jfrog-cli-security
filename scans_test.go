@@ -21,7 +21,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
-	"github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -155,7 +155,7 @@ func dockerScanMockCommand(t *testing.T) components.Command {
 	// https://github.com/jfrog/jfrog-cli/blob/v2/buildtools/cli.go#L691
 	return components.Command{
 		Name:  "docker",
-		Flags: docs.GetCommandFlags(docs.DockerScan),
+		Flags: flags.GetCommandFlags(flags.DockerScan),
 		Action: func(c *components.Context) error {
 			args := pluginsCommon.ExtractArguments(c)
 			var cmd, image string
