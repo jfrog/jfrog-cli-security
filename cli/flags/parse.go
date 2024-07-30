@@ -92,12 +92,10 @@ func ParseViolationContext(context *components.Context) (watches []string, proje
 	if project = getProjectContext(context); project != "" {
 		contextFlag++
 	}
-	failOnViolation = context.GetBoolFlagValue(Fail)
 	if contextFlag > 1 {
 		err = errorutils.CheckErrorf(fmt.Sprintf("only one of the following flags can be supplied: --%s, --%s or --%s", Watches, Project, RepoPath))
-	} else if failOnViolation && contextFlag == 0 {
-		err = errorutils.CheckErrorf("the --%s flag can only be used with --%s, --%s or --%s", Fail, Watches, Project, RepoPath)
 	}
+	failOnViolation = context.GetBoolFlagValue(Fail)
 	return
 }
 
@@ -132,9 +130,11 @@ func ParseRequestedScanTypesFlags(context *components.Context) (requestedSubScan
 	return
 }
 
-func ParseTechnologyConfigurationFlags(context *components.Context) string {
+// Expecting flags: --exclude-test-deps, --use-wrapper, --dep-type, --requirements-file
+func ParseTechnologyConfigurationFlags(context *components.Context) (string) {
+
 	// curationAuditCommand.SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-	// 	SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
+	// 	SetUseWrapper(c.GetBoolFlagValue(UseWrapper)).
 	// 	SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 	// 	SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 

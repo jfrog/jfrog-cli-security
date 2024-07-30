@@ -21,7 +21,7 @@ func getAppsCommands() []components.Command {
 }
 
 func DetectCmd(c *components.Context) error {
-
+	
 	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err

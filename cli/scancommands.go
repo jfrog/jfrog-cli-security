@@ -209,7 +209,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	scanCmd.SetIncludeVulnerabilities(flags.IsViolationContextProvided(c)).SetFail(failOvViolation).SetWatches(watches).SetProject(projectKey)
+	scanCmd.SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c)).SetFail(failOvViolation).SetWatches(watches).SetProject(projectKey)
 	// Output configuration
 	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
 	if err != nil {
@@ -263,7 +263,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetWatches(watches).
 		SetProject(projectKey).
 		SetFail(failOvViolation).
-		SetIncludeVulnerabilities(flags.IsViolationContextProvided(c))
+		SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c))
 	// Output configuration
 	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
 	if err != nil {
@@ -369,7 +369,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
-	auditCmd.SetIncludeVulnerabilities(flags.IsViolationContextProvided(c)).SetTargetRepoPath(targetRepo).SetWatches(watches).SetProject(projectKey).SetFail(failOvViolation)
+	auditCmd.SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c)).SetTargetRepoPath(targetRepo).SetWatches(watches).SetProject(projectKey).SetFail(failOvViolation)
 	// Output configuration
 	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
 	if err != nil {
