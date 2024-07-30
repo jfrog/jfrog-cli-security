@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TODO: remove and move to utils_test.go
 func TestGetRepositoriesList(t *testing.T) {
 	tests := []struct {
 		name     string

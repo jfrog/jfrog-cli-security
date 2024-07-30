@@ -4,8 +4,8 @@ import (
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	gitDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
@@ -100,6 +100,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	return &params, nil
 }
 
+// TODO: remove this and use utils.SplitAndTrim
 func getRepositoriesList(reposStr string) []string {
 	reposSlice := strings.Split(reposStr, ";")
 	// Trim spaces and create a clean list of repo names

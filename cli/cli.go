@@ -15,6 +15,7 @@ func GetJfrogCliSecurityApp() components.App {
 		"security",
 		getAuditAndScansCommands(),
 	)
+	// Namespace commands
 	app.Subcommands = append(app.Subcommands,
 		components.Namespace{
 			Name:        string(cliutils.Xr),

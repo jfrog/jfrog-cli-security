@@ -1,13 +1,12 @@
 package detect
 
 import (
-	"fmt"
+	// "fmt"
 
-	"github.com/jfrog/jfrog-client-go/utils/log"
+	// "github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	// "github.com/jfrog/jfrog-cli-security/utils/results/output"
 )
 
 type DetectAppsCommand struct {
@@ -27,20 +26,20 @@ func (daCmd *DetectAppsCommand) ServerDetails() (*config.ServerDetails, error) {
 }
 
 func (daCmd *DetectAppsCommand) Run() (err error) {
-	serverDetails, err := daCmd.ServerDetails()
-	if err != nil {
-		return
-	}
-	appsConfig, err := RunDetectSecurityConfig(serverDetails, daCmd.params)
-	if err != nil {
-		return
-	}
+	// serverDetails, err := daCmd.ServerDetails()
+	// if err != nil {
+	// 	return
+	// }
+	// appsConfig, err := RunDetectSecurityConfig(serverDetails, daCmd.params)
+	// if err != nil {
+	// 	return
+	// }
 	// Print output
-	log.Info(fmt.Sprintf("Detected %d targets for security scanning with the following configuration", len(appsConfig.Targets)))
-	output.PrintJson(appsConfig)
+	// log.Info(fmt.Sprintf("Detected %d targets for security scanning with the following configuration", len(appsConfig.Targets)))
+	// output.PrintJson(appsConfig)
 	return err
 }
 
-func RunDetectSecurityConfig(serverDetails *config.ServerDetails, params *AppsDetectParams) (*configs.AppsSecurityConfig, error) {
+// func RunDetectSecurityConfig(serverDetails *config.ServerDetails, params *AppsDetectParams) (*configs.AppsSecurityConfig, error) {
 
-}
+// }

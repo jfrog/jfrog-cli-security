@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -9,12 +10,14 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 // Expecting flags: --server-id, --url, --user, --password, --access-token (optional --insecure-tls)
@@ -77,97 +80,91 @@ func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
 }
 
 // Expecting flags: --watches, --project, --repo-path, --fail
-func ParseViolationContext(context *components.Context) (watches []string, project, repoPath string, fail bool) {
+func ParseViolationContext(context *components.Context) (watches []string, project, repoPath string, failOnViolation bool, err error) {
+	contextFlag := 0
 	if context.GetStringFlagValue(Watches) != "" {
 		watches = utils.SplitAndTrim(context.GetStringFlagValue(Watches), ",")
+		contextFlag++
 	}
-	repoPath = addTrailingSlashToRepoPathIfNeeded(context)
-	project = context.GetStringFlagValue(Project)
-	fail = context.GetBoolFlagValue(Fail)
-	ValidateViolationContext(context)
+	if repoPath = addTrailingSlashToRepoPathIfNeeded(context); repoPath != "" {
+		contextFlag++
+	}
+	if project = getProjectContext(context); project != "" {
+		contextFlag++
+	}
+	failOnViolation = context.GetBoolFlagValue(Fail)
+	if contextFlag > 1 {
+		err = errorutils.CheckErrorf(fmt.Sprintf("only one of the following flags can be supplied: --%s, --%s or --%s", Watches, Project, RepoPath))
+	} else if failOnViolation && contextFlag == 0 {
+		err = errorutils.CheckErrorf("the --%s flag can only be used with --%s, --%s or --%s", Fail, Watches, Project, RepoPath)
+	}
 	return
 }
 
+func getProjectContext(context *components.Context) string {
+	if context.IsFlagSet(Project) {
+		return context.GetStringFlagValue(Project)
+	}
+	return os.Getenv(coreutils.Project)
+}
+
+// If no context was provided by the user, no Violations will be triggered by Xray, so should include general vulnerabilities in the command output
 func IsViolationContextProvided(context *components.Context) bool {
 	return context.GetStringFlagValue(Watches) != "" || isProjectProvided(context) || context.GetStringFlagValue(RepoPath) != ""
 }
 
-// refactor to, isViolationsContextProvided
-func shouldIncludeVulnerabilities(c *components.Context) bool {
-	// If no context was provided by the user, no Violations will be triggered by Xray, so include general vulnerabilities in the command output
-	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
-}
-
-func ValidateViolationContext(context *components.Context) error {
-	// if serverDetails.XrayUrl == "" {
-	// 	return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
-	// }
-	contextFlag := 0
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		contextFlag++
-	}
-	if isProjectProvided(c) {
-		contextFlag++
-	}
-	if c.GetStringFlagValue(flags.RepoPath) != "" {
-		contextFlag++
-	}
-	if contextFlag > 1 {
-		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
-	}
-	return nil
-}
-
 func isProjectProvided(c *components.Context) bool {
-	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project) != ""
-	}
-	return os.Getenv(coreutils.Project) != ""
+	return getProjectContext(c) != ""
 }
 
-func ParseRequestedScanTypesFlags(context *components.Context) (requestedSubScans []utils.SubScanType) {
-	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
+// Expecting flags: --sca, --without-contextual-analysis, --iac, --secrets, --sast
+func ParseRequestedScanTypesFlags(context *components.Context) (requestedSubScans []utils.SubScanType, err error) {
+	if context.GetBoolFlagValue(WithoutCA) && !context.GetBoolFlagValue(Sca) {
 		// No CA flag provided but sca flag is not provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+		err = pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", WithoutCA, Sca), context)
+		return
 	}
-
-	allSubScans := utils.GetAllSupportedScans()
-	subScans := []utils.SubScanType{}
-	for _, subScan := range allSubScans {
-		if shouldAddSubScan(subScan, c) {
-			subScans = append(subScans, subScan)
+	for _, subScan := range utils.GetAllSupportedScans() {
+		if context.GetBoolFlagValue(subScan.String()) || (subScan == utils.ContextualAnalysisScan && context.GetBoolFlagValue(Sca) && !context.GetBoolFlagValue(WithoutCA)) {
+			requestedSubScans = append(requestedSubScans, subScan)
 		}
 	}
-	if len(subScans) > 0 {
-		auditCmd.SetScansToPerform(subScans)
-	}
+	return
 }
 
-func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
-	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
+func ParseTechnologyConfigurationFlags(context *components.Context) string {
+	// curationAuditCommand.SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
+	// 	SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
+	// 	SetNpmScope(c.GetStringFlagValue(flags.DepType)).
+	// 	SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+
+	// auditCmd.SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
+	// 	SetNpmScope(c.GetStringFlagValue(flags.DepType)).
+	// 	SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
+	// 	SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
+	return ""
 }
 
-func ParseRequestedPackageManagersFlags(context *components.Context) (requestedPackageManagers []string) {
-	// Check if user used specific technologies flags
-	allTechnologies := techutils.GetAllTechnologiesList()
-	technologies := []string{}
-	for _, tech := range allTechnologies {
+// Expecting flags: values from techutils.Technology enum
+func ParseRequestedTechnologiesFlags(context *components.Context) (requestedTechnologies []string) {
+	for _, tech := range techutils.GetAllTechnologiesList() {
 		var techExists bool
 		if tech == techutils.Maven {
 			// On Maven we use '--mvn' flag
-			techExists = c.GetBoolFlagValue(flags.Mvn)
+			techExists = context.GetBoolFlagValue(Mvn)
 		} else {
-			techExists = c.GetBoolFlagValue(tech.String())
+			techExists = context.GetBoolFlagValue(tech.String())
 		}
 		if techExists {
-			technologies = append(technologies, tech.String())
+			requestedTechnologies = append(requestedTechnologies, tech.String())
 		}
 	}
+	return
 }
 
-func ParseOutputDisplayFlags(context *components.Context) (outputFormat format.OutputFormat, extendedTable bool, err error) {
+func ParseOutputDisplayFlags(context *components.Context) (outputFormat format.OutputFormat, extendedTable, includeLicenses bool, err error) {
 	extendedTable = context.GetBoolFlagValue(ExtendedTable)
+	includeLicenses = context.GetBoolFlagValue(Licenses)
 	outputFormat, err = format.GetOutputFormat(context.GetStringFlagValue(OutputFormat))
 	return
 }

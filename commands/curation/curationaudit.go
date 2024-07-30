@@ -203,6 +203,12 @@ func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditC
 	return ca
 }
 
+func (ca *CurationAuditCommand) SetOutputFormat(format outFormat.OutputFormat) *CurationAuditCommand {
+	basicParams := ca.AuditParams.(*utils.AuditBasicParams)
+	basicParams.SetOutputFormat(format)
+	return ca
+}
+
 func (ca *CurationAuditCommand) Run() (err error) {
 	rootDir, err := os.Getwd()
 	if err != nil {

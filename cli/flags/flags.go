@@ -96,8 +96,7 @@ func getFlagGroups(names ...string) []string {
 // Security Flag keys mapped to their corresponding components. Flag definition.
 var flagsMap = map[string]components.Flag{
 	// Common flags for the commands
-	Threads:     components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(cliutils.Threads)),
-	Licenses:    components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
+	Threads: components.NewStringFlag(Threads, "Number of working threads.", components.WithIntDefaultValue(cliutils.Threads)),
 
 	// PlatformConnection
 	ServerId:    components.NewStringFlag(ServerId, "Server ID configured using the config command."),
@@ -153,6 +152,7 @@ var flagsMap = map[string]components.Flag{
 		components.WithStrDefaultValue("table"),
 	),
 	ExtendedTable: components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
+	Licenses:      components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
 
 	// FilterContent
 	MinSeverity: components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
