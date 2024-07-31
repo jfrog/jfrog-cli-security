@@ -97,3 +97,61 @@ func TestMergeMaps(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitAndTrim(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		separator string
+		expected []string
+	}{
+		{
+			name:     "No spaces",
+			input:    "repo1;repo2;repo3",
+			separator: ";",
+			expected: []string{"repo1", "repo2", "repo3"},
+		},
+		{
+			name:     "With spaces",
+			input:    "repo1, repo2 , repo3",
+			separator: ",",
+			expected: []string{"repo1", "repo2", "repo3"},
+		},
+		{
+			name:     "Trailing and leading spaces",
+			input:    " repo1 ; repo2 ; repo3 ",
+			separator: ";",
+			expected: []string{"repo1", "repo2", "repo3"},
+		},
+		{
+			name:     "Empty input",
+			input:    "",
+			separator: ";",
+			expected: []string{},
+		},
+		{
+			name:     "Only separator",
+			input:    ";",
+			separator: ";",
+			expected: []string{},
+		},
+		{
+			name:     "Multiple consecutive separators",
+			input:    "repo1;;repo2;;;repo3",
+			separator: ";",
+			expected: []string{"repo1", "repo2", "repo3"},
+		},
+		{
+			name:     "Only separator as suffix",
+			input:    "repo1;",
+			separator: ";",
+			expected: []string{"repo1"},
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := SplitAndTrim(testCase.input, testCase.separator)
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
+}

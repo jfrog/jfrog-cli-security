@@ -2,10 +2,9 @@ package cli
 
 import (
 	"fmt"
+
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"os"
-	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
@@ -13,27 +12,23 @@ import (
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
-	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
-	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	"github.com/jfrog/jfrog-cli-security/cli/flags"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
@@ -164,199 +159,248 @@ func getAuditAndScansCommands() []components.Command {
 }
 
 func EnrichCmd(c *components.Context) error {
+	// Validate
 	if len(c.Arguments) == 0 {
 		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	enrichCmd := enrich.NewEnrichCommand()
+	// Platform connection
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err
 	}
-	if err = validateXrayContext(c, serverDetails); err != nil {
+	enrichCmd.SetServerDetails(serverDetails)
+	// Target configuration
+	specFile, err := flags.ParseSpecFileScanFlags(c)
+	if err != nil {
 		return err
 	}
-	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
-	if err = spec.ValidateSpec(specFile.Files, false, false); err != nil {
-		return err
-	}
+	enrichCmd.SetSpec(specFile)
+	// Parse specific flags
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
-	EnrichCmd := enrich.NewEnrichCommand().
-		SetServerDetails(serverDetails).
-		SetThreads(threads).
-		SetSpec(specFile)
-	return commandsCommon.Exec(EnrichCmd)
+	enrichCmd.SetThreads(threads)
+	// Run the command
+	return commandsCommon.Exec(enrichCmd)
 }
 
 func ScanCmd(c *components.Context) error {
+	// Validate
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	scanCmd := scan.NewScanCommand()
+	// Platform connection
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
+	scanCmd.SetServerDetails(serverDetails)
+	// Target configuration
+	specFile, err := flags.ParseSpecFileScanFlags(c)
 	if err != nil {
 		return err
 	}
-	var specFile *spec.SpecFiles
-	if c.IsFlagSet(flags.SpecFlag) && len(c.GetStringFlagValue(flags.SpecFlag)) > 0 {
-		specFile, err = pluginsCommon.GetFileSystemSpec(c)
-		if err != nil {
-			return err
-		}
-	} else {
-		specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
-	}
-	err = spec.ValidateSpec(specFile.Files, false, false)
+	scanCmd.SetSpec(specFile)
+	// Violation context configuration
+	watches, projectKey, _, failOvViolation, err := flags.ParseViolationContext(c)
 	if err != nil {
 		return err
 	}
+	scanCmd.SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c)).SetFail(failOvViolation).SetWatches(watches).SetProject(projectKey)
+	// Output configuration
+	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
+	if err != nil {
+		return err
+	}
+	scanCmd.SetOutputFormat(format).SetPrintExtendedTable(extendedTable).SetIncludeLicenses(includeLicenses)
+	// Filter content configuration
+	minSeverity, fixableOnly, err := flags.ParseFilterContentFlags(c)
+	if err != nil {
+		return err
+	}
+	scanCmd.SetMinSeverityFilter(minSeverity).SetFixableOnly(fixableOnly)
+	// Parse specific flags
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
-	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
-	minSeverity, err := getMinimumSeverity(c)
-	if err != nil {
-		return err
-	}
-	scanCmd := scan.NewScanCommand().
-		SetServerDetails(serverDetails).
-		SetThreads(threads).
-		SetSpec(specFile).
-		SetOutputFormat(format).
-		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
-		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetFail(c.GetBoolFlagValue(flags.Fail)).
-		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
-		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity)
-	if c.IsFlagSet(flags.Watches) {
-		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
-	}
+	scanCmd.SetThreads(threads).SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits))
+	// Run the command
 	return commandsCommon.Exec(scanCmd)
 }
 
-func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.ServerDetails, error) {
-	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
+// Since indirect command is not registered normally, we need to handle printing 'help' here by ourselves.
+func validateIndirectCommand(c *components.Context, cmdName string) (helpRequested bool, err error) {
+	c.CommandName = cmdName
+	return cliutils.ShowGenericCmdHelpIfNeeded(c.Arguments, pluginsCommon.GetPrintCurrentCmdHelp(c))
 }
 
-func validateXrayContext(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
-	if serverDetails.XrayUrl == "" {
-		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
+func DockerScan(c *components.Context, image string) error {
+	// Validate
+	if helpRequested, err := validateIndirectCommand(c, dockerScanCmdHiddenName); helpRequested || err != nil {
+		return err
 	}
-	contextFlag := 0
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		contextFlag++
+	// Target configuration
+	if image == "" {
+		return pluginsCommon.GetPrintCurrentCmdHelp(c)()
 	}
-	if isProjectProvided(c) {
-		contextFlag++
-	}
-	if c.GetStringFlagValue(flags.RepoPath) != "" {
-		contextFlag++
-	}
-	if contextFlag > 1 {
-		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
-	}
-	return nil
-}
-
-func getMinimumSeverity(c *components.Context) (severity severityutils.Severity, err error) {
-	flagSeverity := c.GetStringFlagValue(flags.MinSeverity)
-	if flagSeverity == "" {
-		return
-	}
-	severity, err = severityutils.ParseSeverity(flagSeverity, false)
+	containerScanCommand := scan.NewDockerScanCommand().SetImageTag(image)
+	// Platform connection
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
-		return
+		return err
 	}
-	return
-}
-
-func isProjectProvided(c *components.Context) bool {
-	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project) != ""
+	containerScanCommand.SetServerDetails(serverDetails)
+	// Violation context configuration
+	watches, projectKey, targetRepo, failOvViolation, err := flags.ParseViolationContext(c)
+	if err != nil {
+		return err
 	}
-	return os.Getenv(coreutils.Project) != ""
-}
-
-func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
-	repoPath := c.GetStringFlagValue(flags.RepoPath)
-	if repoPath != "" && !strings.Contains(repoPath, "/") {
-		// In case only repo name was provided (no path) we are adding a trailing slash.
-		repoPath += "/"
+	containerScanCommand.SetTargetRepoPath(targetRepo).
+		SetWatches(watches).
+		SetProject(projectKey).
+		SetFail(failOvViolation).
+		SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c))
+	// Output configuration
+	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
+	if err != nil {
+		return err
 	}
-	return repoPath
-}
-
-func createDefaultScanSpec(c *components.Context, defaultTarget string) *spec.SpecFiles {
-	return spec.NewBuilder().
-		Pattern(c.Arguments[0]).
-		Target(defaultTarget).
-		Recursive(c.GetBoolFlagValue(flags.Recursive)).
-		Exclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions)).
-		Regexp(c.GetBoolFlagValue(flags.RegexpFlag)).
-		Ant(c.GetBoolFlagValue(flags.AntFlag)).
-		IncludeDirs(c.GetBoolFlagValue(flags.IncludeDirs)).
-		BuildSpec()
-}
-
-func shouldIncludeVulnerabilities(c *components.Context) bool {
-	// If no context was provided by the user, no Violations will be triggered by Xray, so include general vulnerabilities in the command output
-	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
-}
-
-func splitByCommaAndTrim(paramValue string) (res []string) {
-	args := strings.Split(paramValue, ",")
-	res = make([]string, len(args))
-	for i, arg := range args {
-		res[i] = strings.TrimSpace(arg)
+	containerScanCommand.SetOutputFormat(format).SetPrintExtendedTable(extendedTable).SetIncludeLicenses(includeLicenses)
+	// Filter content configuration
+	minSeverity, fixableOnly, err := flags.ParseFilterContentFlags(c)
+	if err != nil {
+		return err
 	}
-	return
+	containerScanCommand.SetMinSeverityFilter(minSeverity).SetFixableOnly(fixableOnly)
+	// Parse specific flags
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	containerScanCommand.SetThreads(threads).SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits))
+	// Run the command
+	return progressbar.ExecWithProgress(containerScanCommand)
 }
 
 // Scan published builds with Xray
 func BuildScan(c *components.Context) error {
+	// Validate
 	if len(c.Arguments) > 2 {
 		return pluginsCommon.WrongNumberOfArgumentsHandler(c)
 	}
+	// Target configuration
 	buildConfiguration := pluginsCommon.CreateBuildConfiguration(c)
 	if err := buildConfiguration.ValidateBuildParams(); err != nil {
 		return err
 	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	buildScanCmd := scan.NewBuildScanCommand().SetBuildConfiguration(buildConfiguration)
+	// Platform connection
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
+	buildScanCmd.SetServerDetails(serverDetails)
+	// Output configuration
+	format, extendedTable, _, err := flags.ParseOutputDisplayFlags(c)
 	if err != nil {
 		return err
 	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
-	buildScanCmd := scan.NewBuildScanCommand().
-		SetServerDetails(serverDetails).
-		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
-		SetBuildConfiguration(buildConfiguration).
-		SetOutputFormat(format).
-		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetRescan(c.GetBoolFlagValue(flags.Rescan))
-	if format != outputFormat.Sarif {
+	buildScanCmd.SetOutputFormat(format).SetPrintExtendedTable(extendedTable)
+	// Violation context configuration
+	if flags.IsViolationContextProvided(c) && format != outputFormat.Sarif {
 		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
 		buildScanCmd.SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	}
+	buildScanCmd.SetFailBuild(c.GetBoolFlagValue(flags.Fail))
+	// Specific flags
+	buildScanCmd.SetRescan(c.GetBoolFlagValue(flags.Rescan))
+	// Run the command
 	return commandsCommon.Exec(buildScanCmd)
+}
+
+func CurationCmd(c *components.Context) error {
+	curationAuditCommand := curation.NewCurationAuditCommand()
+	// Platform connection
+	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
+	if err != nil {
+		return err
+	}
+	curationAuditCommand.SetServerDetails(serverDetails).SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls))
+	// Target configuration
+	requestedWorkingDirs, _ := flags.ParseSourceCodeTargetFlags(c)
+	curationAuditCommand.SetWorkingDirs(requestedWorkingDirs)
+	// Output configuration
+	format, err := curation.GetCurationOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return err
+	}
+	curationAuditCommand.SetOutputFormat(format)
+	// Technologies configuration flags
+	useWrapper, gradleExcludeTestDeps, npmScope, customRequirementFile := flags.ParseTechnologyConfigurationFlags(c)
+	curationAuditCommand.SetUseWrapper(useWrapper).SetNpmScope(npmScope).SetExcludeTestDependencies(gradleExcludeTestDeps).SetPipRequirementsFile(customRequirementFile)
+	// Specific flags
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return err
+	}
+	curationAuditCommand.SetParallelRequests(threads).SetIsCurationCmd(true)
+	// Run the command
+	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+	auditCmd := audit.NewGenericAuditCommand()
+	// Platform connection
+	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetServerDetails(serverDetails).SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls))
+	// Target configuration
+	requestedWorkingDirs, pathExclusions := flags.ParseSourceCodeTargetFlags(c)
+	auditCmd.SetWorkingDirs(requestedWorkingDirs).SetExclusions(pathExclusions)
+	// Violation context configuration
+	watches, projectKey, targetRepo, failOvViolation, err := flags.ParseViolationContext(c)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetIncludeVulnerabilities(!flags.IsViolationContextProvided(c)).SetTargetRepoPath(targetRepo).SetWatches(watches).SetProject(projectKey).SetFail(failOvViolation)
+	// Output configuration
+	format, extendedTable, includeLicenses, err := flags.ParseOutputDisplayFlags(c)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetPrintExtendedTable(extendedTable).SetIncludeLicenses(includeLicenses).SetOutputFormat(format)
+	// Filter content configuration
+	minSeverity, fixableOnly, err := flags.ParseFilterContentFlags(c)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetMinSeverityFilter(minSeverity).SetFixableOnly(fixableOnly)
+	// Parse requested specific sub scans
+	requestedSubScans, err := flags.ParseRequestedScanTypesFlags(c)
+	if err != nil {
+		return nil, err
+	}
+	if len(requestedSubScans) > 0 {
+		auditCmd.SetScansToPerform(requestedSubScans)
+	}
+	// Parse specific flags
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetThreads(threads).SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).SetUseJas(true)
+	// Parse specific technology configuration flags
+	useWrapper, gradleExcludeTestDeps, npmScope, customRequirementFile := flags.ParseTechnologyConfigurationFlags(c)
+	auditCmd.SetUseWrapper(useWrapper).SetNpmScope(npmScope).SetExcludeTestDependencies(gradleExcludeTestDeps).SetPipRequirementsFile(customRequirementFile)
+	// Xsc service
+	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
+	return auditCmd, err
 }
 
 func AuditCmd(c *components.Context) error {
@@ -364,54 +408,39 @@ func AuditCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-
-	// Check if user used specific technologies flags
-	allTechnologies := techutils.GetAllTechnologiesList()
-	technologies := []string{}
-	for _, tech := range allTechnologies {
-		var techExists bool
-		if tech == techutils.Maven {
-			// On Maven we use '--mvn' flag
-			techExists = c.GetBoolFlagValue(flags.Mvn)
-		} else {
-			techExists = c.GetBoolFlagValue(tech.String())
-		}
-		if techExists {
-			technologies = append(technologies, tech.String())
-		}
-	}
-	auditCmd.SetTechnologies(technologies)
-
-	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
-		// No CA flag provided but sca flag is not provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
-	}
-
-	allSubScans := utils.GetAllSupportedScans()
-	subScans := []utils.SubScanType{}
-	for _, subScan := range allSubScans {
-		if shouldAddSubScan(subScan, c) {
-			subScans = append(subScans, subScan)
-		}
-	}
-	if len(subScans) > 0 {
-		auditCmd.SetScansToPerform(subScans)
-	}
-
-	threads, err := pluginsCommon.GetThreadsCount(c)
-	if err != nil {
-		return err
-	}
-	auditCmd.SetThreads(threads)
+	// Parse Technologies flags
+	auditCmd.SetTechnologies(flags.ParseRequestedTechnologiesFlags(c))
+	// Run the command
 	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
 	reportErrorIfExists(err, auditCmd)
 	return err
 }
 
-func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
-	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
+func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
+	logNonGenericAuditCommandDeprecation(c.CommandName)
+	auditCmd, err := CreateAuditCmd(c)
+	if err != nil {
+		return err
+	}
+	// Parse Technologies flags
+	auditCmd.SetTechnologies([]string{string(technology)})
+	// Run the command
+	err = progressbar.ExecWithProgress(auditCmd)
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
+	return err
+}
+
+func logNonGenericAuditCommandDeprecation(cmdName string) {
+	if cliutils.ShouldLogWarning() {
+		log.Warn(
+			`You are using a deprecated syntax of the command.
+	Instead of:
+	$ ` + coreutils.GetCliExecutableName() + ` ` + cmdName + ` ...
+	Use:
+	$ ` + coreutils.GetCliExecutableName() + ` audit ...`)
+	}
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
@@ -427,158 +456,4 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
-}
-
-func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
-	auditCmd := audit.NewGenericAuditCommand()
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
-	if err != nil {
-		return nil, err
-	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
-		return nil, err
-	}
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return nil, err
-	}
-	minSeverity, err := getMinimumSeverity(c)
-	if err != nil {
-		return nil, err
-	}
-	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
-
-	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
-		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
-		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetFail(c.GetBoolFlagValue(flags.Fail)).
-		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetMinSeverityFilter(minSeverity).
-		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
-
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
-	}
-
-	if c.GetStringFlagValue(flags.WorkingDirs) != "" {
-		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))
-	}
-	auditCmd.SetServerDetails(serverDetails).
-		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-		SetOutputFormat(format).
-		SetUseJas(true).
-		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
-		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
-		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
-		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
-	return auditCmd, err
-}
-
-func logNonGenericAuditCommandDeprecation(cmdName string) {
-	if cliutils.ShouldLogWarning() {
-		log.Warn(
-			`You are using a deprecated syntax of the command.
-	Instead of:
-	$ ` + coreutils.GetCliExecutableName() + ` ` + cmdName + ` ...
-	Use:
-	$ ` + coreutils.GetCliExecutableName() + ` audit ...`)
-	}
-}
-
-func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
-	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := CreateAuditCmd(c)
-	if err != nil {
-		return err
-	}
-	technologies := []string{string(technology)}
-	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
-
-	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
-}
-
-func CurationCmd(c *components.Context) error {
-	threads, err := pluginsCommon.GetThreadsCount(c)
-	if err != nil {
-		return err
-	}
-	curationAuditCommand := curation.NewCurationAuditCommand().
-		SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs))).
-		SetParallelRequests(threads)
-
-	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
-	if err != nil {
-		return err
-	}
-	format, err := curation.GetCurationOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
-	curationAuditCommand.SetServerDetails(serverDetails).
-		SetIsCurationCmd(true).
-		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
-		SetOutputFormat(format).
-		SetUseWrapper(c.GetBoolFlagValue(flags.UseWrapper)).
-		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
-		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
-		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
-	return progressbar.ExecWithProgress(curationAuditCommand)
-}
-
-func DockerScan(c *components.Context, image string) error {
-	// Since this command is not registered normally, we need to handle printing 'help' here by ourselves.
-	c.CommandName = dockerScanCmdHiddenName
-	printHelp := pluginsCommon.GetPrintCurrentCmdHelp(c)
-	if show, err := cliutils.ShowGenericCmdHelpIfNeeded(c.Arguments, printHelp); show || err != nil {
-		return err
-	}
-	if image == "" {
-		return printHelp()
-	}
-	// Run the command
-	threads, err := pluginsCommon.GetThreadsCount(c)
-	if err != nil {
-		return err
-	}
-	serverDetails, err := createServerDetailsWithConfigOffer(c)
-	if err != nil {
-		return err
-	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
-		return err
-	}
-	containerScanCommand := scan.NewDockerScanCommand()
-	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
-	if err != nil {
-		return err
-	}
-	minSeverity, err := getMinimumSeverity(c)
-	if err != nil {
-		return err
-	}
-	containerScanCommand.SetImageTag(image).
-		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
-		SetServerDetails(serverDetails).
-		SetOutputFormat(format).
-		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
-		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetFail(c.GetBoolFlagValue(flags.Fail)).
-		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
-		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
-		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetMinSeverityFilter(minSeverity).
-		SetThreads(threads)
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
-	}
-	return progressbar.ExecWithProgress(containerScanCommand)
 }

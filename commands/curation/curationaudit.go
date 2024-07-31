@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory"
@@ -202,6 +203,13 @@ func (ca *CurationAuditCommand) SetParallelRequests(threads int) *CurationAuditC
 	return ca
 }
 
+func (ca *CurationAuditCommand) SetOutputFormat(format outFormat.OutputFormat) *CurationAuditCommand {
+	if basicParams, ok := ca.AuditParams.(*utils.AuditBasicParams); ok {
+		basicParams.SetOutputFormat(format)
+	}
+	return ca
+}
+
 func (ca *CurationAuditCommand) Run() (err error) {
 	rootDir, err := os.Getwd()
 	if err != nil {
@@ -242,7 +250,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
 
-	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
+	err = errors.Join(err, output.RecordSecurityCommandOutput(output.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: output.Curation}))
 	return
 }
 
@@ -430,7 +438,7 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 	switch format {
 	case outFormat.Json:
 		if len(packagesStatus) > 0 {
-			err := utils.PrintJson(packagesStatus)
+			err := output.PrintJson(packagesStatus)
 			if err != nil {
 				return err
 			}
