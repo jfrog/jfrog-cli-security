@@ -21,7 +21,16 @@ func getAppsCommands() []components.Command {
 }
 
 func DetectCmd(c *components.Context) error {
-	
+	// // Platform connection
+	// serverDetails, err := flags.ParsePlatformConnectionFlags(c)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// auditCmd.SetServerDetails(serverDetails).SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls))
+	// // Target configuration
+	// requestedWorkingDirs, pathExclusions := flags.ParseSourceCodeTargetFlags(c)
+	// auditCmd.SetWorkingDirs(requestedWorkingDirs).SetExclusions(pathExclusions)
+
 	serverDetails, err := flags.ParsePlatformConnectionFlags(c)
 	if err != nil {
 		return err

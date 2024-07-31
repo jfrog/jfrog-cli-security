@@ -322,9 +322,7 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 		specFiles := scanCmd.spec.Files
 		for i := range specFiles {
 			artifactHandlerFunc := scanCmd.createIndexerHandlerFunc(&specFiles[i], cmdResults, indexedFileProducer, jasFileProducerConsumer)
-			taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
-
-			err := collectFilesForIndexing(specFiles[i], taskHandler)
+			err := collectFilesForIndexing(specFiles[i], getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc))
 			if err != nil {
 				log.Error(err)
 				fileCollectingErrorsQueue.AddError(err)
