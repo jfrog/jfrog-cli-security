@@ -199,6 +199,7 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	if err != nil {
 		return
 	}
+	results.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, auditParams.AuditBasicParams.ValidateSecrets)
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
@@ -265,7 +266,9 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err = jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, auditParams.AuditBasicParams.ValidateSecrets, scanResults.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
+	amEnvVars := jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetScaScannedTechnologies()...)
+	jas.AppendTokenValidationToEnvVars(amEnvVars, scanResults.ExtendedScanResults.SecretValidation)
+	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, amEnvVars, auditParams.Exclusions()...)
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}

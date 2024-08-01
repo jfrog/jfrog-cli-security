@@ -213,7 +213,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -270,30 +270,27 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func addValidateSecretsEnvVar(envVars map[string]string, validateSecrets bool) {
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, validateSecrets bool) bool {
 	// Ordered By importance
-
 	// first check for flag
 	if validateSecrets {
-		envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
-		return
+		return validateSecrets
 	}
-
 	// second check for env var
-	if os.Getenv("JF_VERIFY_SECRETS") == "true" {
-		envVars[JfSecretValidationEnvVariable] = "true"
-		return
+	if os.Getenv("JF_VALIDATE_SECRETS") == "true" {
+		return true
 	}
 	// third check for platform api
-	// INSERT_API_CALL HERE
-
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	if isEnabled && err != nil {
+		return true
+	}
 	// at this point secret validation will be false
-	envVars[JfSecretValidationEnvVariable] = "false"
+	return false
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
+func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
-	addValidateSecretsEnvVar(envVars, validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}
@@ -301,7 +298,10 @@ func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies
 	envVars[JfPackageManagerEnvVariable] = technology.String()
 	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
 	return envVars
+}
 
+func AppendTokenValidationToEnvVars(envVars map[string]string, validateSecrets bool) {
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
