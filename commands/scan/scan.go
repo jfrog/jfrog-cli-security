@@ -74,6 +74,12 @@ type ScanCommand struct {
 	fixableOnly            bool
 	progress               ioUtils.ProgressMgr
 	commandSupportsJAS     bool
+	validateSecrets        bool
+}
+
+func (scanCmd *ScanCommand) SetSecretValidation(validateSecrets bool) *ScanCommand {
+	scanCmd.validateSecrets = validateSecrets
+	return scanCmd
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -208,6 +214,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	scanResults.XrayVersion = xrayVersion
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
+	scanResults.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, scanCmd.validateSecrets)
+
 	errGroup := new(errgroup.Group)
 	if scanResults.ExtendedScanResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.
@@ -425,7 +433,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
 					scanner := &jas.JasScanner{}
-					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars("", techutils.Technology(graphScanResults.ScannedPackageType)))
+					amEnvVars := jas.GetAnalyzerManagerXscEnvVars("", techutils.Technology(graphScanResults.ScannedPackageType))
+					jas.AppendTokenValidationToEnvVars(amEnvVars, scanResults.ExtendedScanResults.SecretValidation)
+					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, amEnvVars)
 					if err != nil {
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
