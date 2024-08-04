@@ -113,13 +113,13 @@ func configureYarnResolutionServerAndRunInstall(params utils.AuditParams, curWd,
 		return
 	}
 
-	registry, repoAuthIdent, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
+	registry, repoAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
 	if err != nil {
 		err = errors.Join(err, restoreYarnrcFunc())
 		return
 	}
 
-	backupEnvMap, err := yarn.ModifyYarnConfigurations(yarnExecPath, registry, repoAuthIdent)
+	backupEnvMap, err := yarn.ModifyYarnConfigurations(yarnExecPath, registry, repoAuthIdent, npmAuthToken)
 	if err != nil {
 		if len(backupEnvMap) > 0 {
 			err = errors.Join(err, yarn.RestoreConfigurationsFromBackup(backupEnvMap, restoreYarnrcFunc))
