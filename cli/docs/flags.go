@@ -119,6 +119,7 @@ const (
 	CurationOutput = "curation-format"
 
 	// Unique git flags
+	InputFile       = "input-file"
 	ScmType         = "scm-type"
 	ScmApiUrl       = "scm-api-url"
 	Token           = "token"
@@ -155,7 +156,7 @@ var commandFlags = map[string][]string{
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
 	GitCountContributors: {
-		ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
+		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary,
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
@@ -255,11 +256,12 @@ var flagsMap = map[string]components.Flag{
 	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 
 	// Git flags
-	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
-	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
+	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
+	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString())),
+	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'."),
 	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars())),
-	Owner:           components.NewStringFlag(Owner, "The owner of the repository. Depends on the git provider - on github and gitlab the owner is usually an individual or an organization, on bitbucket it is a project.", components.SetMandatory()),
-	RepoName:        components.NewStringFlag(RepoName, "Specific repository name to analyze, If not provided all repositories in the project will be analyzed."),
+	Owner:           components.NewStringFlag(Owner, "The format of the owner key depends on the Git provider: On GitHub and GitLab, the owner is typically an individual or an organization, On Bitbucket, the owner can also be a project. In the case of a private instance on Bitbucket, the individual or organization name should be prefixed with '~'."),
+	RepoName:        components.NewStringFlag(RepoName, "List of semicolon-separated(;) repositories names to analyze, If not provided all repositories related to the provided owner will be analyzed."),
 	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
 	DetailedSummary: components.NewBoolFlag(DetailedSummary, "Set to true to get a contributors detailed summary."),
 }

@@ -38,8 +38,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
-const auditScanCategory = "Audit & Scan"
-
 const dockerScanCmdHiddenName = "dockerscan"
 
 func getAuditAndScansCommands() []components.Command {
@@ -50,7 +48,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.XrScan),
 			Description: scanDocs.GetDescription(),
 			Arguments:   scanDocs.GetArguments(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      ScanCmd,
 		},
 		{
@@ -59,6 +57,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.Enrich),
 			Description: enrichDocs.GetDescription(),
 			Arguments:   enrichDocs.GetArguments(),
+			Category:    securityCategory,
 			Action:      EnrichCmd,
 		},
 		{
@@ -67,7 +66,7 @@ func getAuditAndScansCommands() []components.Command {
 			Flags:       flags.GetCommandFlags(flags.BuildScan),
 			Description: buildScanDocs.GetDescription(),
 			Arguments:   buildScanDocs.GetArguments(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      BuildScan,
 		},
 		{
@@ -88,7 +87,7 @@ func getAuditAndScansCommands() []components.Command {
 			Aliases:     []string{"aud"},
 			Flags:       flags.GetCommandFlags(flags.Audit),
 			Description: auditDocs.GetDescription(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      AuditCmd,
 		},
 		{
@@ -96,7 +95,7 @@ func getAuditAndScansCommands() []components.Command {
 			Aliases:     []string{"ca"},
 			Flags:       flags.GetCommandFlags(flags.CurationAudit),
 			Description: curationDocs.GetDescription(),
-			Category:    auditScanCategory,
+			Category:    securityCategory,
 			Action:      CurationCmd,
 		},
 
