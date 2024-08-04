@@ -352,20 +352,23 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
-				secretsRows = append(secretsRows,
-					formats.SourceCodeRow{
-						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
-						Finding:         sarifutils.GetResultMsgText(secretResult),
-						Location: formats.Location{
-							File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
-							StartLine:   sarifutils.GetLocationStartLine(location),
-							StartColumn: sarifutils.GetLocationStartColumn(location),
-							EndLine:     sarifutils.GetLocationEndLine(location),
-							EndColumn:   sarifutils.GetLocationEndColumn(location),
-							Snippet:     sarifutils.GetLocationSnippet(location),
-						},
+				newRow := formats.SourceCodeRow{
+					SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
+					Finding:         sarifutils.GetResultMsgText(secretResult),
+					Location: formats.Location{
+						File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
+						StartLine:   sarifutils.GetLocationStartLine(location),
+						StartColumn: sarifutils.GetLocationStartColumn(location),
+						EndLine:     sarifutils.GetLocationEndLine(location),
+						EndColumn:   sarifutils.GetLocationEndColumn(location),
+						Snippet:     sarifutils.GetLocationSnippet(location),
 					},
-				)
+				}
+				if tokenValidation := sarifutils.GetLocationStatus(location); tokenValidation != "" {
+					newRow.TokenValidation = tokenValidation
+					newRow.Metadata = sarifutils.GetLocationMetadata(location)
+				}
+				secretsRows = append(secretsRows, newRow)
 			}
 		}
 	}

@@ -127,6 +127,20 @@ func GetResultLevel(result *sarif.Result) string {
 	return ""
 }
 
+func GetLocationStatus(location *sarif.Location) string {
+	if location != nil && location.Message != nil && location.Message.ID != nil {
+		return *location.Message.ID
+	}
+	return ""
+}
+
+func GetLocationMetadata(location *sarif.Location) string {
+	if location != nil && location.Message != nil && location.Message.Text != nil {
+		return *location.Message.Text
+	}
+	return ""
+}
+
 func GetLocationSnippet(location *sarif.Location) string {
 	region := getLocationRegion(location)
 	if region != nil && region.Snippet != nil {
