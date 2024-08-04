@@ -171,7 +171,7 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 			if rule.Properties == nil {
 				rule.WithProperties(sarif.NewPropertyBag().Properties)
 			}
-			rule.Properties[severityutils.SarifSeverityRuleProperty] = score
+			rule.Properties[severityutils.SarifSeverityRuleProperty] = fmt.Sprintf("%f", score)
 		}
 	}
 }
