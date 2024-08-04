@@ -250,7 +250,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	if scanCmd.threads > 1 {
 		threads = scanCmd.threads
 	}
-
+	// Wait for the Download of the AnalyzerManager to complete.
+	if err = errGroup.Wait(); err != nil {
+		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
+	}
 	// resultsArr is a two-dimensional array. Each array in it contains a list of ScanResponses that were requested and collected by a specific thread.
 	resultsArr := make([][]*ScanInfo, threads)
 	fileProducerConsumer := parallel.NewRunner(scanCmd.threads, 20000, false)
@@ -293,11 +296,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	scanErrors = appendErrorSlice(scanErrors, jasScanProducerErrors)
 
 	scanResults.ScaResults = flatResults
-
-	// Wait for the Download of the AnalyzerManager to complete.
-	if err = errGroup.Wait(); err != nil {
-		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
-	}
 
 	if err = utils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
