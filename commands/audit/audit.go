@@ -195,7 +195,6 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	}
 	results.XrayVersion = auditParams.xrayVersion
 	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams)
-	results.ExtendedScanResults.EntitledForJas = true
 	if err != nil {
 		return
 	}
