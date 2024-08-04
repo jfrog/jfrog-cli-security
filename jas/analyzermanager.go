@@ -42,7 +42,8 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
-	JfSecretValidationEnvVariable             = "JF_VALIDATE_SECRETS"
+	// #nosec G101 -- Not credentials.
+	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
 
 var exitCodeErrorsMap = map[int]string{
