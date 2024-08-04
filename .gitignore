@@ -1,6 +1,7 @@
 # IDEs
 .idea
 .vscode
+**/.jfrog/curation/*
 *.iml
 
 # IOS
