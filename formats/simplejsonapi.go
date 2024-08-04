@@ -79,8 +79,8 @@ type Location struct {
 	EndLine         int    `json:"endLine,omitempty"`
 	EndColumn       int    `json:"endColumn,omitempty"`
 	Snippet         string `json:"snippet,omitempty"`
-	TokenValidation string `json:"results,omitempty"`
-	Metadata        string `json:"extensions,omitempty"`
+	TokenValidation string `json:"tokenValidation,omitempty"`
+	Metadata        string `json:"metadata,omitempty"`
 }
 
 type ComponentRow struct {
