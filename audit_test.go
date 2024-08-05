@@ -448,7 +448,7 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }
 
-func getNoJasAuditMockCommand(t *testing.T) components.Command {
+func getNoJasAuditMockCommand() components.Command {
 	return components.Command{
 		Name:  docs.Audit,
 		Flags: docs.GetCommandFlags(docs.Audit),
