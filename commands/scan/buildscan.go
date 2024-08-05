@@ -130,7 +130,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	if trimerr != nil {
 		return false, err
 	}
-	cliUrl, err := bsc.configuredCliUrl()
+	cliUrl, err := getActualUrl(*bsc.serverDetails)
 	if err != nil {
 		return false, err
 	}
@@ -192,14 +192,14 @@ func (bsc *BuildScanCommand) CommandName() string {
 }
 
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured
-// The function will retutn the Url if configured and will trim xray if serverDetails.Url is not configured
-func (bsc *BuildScanCommand) configuredCliUrl() (string, error) {
-	url := bsc.serverDetails.Url
+// The function will return the Url if configured and will trim xray if serverDetails.Url is not configured
+func getActualUrl(serverDetails config.ServerDetails) (string, error) {
+	url := serverDetails.Url
 	if url != "" {
 		return url, nil
 	}
 
-	url, _, trimerr := trimUrl(bsc.serverDetails.XrayUrl)
+	url, _, trimerr := trimUrl(serverDetails.XrayUrl)
 	return url, trimerr
 }
 
