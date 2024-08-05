@@ -277,12 +277,12 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, validateSec
 		return validateSecrets
 	}
 	// second check for env var
-	if os.Getenv("JF_VALIDATE_SECRETS") == "true" {
+	if strings.ToLower(os.Getenv("JF_VALIDATE_SECRETS")) == "true" {
 		return true
 	}
 	// third check for platform api
 	isEnabled, err := xrayManager.IsTokenValidationEnabled()
-	if isEnabled && err != nil {
+	if isEnabled && err == nil {
 		return true
 	}
 	// at this point secret validation will be false

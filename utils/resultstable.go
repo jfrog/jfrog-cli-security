@@ -339,11 +339,13 @@ func PrepareLicenses(licenses []services.License) ([]formats.LicenseRow, error) 
 
 // Prepare secrets for all non-table formats (without style or emoji)
 func PrepareSecrets(secrets []*sarif.Run) []formats.SourceCodeRow {
-	return prepareSecrets(secrets, false)
+	rows, _ := prepareSecrets(secrets, false)
+	return rows
 }
 
-func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow {
+func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow, bool) {
 	var secretsRows []formats.SourceCodeRow
+	tokenValidationActivated := false
 	for _, secretRun := range secrets {
 		for _, secretResult := range secretRun.Results {
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(secretResult), true)
@@ -365,8 +367,9 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 					},
 				}
 				if tokenValidation := sarifutils.GetLocationStatus(location); tokenValidation != "" {
+					tokenValidationActivated = true
 					newRow.TokenValidation = tokenValidation
-					newRow.Metadata = sarifutils.GetLocationMetadata(location)
+					newRow.Metadata = strings.TrimSpace(sarifutils.GetLocationMetadata(location))
 				}
 				secretsRows = append(secretsRows, newRow)
 			}
@@ -377,15 +380,15 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 	})
 
-	return secretsRows
+	return secretsRows, tokenValidationActivated
 }
 
 func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool) error {
 	if entitledForSecretsScan {
-		secretsRows := prepareSecrets(secrets, true)
+		secretsRows, tokenValidationActivated := prepareSecrets(secrets, true)
 		log.Output()
-		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
-			"✨ No secrets were found ✨", false)
+		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows, tokenValidationActivated), "Secret Detection",
+			"✨ No secrets were found ✨", tokenValidationActivated)
 	}
 	return nil
 }
