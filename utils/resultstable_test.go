@@ -917,11 +917,104 @@ func TestPrepareSecrets(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Prepare Secret run - with results and tokens validation",
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResults(),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("secret finding", "rule1", "info",
+						sarifutils.CreateLocationWithTokenValidation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet", "Inactive", ""),
+						sarifutils.CreateLocationWithTokenValidation("file://wd/file2", 5, 6, 7, 8, "other-secret-snippet", "Active", "testmetadata"),
+						sarifutils.CreateLocation("file://wd/file3", 3, 4, 5, 6, "another-secret-snippet"),
+					),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd")),
+				}),
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("other secret finding", "rule2", "note",
+						sarifutils.CreateLocation("file://wd2/file4", 1, 2, 3, 4, "some-secret-snippet"),
+					),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("wd2")),
+				}),
+			},
+			expectedOutput: []formats.SourceCodeRow{
+				{
+					SeverityDetails: formats.SeverityDetails{
+						Severity:         "Medium",
+						SeverityNumValue: 14,
+					},
+					Finding: "secret finding",
+					Location: formats.Location{
+						File:            "file",
+						StartLine:       1,
+						StartColumn:     2,
+						EndLine:         3,
+						EndColumn:       4,
+						Snippet:         "some-secret-snippet",
+						TokenValidation: "Inactive",
+						Metadata:        "",
+					},
+				},
+				{
+					SeverityDetails: formats.SeverityDetails{
+						Severity:         "Medium",
+						SeverityNumValue: 14,
+					},
+					Finding: "secret finding",
+					Location: formats.Location{
+						File:            "file2",
+						StartLine:       5,
+						StartColumn:     6,
+						EndLine:         7,
+						EndColumn:       8,
+						Snippet:         "other-secret-snippet",
+						TokenValidation: "Active",
+						Metadata:        "testmetadata",
+					},
+				},
+				{
+					SeverityDetails: formats.SeverityDetails{
+						Severity:         "Medium",
+						SeverityNumValue: 14,
+					},
+					Finding: "secret finding",
+					Location: formats.Location{
+						File:            "file3",
+						StartLine:       3,
+						StartColumn:     4,
+						EndLine:         5,
+						EndColumn:       6,
+						Snippet:         "another-secret-snippet",
+						TokenValidation: "",
+						Metadata:        "",
+					},
+				},
+				{
+					SeverityDetails: formats.SeverityDetails{
+						Severity:         "Low",
+						SeverityNumValue: 11,
+					},
+					Finding: "other secret finding",
+					Location: formats.Location{
+						File:            "file4",
+						StartLine:       1,
+						StartColumn:     2,
+						EndLine:         3,
+						EndColumn:       4,
+						Snippet:         "some-secret-snippet",
+						TokenValidation: "",
+						Metadata:        "",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tc.expectedOutput, prepareSecrets(tc.input, false))
+			rows, _ := prepareSecrets(tc.input, false)
+			assert.ElementsMatch(t, tc.expectedOutput, rows)
 		})
 	}
 }

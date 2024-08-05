@@ -46,6 +46,20 @@ func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, s
 	}
 }
 
+func CreateLocationWithTokenValidation(fileName string, startLine, startCol, endLine, endCol int, snippet string, tokenValidation string, metadata string) *sarif.Location {
+	return &sarif.Location{
+		Message: &sarif.Message{ID: &tokenValidation, Text: &metadata},
+		PhysicalLocation: &sarif.PhysicalLocation{
+			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
+			Region: &sarif.Region{
+				StartLine:   &startLine,
+				StartColumn: &startCol,
+				EndLine:     &endLine,
+				EndColumn:   &endCol,
+				Snippet:     &sarif.ArtifactContent{Text: &snippet}}},
+	}
+}
+
 func CreateDummyPassingResult(ruleId string) *sarif.Result {
 	kind := "pass"
 	return &sarif.Result{
