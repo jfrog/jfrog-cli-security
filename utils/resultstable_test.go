@@ -83,19 +83,19 @@ func TestGetDirectComponents(t *testing.T) {
 	}
 }
 
-func TestSimplifyVulnerabily(t *testing.T) {
+func TestSimplifyVulnerability(t *testing.T) {
 	vulnerabilities := []services.Vulnerability{
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}},
 	}
-	simpliedViolationsRootsFalse := simplifyVulnerabilities(vulnerabilities, false)
-	simpliedViolationsRootsTrue := simplifyVulnerabilities(vulnerabilities, true)
+	simplifiedViolationsRootsFalse := simplifyVulnerabilities(vulnerabilities, false)
+	simplifiedViolationsRootsTrue := simplifyVulnerabilities(vulnerabilities, true)
 
 	// assert that the length of simplified vulnerabilities is length of vulnerabilities without the similar componentID
-	assert.Equal(t, len(vulnerabilities)-1, len(simpliedViolationsRootsFalse))
-	assert.Equal(t, len(vulnerabilities)-1, len(simpliedViolationsRootsTrue))
+	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedViolationsRootsFalse))
+	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedViolationsRootsTrue))
 }
 
 func TestSimplifyViolation(t *testing.T) {
@@ -105,12 +105,12 @@ func TestSimplifyViolation(t *testing.T) {
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}, FailBuild: true},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}, FailBuild: true},
 	}
-	simpliedViolationsRootsFalse := simplifyViolations(violations, false)
-	simpliedViolationsRootsTrue := simplifyViolations(violations, true)
+	simplifiedViolationsRootsFalse := simplifyViolations(violations, false)
+	simplifiedViolationsRootsTrue := simplifyViolations(violations, true)
 
 	// assert that the length of simplified violations is length of violation without the similar componentID
-	assert.Equal(t, len(violations)-1, len(simpliedViolationsRootsFalse))
-	assert.Equal(t, len(violations)-1, len(simpliedViolationsRootsTrue))
+	assert.Equal(t, len(violations)-1, len(simplifiedViolationsRootsFalse))
+	assert.Equal(t, len(violations)-1, len(simplifiedViolationsRootsTrue))
 }
 
 func TestGetOperationalRiskReadableData(t *testing.T) {
@@ -142,7 +142,7 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 }
 
 // Test Simplified Violations as this is the data we eventually parse in the tables
-func TestGetOpertionalRiskSimplifiedViolations(t *testing.T) {
+func TestGetOperationalRiskSimplifiedViolations(t *testing.T) {
 	violations := []services.Violation{
 		{Components: map[string]services.Component{"gav://antparent:ant:1.6.4": {}}, IsEol: nil, LatestVersion: "", NewerVersions: nil,
 			Cadence: nil, Commits: nil, Committers: nil, RiskReason: "", EolMessage: ""},
