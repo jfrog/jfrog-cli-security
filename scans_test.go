@@ -13,22 +13,18 @@ import (
 	"testing"
 
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/cli"
+	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	securityTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jfrog/jfrog-cli-security/cli"
-	"github.com/jfrog/jfrog-cli-security/cli/docs"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
-	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -130,33 +126,7 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
-	return securityTestUtils.InitTestWithMockCommandOrParams(t, dockerScanMockCommand)
-}
-
-func dockerScanMockCommand(t *testing.T) components.Command {
-	// Mock how the CLI handles docker commands:
-	// https://github.com/jfrog/jfrog-cli/blob/v2/buildtools/cli.go#L691
-	return components.Command{
-		Name:  "docker",
-		Flags: docs.GetCommandFlags(docs.DockerScan),
-		Action: func(c *components.Context) error {
-			args := pluginsCommon.ExtractArguments(c)
-			var cmd, image string
-			// We may have prior flags before push/pull commands for the docker client.
-			for _, arg := range args {
-				if !strings.HasPrefix(arg, "-") {
-					if cmd == "" {
-						cmd = arg
-					} else {
-						image = arg
-						break
-					}
-				}
-			}
-			assert.Equal(t, "scan", cmd)
-			return cli.DockerScan(c, image)
-		},
-	}
+	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {

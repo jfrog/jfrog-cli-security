@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -18,8 +21,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -535,7 +536,7 @@ func writeJsonResults(results *Results) (resultsPath string, err error) {
 			err = e
 		}
 	}()
-	bytesRes, err := json.Marshal(&results)
+	bytesRes, err := JSONMarshal(&results)
 	if errorutils.CheckError(err) != nil {
 		return
 	}
@@ -552,8 +553,16 @@ func writeJsonResults(results *Results) (resultsPath string, err error) {
 	return
 }
 
+func JSONMarshal(t interface{}) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(t)
+	return buffer.Bytes(), err
+}
+
 func PrintJson(output interface{}) error {
-	results, err := json.Marshal(output)
+	results, err := JSONMarshal(output)
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
