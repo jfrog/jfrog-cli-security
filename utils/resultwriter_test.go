@@ -404,3 +404,40 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 		})
 	}
 }
+
+func TestJSONMarshall(t *testing.T) {
+	testCases := []struct {
+		testName       string
+		resultString   string
+		expectedResult string
+	}{
+		{
+			testName:       "Regular URL",
+			resultString:   "http://my-artifactory.jfrog.io/",
+			expectedResult: "\"http://my-artifactory.jfrog.io/\"\n",
+		},
+		{
+			testName:       "Regular CVE",
+			resultString:   "CVE-2021-4104",
+			expectedResult: "\"CVE-2021-4104\"\n",
+		},
+		{
+			testName:       "URL with escape characters ignore rules",
+			resultString:   "https://my-artifactory.jfrog.com/ui/admin/xray/policiesGovernance/ignore-rules?graph_scan_id=1babb2d0-42c0-4389-7770-18a6cab8d9a7\u0026issue_id=XRAY-590941\u0026on_demand_scanning=true\u0026show_popup=true\u0026type=security\u0026watch_name=my-watch",
+			expectedResult: "\"https://my-artifactory.jfrog.com/ui/admin/xray/policiesGovernance/ignore-rules?graph_scan_id=1babb2d0-42c0-4389-7770-18a6cab8d9a7&issue_id=XRAY-590941&on_demand_scanning=true&show_popup=true&type=security&watch_name=my-watch\"\n",
+		},
+		{
+			testName:       "URL with escape characters build scan data",
+			resultString:   "https://my-artifactory.jfrog.com/ui/scans-list/builds-scans/dort1/scan-descendants/1?version=1\u0026package_id=build%3A%2F%2Fdort1\u0026build_repository=artifactory-build-info\u0026component_id=build%3A%2F%2Fshweta1%3A1\u0026page_type=security-vulnerabilities\u0026exposure_status=to_fix",
+			expectedResult: "\"https://my-artifactory.jfrog.com/ui/scans-list/builds-scans/dort1/scan-descendants/1?version=1&package_id=build%3A%2F%2Fdort1&build_repository=artifactory-build-info&component_id=build%3A%2F%2Fshweta1%3A1&page_type=security-vulnerabilities&exposure_status=to_fix\"\n",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			printedString, err := JSONMarshal(tc.resultString)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedResult, string(printedString))
+		})
+	}
+}
