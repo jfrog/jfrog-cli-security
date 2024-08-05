@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"os"
 	"strings"
 
@@ -505,9 +507,71 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threads, err := pluginsCommon.GetThreadsCount(c)
+	curationAuditCommand, err := getCurationCommand(c)
 	if err != nil {
 		return err
+	}
+	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+var supportedCommandsForPostInstallationFailure = map[string]struct{}{
+	"install": {},
+	"build":   {},
+	"i":       {},
+	"add":     {},
+	"ci":      {},
+	"get":     {},
+	"mod":     {},
+}
+
+func IsSupportedCommandForPostInstallationFailure(cmd string) bool {
+	_, ok := supportedCommandsForPostInstallationFailure[cmd]
+	return ok
+}
+
+func CurationCmdPostInstallationFailure(c *components.Context, cmd string, tech techutils.Technology, originError error) error {
+	// check the command supported
+	if !IsSupportedCommandForPostInstallationFailure(cmd) {
+		return nil
+	}
+	// Curation post run failure is only relevant for forbidden errors
+	if !sca.IsForbiddenError(tech, originError.Error()) {
+		return nil
+	}
+	// If the command is not running in the context of github actions, we don't want to run the curation audit automatically
+	if os.Getenv("JFROG_CLI_COMMAND_SUMMARY_OUTPUT_DIR") == "" {
+		return nil
+	}
+
+	curationAuditCommand, err := getCurationCommand(c)
+	if err != nil {
+		return err
+	}
+	// check if user entitled for curation
+	serverDetails, err := curationAuditCommand.GetAuth(tech)
+	if err != nil {
+		return err
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return err
+	}
+	entitled, err := curation.IsEntitledForCuration(xrayManager)
+	if err != nil {
+		return err
+	}
+	if !entitled {
+		log.Info("Curation feature is not entitled, skipping curation audit")
+		return nil
+	}
+
+	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, error) {
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return nil, err
 	}
 	curationAuditCommand := curation.NewCurationAuditCommand().
 		SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs))).
@@ -515,11 +579,11 @@ func CurationCmd(c *components.Context) error {
 
 	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	format, err := curation.GetCurationOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	curationAuditCommand.SetServerDetails(serverDetails).
 		SetIsCurationCmd(true).
@@ -529,7 +593,7 @@ func CurationCmd(c *components.Context) error {
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
-	return progressbar.ExecWithProgress(curationAuditCommand)
+	return curationAuditCommand, nil
 }
 
 func DockerScanMockCommand() components.Command {
