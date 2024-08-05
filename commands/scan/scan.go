@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -214,7 +215,13 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	scanResults.XrayVersion = xrayVersion
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
-	scanResults.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, scanCmd.validateSecrets)
+	dynamicTokenVersionMismatchErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil && (scanCmd.validateSecrets) {
+		log.Warn("Token validation (--validate-secrets flag) is not supported in your xray version")
+		scanResults.ExtendedScanResults.SecretValidation = false
+	} else {
+		scanResults.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, scanCmd.validateSecrets)
+	}
 
 	errGroup := new(errgroup.Group)
 	if scanResults.ExtendedScanResults.EntitledForJas {

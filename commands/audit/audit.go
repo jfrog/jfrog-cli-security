@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"os"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -194,11 +195,18 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 		return
 	}
 	results.XrayVersion = auditParams.xrayVersion
+
 	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams)
 	if err != nil {
 		return
 	}
-	results.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, auditParams.AuditBasicParams.ValidateSecrets)
+	dynamicTokenVersionMismatchErr := clientutils.ValidateMinimumVersion(clientutils.Xray, auditParams.xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil && (auditParams.AuditBasicParams.ValidateSecrets) {
+		log.Warn("Token validation (--validate-secrets flag) is not supported in your xray version")
+		results.ExtendedScanResults.SecretValidation = false
+	} else {
+		results.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, auditParams.AuditBasicParams.ValidateSecrets)
+	}
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)

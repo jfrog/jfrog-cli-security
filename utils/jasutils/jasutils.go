@@ -17,6 +17,10 @@ const (
 	Sast          JasScanType = "Sast"
 )
 
+const (
+	DynamicTokenValidationMinXrayVersion = "3.101.0"
+)
+
 type JasScanType string
 
 func (jst JasScanType) String() string {
