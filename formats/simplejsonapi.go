@@ -68,19 +68,19 @@ type SourceCodeRow struct {
 	SeverityDetails
 	Location
 	Finding            string       `json:"finding,omitempty"`
+	TokenValidation    string       `json:"tokenValidation,omitempty"`
+	Metadata           string       `json:"metadata,omitempty"`
 	ScannerDescription string       `json:"scannerDescription,omitempty"`
 	CodeFlow           [][]Location `json:"codeFlow,omitempty"`
 }
 
 type Location struct {
-	File            string `json:"file"`
-	StartLine       int    `json:"startLine,omitempty"`
-	StartColumn     int    `json:"startColumn,omitempty"`
-	EndLine         int    `json:"endLine,omitempty"`
-	EndColumn       int    `json:"endColumn,omitempty"`
-	Snippet         string `json:"snippet,omitempty"`
-	TokenValidation string `json:"tokenValidation,omitempty"`
-	Metadata        string `json:"metadata,omitempty"`
+	File        string `json:"file"`
+	StartLine   int    `json:"startLine,omitempty"`
+	StartColumn int    `json:"startColumn,omitempty"`
+	EndLine     int    `json:"endLine,omitempty"`
+	EndColumn   int    `json:"endColumn,omitempty"`
+	Snippet     string `json:"snippet,omitempty"`
 }
 
 type ComponentRow struct {

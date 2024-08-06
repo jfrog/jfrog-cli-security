@@ -366,10 +366,10 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow
 						Snippet:     sarifutils.GetLocationSnippet(location),
 					},
 				}
-				if tokenValidation := sarifutils.GetLocationStatus(location); tokenValidation != "" {
+				if tokenValidation := sarifutils.GetResultPropertyTokenValidation(secretResult); tokenValidation != "" {
 					tokenValidationActivated = true
 					newRow.TokenValidation = tokenValidation
-					newRow.Metadata = strings.TrimSpace(sarifutils.GetLocationMetadata(location))
+					newRow.Metadata = strings.TrimSpace(sarifutils.GetResultPropertyMetadata(secretResult))
 				}
 				secretsRows = append(secretsRows, newRow)
 			}

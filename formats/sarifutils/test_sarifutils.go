@@ -33,22 +33,19 @@ func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Lo
 	}
 }
 
-func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
-	return &sarif.Location{
-		PhysicalLocation: &sarif.PhysicalLocation{
-			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
-			Region: &sarif.Region{
-				StartLine:   &startLine,
-				StartColumn: &startCol,
-				EndLine:     &endLine,
-				EndColumn:   &endCol,
-				Snippet:     &sarif.ArtifactContent{Text: &snippet}}},
+func CreateResultWithTokenValidation(msg, ruleId, level string, tokenValidation string, metadata string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
+		Message:   *sarif.NewTextMessage(msg),
+		Level:     &level,
+		RuleID:    &ruleId,
+		Locations: locations,
 	}
+	result.Properties = map[string]interface{}{"tokenValidation": tokenValidation, "metadata": metadata}
+	return result
 }
 
-func CreateLocationWithTokenValidation(fileName string, startLine, startCol, endLine, endCol int, snippet string, tokenValidation string, metadata string) *sarif.Location {
+func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
 	return &sarif.Location{
-		Message: &sarif.Message{ID: &tokenValidation, Text: &metadata},
 		PhysicalLocation: &sarif.PhysicalLocation{
 			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
 			Region: &sarif.Region{

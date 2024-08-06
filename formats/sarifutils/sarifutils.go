@@ -127,16 +127,24 @@ func GetResultLevel(result *sarif.Result) string {
 	return ""
 }
 
-func GetLocationStatus(location *sarif.Location) string {
-	if location != nil && location.Message != nil && location.Message.ID != nil {
-		return *location.Message.ID
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties["tokenValidation"] != nil {
+		status, ok := result.Properties["tokenValidation"].(string)
+		if !ok {
+			return ""
+		}
+		return status
 	}
 	return ""
 }
 
-func GetLocationMetadata(location *sarif.Location) string {
-	if location != nil && location.Message != nil && location.Message.Text != nil {
-		return *location.Message.Text
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties["metadata"] != nil {
+		metadata, ok := result.Properties["metadata"].(string)
+		if !ok {
+			return ""
+		}
+		return metadata
 	}
 	return ""
 }
