@@ -42,33 +42,40 @@ import (
 // Binary scan tests
 
 func TestXrayBinaryScanJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.Json))
+	output := testXrayBinaryScan(t, string(format.Json), false)
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.Json))
+	output := testXrayBinaryScan(t, string(format.Json), false)
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
 }
 
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
 }
 
-func testXrayBinaryScan(t *testing.T, format string) string {
+func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "scan", binariesPath, "--licenses", "--format="+format)
+	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
+	if withViolation {
+		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+		defer deleteWatch()
+		// Include violations and vulnerabilities
+		args = append(args, "--watches="+watchName, "--vuln")
+	}
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
