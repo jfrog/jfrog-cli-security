@@ -228,7 +228,8 @@ func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content
 		for index, blockStruct := range blocked {
 			subScanPrefix := fmt.Sprintf("<br>%s", getListItemPrefix(index, len(blocked)))
 			subScanPrefix += blockStruct.BlockedName
-			content += fmt.Sprintf("%s (%d)", subScanPrefix, blockStruct.BlockedValue.GetTotal())
+			// a single package can be blocked in multiple paths, which is why we count the keys instead of the occurrences.
+			content += fmt.Sprintf("%s (%d)", subScanPrefix, len(blockStruct.BlockedValue))
 		}
 	}
 	return
