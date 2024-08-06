@@ -29,23 +29,33 @@ func TestTrimUrlFunc(t *testing.T) {
 }
 
 func TestGetActualUrl(t *testing.T) {
-	buildScanCommand := NewBuildScanCommand()
-	testServerDetails := &config.ServerDetails{
-		Url:            "http://dort.jfrog.io/",
-		ArtifactoryUrl: "http://dort.jfrog.io/artifactory",
-		XrayUrl:        "http://dort.jfrog.io/xray",
+	expectedUrl := "http://dort.jfrog.io/"
+	testCases := []struct {
+		name          string
+		serverDetails config.ServerDetails
+	}{
+		{
+			name: "JFrog URL is provided",
+			serverDetails: config.ServerDetails{
+				Url:            "http://dort.jfrog.io/",
+				ArtifactoryUrl: "http://dort.jfrog.io/artifactory",
+				XrayUrl:        "http://dort.jfrog.io/xray",
+			},
+		},
+		{
+			name: "No JFrog URL",
+			serverDetails: config.ServerDetails{
+				ArtifactoryUrl: "http://dort.jfrog.io/artifactory",
+				XrayUrl:        "http://dort.jfrog.io/xray",
+			},
+		},
 	}
 
-	// test when JFrog URL is provided
-	buildScanCommand.SetServerDetails(testServerDetails)
-	expectedUrl := "http://dort.jfrog.io/"
-	actualUrl, err := getActualUrl(*buildScanCommand.serverDetails)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedUrl, actualUrl)
-
-	// test when only Artifactory URL and Xray URL are provided and URL is empty
-	buildScanCommand.serverDetails.Url = ""
-	actualUrl, err = getActualUrl(*buildScanCommand.serverDetails)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedUrl, actualUrl)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualUrl, err := getActualUrl(tc.serverDetails)
+			assert.NoError(t, err)
+			assert.Equal(t, expectedUrl, actualUrl)
+		})
+	}
 }

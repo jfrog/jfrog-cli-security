@@ -194,7 +194,10 @@ func (bsc *BuildScanCommand) CommandName() string {
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured
 // The function will return the Url if configured and will trim xray if serverDetails.Url is not configured
 func getActualUrl(serverDetails config.ServerDetails) (string, error) {
-	url := serverDetails.Url
+	url, _, err := trimUrl(serverDetails.Url)
+	if err != nil {
+		return "", err
+	}
 	if url != "" {
 		return url, nil
 	}
