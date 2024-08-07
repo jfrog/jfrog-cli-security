@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/jfrog/gofrog/datastructures"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
@@ -516,19 +517,12 @@ func CurationCmd(c *components.Context) error {
 	return progressbar.ExecWithProgress(curationAuditCommand)
 }
 
-var supportedCommandsForPostInstallationFailure = map[string]struct{}{
-	"install": {},
-	"build":   {},
-	"i":       {},
-	"add":     {},
-	"ci":      {},
-	"get":     {},
-	"mod":     {},
-}
+var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](
+	"install", "build", "i", "add", "ci", "get", "mod",
+)
 
 func IsSupportedCommandForCurationInspect(cmd string) bool {
-	_, ok := supportedCommandsForPostInstallationFailure[cmd]
-	return ok
+	return supportedCommandsForPostInstallationFailure.Exists(cmd)
 }
 
 func WrapCmdWithCurationPostFailureRun(c *cli.Context, cmd func(c *cli.Context) error, technology techutils.Technology, cmdName string) error {

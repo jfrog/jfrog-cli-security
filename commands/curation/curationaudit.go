@@ -207,7 +207,6 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
-	// This is an internal flag that is used to indicate that the command was run as part of the post-installation process.
 	if len(ca.workingDirs) > 0 {
 		defer func() {
 			if e := errorutils.CheckError(os.Chdir(rootDir)); err == nil {
