@@ -125,15 +125,20 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	// A patch for Xray issue where it returns Base URL from the API but it is somtimes not the URL that is configured in the CLI
 	// More info in https://jfrog-int.atlassian.net/browse/XRAY-77451
-	url, endpoint, trimerr := trimBuildScanResultUrl(buildScanResults.MoreDetailsUrl)
+
+	url, endpoint, trimerr := trimUrl(buildScanResults.MoreDetailsUrl)
 	if trimerr != nil {
 		return false, err
 	}
+	cliUrl, err := getActualUrl(*bsc.serverDetails)
+	if err != nil {
+		return false, err
+	}
 	// Check that the response url from scan build API is the same url as the one that was inserted to the CLI in config
-	if url != bsc.serverDetails.Url {
+	if url != cliUrl {
 		// if URL from XRAY API is different than the URL in CLI config change the printed url to the CLI config URL and the endpoint from API
-		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s", url, bsc.serverDetails.Url))
-		buildScanResults.MoreDetailsUrl = bsc.serverDetails.Url + endpoint
+		log.Debug(fmt.Sprintf("The resulted url from API is %s, and the CLI config url is %s", url, cliUrl))
+		buildScanResults.MoreDetailsUrl = cliUrl + endpoint
 	}
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
@@ -186,7 +191,24 @@ func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
 }
 
-func trimBuildScanResultUrl(fullUrl string) (string, string, error) {
+// There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured
+// The function will return the Url if configured and will trim xray if serverDetails.Url is not configured
+func getActualUrl(serverDetails config.ServerDetails) (string, error) {
+	url, _, err := trimUrl(serverDetails.Url)
+	if err != nil {
+		return "", err
+	}
+	if url != "" {
+		return url, nil
+	}
+
+	url, _, trimerr := trimUrl(serverDetails.XrayUrl)
+	return url, trimerr
+}
+
+// trim URL to be http(s)://<JFROG-URL> and the endpoint
+// return the base url the endpoint and an error if the parsing failed
+func trimUrl(fullUrl string) (string, string, error) {
 	if fullUrl == "" {
 		return "", "", nil
 	}
