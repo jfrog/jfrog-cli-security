@@ -45,6 +45,11 @@ type CuratedPackages struct {
 	Approved int                  `json:"approved,omitempty"`
 }
 
+type ScanViolationsSummary struct {
+	Watches []string `json:"watches,omitempty"`
+	Violations      TwoLevelSummaryCount  `json:"policy_violations,omitempty"`
+}
+
 type ScanVulnerabilitiesSummary struct {
 	ScaScanResults     *ScanScaResult `json:"sca,omitempty"`
 	IacScanResults     *SummaryCount  `json:"iac,omitempty"`
@@ -53,6 +58,7 @@ type ScanVulnerabilitiesSummary struct {
 }
 
 type ScanScaResult struct {
+	ScanId string `json:"scan_id,omitempty"`
 	SummaryCount   TwoLevelSummaryCount `json:"sca,omitempty"`
 	UniqueFindings int                  `json:"unique_findings,omitempty"`
 }

@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	Build    SecuritySummarySection = "Builds"
-	Binary   SecuritySummarySection = "Artifacts"
-	Modules  SecuritySummarySection = "Modules"
-	Curation SecuritySummarySection = "Curation"
+	Build    SecuritySummarySection = "Build-info Scans"
+	Binary   SecuritySummarySection = "Binary Artifact Scans"
+	Modules  SecuritySummarySection = "Source Code Scans"
+	Curation SecuritySummarySection = "Curation Audit Results"
 )
 
 type SecuritySummarySection string
@@ -96,11 +96,11 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 }
 
 func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
-	if len(scs.BuildScanCommands) > 0 {
-		sections = append(sections, Build)
-	}
 	if len(scs.ScanCommands) > 0 {
 		sections = append(sections, Binary)
+	}
+	if len(scs.BuildScanCommands) > 0 {
+		sections = append(sections, Build)
 	}
 	if len(scs.AuditCommands) > 0 {
 		sections = append(sections, Modules)
@@ -131,7 +131,7 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	addSectionTitle := len(sectionsWithContent) > 1
 	var sectionSummary string
 	for i, section := range sectionsWithContent {
-		sectionSummary = getSummaryString(results.getSectionSummaries(section)...)
+		sectionSummary = getSummaryString(section, results.getSectionSummaries(section)...)
 		if addSectionTitle {
 			if i > 0 {
 				summary += "\n"
@@ -143,18 +143,27 @@ func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, er
 	return
 }
 
-func getSummaryString(summaries ...formats.SummaryResults) (str string) {
+func getSummaryString(section SecuritySummarySection, summaries ...formats.SummaryResults) (str string) {
 	parsed := 0
 	singleScan := isSingleCommandAndScan(summaries...)
 	if !singleScan {
-		str += "| Status | Id | Details |\n|--------|----|---------|\n"
+		switch section {
+		case Build:
+			str += "| ID | Build name | Security Violations | Security Issues |\n|--------|----|---------|---------|\n"
+		case Binary:
+			str += "| ID | File name | Security Violations | Security Issues |\n|--------|----|---------|---------|\n"
+		case Modules:
+			str += "| ID | Project name | Security Violations | Security Issues |\n|--------|----|---------|---------|\n"
+		case Curation:
+			str += "| Status | Project name | Audit Details |\n|--------|--------|---------|\n"
+		}
 	}
 	for i := range summaries {
 		for _, scan := range summaries[i].Scans {
 			if parsed > 0 {
 				str += "\n"
 			}
-			str += GetScanSummaryString(scan, singleScan)
+			str += GetScanSummaryString(section, scan, singleScan)
 			parsed++
 		}
 	}
@@ -172,7 +181,7 @@ func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
 	return true
 }
 
-func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (content string) {
+func GetScanSummaryString(section SecuritySummarySection, summary formats.ScanSummaryResult, singleData bool) (content string) {
 	// single data -> no table
 	hasIssues := summary.HasIssues()
 	if !hasIssues {
