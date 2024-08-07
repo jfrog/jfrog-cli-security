@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/urfave/cli"
 	"os"
 	"strings"
 
@@ -41,6 +42,7 @@ import (
 )
 
 const dockerScanCmdHiddenName = "dockerscan"
+const skipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
@@ -524,22 +526,41 @@ var supportedCommandsForPostInstallationFailure = map[string]struct{}{
 	"mod":     {},
 }
 
-func IsSupportedCommandForPostInstallationFailure(cmd string) bool {
+func IsSupportedCommandForCurationInspect(cmd string) bool {
 	_, ok := supportedCommandsForPostInstallationFailure[cmd]
 	return ok
 }
 
-func CurationCmdPostInstallationFailure(c *components.Context, cmd string, tech techutils.Technology, originError error) error {
+func WrapCmdWithCurationPostFailureRun(c *cli.Context, cmd func(c *cli.Context) error, technology techutils.Technology, cmdName string) error {
+	if err := cmd(c); err != nil {
+		CurationInspectAfterFailure(c, cmdName, technology, err)
+		return err
+	}
+	return nil
+}
+
+func CurationInspectAfterFailure(c *cli.Context, cmdName string, technology techutils.Technology, errFromCmd error) {
+	if compContexts, errConvertCtx := components.ConvertContext(c); errConvertCtx == nil {
+		if errPostCuration := CurationCmdPostInstallationFailure(compContexts, technology, cmdName, errFromCmd); errPostCuration != nil {
+			log.Error(errPostCuration)
+		}
+	} else {
+		log.Error(errConvertCtx)
+	}
+}
+
+func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) error {
 	// check the command supported
-	if !IsSupportedCommandForPostInstallationFailure(cmd) {
+	if !IsSupportedCommandForCurationInspect(cmdName) {
 		return nil
 	}
 	// Curation post run failure is only relevant for forbidden errors
 	if !sca.IsForbiddenError(tech, originError.Error()) {
 		return nil
 	}
-	// If the command is not running in the context of github actions, we don't want to run the curation audit automatically
-	if os.Getenv("JFROG_CLI_COMMAND_SUMMARY_OUTPUT_DIR") == "" {
+	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
+	if os.Getenv("JFROG_CLI_COMMAND_SUMMARY_OUTPUT_DIR") == "" ||
+		os.Getenv(skipCurationAfterFailureEnv) == "true" {
 		return nil
 	}
 
@@ -564,7 +585,7 @@ func CurationCmdPostInstallationFailure(c *components.Context, cmd string, tech 
 		log.Info("Curation feature is not entitled, skipping curation audit")
 		return nil
 	}
-
+	log.Info("Running curation audit after failure")
 	return progressbar.ExecWithProgress(curationAuditCommand)
 }
 

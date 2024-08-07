@@ -6,15 +6,16 @@ require (
 	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.31
+	github.com/jfrog/build-info-go v1.9.32
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.5
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-core/v2 v2.54.0
-	github.com/jfrog/jfrog-client-go v1.43.1
+	github.com/jfrog/jfrog-client-go v1.43.2
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
+	github.com/urfave/cli v1.22.15
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 	golang.org/x/sync v0.7.0
 	golang.org/x/text v0.16.0
@@ -92,7 +93,6 @@ require (
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
-	github.com/urfave/cli v1.22.15 // indirect
 	github.com/vbauerster/mpb/v8 v8.7.4 // indirect
 	github.com/xanzy/go-gitlab v0.95.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
@@ -114,10 +114,10 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240807144632-dde699f7fd28
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
-//replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
+replace github.com/jfrog/build-info-go => github.com/asafambar/build-info-go v1.8.9-0.20240807140220-fcdb3f8907fc
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev
