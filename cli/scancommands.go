@@ -238,7 +238,7 @@ func ScanCmd(c *components.Context) error {
 		SetSpec(specFile).
 		SetOutputFormat(format).
 		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
@@ -456,7 +456,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
@@ -676,7 +676,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format).
 		SetProject(c.GetStringFlagValue(flags.Project)).
-		SetIncludeVulnerabilities(shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).

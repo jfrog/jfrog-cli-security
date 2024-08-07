@@ -33,16 +33,16 @@ import (
 )
 
 func TestXrayAuditNpmJson(t *testing.T) {
-	output := testAuditNpm(t, string(format.Json))
+	output := testAuditNpm(t, string(format.Json), false)
 	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
 }
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
-	output := testAuditNpm(t, string(format.SimpleJson))
+	output := testAuditNpm(t, string(format.SimpleJson), true)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
 }
 
-func testAuditNpm(t *testing.T, format string) string {
+func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -57,7 +57,11 @@ func testAuditNpm(t *testing.T, format string) string {
 	addDummyPackageDescriptor(t, true)
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--npm", "--licenses", "--format="+format, "--watches="+watchName, "--fail=false")
+	args := []string{"audit", "--npm", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
+	if withVuln {
+		args = append(args, "--vuln")
+	}
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditPnpmJson(t *testing.T) {
