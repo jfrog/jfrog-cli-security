@@ -1,12 +1,12 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/jfrog/gofrog/datastructures"
-	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -59,12 +59,40 @@ func UniqueUnion[T comparable](arr []T, others ...T) []T {
 	return result
 }
 
-func GetAsJsonString(output interface{}) (string, error) {
-	results, err := json.Marshal(output)
-	if err != nil {
-		return "", errorutils.CheckError(err)
+func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {
+	if escapeValues {
+		if results, err = json.Marshal(output); errorutils.CheckError(err) != nil {
+			return
+		}
+	} else {
+		buffer := &bytes.Buffer{}
+		encoder := json.NewEncoder(buffer)
+		encoder.SetEscapeHTML(false)
+		if err = encoder.Encode(output); err != nil {
+			return
+		}
+		results = buffer.Bytes()
 	}
-	return clientUtils.IndentJson(results), nil
+	if indent {
+		return doIndent(results)
+	}
+	return
+}
+
+func doIndent(bytesRes []byte) ([]byte, error) {
+	var content bytes.Buffer
+	if err := json.Indent(&content, bytesRes, "", "  "); errorutils.CheckError(err) != nil {
+		return content.Bytes(), err
+	}
+	return content.Bytes(), nil
+}
+
+func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, error) {
+	results, err := GetAsJsonBytes(output, escapeValues, indent)
+	if err != nil {
+		return "", err
+	}
+	return string(results), nil
 }
 
 func NewBoolPtr(v bool) *bool {

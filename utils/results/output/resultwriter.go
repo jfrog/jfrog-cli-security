@@ -1,8 +1,6 @@
 package output
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
 	"slices"
 
@@ -160,7 +158,7 @@ func (rw *ResultsWriter) printSarif() error {
 }
 
 func PrintJson(output interface{}) (err error) {
-	results, err := utils.GetAsJsonString(output)
+	results, err := utils.GetAsJsonString(output, true, true)
 	if err != nil {
 		return
 	}
@@ -306,16 +304,11 @@ func writeJsonResults(results *results.SecurityCommandResults) (resultsPath stri
 			err = e
 		}
 	}()
-	bytesRes, err := json.Marshal(&results)
-	if errorutils.CheckError(err) != nil {
+	content, err := utils.GetAsJsonBytes(results, true, true)
+	if err != nil {
 		return
 	}
-	var content bytes.Buffer
-	err = json.Indent(&content, bytesRes, "", "  ")
-	if errorutils.CheckError(err) != nil {
-		return
-	}
-	_, err = out.Write(content.Bytes())
+	_, err = out.Write(content)
 	if errorutils.CheckError(err) != nil {
 		return
 	}

@@ -78,14 +78,14 @@ func ValidateXscVersion(t *testing.T, minVersion string) {
 	}
 }
 
-func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func(t *testing.T) components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
 	// Create server config to use with the command.
 	CreateJfrogHomeConfig(t, true)
 	// Create mock cli with the mock commands.
 	commands := []components.Command{}
 	for _, mockCommand := range mockCommands {
-		commands = append(commands, mockCommand(t))
+		commands = append(commands, mockCommand())
 	}
 	return GetTestCli(components.CreateEmbeddedApp("security", commands)), func() {
 		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)

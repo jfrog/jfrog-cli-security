@@ -248,7 +248,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 	if scanCmd.threads > 1 {
 		threads = scanCmd.threads
 	}
-
+	// Wait for the Download of the AnalyzerManager to complete.
+	if err = errGroup.Wait(); err != nil {
+		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
+	}
 	fileProducerConsumer := parallel.NewRunner(threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(threads, 20000, false)
 	fileCollectingErrorsQueue := clientutils.NewErrorsQueue(1)

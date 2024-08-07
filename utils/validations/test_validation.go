@@ -140,11 +140,11 @@ func jsonErrMsg(t *testing.T, expected, actual any, msg string) []string {
 	var expectedStr, actualStr string
 	var err error
 	if expected != nil {
-		expectedStr, err = utils.GetAsJsonString(expected)
+		expectedStr, err = utils.GetAsJsonString(expected, false, true)
 		assert.NoError(t, err)
 	}
 	if actual != nil {
-		actualStr, err = utils.GetAsJsonString(actual)
+		actualStr, err = utils.GetAsJsonString(actual, false, true)
 		assert.NoError(t, err)
 	}
 	return errMsg(expectedStr, actualStr, msg)

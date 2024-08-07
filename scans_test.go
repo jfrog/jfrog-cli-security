@@ -21,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
-	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -29,8 +28,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
-	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -48,7 +45,7 @@ import (
 // Binary scan tests
 
 func TestXrayBinaryScanJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.Json))
+	output := testXrayBinaryScan(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
@@ -56,17 +53,18 @@ func TestXrayBinaryScanJson(t *testing.T) {
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.SimpleJson))
+	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
 	})
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.Json))
+	output := testXrayBinaryScan(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
@@ -76,17 +74,25 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.SimpleJson))
+	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
 	})
 }
 
-func testXrayBinaryScan(t *testing.T, format string) string {
+func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "scan", binariesPath, "--licenses", "--format="+format)
+	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
+	if withViolation {
+		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+		defer deleteWatch()
+		// Include violations and vulnerabilities
+		args = append(args, "--watches="+watchName, "--vuln")
+	}
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
@@ -147,33 +153,7 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
-	return securityTestUtils.InitTestWithMockCommandOrParams(t, dockerScanMockCommand)
-}
-
-func dockerScanMockCommand(t *testing.T) components.Command {
-	// Mock how the CLI handles docker commands:
-	// https://github.com/jfrog/jfrog-cli/blob/v2/buildtools/cli.go#L691
-	return components.Command{
-		Name:  "docker",
-		Flags: docs.GetCommandFlags(docs.DockerScan),
-		Action: func(c *components.Context) error {
-			args := pluginsCommon.ExtractArguments(c)
-			var cmd, image string
-			// We may have prior flags before push/pull commands for the docker client.
-			for _, arg := range args {
-				if !strings.HasPrefix(arg, "-") {
-					if cmd == "" {
-						cmd = arg
-					} else {
-						image = arg
-						break
-					}
-				}
-			}
-			assert.Equal(t, "scan", cmd)
-			return cli.DockerScan(c, image)
-		},
-	}
+	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {
