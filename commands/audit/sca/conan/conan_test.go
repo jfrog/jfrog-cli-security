@@ -2,7 +2,6 @@ package conan
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,11 +35,12 @@ func TestParseConanDependencyTree(t *testing.T) {
 	}{}
 
 	err = json.Unmarshal(dependenciesJson, &output)
+	assert.NoError(t, err)
 
 	graph, err := parseConanDependencyGraph("0", output.Graph.Nodes)
 	assert.NoError(t, err)
 	if !tests.CompareTree(expectedResult, graph) {
-		t.Error(fmt.Sprintf("expected %+v, got: %+v", expectedResult.Nodes, graph))
+		t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)
 	}
 }
 
@@ -52,7 +52,7 @@ func TestBuildDependencyTree(t *testing.T) {
 	graph, uniqueDeps, err := BuildDependencyTree(params)
 	assert.NoError(t, err)
 	if !tests.CompareTree(expectedResult, graph[0]) {
-		t.Error(fmt.Sprintf("expected %+v, got: %+v", expectedResult.Nodes, graph))
+		t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)
 	}
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 }

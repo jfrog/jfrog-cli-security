@@ -122,7 +122,7 @@ func parseConanDependencyGraph(id string, graph map[string]conanRef) (*xrayUtils
 	var childrenNodes []*xrayUtils.GraphNode
 	node, ok := graph[id]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("got non-existant node id %s", id))
+		return nil, fmt.Errorf("got non-existant node id %s", id)
 	}
 	for key, dep := range node.Dependencies {
 		if !dep.Direct {
