@@ -553,7 +553,7 @@ func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Te
 		return nil
 	}
 	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
-	if os.Getenv("JFROG_CLI_COMMAND_SUMMARY_OUTPUT_DIR") == "" ||
+	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
 		os.Getenv(skipCurationAfterFailureEnv) == "true" {
 		return nil
 	}
