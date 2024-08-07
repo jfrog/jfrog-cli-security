@@ -16,8 +16,10 @@ import (
 )
 
 func TestNewIacScanManager(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t, "currentDir")
+	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
+	assert.NoError(t, err)
 	// Act
 
 	iacScanManager := newIacScanManager(scanner, "temoDirPath")
@@ -26,13 +28,13 @@ func TestNewIacScanManager(t *testing.T) {
 	if assert.NotNil(t, iacScanManager) {
 		assert.NotEmpty(t, iacScanManager.configFileName)
 		assert.NotEmpty(t, iacScanManager.resultsFileName)
-		assert.NotEmpty(t, iacScanManager.scanner.JFrogAppsConfig.Modules[0].SourceRoot)
+		assert.NotEmpty(t, jfrogAppsConfigForTest.Modules[0].SourceRoot)
 		assert.Equal(t, &jas.FakeServerDetails, iacScanManager.scanner.ServerDetails)
 	}
 }
 
 func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t, "currentDir")
+	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String())
@@ -58,14 +60,15 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 func TestIacParseResults_EmptyResults(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	assert.NoError(t, err)
 
 	// Arrange
 	iacScanManager := newIacScanManager(scanner, "temoDirPath")
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "no-violations.sarif")
 
 	// Act
-	var err error
-	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, iacDocsUrlSuffix)
+	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix)
 	if assert.NoError(t, err) && assert.NotNil(t, iacScanManager.iacScannerResults) {
 		assert.Len(t, iacScanManager.iacScannerResults, 1)
 		assert.Empty(t, iacScanManager.iacScannerResults[0].Results)
@@ -75,13 +78,14 @@ func TestIacParseResults_EmptyResults(t *testing.T) {
 func TestIacParseResults_ResultsContainIacViolations(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
+	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
+	assert.NoError(t, err)
 	// Arrange
 	iacScanManager := newIacScanManager(scanner, "temoDirPath")
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "contains-iac-violations.sarif")
 
 	// Act
-	var err error
-	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, iacDocsUrlSuffix)
+	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix)
 	if assert.NoError(t, err) && assert.NotNil(t, iacScanManager.iacScannerResults) {
 		assert.Len(t, iacScanManager.iacScannerResults, 1)
 		assert.Len(t, iacScanManager.iacScannerResults[0].Results, 4)

@@ -1,4 +1,4 @@
-package utils
+package output
 
 import (
 	"os"
@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	summaryExpectedContentDir = filepath.Join("..", "tests", "testdata", "other", "jobSummary")
+	summaryExpectedContentDir = filepath.Join("..", "..", "..", "tests", "testdata", "other", "output", "jobSummary")
 )
 
 func TestConvertSummaryToString(t *testing.T) {
@@ -150,7 +150,7 @@ func TestConvertSummaryToString(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Read expected content from file
-			expectedContent := getOutputFromFile(t, testCase.expectedContentPath)
+			expectedContent := readOutputFromFile(t, testCase.expectedContentPath)
 			summary, err := ConvertSummaryToString(testCase.summary)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedContent, summary)
@@ -158,10 +158,10 @@ func TestConvertSummaryToString(t *testing.T) {
 	}
 }
 
-func getOutputFromFile(t *testing.T, path string) string {
+func readOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
+	return strings.ReplaceAll(filepath.FromSlash(strings.ReplaceAll(string(content), "\r\n", "\n")), "<"+string(filepath.Separator), "</")
 }
 
 func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) SecurityCommandsSummary {

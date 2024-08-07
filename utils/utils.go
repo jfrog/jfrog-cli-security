@@ -1,13 +1,21 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
 const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
+
+	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	JasInfoURL           = "https://jfrog.com/xray/"
 )
 
 var (
@@ -33,6 +41,74 @@ func (s SubScanType) String() string {
 
 func GetAllSupportedScans() []SubScanType {
 	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
+}
+
+// UniqueUnion returns a new slice of strings that contains elements from both input slices without duplicates
+func UniqueUnion[T comparable](arr []T, others ...T) []T {
+	uniqueSet := datastructures.MakeSet[T]()
+	var result []T
+	for _, str := range arr {
+		uniqueSet.Add(str)
+		result = append(result, str)
+	}
+	for _, str := range others {
+		if exist := uniqueSet.Exists(str); !exist {
+			result = append(result, str)
+		}
+	}
+	return result
+}
+
+func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {
+	if escapeValues {
+		if results, err = json.Marshal(output); errorutils.CheckError(err) != nil {
+			return
+		}
+	} else {
+		buffer := &bytes.Buffer{}
+		encoder := json.NewEncoder(buffer)
+		encoder.SetEscapeHTML(false)
+		if err = encoder.Encode(output); err != nil {
+			return
+		}
+		results = buffer.Bytes()
+	}
+	if indent {
+		return doIndent(results)
+	}
+	return
+}
+
+func doIndent(bytesRes []byte) ([]byte, error) {
+	var content bytes.Buffer
+	if err := json.Indent(&content, bytesRes, "", "  "); errorutils.CheckError(err) != nil {
+		return content.Bytes(), err
+	}
+	return content.Bytes(), nil
+}
+
+func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, error) {
+	results, err := GetAsJsonBytes(output, escapeValues, indent)
+	if err != nil {
+		return "", err
+	}
+	return string(results), nil
+}
+
+func NewBoolPtr(v bool) *bool {
+	return &v
+}
+
+func NewIntPtr(v int) *int {
+	return &v
+}
+
+func NewInt64Ptr(v int64) *int64 {
+	return &v
+}
+
+func NewFloat64Ptr(v float64) *float64 {
+	return &v
 }
 
 // map[string]string to []string (key=value format)

@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	ApplicabilityRuleIdPrefix = "applic_"
+	ApplicabilityRuleIdPrefix     = "applic_"
+	ApplicabilitySarifPropertyKey = "applicability"
 )
 
 const (
@@ -21,6 +22,10 @@ type JasScanType string
 
 func (jst JasScanType) String() string {
 	return string(jst)
+}
+
+func GetJasScanTypes() []JasScanType {
+	return []JasScanType{Applicability, Secrets, IaC, Sast}
 }
 
 type ApplicabilityStatus string

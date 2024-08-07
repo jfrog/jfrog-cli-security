@@ -110,7 +110,22 @@ func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (fil
 		}
 	}
 	return
+}
 
+func GetRunsByToolName(report *sarif.Report, toolName string) (filteredRuns []*sarif.Run) {
+	for _, run := range report.Runs {
+		if run.Tool.Driver != nil && run.Tool.Driver.Name == toolName {
+			filteredRuns = append(filteredRuns, run)
+		}
+	}
+	return
+}
+
+func GetResultRuleId(result *sarif.Result) string {
+	if result.RuleID == nil {
+		return ""
+	}
+	return *result.RuleID
 }
 
 func GetResultMsgText(result *sarif.Result) string {
@@ -227,9 +242,47 @@ func IsResultKindNotPass(result *sarif.Result) bool {
 	return !(result.Kind != nil && *result.Kind == "pass")
 }
 
+func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {
+	for _, rule := range GetRunRules(run) {
+		if rule.ID == ruleId {
+			return rule
+		}
+	}
+	return nil
+}
+
 func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
 	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
+	}
+	return ""
+}
+
+func GetRuleFullDescriptionMarkdown(rule *sarif.ReportingDescriptor) string {
+	if rule.FullDescription != nil && rule.FullDescription.Markdown != nil {
+		return *rule.FullDescription.Markdown
+	}
+	return ""
+
+}
+
+func GetRuleHelp(rule *sarif.ReportingDescriptor) string {
+	if rule.Help != nil && rule.Help.Text != nil {
+		return *rule.Help.Text
+	}
+	return ""
+}
+
+func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
+	if rule.Help != nil && rule.Help.Markdown != nil {
+		return *rule.Help.Markdown
+	}
+	return ""
+}
+
+func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
+	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+		return *rule.ShortDescription.Text
 	}
 	return ""
 }
