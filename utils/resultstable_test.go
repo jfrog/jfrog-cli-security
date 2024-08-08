@@ -98,21 +98,38 @@ func TestSimplifyVulnerability(t *testing.T) {
 		}}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}},
 	}
-	expectedImpactPathRootsFalse := [][]services.ImpactPathNode{
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
-				FullPath: "multi3-3.7-20240806.082023-11.war"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
-	}
-	expectedImpactPathRootsTrue := [][]services.ImpactPathNode{
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	tests := []struct {
+		testName                string
+		expectedImpactPathRoots [][]services.ImpactPathNode
+		isMultipleRoots         bool
+	}{
+		{
+			"Test multiple roots false",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+						FullPath: "multi3-3.7-20240806.082023-11.war"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			false,
+		},
+		{
+			"Test multiple roots true",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			true,
+		},
 	}
 
-	testSimplifyVulnerabilityRoot(t, vulnerabilities, false, expectedImpactPathRootsFalse)
-	testSimplifyVulnerabilityRoot(t, vulnerabilities, true, expectedImpactPathRootsTrue)
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			testSimplifyVulnerabilityRoot(t, vulnerabilities, test.isMultipleRoots, test.expectedImpactPathRoots)
+		})
+	}
 
 }
 
@@ -143,21 +160,38 @@ func TestSimplifyViolation(t *testing.T) {
 		}}}, FailBuild: true},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}, FailBuild: true},
 	}
-	expectedImpactPathRootsFalse := [][]services.ImpactPathNode{
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
-				FullPath: "multi3-3.7-20240806.082023-11.war"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
-	}
-	expectedImpactPathRootsTrue := [][]services.ImpactPathNode{
-		{{ComponentId: "build://dort:1"},
-			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	tests := []struct {
+		testName                string
+		expectedImpactPathRoots [][]services.ImpactPathNode
+		isMultipleRoots         bool
+	}{
+		{
+			"Test multiple roots false",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+						FullPath: "multi3-3.7-20240806.082023-11.war"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			false,
+		},
+		{
+			"Test multiple roots true",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			true,
+		},
 	}
 
-	testSimplifyViolationRoot(t, violations, false, expectedImpactPathRootsFalse)
-	testSimplifyViolationRoot(t, violations, true, expectedImpactPathRootsTrue)
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			testSimplifyViolationRoot(t, violations, test.isMultipleRoots, test.expectedImpactPathRoots)
+		})
+	}
 }
 
 func testSimplifyViolationRoot(t *testing.T, violations []services.Violation, multipleRoots bool, expectedImpactPath [][]services.ImpactPathNode) {
