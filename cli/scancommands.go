@@ -2,8 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"github.com/jfrog/gofrog/datastructures"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/urfave/cli"
 	"os"
 	"strings"
 
@@ -39,6 +43,7 @@ import (
 )
 
 const dockerScanCmdHiddenName = "dockerscan"
+const skipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
@@ -505,9 +510,83 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 }
 
 func CurationCmd(c *components.Context) error {
-	threads, err := pluginsCommon.GetThreadsCount(c)
+	curationAuditCommand, err := getCurationCommand(c)
 	if err != nil {
 		return err
+	}
+	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+var supportedCommandsForPostInstallationFailure = datastructures.MakeSetFromElements[string](
+	"install", "build", "i", "add", "ci", "get", "mod",
+)
+
+func IsSupportedCommandForCurationInspect(cmd string) bool {
+	return supportedCommandsForPostInstallationFailure.Exists(cmd)
+}
+
+func WrapCmdWithCurationPostFailureRun(c *cli.Context, cmd func(c *cli.Context) error, technology techutils.Technology, cmdName string) error {
+	if err := cmd(c); err != nil {
+		CurationInspectAfterFailure(c, cmdName, technology, err)
+		return err
+	}
+	return nil
+}
+
+func CurationInspectAfterFailure(c *cli.Context, cmdName string, technology techutils.Technology, errFromCmd error) {
+	if compContexts, errConvertCtx := components.ConvertContext(c); errConvertCtx == nil {
+		if errPostCuration := CurationCmdPostInstallationFailure(compContexts, technology, cmdName, errFromCmd); errPostCuration != nil {
+			log.Error(errPostCuration)
+		}
+	} else {
+		log.Error(errConvertCtx)
+	}
+}
+
+func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) error {
+	// check the command supported
+	if !IsSupportedCommandForCurationInspect(cmdName) {
+		return nil
+	}
+	// Curation post run failure is only relevant for forbidden errors
+	if !sca.IsForbiddenError(tech, originError.Error()) {
+		return nil
+	}
+	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
+	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
+		os.Getenv(skipCurationAfterFailureEnv) == "true" {
+		return nil
+	}
+
+	curationAuditCommand, err := getCurationCommand(c)
+	if err != nil {
+		return err
+	}
+	// check if user entitled for curation
+	serverDetails, err := curationAuditCommand.GetAuth(tech)
+	if err != nil {
+		return err
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return err
+	}
+	entitled, err := curation.IsEntitledForCuration(xrayManager)
+	if err != nil {
+		return err
+	}
+	if !entitled {
+		log.Info("Curation feature is not entitled, skipping curation audit")
+		return nil
+	}
+	log.Info("Running curation audit after failure")
+	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, error) {
+	threads, err := pluginsCommon.GetThreadsCount(c)
+	if err != nil {
+		return nil, err
 	}
 	curationAuditCommand := curation.NewCurationAuditCommand().
 		SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs))).
@@ -515,11 +594,11 @@ func CurationCmd(c *components.Context) error {
 
 	serverDetails, err := pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Rt)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	format, err := curation.GetCurationOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	curationAuditCommand.SetServerDetails(serverDetails).
 		SetIsCurationCmd(true).
@@ -529,7 +608,7 @@ func CurationCmd(c *components.Context) error {
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
-	return progressbar.ExecWithProgress(curationAuditCommand)
+	return curationAuditCommand, nil
 }
 
 func DockerScanMockCommand() components.Command {

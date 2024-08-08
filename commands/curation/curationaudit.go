@@ -13,14 +13,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
@@ -33,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
@@ -314,16 +314,24 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
+	serverDetails, err = ca.GetAuth(tech)
+	if err != nil {
+		return
+	}
+	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
 			return
 		}
 	}
 	serverDetails, err = ca.PackageManagerConfig.ServerDetails()
-	if err != nil {
-		return
-	}
-	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
 	if err != nil {
 		return
 	}
@@ -803,4 +811,9 @@ func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputForma
 		}
 	}
 	return
+}
+
+func IsEntitledForCuration(xrayManager *xrayClient.XrayServicesManager) (entitled bool, err error) {
+	return xrayManager.IsEntitled("curation")
+
 }

@@ -104,7 +104,7 @@ func handleCurationGoError(err error) (bool, error) {
 	if err == nil {
 		return false, nil
 	}
-	if msgToUser := sca.SuspectCurationBlockedError(true, techutils.Go, err.Error()); msgToUser != "" {
+	if msgToUser := sca.GetMsgToUserForCurationBlock(true, techutils.Go, err.Error()); msgToUser != "" {
 		return true, errors.New(msgToUser)
 	}
 	return false, nil
