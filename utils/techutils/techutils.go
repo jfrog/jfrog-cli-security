@@ -37,6 +37,7 @@ const (
 	Dotnet Technology = "dotnet"
 	Docker Technology = "docker"
 	Oci    Technology = "oci"
+	Conan  Technology = "conan"
 )
 const Pypi = "pypi"
 
@@ -48,6 +49,7 @@ const (
 	GoLang     CodeLanguage = "go"
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
+	CPP        CodeLanguage = "C++"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
@@ -167,6 +169,11 @@ var technologiesData = map[Technology]TechData{
 	},
 	Docker: {},
 	Oci:    {},
+	Conan: {
+		indicators:         []string{"conanfile.txt", "conanfile.py "},
+		packageDescriptors: []string{"conanfile.txt", "conanfile.py "},
+		formal:             "Conan",
+	},
 }
 
 var (
