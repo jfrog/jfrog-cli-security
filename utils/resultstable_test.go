@@ -85,32 +85,91 @@ func TestGetDirectComponents(t *testing.T) {
 
 func TestSimplifyVulnerability(t *testing.T) {
 	vulnerabilities := []services.Vulnerability{
-		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+					FullPath: "multi3-3.7-20240806.082023-11.war"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}},
-		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}},
 	}
-	simplifiedViolationsRootsFalse := simplifyVulnerabilities(vulnerabilities, false)
-	simplifiedViolationsRootsTrue := simplifyVulnerabilities(vulnerabilities, true)
+	expectedImpactPathRootsFalse := [][]services.ImpactPathNode{
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+				FullPath: "multi3-3.7-20240806.082023-11.war"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	}
+	expectedImpactPathRootsTrue := [][]services.ImpactPathNode{
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	}
 
-	// assert that the length of simplified vulnerabilities is length of vulnerabilities without the similar componentID
-	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedViolationsRootsFalse))
-	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedViolationsRootsTrue))
+	testSimplifyVulnerabilityRoot(t, vulnerabilities, false, expectedImpactPathRootsFalse)
+	testSimplifyVulnerabilityRoot(t, vulnerabilities, true, expectedImpactPathRootsTrue)
+
+}
+
+func testSimplifyVulnerabilityRoot(t *testing.T, vulnerabilities []services.Vulnerability, multipleRoots bool, expectedImpactPath [][]services.ImpactPathNode) {
+	simplifiedVulnerabilities := simplifyVulnerabilities(vulnerabilities, multipleRoots)
+	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedVulnerabilities))
+	for _, vulnerability := range simplifiedVulnerabilities {
+		for key := range vulnerability.Components {
+			if key == "gav://jfrogpack:1.0.0" {
+				assert.Equal(t, expectedImpactPath, vulnerability.Components[key].ImpactPaths)
+			}
+		}
+	}
 }
 
 func TestSimplifyViolation(t *testing.T) {
 	violations := []services.Violation{
-		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+					FullPath: "multi3-3.7-20240806.082023-11.war"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}, FailBuild: true},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}, FailBuild: true},
-		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}, FailBuild: true},
 		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}, FailBuild: true},
 	}
-	simplifiedViolationsRootsFalse := simplifyViolations(violations, false)
-	simplifiedViolationsRootsTrue := simplifyViolations(violations, true)
+	expectedImpactPathRootsFalse := [][]services.ImpactPathNode{
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+				FullPath: "multi3-3.7-20240806.082023-11.war"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	}
+	expectedImpactPathRootsTrue := [][]services.ImpactPathNode{
+		{{ComponentId: "build://dort:1"},
+			{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+	}
 
-	// assert that the length of simplified violations is length of violation without the similar componentID
-	assert.Equal(t, len(violations)-1, len(simplifiedViolationsRootsFalse))
-	assert.Equal(t, len(violations)-1, len(simplifiedViolationsRootsTrue))
+	testSimplifyViolationRoot(t, violations, false, expectedImpactPathRootsFalse)
+	testSimplifyViolationRoot(t, violations, true, expectedImpactPathRootsTrue)
+}
+
+func testSimplifyViolationRoot(t *testing.T, violations []services.Violation, multipleRoots bool, expectedImpactPath [][]services.ImpactPathNode) {
+	simplifiedViolations := simplifyViolations(violations, multipleRoots)
+	assert.Equal(t, len(violations)-1, len(simplifiedViolations))
+	for _, violation := range simplifiedViolations {
+		for key := range violation.Components {
+			if key == "gav://jfrogpack:1.0.0" {
+				assert.Equal(t, expectedImpactPath, violation.Components[key].ImpactPaths)
+			}
+		}
+	}
 }
 
 func TestGetOperationalRiskReadableData(t *testing.T) {
