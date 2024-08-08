@@ -130,6 +130,7 @@ var tokenValidationOrder = map[string]int{
 	"Inactive":    2,
 	"Unsupported": 3,
 	"Unavailable": 4,
+	"":            5,
 }
 
 type SourceCodeRows []SourceCodeRow
@@ -138,7 +139,7 @@ func (a SourceCodeRows) Less(i, j int) bool {
 	if tokenValidationOrder[a[i].TokenValidation] != tokenValidationOrder[a[j].TokenValidation] {
 		return tokenValidationOrder[a[i].TokenValidation] < tokenValidationOrder[a[j].TokenValidation]
 	}
-	return a[i].Severity < a[j].Severity
+	return a[i].SeverityNumValue > a[j].SeverityNumValue
 }
 
 func (a SourceCodeRows) Len() int {
