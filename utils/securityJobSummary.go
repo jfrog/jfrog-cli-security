@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	Build    SecuritySummarySection = "Builds"
-	Binary   SecuritySummarySection = "Artifacts"
-	Modules  SecuritySummarySection = "Modules"
-	Curation SecuritySummarySection = "Curation"
+	BuildSection    SecuritySummarySection = "Builds"
+	BinarySection   SecuritySummarySection = "Artifacts"
+	ModulesSection  SecuritySummarySection = "Modules"
+	CurationSection SecuritySummarySection = "Curation"
 )
 
 type SecuritySummarySection string
@@ -82,13 +82,13 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 		updateSummaryNamesToRelativePath(&results, cmdResults.WorkingDirectory)
 		// Append the new data
 		switch cmdResults.Section {
-		case Build:
+		case BuildSection:
 			scs.BuildScanCommands = append(scs.BuildScanCommands, results)
-		case Binary:
+		case BinarySection:
 			scs.ScanCommands = append(scs.ScanCommands, results)
-		case Modules:
+		case ModulesSection:
 			scs.AuditCommands = append(scs.AuditCommands, results)
-		case Curation:
+		case CurationSection:
 			scs.CurationCommands = append(scs.CurationCommands, results)
 		}
 	}
@@ -97,16 +97,16 @@ func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) 
 
 func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
 	if len(scs.BuildScanCommands) > 0 {
-		sections = append(sections, Build)
+		sections = append(sections, BuildSection)
 	}
 	if len(scs.ScanCommands) > 0 {
-		sections = append(sections, Binary)
+		sections = append(sections, BinarySection)
 	}
 	if len(scs.AuditCommands) > 0 {
-		sections = append(sections, Modules)
+		sections = append(sections, ModulesSection)
 	}
 	if len(scs.CurationCommands) > 0 {
-		sections = append(sections, Curation)
+		sections = append(sections, CurationSection)
 	}
 	return
 
@@ -114,13 +114,13 @@ func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []
 
 func (scs *SecurityCommandsSummary) getSectionSummaries(section SecuritySummarySection) (summaries []formats.SummaryResults) {
 	switch section {
-	case Build:
+	case BuildSection:
 		summaries = scs.BuildScanCommands
-	case Binary:
+	case BinarySection:
 		summaries = scs.ScanCommands
-	case Modules:
+	case ModulesSection:
 		summaries = scs.AuditCommands
-	case Curation:
+	case CurationSection:
 		summaries = scs.CurationCommands
 	}
 	return

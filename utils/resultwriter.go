@@ -45,8 +45,6 @@ type ResultsWriter struct {
 	isMultipleRoots bool
 	// PrintExtended, If true, show extended results.
 	printExtended bool
-	// The scanType (binary,dependency)
-	scanType services.ScanType
 	// For table format - show table only for the given subScansPreformed
 	subScansPreformed []SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
@@ -66,11 +64,6 @@ func GetScaScanFileName(r *Results) string {
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 	rw.format = f
-	return rw
-}
-
-func (rw *ResultsWriter) SetScanType(scanType services.ScanType) *ResultsWriter {
-	rw.scanType = scanType
 	return rw
 }
 
@@ -140,39 +133,39 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.results.ResultType) {
 		if rw.includeVulnerabilities {
-			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+			err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.results.ResultType)
 		} else {
-			err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType)
+			err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended)
 		}
 		if err != nil {
 			return
 		}
 		if rw.includeLicenses {
-			if err = PrintLicensesTable(licenses, rw.printExtended, rw.scanType); err != nil {
+			if err = PrintLicensesTable(licenses, rw.printExtended, rw.results.ResultType); err != nil {
 				return
 			}
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.results.ResultType) {
 		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.results.ResultType) {
 		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
 	}
-	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.scanType) {
+	if !shouldPrintTable(rw.subScansPreformed, SastScan, rw.results.ResultType) {
 		return nil
 	}
 	return PrintSastTable(rw.results.ExtendedScanResults.SastScanResults, rw.results.ExtendedScanResults.EntitledForJas)
 }
 
-func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType services.ScanType) bool {
-	if scanType == services.Binary && (subScan == IacScan || subScan == SastScan) {
+func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType CommandType) bool {
+	if (scanType == Binary || scanType == DockerImage) && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
@@ -191,7 +184,7 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func GenereateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
+func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (report *sarif.Report, err error) {
 	report, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -202,12 +195,52 @@ func GenereateSarifReportFromResults(results *Results, isMultipleRoots, includeL
 	}
 
 	report.Runs = append(report.Runs, xrayRun)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.ApplicabilityScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.IacScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.SecretsScanResults...)
-	report.Runs = append(report.Runs, results.ExtendedScanResults.SastScanResults...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.ApplicabilityScanResults)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.IacScanResults)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.SecretsScanResults)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.SastScanResults)...)
 
 	return
+}
+
+func patchRunsToPassIngestionRules(runs []*sarif.Run) []*sarif.Run {
+	for _, run := range runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			// Github code scanning ingestion rules rejects rules without help content, transfer fullDescription if not exists
+			if rule.Help == nil && rule.FullDescription != nil {
+				rule.Help = rule.FullDescription
+			}
+		}
+		// Github code scanning ingestion rules rejects results without locations, remove them
+		results := []*sarif.Result{}
+		for _, result := range run.Results {
+			if len(result.Locations) == 0 {
+				continue
+			}
+			results = append(results, result)
+		}
+		run.Results = results
+	}
+	// Since we run in temp directories files should be relative
+	convertToRelativePath(runs)
+	return runs
+}
+
+func convertToRelativePath(runs []*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				sarifutils.SetLocationFileName(location, sarifutils.GetRelativeLocationFileName(location, run.Invocations))
+			}
+			for _, flows := range result.CodeFlows {
+				for _, flow := range flows.ThreadFlows {
+					for _, location := range flow.Locations {
+						sarifutils.SetLocationFileName(location.Location, sarifutils.GetRelativeLocationFileName(location.Location, run.Invocations))
+					}
+				}
+			}
+		}
+	}
 }
 
 func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
@@ -571,7 +604,7 @@ func PrintJson(output interface{}) error {
 }
 
 func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool) error {
-	sarifReport, err := GenereateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil)
+	sarifReport, err := GenerateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil)
 	if err != nil {
 		return err
 	}

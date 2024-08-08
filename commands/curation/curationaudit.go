@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/jfrog/jfrog-cli-security/formats"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -242,7 +243,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
 
-	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
+	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.CurationSection}))
 	return
 }
 

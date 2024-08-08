@@ -27,6 +27,16 @@ const (
 
 type SubScanType string
 
+const (
+	SourceCode  CommandType = "source_code"
+	Binary      CommandType = "binary"
+	DockerImage CommandType = "docker_image"
+	Build       CommandType = "build"
+	SBOM        CommandType = "SBOM"
+)
+
+type CommandType string
+
 func (s SubScanType) String() string {
 	return string(s)
 }

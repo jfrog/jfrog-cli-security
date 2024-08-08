@@ -27,7 +27,7 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "One Section - No Issues",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section:          Binary,
+					Section:          BinarySection,
 					WorkingDirectory: wd,
 					Results:          formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: filepath.Join(wd, "binary-name")}}},
 				},
@@ -38,7 +38,7 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "One Section - With Issues",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section: Build,
+					Section: BuildSection,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target:          "build-name (build-number)",
 						Violations:      formats.TwoLevelSummaryCount{formats.ViolationTypeLicense.String(): formats.SummaryCount{"High": 1}},
@@ -52,11 +52,11 @@ func TestConvertSummaryToString(t *testing.T) {
 			name: "Multiple Sections",
 			summary: getDummySecurityCommandsSummary(
 				ScanCommandSummaryResult{
-					Section: Build,
+					Section: BuildSection,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{Target: "build-name (build-number)"}}},
 				},
 				ScanCommandSummaryResult{
-					Section: Build,
+					Section: BuildSection,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{{
 						Target: "build-name (build-number)",
 						Violations: formats.TwoLevelSummaryCount{
@@ -67,7 +67,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					}}},
 				},
 				ScanCommandSummaryResult{
-					Section:          Binary,
+					Section:          BinarySection,
 					WorkingDirectory: wd,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
@@ -83,7 +83,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					}},
 				},
 				ScanCommandSummaryResult{
-					Section:          Modules,
+					Section:          ModulesSection,
 					WorkingDirectory: wd,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
@@ -117,7 +117,7 @@ func TestConvertSummaryToString(t *testing.T) {
 					}},
 				},
 				ScanCommandSummaryResult{
-					Section:          Curation,
+					Section:          CurationSection,
 					WorkingDirectory: wd,
 					Results: formats.SummaryResults{Scans: []formats.ScanSummaryResult{
 						{
@@ -175,13 +175,13 @@ func getDummySecurityCommandsSummary(cmdResults ...ScanCommandSummaryResult) Sec
 		// Update the working directory
 		updateSummaryNamesToRelativePath(&results, cmdResult.WorkingDirectory)
 		switch cmdResult.Section {
-		case Build:
+		case BuildSection:
 			summary.BuildScanCommands = append(summary.BuildScanCommands, cmdResult.Results)
-		case Binary:
+		case BinarySection:
 			summary.ScanCommands = append(summary.ScanCommands, cmdResult.Results)
-		case Modules:
+		case ModulesSection:
 			summary.AuditCommands = append(summary.AuditCommands, cmdResult.Results)
-		case Curation:
+		case CurationSection:
 			summary.CurationCommands = append(summary.CurationCommands, cmdResult.Results)
 		}
 	}
