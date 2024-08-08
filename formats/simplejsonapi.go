@@ -124,3 +124,27 @@ type JfrogResearchSeverityReason struct {
 	Description string `json:"description,omitempty"`
 	IsPositive  bool   `json:"isPositive,omitempty"`
 }
+
+var tokenValidationOrder = map[string]int{
+	"Active":      1,
+	"Inactive":    2,
+	"Unsupported": 3,
+	"Unavailable": 4,
+}
+
+type SourceCodeRows []SourceCodeRow
+
+func (a SourceCodeRows) Less(i, j int) bool {
+	if tokenValidationOrder[a[i].TokenValidation] != tokenValidationOrder[a[j].TokenValidation] {
+		return tokenValidationOrder[a[i].TokenValidation] < tokenValidationOrder[a[j].TokenValidation]
+	}
+	return a[i].Severity < a[j].Severity
+}
+
+func (a SourceCodeRows) Len() int {
+	return len(a)
+}
+
+func (a SourceCodeRows) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}

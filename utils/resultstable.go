@@ -375,11 +375,13 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow
 			}
 		}
 	}
-
-	sort.Slice(secretsRows, func(i, j int) bool {
-		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
-	})
-
+	if !tokenValidationActivated {
+		sort.Slice(secretsRows, func(i, j int) bool {
+			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		})
+	} else {
+		sort.Sort(formats.SourceCodeRows(secretsRows))
+	}
 	return secretsRows, tokenValidationActivated
 }
 
