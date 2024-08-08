@@ -28,12 +28,8 @@ func TestParseConanDependencyTree(t *testing.T) {
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
-	output := struct {
-		Graph struct {
-			Nodes map[string]conanRef `json:"nodes"`
-		} `json:"graph"`
-	}{}
 
+	var output conanGraphOutput
 	err = json.Unmarshal(dependenciesJson, &output)
 	assert.NoError(t, err)
 

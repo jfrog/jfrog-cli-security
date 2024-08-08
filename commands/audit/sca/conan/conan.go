@@ -7,6 +7,7 @@ import (
 	"os/exec"
 
 	"github.com/jfrog/gofrog/io"
+	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
@@ -19,6 +20,7 @@ import (
 
 const (
 	PackageTypeIdentifier = "conan://"
+	conanV2               = "2.0.0"
 )
 
 func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
@@ -45,11 +47,15 @@ func getConanExecPath() (conanExecPath string, err error) {
 	}
 	log.Debug("Using Conan executable:", conanExecPath)
 	// Validate conan version command
-	version, err := getConanCmd(conanExecPath, "", "--version").RunWithOutput()
+	conanVersion, err := getConanCmd(conanExecPath, "", "--version").RunWithOutput()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
-	log.Debug("Conan version:", string(version))
+	if version.NewVersion(string(conanVersion)).Compare(conanV2) < 0 {
+		err = fmt.Errorf("Conan dependency tree building is currently supported for Conan V2. The current Conan version is: %s", conanVersion)
+		return
+	}
+	log.Debug("Conan version: ", string(conanVersion))
 	return
 }
 
@@ -72,9 +78,9 @@ type conanRef struct {
 	node         *xrayUtils.GraphNode
 }
 
-func (cr *conanRef) Node() *xrayUtils.GraphNode {
+func (cr *conanRef) Node(children ...*xrayUtils.GraphNode) *xrayUtils.GraphNode {
 	if cr.node == nil {
-		cr.node = &xrayUtils.GraphNode{Id: cr.NodeName()}
+		cr.node = &xrayUtils.GraphNode{Id: cr.NodeName(), Nodes: children}
 	}
 	return cr.node
 }
@@ -122,22 +128,23 @@ func parseConanDependencyGraph(id string, graph map[string]conanRef) (*xrayUtils
 	var childrenNodes []*xrayUtils.GraphNode
 	node, ok := graph[id]
 	if !ok {
-		return nil, fmt.Errorf("got non-existant node id %s", id)
+		return nil, fmt.Errorf("got non-existent node id %s", id)
 	}
 	for key, dep := range node.Dependencies {
+		// Conan includes some transitive dependencies here. To keep it consistent with other package managers,
+		// we'll exclude the indirect dependencies from the tree.
 		if !dep.Direct {
 			continue
 		}
-		r, err := parseConanDependencyGraph(key, graph)
+		parsedNode, err := parseConanDependencyGraph(key, graph)
 		if err != nil {
 			return nil, err
 		}
-		childrenNodes = append(childrenNodes, r)
+		childrenNodes = append(childrenNodes, parsedNode)
 	}
 	if id == "0" {
 		return &xrayUtils.GraphNode{Id: "root", Nodes: childrenNodes}, nil
 	} else {
-		node.Node().Nodes = childrenNodes
-		return node.Node(), nil
+		return node.Node(childrenNodes...), nil
 	}
 }
