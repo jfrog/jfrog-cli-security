@@ -183,12 +183,12 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) error {
+		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.BinarySection})
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recordResFunc func(scanResults *utils.Results) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -204,7 +204,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		return err
 	}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := utils.NewAuditResults(cmdType)
 	scanResults.XrayVersion = xrayVersion
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
@@ -303,7 +303,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(true).
-		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
 		return
 	}

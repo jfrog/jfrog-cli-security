@@ -390,7 +390,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			results := NewAuditResults()
+			results := NewAuditResults(SourceCode)
 			scaScanResult := ScaScanResult{XrayResults: []services.ScanResponse{tc.result}}
 			results.ScaResults = append(results.ScaResults, &scaScanResult)
 			output, err := ConvertXrayScanToSimpleJson(results, false, tc.includeLicenses, true, tc.allowedLicenses)

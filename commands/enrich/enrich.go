@@ -190,7 +190,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	scanErrors = appendErrorSlice(scanErrors, fileProducerErrors)
 	scanErrors = appendErrorSlice(scanErrors, indexedFileProducerErrors)
 
-	scanResults := xrutils.NewAuditResults()
+	scanResults := xrutils.NewAuditResults(utils.SBOM)
 	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = flatResults
 

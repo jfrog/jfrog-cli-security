@@ -10,6 +10,7 @@ import (
 )
 
 type Results struct {
+	ResultType  CommandType
 	ScaResults  []*ScaScanResult
 	XrayVersion string
 	ScansErr    error
@@ -19,8 +20,8 @@ type Results struct {
 	MultiScanId string
 }
 
-func NewAuditResults() *Results {
-	return &Results{ExtendedScanResults: &ExtendedScanResults{}}
+func NewAuditResults(resultType CommandType) *Results {
+	return &Results{ResultType: resultType, ExtendedScanResults: &ExtendedScanResults{}}
 }
 
 func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
