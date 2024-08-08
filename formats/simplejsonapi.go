@@ -68,6 +68,8 @@ type SourceCodeRow struct {
 	SeverityDetails
 	Location
 	Finding            string       `json:"finding,omitempty"`
+	TokenValidation    string       `json:"tokenValidation,omitempty"`
+	Metadata           string       `json:"metadata,omitempty"`
 	ScannerDescription string       `json:"scannerDescription,omitempty"`
 	CodeFlow           [][]Location `json:"codeFlow,omitempty"`
 }
@@ -121,4 +123,29 @@ type JfrogResearchSeverityReason struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	IsPositive  bool   `json:"isPositive,omitempty"`
+}
+
+var tokenValidationOrder = map[string]int{
+	"Active":      1,
+	"Inactive":    2,
+	"Unsupported": 3,
+	"Unavailable": 4,
+	"":            5,
+}
+
+type SourceCodeRows []SourceCodeRow
+
+func (a SourceCodeRows) Less(i, j int) bool {
+	if tokenValidationOrder[a[i].TokenValidation] != tokenValidationOrder[a[j].TokenValidation] {
+		return tokenValidationOrder[a[i].TokenValidation] < tokenValidationOrder[a[j].TokenValidation]
+	}
+	return a[i].SeverityNumValue > a[j].SeverityNumValue
+}
+
+func (a SourceCodeRows) Len() int {
+	return len(a)
+}
+
+func (a SourceCodeRows) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
 }

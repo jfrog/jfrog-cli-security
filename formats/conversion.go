@@ -141,14 +141,25 @@ func ConvertToOperationalRiskViolationScanTableRow(rows []OperationalRiskViolati
 	return
 }
 
-func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow) {
+func ConvertToSecretsTableRow(rows []SourceCodeRow, tokenValidationActivated bool) (tableRows []secretsTableRow) {
 	for i := range rows {
-		tableRows = append(tableRows, secretsTableRow{
+		newRow := secretsTableRow{
 			severity:   rows[i].Severity,
 			file:       rows[i].File,
 			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
 			secret:     rows[i].Snippet,
-		})
+		}
+		if tokenValidationActivated {
+			newRow.tokenValidation = "N/A"
+			newRow.metadata = "N/A"
+			if rows[i].TokenValidation != "" {
+				newRow.tokenValidation = rows[i].TokenValidation
+			}
+			if rows[i].Metadata != "" {
+				newRow.metadata = rows[i].Metadata
+			}
+		}
+		tableRows = append(tableRows, newRow)
 	}
 	return
 }

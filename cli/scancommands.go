@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"os"
 	"strings"
+
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
@@ -457,7 +458,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
+		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -604,7 +606,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
-		SetThreads(threads)
+		SetThreads(threads).
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

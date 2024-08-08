@@ -33,6 +33,17 @@ func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Lo
 	}
 }
 
+func CreateResultWithTokenValidation(msg, ruleId, level string, tokenValidation string, metadata string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
+		Message:   *sarif.NewTextMessage(msg),
+		Level:     &level,
+		RuleID:    &ruleId,
+		Locations: locations,
+	}
+	result.Properties = map[string]interface{}{"tokenValidation": tokenValidation, "metadata": metadata}
+	return result
+}
+
 func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
 	return &sarif.Location{
 		PhysicalLocation: &sarif.PhysicalLocation{

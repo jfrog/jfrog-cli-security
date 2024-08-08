@@ -124,10 +124,12 @@ type cveTableRow struct {
 }
 
 type secretsTableRow struct {
-	severity   string `col-name:"Severity"`
-	file       string `col-name:"File"`
-	lineColumn string `col-name:"Line:Column"`
-	secret     string `col-name:"Secret"`
+	severity        string `col-name:"Severity"`
+	file            string `col-name:"File"`
+	lineColumn      string `col-name:"Line:Column"`
+	secret          string `col-name:"Secret"`
+	tokenValidation string `col-name:"Token Validation" extended:"true"`
+	metadata        string `col-name:"Metadata" extended:"true"`
 }
 
 type iacOrSastTableRow struct {

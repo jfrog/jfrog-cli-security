@@ -142,6 +142,7 @@ type ExtendedScanResults struct {
 	IacScanResults           []*sarif.Run
 	SastScanResults          []*sarif.Run
 	EntitledForJas           bool
+	SecretValidation         bool
 }
 
 func (e *ExtendedScanResults) IsIssuesFound() bool {

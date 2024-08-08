@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"os"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -194,9 +195,17 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 		return
 	}
 	results.XrayVersion = auditParams.xrayVersion
+
 	results.ExtendedScanResults.EntitledForJas, err = isEntitledForJas(xrayManager, auditParams)
 	if err != nil {
 		return
+	}
+	dynamicTokenVersionMismatchErr := clientutils.ValidateMinimumVersion(clientutils.Xray, auditParams.xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil && (auditParams.AuditBasicParams.ValidateSecrets) {
+		log.Warn("Token validation (--validate-secrets flag) is not supported in your xray version")
+		results.ExtendedScanResults.SecretValidation = false
+	} else {
+		results.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, auditParams.AuditBasicParams.ValidateSecrets)
 	}
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
 
@@ -264,7 +273,9 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err = jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
+	amEnvVars := jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetScaScannedTechnologies()...)
+	jas.AppendTokenValidationToEnvVars(amEnvVars, scanResults.ExtendedScanResults.SecretValidation)
+	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, amEnvVars, auditParams.Exclusions()...)
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}

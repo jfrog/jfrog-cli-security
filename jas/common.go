@@ -270,6 +270,25 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, validateSecrets bool) bool {
+	// Ordered By importance
+	// first check for flag
+	if validateSecrets {
+		return validateSecrets
+	}
+	// second check for env var
+	if strings.ToLower(os.Getenv("JF_VALIDATE_SECRETS")) == "true" {
+		return true
+	}
+	// third check for platform api
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	if isEnabled && err == nil {
+		return true
+	}
+	// at this point secret validation will be false
+	return false
+}
+
 func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
 	if len(technologies) != 1 {
@@ -279,7 +298,10 @@ func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technolo
 	envVars[JfPackageManagerEnvVariable] = technology.String()
 	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
 	return envVars
+}
 
+func AppendTokenValidationToEnvVars(envVars map[string]string, validateSecrets bool) {
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {

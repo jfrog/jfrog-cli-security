@@ -127,6 +127,28 @@ func GetResultLevel(result *sarif.Result) string {
 	return ""
 }
 
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties["tokenValidation"] != nil {
+		status, ok := result.Properties["tokenValidation"].(string)
+		if !ok {
+			return ""
+		}
+		return status
+	}
+	return ""
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties["metadata"] != nil {
+		metadata, ok := result.Properties["metadata"].(string)
+		if !ok {
+			return ""
+		}
+		return metadata
+	}
+	return ""
+}
+
 func GetLocationSnippet(location *sarif.Location) string {
 	region := getLocationRegion(location)
 	if region != nil && region.Snippet != nil {
