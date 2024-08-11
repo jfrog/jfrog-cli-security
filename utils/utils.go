@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"crypto"
 	"fmt"
+	"encoding/hex"
 	"strings"
 )
 
@@ -43,6 +45,25 @@ func (s SubScanType) String() string {
 
 func GetAllSupportedScans() []SubScanType {
 	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
+}
+
+func Md5Hash(values ...string) (string, error) {
+	return toHash(crypto.MD5, values...)
+}
+
+func Sha1Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA1, values...)
+}
+
+func toHash(hash crypto.Hash, values ...string) (string, error) {
+	h := hash.New()
+	for _, ob := range values {
+		_, err := fmt.Fprint(h, ob)
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // map[string]string to []string (key=value format)

@@ -194,53 +194,13 @@ func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLi
 		return
 	}
 
-	report.Runs = append(report.Runs, xrayRun)
-	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.ApplicabilityScanResults)...)
-	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.IacScanResults)...)
-	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.SecretsScanResults)...)
-	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(results.ExtendedScanResults.SastScanResults)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(ScaScan, results, xrayRun)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(ContextualAnalysisScan, results, results.ExtendedScanResults.ApplicabilityScanResults...)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(IacScan, results, results.ExtendedScanResults.IacScanResults...)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(SecretsScan, results, results.ExtendedScanResults.SecretsScanResults...)...)
+	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(SastScan, results, results.ExtendedScanResults.SastScanResults...)...)
 
 	return
-}
-
-func patchRunsToPassIngestionRules(runs []*sarif.Run) []*sarif.Run {
-	for _, run := range runs {
-		for _, rule := range run.Tool.Driver.Rules {
-			// Github code scanning ingestion rules rejects rules without help content, transfer fullDescription if not exists
-			if rule.Help == nil && rule.FullDescription != nil {
-				rule.Help = rule.FullDescription
-			}
-		}
-		// Github code scanning ingestion rules rejects results without locations, remove them
-		results := []*sarif.Result{}
-		for _, result := range run.Results {
-			if len(result.Locations) == 0 {
-				continue
-			}
-			results = append(results, result)
-		}
-		run.Results = results
-	}
-	// Since we run in temp directories files should be relative
-	convertToRelativePath(runs)
-	return runs
-}
-
-func convertToRelativePath(runs []*sarif.Run) {
-	for _, run := range runs {
-		for _, result := range run.Results {
-			for _, location := range result.Locations {
-				sarifutils.SetLocationFileName(location, sarifutils.GetRelativeLocationFileName(location, run.Invocations))
-			}
-			for _, flows := range result.CodeFlows {
-				for _, flow := range flows.ThreadFlows {
-					for _, location := range flow.Locations {
-						sarifutils.SetLocationFileName(location.Location, sarifutils.GetRelativeLocationFileName(location.Location, run.Invocations))
-					}
-				}
-			}
-		}
-	}
 }
 
 func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string) (run *sarif.Run, err error) {
@@ -541,6 +501,122 @@ func findMaxCVEScore(cves []formats.CveRow) (string, error) {
 	strCve := fmt.Sprintf("%.1f", maxCve)
 
 	return strCve, nil
+}
+
+func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results, runs ...*sarif.Run) []*sarif.Run {
+	// Since we run in temp directories files should be relative
+	// Patch by converting the file paths to relative paths according to the invocations
+	convertPathsToRelative(cmdResults.ResultType, subScanType, runs...)
+	for _, run := range runs {
+		if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
+			// Patch the tool name in case of binary scan
+			sarifutils.SetRunToolName("JFrog Xray Secrets scanner", run)
+		}
+		for _, rule := range run.Tool.Driver.Rules {
+			// Github code scanning ingestion rules rejects rules without help content.
+			// Patch by transferring the full description to the help field.
+			if rule.Help == nil && rule.FullDescription != nil {
+				rule.Help = rule.FullDescription
+			}
+			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
+				// Patch the rule name in case of binary scan
+				sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule) 
+			}
+		}
+		// Github code scanning ingestion rules rejects results without locations.
+		// Patch by removing results without locations.
+		results := []*sarif.Result{}
+		for _, result := range run.Results {
+			if len(result.Locations) == 0 {
+				continue
+			}
+			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
+				sarifutils.SetResultMsgMarkdown(getSecretInBinaryMarkdownMsg(cmdResults.ResultType, result), result)
+			}
+			// Calculate the fingerprints if not exists
+			if !sarifutils.IsFingerprintsExists(result) {
+				calculateResultFingerprints(cmdResults, run, result)
+			}
+			results = append(results, result)
+		}
+		run.Results = results
+	}
+	return runs
+}
+
+func getSecretInBinaryMarkdownMsg(commandType CommandType, result *sarif.Result) string {
+	if commandType != Binary || commandType != DockerImage {
+		return ""
+	}
+	content := "🔒 Found Secrets in Binary"
+	if commandType == DockerImage {
+		content += " docker"
+	}
+	content += " scanning"
+	if len(result.Locations) == 0 {
+		return content
+	}
+	// In secrets scan, each result contain only one location
+	content += ":\n"
+	if commandType == DockerImage {
+		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
+		uri := sarifutils.GetLocationFileName(result.Locations[0])
+		hashValue := uri[:strings.Index(uri, "/")]
+		relativePath := uri[strings.Index(uri, "/"):]
+		if len(uriParts) == 2 {
+	}
+	return content + fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\n%s", msg)
+}
+
+func getLocationMarkdownString(commandType CommandType, location *sarif.Location) string {
+	// If command is docker prepare the markdown string for the location:
+	// * Layer: <HASH>
+	// * File: <PATH>
+	// *
+	if location == nil {
+		return ""
+	}
+	uri := sarifutils.GetLocationFileName(location)
+	if uri == "" {
+		return ""
+	}
+	return fmt.Sprintf("File: [%s](%s)", uri, uri)
+}
+
+func convertPathsToRelative(commandType CommandType, subScanType SubScanType, runs ...*sarif.Run) {
+	// Convert base on invocation for source code
+	sarifutils.ConvertRunsPathsToRelative(runs...)
+	if subScanType != SecretsScan || (commandType != Binary && commandType != DockerImage) {
+		return
+	}
+	// Invocation can't handle converting to relative since we are scanning a binary/image
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				// For docker scan, search for 'sha256/' and remove it and all the path before it. leaving only the sha256 hash and the relative path in it, if exists
+				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/"):])
+			}
+		}
+	}
+}
+
+// According to the SARIF specification:
+// To determine whether a result from a subsequent run is logically the same as a result from the baseline,
+// there must be a way to use information contained in the result to construct a stable identifier for the result. We refer to this identifier as a fingerprint.
+// A result management system SHOULD construct a fingerprint by using information contained in the SARIF file such as:
+// The name of the tool that produced the result, the rule id, the file system path to the analysis target...
+func calculateResultFingerprints(cmdResults *Results, run *sarif.Run, result *sarif.Result) error {
+	if cmdResults.ResultType != DockerImage {
+		// Currently, we support only DockerImage scan
+		return nil
+	}
+	// Set the fingerprint to the result
+	hashValue, err := Md5Hash(append(sarifutils.GetResultFileLocations(result),sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result))...)
+	if err != nil {
+		return err
+	}
+	sarifutils.SetResultFingerprint("jfrogHash", hashValue , result)
+	return nil
 }
 
 // Splits scan responses into aggregated lists of violations, vulnerabilities and licenses.

@@ -398,7 +398,7 @@ func prepareIacs(iacs []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, iacResult := range iacRun.Results {
 			scannerDescription := ""
 			if rule, err := iacRun.GetRuleById(*iacResult.RuleID); err == nil {
-				scannerDescription = sarifutils.GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			}
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(iacResult), true)
 			if err != nil {
@@ -452,7 +452,7 @@ func prepareSast(sasts []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, sastResult := range sastRun.Results {
 			scannerDescription := ""
 			if rule, err := sastRun.GetRuleById(*sastResult.RuleID); err == nil {
-				scannerDescription = sarifutils.GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			}
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sastResult), true)
 			if err != nil {
@@ -935,7 +935,7 @@ func getCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	var applicabilityStatuses []jasutils.ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
 		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
-			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
+			applicability.ScannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			status := getApplicabilityStatusFromRule(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)

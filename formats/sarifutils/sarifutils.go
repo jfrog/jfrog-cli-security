@@ -90,6 +90,20 @@ func GetLocationId(location *sarif.Location) string {
 	)
 }
 
+func SetRunToolName(toolName string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	run.Tool.Driver.Name = toolName
+}
+
+func GetRunToolName(run *sarif.Run) string {
+	if run.Tool.Driver != nil {
+		return run.Tool.Driver.Name
+	}
+	return ""
+}
+
 func GetResultsLocationCount(runs ...*sarif.Run) (count int) {
 	for _, run := range runs {
 		for _, result := range run.Results {
@@ -110,7 +124,10 @@ func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (fil
 		}
 	}
 	return
+}
 
+func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
+	result.Message.Markdown = &markdown
 }
 
 func GetResultMsgText(result *sarif.Result) string {
@@ -125,6 +142,24 @@ func GetResultLevel(result *sarif.Result) string {
 		return *result.Level
 	}
 	return ""
+}
+
+func GetResultRuleId(result *sarif.Result) string {
+	if result.RuleID != nil {
+		return *result.RuleID
+	}
+	return ""
+}
+
+func IsFingerprintsExists(result *sarif.Result) bool {
+	return result.Fingerprints != nil && len(result.Fingerprints) > 0
+}
+
+func SetResultFingerprint(algorithm, value string, result *sarif.Result) {
+	if result.Fingerprints == nil {
+		result.Fingerprints = make(map[string]interface{})
+	}
+	result.Fingerprints[algorithm] = value
 }
 
 func GetLocationSnippet(location *sarif.Location) string {
@@ -146,6 +181,31 @@ func GetLocationFileName(location *sarif.Location) string {
 		return *location.PhysicalLocation.ArtifactLocation.URI
 	}
 	return ""
+}
+
+func GetResultFileLocations(result *sarif.Result) []string {
+	var locations []string
+	for _, location := range result.Locations {
+		locations = append(locations, GetLocationFileName(location))
+	}
+	return locations
+}
+
+func ConvertRunsPathsToRelative(runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				SetLocationFileName(location, GetRelativeLocationFileName(location, run.Invocations))
+			}
+			for _, flows := range result.CodeFlows {
+				for _, flow := range flows.ThreadFlows {
+					for _, location := range flow.Locations {
+						SetLocationFileName(location.Location, GetRelativeLocationFileName(location.Location, run.Invocations))
+					}
+				}
+			}
+		}
+	}
 }
 
 func GetRelativeLocationFileName(location *sarif.Location, invocations []*sarif.Invocation) string {
@@ -227,9 +287,24 @@ func IsResultKindNotPass(result *sarif.Result) bool {
 	return !(result.Kind != nil && *result.Kind == "pass")
 }
 
-func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
+func GetRuleFullDescriptionText(rule *sarif.ReportingDescriptor) string {
 	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
+	}
+	return ""
+}
+
+func SetRuleShortDescriptionText(value string, rule *sarif.ReportingDescriptor) {
+	if rule.ShortDescription == nil {
+		rule.ShortDescription = sarif.NewMultiformatMessageString(value)
+		return
+	}
+	rule.ShortDescription.Text = &value
+}
+
+func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {
+	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+		return *rule.ShortDescription.Text
 	}
 	return ""
 }
