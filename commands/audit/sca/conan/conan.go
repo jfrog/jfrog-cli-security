@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -95,6 +96,17 @@ type conanGraphOutput struct {
 	} `json:"graph"`
 }
 
+func calculateUniqueDependencies(nodes map[string]conanRef) []string {
+	uniqueDepsSet := datastructures.MakeSet[string]()
+	for id, dep := range nodes {
+		if id == "0" { // ignore the root node
+			continue
+		}
+		uniqueDepsSet.Add(dep.NodeName())
+	}
+	return uniqueDepsSet.ToSlice()
+}
+
 func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	graphInfo := append([]string{"info", ".", "--format=json"}, params.Args()...)
 	conanGraphInfoContent, err := getConanCmd(executablePath, workingDir, "graph", graphInfo...).RunWithOutput()
@@ -114,12 +126,7 @@ func calculateDependencies(executablePath, workingDir string, params utils.Audit
 	}
 	dependencyTrees = append(dependencyTrees, rootNode)
 
-	for id, dep := range output.Graph.Nodes {
-		if id == "0" {
-			continue
-		}
-		uniqueDeps = append(uniqueDeps, dep.NodeName())
-	}
+	uniqueDeps = calculateUniqueDependencies(output.Graph.Nodes)
 
 	return
 }
