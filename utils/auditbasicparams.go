@@ -192,6 +192,11 @@ func (abp *AuditBasicParams) SetNpmScope(depType string) *AuditBasicParams {
 	return abp
 }
 
+func (abp *AuditBasicParams) SetConanProfile(file string) *AuditBasicParams {
+	abp.args = append(abp.args, "--profile:build", file)
+	return abp
+}
+
 func (abp *AuditBasicParams) OutputFormat() format.OutputFormat {
 	return abp.outputFormat
 }
