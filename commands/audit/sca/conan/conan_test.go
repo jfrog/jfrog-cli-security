@@ -41,10 +41,10 @@ func TestParseConanDependencyTree(t *testing.T) {
 }
 
 func TestBuildDependencyTree(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
+	dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
 	defer cleanUp()
-	expectedUniqueDeps := []string{"conan://openssl:3.0.9", "conan://zlib:1.3.1", "conan://meson:1.4.1", "conan://ninja:1.11.1"}
 	params := &utils.AuditBasicParams{}
+	params.SetConanProfile(filepath.Join(dir, "profile"))
 	graph, uniqueDeps, err := BuildDependencyTree(params)
 	assert.NoError(t, err)
 	if !tests.CompareTree(expectedResult, graph[0]) {
