@@ -83,17 +83,143 @@ func TestGetDirectComponents(t *testing.T) {
 	}
 }
 
+func TestSimplifyVulnerability(t *testing.T) {
+	vulnerabilities := []services.Vulnerability{
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+					FullPath: "multi3-3.7-20240806.082023-11.war"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}},
+	}
+	tests := []struct {
+		testName                string
+		expectedImpactPathRoots [][]services.ImpactPathNode
+		isMultipleRoots         bool
+	}{
+		{
+			"Test multiple roots false",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+						FullPath: "multi3-3.7-20240806.082023-11.war"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			false,
+		},
+		{
+			"Test multiple roots true",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			testSimplifyVulnerabilityRoot(t, vulnerabilities, test.isMultipleRoots, test.expectedImpactPathRoots)
+		})
+	}
+
+}
+
+func testSimplifyVulnerabilityRoot(t *testing.T, vulnerabilities []services.Vulnerability, multipleRoots bool, expectedImpactPath [][]services.ImpactPathNode) {
+	simplifiedVulnerabilities := simplifyVulnerabilities(vulnerabilities, multipleRoots)
+	assert.Equal(t, len(vulnerabilities)-1, len(simplifiedVulnerabilities))
+	for _, vulnerability := range simplifiedVulnerabilities {
+		for key := range vulnerability.Components {
+			if key == "gav://jfrogpack:1.0.0" {
+				assert.Equal(t, expectedImpactPath, vulnerability.Components[key].ImpactPaths)
+			}
+		}
+	}
+}
+
+func TestSimplifyViolation(t *testing.T) {
+	violations := []services.Violation{
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+					FullPath: "multi3-3.7-20240806.082023-11.war"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.1": {}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.0": {ImpactPaths: [][]services.ImpactPathNode{
+			{{ComponentId: "build://dort:1"},
+				{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+		}}}, FailBuild: true},
+		{Components: map[string]services.Component{"gav://jfrogpack:1.0.2": {}}, FailBuild: true},
+	}
+	tests := []struct {
+		testName                string
+		expectedImpactPathRoots [][]services.ImpactPathNode
+		isMultipleRoots         bool
+	}{
+		{
+			"Test multiple roots false",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "generic://sha256:1bcd6597181d476796e206e176ccc185b4709ff28fb069c42e7f7f67c6a0ff28/multi3-3.7-20240806.082023-11.war",
+						FullPath: "multi3-3.7-20240806.082023-11.war"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			false,
+		},
+		{
+			"Test multiple roots true",
+			[][]services.ImpactPathNode{
+				{{ComponentId: "build://dort:1"},
+					{ComponentId: "gav://jfrogpack:1.0.0", FullPath: "jfrogpack:-1.0.0.jar"}},
+			},
+			true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			testSimplifyViolationRoot(t, violations, test.isMultipleRoots, test.expectedImpactPathRoots)
+		})
+	}
+}
+
+func testSimplifyViolationRoot(t *testing.T, violations []services.Violation, multipleRoots bool, expectedImpactPath [][]services.ImpactPathNode) {
+	simplifiedViolations := simplifyViolations(violations, multipleRoots)
+	assert.Equal(t, len(violations)-1, len(simplifiedViolations))
+	for _, violation := range simplifiedViolations {
+		for key := range violation.Components {
+			if key == "gav://jfrogpack:1.0.0" {
+				assert.Equal(t, expectedImpactPath, violation.Components[key].ImpactPaths)
+			}
+		}
+	}
+}
+
 func TestGetOperationalRiskReadableData(t *testing.T) {
 	tests := []struct {
+		testName        string
 		violation       services.Violation
 		expectedResults *operationalRiskViolationReadableData
 	}{
 		{
+			"Empty Operational Risk Violation",
 			services.Violation{IsEol: nil, LatestVersion: "", NewerVersions: nil,
 				Cadence: nil, Commits: nil, Committers: nil, RiskReason: "", EolMessage: ""},
 			&operationalRiskViolationReadableData{"N/A", "N/A", "N/A", "N/A", "", "", "N/A", "N/A"},
 		},
 		{
+			"Detailed Operational Risk Violation with all fields",
 			services.Violation{IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
 				Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
 			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
@@ -101,8 +227,44 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		results := getOperationalRiskViolationReadableData(test.violation)
-		assert.Equal(t, test.expectedResults, results)
+		t.Run(test.testName, func(t *testing.T) {
+			results := getOperationalRiskViolationReadableData(test.violation)
+			assert.Equal(t, test.expectedResults, results)
+		})
+	}
+}
+
+// Test Simplified Violations as this is the data we eventually parse in the tables
+func TestGetOperationalRiskSimplifiedViolations(t *testing.T) {
+	violations := []services.Violation{
+		{Components: map[string]services.Component{"gav://antparent:ant:1.6.4": {}}, IsEol: nil, LatestVersion: "", NewerVersions: nil,
+			Cadence: nil, Commits: nil, Committers: nil, RiskReason: "", EolMessage: ""},
+		{Components: map[string]services.Component{"gav://antparent:ant:1.6.5": {}}, IsEol: newBoolPtr(true), LatestVersion: "1.2.3", NewerVersions: newIntPtr(5),
+			Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
+	}
+	simplifiedViolations := simplifyViolations(violations, true)
+	tests := []struct {
+		testName        string
+		violation       services.Violation
+		expectedResults *operationalRiskViolationReadableData
+	}{
+		{
+			"Empty Operational Risk Violation",
+			simplifiedViolations[0],
+			&operationalRiskViolationReadableData{"N/A", "N/A", "N/A", "N/A", "", "", "N/A", "N/A"},
+		},
+		{
+			"Detailed Operational Risk Violation with all fields",
+			simplifiedViolations[1],
+			&operationalRiskViolationReadableData{"true", "3.5", "55", "10", "no maintainers", "EOL", "1.2.3", "5"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			results := getOperationalRiskViolationReadableData(test.violation)
+			assert.Equal(t, test.expectedResults, results)
+		})
 	}
 }
 
