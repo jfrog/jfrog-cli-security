@@ -876,6 +876,14 @@ func TestPrepareSecrets(t *testing.T) {
 						SeverityNumValue: 11,
 					},
 					Finding: "other secret finding",
+					Location: formats.Location{
+						File:        "file3",
+						StartLine:   1,
+						StartColumn: 2,
+						EndLine:     3,
+						EndColumn:   4,
+						Snippet:     "some-secret-snippet",
+					},
 				},
 				{
 					SeverityDetails: formats.SeverityDetails{
