@@ -92,6 +92,7 @@ var TokenValidationOrder = map[string]int{
 	"Unsupported": 3,
 	"Unavailable": 4,
 	"":            5,
+	"N/A":         6,
 }
 
 func ConvertApplicableToScore(applicability string) int {

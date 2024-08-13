@@ -344,7 +344,6 @@ func PrepareSecrets(secrets []*sarif.Run) []formats.SourceCodeRow {
 
 func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 	var secretsRows []formats.SourceCodeRow
-	tokenValidationActivated := false
 	for _, secretRun := range secrets {
 		for _, secretResult := range secretRun.Results {
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(secretResult), true)
@@ -373,10 +372,8 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
-		if tokenValidationActivated {
-			if jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] != jasutils.TokenValidationOrder[secretsRows[j].TokenValidation] {
-				return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
-			}
+		if jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] != jasutils.TokenValidationOrder[secretsRows[j].TokenValidation] {
+			return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
 		}
 		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 	})

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -474,6 +475,11 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
+func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
+	output := testXrayAuditJasWithTokenValidation(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3")
+	securityTestUtils.VerifySimpleJsonScanTokenValidationResults(t, output, 5)
+}
+
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
@@ -491,7 +497,7 @@ func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
 }
 
-func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string) string {
+func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets ...bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -505,7 +511,15 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	assert.NoError(t, err)
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
+	if validateSecrets[0] {
+		return testCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--validate-secrets", "--secrets", "--format="+string(format.SimpleJson), "--threads="+threads)
+	}
 	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), "--threads="+threads)
+}
+
+func testXrayAuditJasWithTokenValidation(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string) string {
+	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	return testXrayAuditJas(t, testCli, project, threads, true)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {

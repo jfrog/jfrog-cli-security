@@ -290,13 +290,13 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 
 func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}
 	technology := technologies[0]
 	envVars[JfPackageManagerEnvVariable] = technology.String()
 	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
-	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	return envVars
 
 }
