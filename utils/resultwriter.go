@@ -545,42 +545,39 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 }
 
 func getSecretInBinaryMarkdownMsg(commandType CommandType, result *sarif.Result) string {
-	if commandType != Binary || commandType != DockerImage {
+	if commandType != Binary && commandType != DockerImage {
 		return ""
 	}
-	content := "🔒 Found Secrets in Binary"
+	content := " Found Secrets in Binary"
 	if commandType == DockerImage {
 		content += " docker"
 	}
 	content += " scanning"
 	if len(result.Locations) == 0 {
-		return content
+		return "🔒" + content
 	}
 	// In secrets scan, each result contain only one location
-	content += ":\n"
-	if commandType == DockerImage {
-		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
-		uri := sarifutils.GetLocationFileName(result.Locations[0])
-		hashValue := uri[:strings.Index(uri, "/")]
-		relativePath := uri[strings.Index(uri, "/"):]
-		if len(uriParts) == 2 {
-	}
-	return content + fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\n%s", msg)
+	content += fmt.Sprintf(":\n%s", getLocationMarkdownString(commandType, result.Locations[0]))
+	return "🔒" + content
 }
 
-func getLocationMarkdownString(commandType CommandType, location *sarif.Location) string {
-	// If command is docker prepare the markdown string for the location:
-	// * Layer: <HASH>
-	// * File: <PATH>
-	// *
+// If command is docker prepare the markdown string for the location:
+// * Layer: <HASH>
+// * Filepath: <PATH>
+// * Evidence: <Snippet>
+func getLocationMarkdownString(commandType CommandType, location *sarif.Location) (content string) {
 	if location == nil {
 		return ""
 	}
 	uri := sarifutils.GetLocationFileName(location)
-	if uri == "" {
-		return ""
+	if commandType == DockerImage {
+		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
+		content += fmt.Sprintf("Layer: %s\n", uri[:strings.Index(uri, "/")])
+		uri = uri[strings.Index(uri, "/") + 1:]
 	}
-	return fmt.Sprintf("File: [%s](%s)", uri, uri)
+	content += fmt.Sprintf("Filepath: %s", uri)
+	content += fmt.Sprintf("\nEvidence: %s", sarifutils.GetLocationSnippet(location))
+	return
 }
 
 func convertPathsToRelative(commandType CommandType, subScanType SubScanType, runs ...*sarif.Run) {
@@ -594,7 +591,7 @@ func convertPathsToRelative(commandType CommandType, subScanType SubScanType, ru
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
 				// For docker scan, search for 'sha256/' and remove it and all the path before it. leaving only the sha256 hash and the relative path in it, if exists
-				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/"):])
+				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/") + 7:])
 			}
 		}
 	}

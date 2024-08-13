@@ -544,7 +544,7 @@ func TestGetRuleFullDescription(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetRuleFullDescription(test.rule))
+		assert.Equal(t, test.expectedOutput, GetRuleFullDescriptionText(test.rule))
 	}
 }
 
