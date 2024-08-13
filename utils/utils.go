@@ -18,11 +18,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan SubScanType = "contextual_analysis"
-	ScaScan                SubScanType = "sca"
-	IacScan                SubScanType = "iac"
-	SastScan               SubScanType = "sast"
-	SecretsScan            SubScanType = "secrets"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 type SubScanType string
@@ -32,7 +33,7 @@ func (s SubScanType) String() string {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
 }
 
 // map[string]string to []string (key=value format)

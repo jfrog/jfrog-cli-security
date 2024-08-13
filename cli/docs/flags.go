@@ -106,6 +106,7 @@ const (
 	buildPrefix         = "build-"
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
+	SecretValidation    = "validate-secrets"
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -146,13 +147,13 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -199,14 +200,15 @@ var flagsMap = map[string]components.Flag{
 	Stream:    components.NewStringFlag(Stream, fmt.Sprintf("Xray DBSync V3 stream, Possible values are: %s.", offlineupdate.NewValidStreams().GetValidStreamsString())),
 	Periodic:  components.NewBoolFlag(Periodic, fmt.Sprintf("Set to true to get the Xray DBSync V3 Periodic Package (Use with %s flag).", Stream)),
 	// Scan flags
-	SpecFlag:      components.NewStringFlag(SpecFlag, "Path to a File Spec."),
-	scanRecursive: components.NewBoolFlag(Recursive, "Set to false if you do not wish to collect artifacts in sub-folders to be scanned by Xray.", components.WithBoolDefaultValue(true)),
-	scanRegexp:    components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
-	scanAnt:       components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
-	Project:       components.NewStringFlag(Project, "JFrog Artifactory project key."),
-	Watches:       components.NewStringFlag(Watches, "A comma-separated list of Xray watches, to determine Xray's violations creation."),
-	RepoPath:      components.NewStringFlag(RepoPath, "Target repo path, to enable Xray to determine watches accordingly."),
-	Licenses:      components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
+	SpecFlag:         components.NewStringFlag(SpecFlag, "Path to a File Spec."),
+	scanRecursive:    components.NewBoolFlag(Recursive, "Set to false if you do not wish to collect artifacts in sub-folders to be scanned by Xray.", components.WithBoolDefaultValue(true)),
+	scanRegexp:       components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
+	scanAnt:          components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
+	Project:          components.NewStringFlag(Project, "JFrog Artifactory project key."),
+	Watches:          components.NewStringFlag(Watches, "A comma-separated list of Xray watches, to determine Xray's violations creation."),
+	RepoPath:         components.NewStringFlag(RepoPath, "Target repo path, to enable Xray to determine watches accordingly."),
+	Licenses:         components.NewBoolFlag(Licenses, "Set to true if you'd like to receive licenses from Xray scanning."),
+	SecretValidation: components.NewBoolFlag(SecretValidation, "Set to true if you want exposures scanner to validate api tokens"),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",

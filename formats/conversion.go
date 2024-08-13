@@ -144,10 +144,12 @@ func ConvertToOperationalRiskViolationScanTableRow(rows []OperationalRiskViolati
 func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow) {
 	for i := range rows {
 		tableRows = append(tableRows, secretsTableRow{
-			severity:   rows[i].Severity,
-			file:       rows[i].File,
-			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
-			secret:     rows[i].Snippet,
+			severity:        rows[i].Severity,
+			file:            rows[i].File,
+			lineColumn:      strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			secret:          rows[i].Snippet,
+			tokenValidation: rows[i].TokenValidation,
+			metadata:        rows[i].Metadata,
 		})
 	}
 	return

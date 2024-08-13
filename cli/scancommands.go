@@ -387,6 +387,11 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
 	}
 
+	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
+		// No secrets flag but secret validation is provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
+	}
+
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
@@ -411,7 +416,7 @@ func AuditCmd(c *components.Context) error {
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
@@ -604,7 +609,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
-		SetThreads(threads)
+		SetThreads(threads).
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

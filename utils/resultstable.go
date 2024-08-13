@@ -344,6 +344,7 @@ func PrepareSecrets(secrets []*sarif.Run) []formats.SourceCodeRow {
 
 func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 	var secretsRows []formats.SourceCodeRow
+	tokenValidationActivated := false
 	for _, secretRun := range secrets {
 		for _, secretResult := range secretRun.Results {
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(secretResult), true)
@@ -352,25 +353,31 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
-				secretsRows = append(secretsRows,
-					formats.SourceCodeRow{
-						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
-						Finding:         sarifutils.GetResultMsgText(secretResult),
-						Location: formats.Location{
-							File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
-							StartLine:   sarifutils.GetLocationStartLine(location),
-							StartColumn: sarifutils.GetLocationStartColumn(location),
-							EndLine:     sarifutils.GetLocationEndLine(location),
-							EndColumn:   sarifutils.GetLocationEndColumn(location),
-							Snippet:     sarifutils.GetLocationSnippet(location),
-						},
+				secretsRows = append(secretsRows, formats.SourceCodeRow{
+					SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
+					Finding:         sarifutils.GetResultMsgText(secretResult),
+					Location: formats.Location{
+						File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
+						StartLine:   sarifutils.GetLocationStartLine(location),
+						StartColumn: sarifutils.GetLocationStartColumn(location),
+						EndLine:     sarifutils.GetLocationEndLine(location),
+						EndColumn:   sarifutils.GetLocationEndColumn(location),
+						Snippet:     sarifutils.GetLocationSnippet(location),
 					},
+					TokenValidation: sarifutils.GetResultPropertyTokenValidation(secretResult),
+					Metadata:        sarifutils.GetResultPropertyMetadata(secretResult),
+				},
 				)
 			}
 		}
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
+		if tokenValidationActivated {
+			if jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] != jasutils.TokenValidationOrder[secretsRows[j].TokenValidation] {
+				return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
+			}
+		}
 		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 	})
 

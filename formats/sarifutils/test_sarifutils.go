@@ -24,6 +24,20 @@ func CreateRunWithDummyResultAndRuleProperties(property, value string, result *s
 	return run
 }
 
+func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
+		Message:   *sarif.NewTextMessage(msg),
+		Level:     &level,
+		RuleID:    &ruleId,
+		Locations: locations,
+	}
+	result.Properties = map[string]interface{}{}
+	for key, val := range properties {
+		result.Properties[key] = val
+	}
+	return result
+}
+
 func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
 	return &sarif.Result{
 		Message:   *sarif.NewTextMessage(msg),

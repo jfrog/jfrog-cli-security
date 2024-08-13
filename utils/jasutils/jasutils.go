@@ -11,6 +11,10 @@ const (
 )
 
 const (
+	DynamicTokenValidationMinXrayVersion = "3.101.0"
+)
+
+const (
 	Applicability JasScanType = "Applicability"
 	Secrets       JasScanType = "Secrets"
 	IaC           JasScanType = "IaC"
@@ -80,6 +84,14 @@ var applicableMapToScore = map[string]int{
 	"NotScanned":                2,
 	"NotCovered":                1,
 	"NotApplicable":             0,
+}
+
+var TokenValidationOrder = map[string]int{
+	"Active":      1,
+	"Inactive":    2,
+	"Unsupported": 3,
+	"Unavailable": 4,
+	"":            5,
 }
 
 func ConvertApplicableToScore(applicability string) int {

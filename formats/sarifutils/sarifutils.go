@@ -59,6 +59,25 @@ func AggregateMultipleRunsIntoSingle(runs []*sarif.Run, destination *sarif.Run) 
 	}
 }
 
+func GetResultProperty(key string, result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties[key] != nil {
+		status, ok := result.Properties[key].(string)
+		if !ok {
+			return ""
+		}
+		return status
+	}
+	return ""
+}
+
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return GetResultProperty("tokenValidation", result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return GetResultProperty("metadata", result)
+}
+
 func GetLocationRelatedCodeFlowsFromResult(location *sarif.Location, result *sarif.Result) (codeFlows []*sarif.CodeFlow) {
 	for _, codeFlow := range result.CodeFlows {
 		for _, stackTrace := range codeFlow.ThreadFlows {

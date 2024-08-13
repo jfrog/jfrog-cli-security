@@ -213,7 +213,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -270,7 +270,25 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
+	dynamicTokenVersionMismatchErr := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil {
+		if validateSecrets {
+			log.Warn("Token validation (--validate-secrets flag) is not supported in your xray version")
+		}
+		return false
+	}
+	// Ordered By importance
+	// first check for flag and second check for env var
+	if validateSecrets || strings.ToLower(os.Getenv("JF_VALIDATE_SECRETS")) == "true" {
+		return true
+	}
+	// third check for platform api
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	return err == nil && isEnabled
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
 	if len(technologies) != 1 {
 		return envVars
@@ -278,6 +296,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technolo
 	technology := technologies[0]
 	envVars[JfPackageManagerEnvVariable] = technology.String()
 	envVars[JfLanguageEnvVariable] = string(techutils.TechnologyToLanguage(technology))
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	return envVars
 
 }
