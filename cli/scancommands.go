@@ -1,18 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/urfave/cli"
-	"os"
-	"strings"
-
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
-
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	commandsCommon "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -22,8 +14,15 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/urfave/cli"
+	"os"
+	"strings"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -545,42 +544,57 @@ func CurationInspectAfterFailure(c *cli.Context, cmdName string, technology tech
 
 func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) error {
 	// check the command supported
-	if !IsSupportedCommandForCurationInspect(cmdName) {
-		return nil
-	}
-	// Curation post run failure is only relevant for forbidden errors
-	if !sca.IsForbiddenError(tech, originError.Error()) {
-		return nil
-	}
-	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
-	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
-		os.Getenv(skipCurationAfterFailureEnv) == "true" {
-		return nil
-	}
-
-	curationAuditCommand, err := getCurationCommand(c)
+	curationAuditCommand, err, runCuration := shouldRunCurationAfterFailure(c, tech, cmdName, originError)
 	if err != nil {
 		return err
 	}
-	// check if user entitled for curation
-	serverDetails, err := curationAuditCommand.GetAuth(tech)
-	if err != nil {
-		return err
-	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
-	if err != nil {
-		return err
-	}
-	entitled, err := curation.IsEntitledForCuration(xrayManager)
-	if err != nil {
-		return err
-	}
-	if !entitled {
-		log.Info("Curation feature is not entitled, skipping curation audit")
+	if !runCuration {
 		return nil
 	}
 	log.Info("Running curation audit after failure")
 	return progressbar.ExecWithProgress(curationAuditCommand)
+}
+
+func shouldRunCurationAfterFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) (curationCmd *curation.CurationAuditCommand, err error, runCuration bool) {
+	if !IsSupportedCommandForCurationInspect(cmdName) {
+		return
+	}
+	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
+		os.Getenv(skipCurationAfterFailureEnv) == "true" {
+		return
+	}
+	// check if the error is a forbidden error, if so, we don't want to run the curation audit automatically.
+	// this check have two parts:
+	// 1. check if the error is a forbidden error
+	// 2. check if the error message contains the forbidden error message, in case the output included in the error message.
+	forBiddenError := &buildInfoUtils.ForbiddenError{}
+	if !errors.Is(originError, forBiddenError) && !strings.Contains(originError.Error(), forBiddenError.Error()) &&
+		!buildInfoUtils.IsForbiddenOutput(tech.String(), originError.Error()) {
+		return
+	}
+	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
+	curationCmd, err = getCurationCommand(c)
+	if err != nil {
+		return
+	}
+	// check if user entitled for curation
+	serverDetails, err := curationCmd.GetAuth(tech)
+	if err != nil {
+		return
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return
+	}
+	entitled, err := curation.IsEntitledForCuration(xrayManager)
+	if err != nil {
+		return
+	}
+	if !entitled {
+		log.Info("Curation feature is not entitled, skipping curation audit")
+		return
+	}
+	return curationCmd, nil, true
 }
 
 func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, error) {

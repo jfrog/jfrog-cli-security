@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -168,26 +169,8 @@ func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map
 }
 
 func GetMsgToUserForCurationBlock(isCurationCmd bool, tech techutils.Technology, cmdOutput string) (msgToUser string) {
-	if isCurationCmd && IsForbiddenError(tech, cmdOutput) {
+	if isCurationCmd && buildInfoUtils.IsForbiddenOutput(tech.String(), cmdOutput) {
 		msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, tech)
 	}
 	return
-}
-
-func IsForbiddenError(tech techutils.Technology, cmdOutput string) bool {
-	switch tech {
-	case techutils.Npm:
-		return strings.Contains(strings.ToLower(cmdOutput), "403 forbidden")
-	case techutils.Maven:
-		return strings.Contains(cmdOutput, "status code: 403") ||
-			strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
-			// In some cases mvn returns 500 status code even though it got 403 from artifactory.
-			strings.Contains(cmdOutput, "status code: 500")
-	case techutils.Pip:
-		return strings.Contains(strings.ToLower(cmdOutput), "http error 403")
-	case techutils.Go:
-		return strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
-			strings.Contains(strings.ToLower(cmdOutput), " 403")
-	}
-	return false
 }
