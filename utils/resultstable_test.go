@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
@@ -243,6 +244,11 @@ func TestGetOperationalRiskSimplifiedViolations(t *testing.T) {
 			Cadence: newFloat64Ptr(3.5), Commits: newInt64Ptr(55), Committers: newIntPtr(10), EolMessage: "no maintainers", RiskReason: "EOL"},
 	}
 	simplifiedViolations := simplifyViolations(violations, true)
+
+	// Sorting the violations based on component key so that the order will be unified for the expected results
+	// gav://antparent:ant:1.6.4 -> gav://antparent:ant:1.6.5 (if other tests are added, add it in order)
+	// In the code the violations returned from the function are being sorted at the end of the logic for printing
+	sortViolationsSliceBasedOnComponentVersion(simplifiedViolations)
 	tests := []struct {
 		testName        string
 		violation       services.Violation
@@ -266,6 +272,18 @@ func TestGetOperationalRiskSimplifiedViolations(t *testing.T) {
 			assert.Equal(t, test.expectedResults, results)
 		})
 	}
+}
+
+func getFirstKey(components map[string]services.Component) string {
+	for key := range components {
+		return key
+	}
+	return ""
+}
+func sortViolationsSliceBasedOnComponentVersion(simplifiedViolations []services.Violation) {
+	sort.Slice(simplifiedViolations, func(i, j int) bool {
+		return getFirstKey(simplifiedViolations[i].Components) < getFirstKey(simplifiedViolations[j].Components)
+	})
 }
 
 func TestIsImpactPathIsSubset(t *testing.T) {
