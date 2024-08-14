@@ -339,11 +339,13 @@ func PrepareLicenses(licenses []services.License) ([]formats.LicenseRow, error) 
 
 // Prepare secrets for all non-table formats (without style or emoji)
 func PrepareSecrets(secrets []*sarif.Run) []formats.SourceCodeRow {
-	return prepareSecrets(secrets, false)
+	preparedSecrets, _ := prepareSecrets(secrets, false)
+	return preparedSecrets
 }
 
-func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow {
+func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow, bool) {
 	var secretsRows []formats.SourceCodeRow
+	tokenValidationActivated := false
 	for _, secretRun := range secrets {
 		for _, secretResult := range secretRun.Results {
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(secretResult), true)
@@ -352,7 +354,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
-				secretsRows = append(secretsRows, formats.SourceCodeRow{
+				newRow := formats.SourceCodeRow{
 					SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 					Finding:         sarifutils.GetResultMsgText(secretResult),
 					Location: formats.Location{
@@ -363,10 +365,13 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 						EndColumn:   sarifutils.GetLocationEndColumn(location),
 						Snippet:     sarifutils.GetLocationSnippet(location),
 					},
-					TokenValidation: sarifutils.GetResultPropertyTokenValidation(secretResult),
-					Metadata:        sarifutils.GetResultPropertyMetadata(secretResult),
-				},
-				)
+				}
+				if tokenValidation := sarifutils.GetResultPropertyTokenValidation(secretResult); tokenValidation != "" {
+					newRow.TokenValidation = sarifutils.GetResultPropertyTokenValidation(secretResult)
+					newRow.Metadata = sarifutils.GetResultPropertyMetadata(secretResult)
+					tokenValidationActivated = true
+				}
+				secretsRows = append(secretsRows, newRow)
 			}
 		}
 	}
@@ -378,14 +383,14 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 	})
 
-	return secretsRows
+	return secretsRows, tokenValidationActivated
 }
 
 func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool) error {
 	if entitledForSecretsScan {
-		secretsRows := prepareSecrets(secrets, true)
+		secretsRows, tokenValidationActivated := prepareSecrets(secrets, true)
 		log.Output()
-		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
+		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows, tokenValidationActivated), "Secret Detection",
 			"✨ No secrets were found ✨", false)
 	}
 	return nil

@@ -1166,7 +1166,8 @@ func TestPrepareSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tc.expectedOutput, prepareSecrets(tc.input, false))
+			rows, _ := prepareSecrets(tc.input, false)
+			assert.ElementsMatch(t, tc.expectedOutput, rows)
 		})
 	}
 }
