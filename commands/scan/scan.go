@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -60,20 +61,21 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath            string
-	indexerTempDir         string
-	outputFormat           format.OutputFormat
-	projectKey             string
-	minSeverityFilter      severityutils.Severity
-	watches                []string
-	includeVulnerabilities bool
-	includeLicenses        bool
-	fail                   bool
-	printExtendedTable     bool
-	bypassArchiveLimits    bool
-	fixableOnly            bool
-	progress               ioUtils.ProgressMgr
-	commandSupportsJAS     bool
+	indexerPath             string
+	indexerTempDir          string
+	outputFormat            format.OutputFormat
+	projectKey              string
+	minSeverityFilter       severityutils.Severity
+	watches                 []string
+	includeVulnerabilities  bool
+	includeLicenses         bool
+	fail                    bool
+	printExtendedTable      bool
+	bypassArchiveLimits     bool
+	fixableOnly             bool
+	progress                ioUtils.ProgressMgr
+	commandSupportsJAS      bool
+	analyticsMetricsService *xsc.AnalyticsMetricsService
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -154,6 +156,11 @@ func (scanCmd *ScanCommand) SetBypassArchiveLimits(bypassArchiveLimits bool) *Sc
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *ScanCommand {
+	scanCmd.analyticsMetricsService = analyticsMetricsService
+	return scanCmd
+}
+
 func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 	var indexerResults xrayUtils.BinaryGraphNode
 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
@@ -206,6 +213,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 
 	scanResults := utils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
+	scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
 	errGroup := new(errgroup.Group)
@@ -388,6 +396,17 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
 				}
+				params.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+				if params.MultiScanId != "" {
+					xscManager := scanCmd.analyticsMetricsService.XscManager()
+					if xscManager != nil {
+						version, err := xscManager.GetVersion()
+						if err != nil {
+							log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
+						}
+						params.XscVersion = version
+					}
+				}
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
@@ -425,7 +444,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
 					scanner := &jas.JasScanner{}
-					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars("", techutils.Technology(graphScanResults.ScannedPackageType)))
+					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanCmd.analyticsMetricsService.GetMsi(), techutils.Technology(graphScanResults.ScannedPackageType)))
 					if err != nil {
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
