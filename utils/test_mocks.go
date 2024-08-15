@@ -8,10 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
-const TestMsi = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+const (
+	TestMsi               = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+	TestConfigProfileName = "default-profile"
+)
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
 
@@ -41,6 +45,19 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, TestMsi)))
+				if err != nil {
+					return
+				}
+			}
+		}
+		if r.RequestURI == "/xsc/api/v1/profile/"+TestConfigProfileName {
+			if r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				content, err := os.ReadFile("../xsc/configProfileExample.json")
+				if err != nil {
+					return
+				}
+				_, err = w.Write(content)
 				if err != nil {
 					return
 				}

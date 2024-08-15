@@ -268,7 +268,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
-	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform()); err != nil {
+	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return
