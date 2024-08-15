@@ -101,6 +101,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		for i := range scanResults.ScaResults {
 			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
 			scanResults.ScaResults[i].Target = dsc.imageTag
+			scanResults.ScaResults[i].Name = dsc.imageTag
 		}
 		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.BinarySection})
 	})

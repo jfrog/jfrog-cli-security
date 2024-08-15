@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,7 +27,11 @@ import (
 
 const (
 	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	CurrentWorkflowNameEnvVar = "GITHUB_WORKFLOW"
+	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
 )
+
+var GithubBaseWorkflowDir = filepath.Join(".github", "workflows")
 
 const MissingCveScore = "0"
 const maxPossibleCve = 10.0
@@ -510,7 +516,7 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 	for _, run := range runs {
 		if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
 			// Patch the tool name in case of binary scan
-			sarifutils.SetRunToolName("JFrog Xray Secrets scanner", run)
+			sarifutils.SetRunToolName("JFrog Binary Secrets scanner", run)
 		}
 		for _, rule := range run.Tool.Driver.Rules {
 			// Github code scanning ingestion rules rejects rules without help content.
@@ -518,9 +524,13 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 			if rule.Help == nil && rule.FullDescription != nil {
 				rule.Help = rule.FullDescription
 			}
+			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
+			if rule.Name != nil && rule.ID == *rule.Name {
+				rule.Name = nil
+			}
 			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
 				// Patch the rule name in case of binary scan
-				sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule) 
+				sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 			}
 		}
 		// Github code scanning ingestion rules rejects results without locations.
@@ -531,12 +541,13 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 				continue
 			}
 			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
-				sarifutils.SetResultMsgMarkdown(getSecretInBinaryMarkdownMsg(cmdResults.ResultType, result), result)
+				sarifutils.SetResultMsgMarkdown(getSecretInBinaryMarkdownMsg(cmdResults, result), result)
 			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
 				calculateResultFingerprints(cmdResults, run, result)
 			}
+			convertLocationsToActionWorkflowFileIfNeeded(cmdResults, subScanType, result)
 			results = append(results, result)
 		}
 		run.Results = results
@@ -544,21 +555,74 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 	return runs
 }
 
-func getSecretInBinaryMarkdownMsg(commandType CommandType, result *sarif.Result) string {
-	if commandType != Binary && commandType != DockerImage {
+func convertLocationsToActionWorkflowFileIfNeeded(cmdResults *Results, subScanType SubScanType, result *sarif.Result) {
+	actionName := os.Getenv(CurrentWorkflowNameEnvVar)
+	if actionName == "" || (cmdResults.ResultType != Binary && cmdResults.ResultType != DockerImage) || subScanType != SecretsScan {
+		return
+	}
+	// Get the workflow file path base on the action name
+	actionPath := getWorkflowFilePath(os.Getenv(CurrentWorkflowNameEnvVar))
+	for _, location := range result.Locations {
+		// Patch the location to the result to be the workflow file - Reset the uri and region
+		location.PhysicalLocation.ArtifactLocation = sarif.NewArtifactLocation().WithUri(actionPath)
+		location.PhysicalLocation.Region = sarif.NewRegion().WithStartLine(1).WithEndLine(1).WithStartColumn(1).WithEndColumn(2)
+	}
+}
+
+func getWorkflowFilePath(workflowName string) string {
+	// Search in the .github/workflows directory
+	// Search for the workflow file
+	if files, err := fileutils.ListFiles(GithubBaseWorkflowDir, false); err == nil && len(files) > 0 {
+		for _, file := range files {
+			// Search file content for the workflow name or the file name
+			if strings.Contains(file, workflowName) {
+				return file
+			}
+			if content, err := fileutils.ReadFile(file); err == nil && strings.Contains(string(content), workflowName) {
+				return file
+			}
+		}
+	}
+	log.Debug(fmt.Sprintf("Workflow file not found for %s", workflowName))
+	// If not found, return a path with the workflow name
+	return filepath.Join(GithubBaseWorkflowDir,fmt. Sprintf("%s.yml", workflowName))
+}
+
+func getSecretInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) string {
+	if cmdResults.ResultType != Binary && cmdResults.ResultType != DockerImage {
 		return ""
 	}
-	content := " Found Secrets in Binary"
-	if commandType == DockerImage {
+	content := "🔒 Found Secrets in Binary"
+	if cmdResults.ResultType == DockerImage {
 		content += " docker"
 	}
-	content += " scanning"
-	if len(result.Locations) == 0 {
-		return "🔒" + content
+	content += " scanning:"
+	// If in github action, add the workflow name and run number
+	if os.Getenv(CurrentWorkflowNameEnvVar) != "" {
+		content += fmt.Sprintf("\nGithub Actions Workflow: %s", os.Getenv(CurrentWorkflowNameEnvVar))
 	}
-	// In secrets scan, each result contain only one location
-	content += fmt.Sprintf(":\n%s", getLocationMarkdownString(commandType, result.Locations[0]))
-	return "🔒" + content
+	if os.Getenv(CurrentWorkflowRunNumberEnvVar) != "" {
+		content += fmt.Sprintf("\nRun: %s", os.Getenv(CurrentWorkflowRunNumberEnvVar))
+	}
+	// If // In docker scan, we add imageTag
+	if cmdResults.ResultType == DockerImage {
+		if imageTag := getDockerImageTag(cmdResults); imageTag != "" {
+			content += fmt.Sprintf("\nImage: %s", imageTag)
+		}
+	}
+	return content + getLocationMarkdownString(cmdResults.ResultType, result.Locations[0])
+}
+
+func getDockerImageTag(cmdResults *Results) string {
+	if cmdResults.ResultType != DockerImage || len(cmdResults.ScaResults) == 0 {
+		return ""
+	}
+	for _, scaResults := range cmdResults.ScaResults {
+		if scaResults.Name != "" {
+			return scaResults.Name
+		}
+	}
+	return filepath.Base(cmdResults.ScaResults[0].Target)
 }
 
 // If command is docker prepare the markdown string for the location:
@@ -573,7 +637,7 @@ func getLocationMarkdownString(commandType CommandType, location *sarif.Location
 	if commandType == DockerImage {
 		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
 		content += fmt.Sprintf("Layer: %s\n", uri[:strings.Index(uri, "/")])
-		uri = uri[strings.Index(uri, "/") + 1:]
+		uri = uri[strings.Index(uri, "/")+1:]
 	}
 	content += fmt.Sprintf("Filepath: %s", uri)
 	content += fmt.Sprintf("\nEvidence: %s", sarifutils.GetLocationSnippet(location))
@@ -591,7 +655,7 @@ func convertPathsToRelative(commandType CommandType, subScanType SubScanType, ru
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
 				// For docker scan, search for 'sha256/' and remove it and all the path before it. leaving only the sha256 hash and the relative path in it, if exists
-				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/") + 7:])
+				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/")+7:])
 			}
 		}
 	}
@@ -608,11 +672,11 @@ func calculateResultFingerprints(cmdResults *Results, run *sarif.Run, result *sa
 		return nil
 	}
 	// Set the fingerprint to the result
-	hashValue, err := Md5Hash(append(sarifutils.GetResultFileLocations(result),sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result))...)
+	hashValue, err := Md5Hash(append(sarifutils.GetResultFileLocations(result), sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result))...)
 	if err != nil {
 		return err
 	}
-	sarifutils.SetResultFingerprint("jfrogHash", hashValue , result)
+	sarifutils.SetResultFingerprint("jfrogHash", hashValue, result)
 	return nil
 }
 

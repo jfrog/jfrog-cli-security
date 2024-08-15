@@ -122,6 +122,7 @@ func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []format
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
 	Target                string                  `json:"Target"`
+	Name 				string                    `json:"Name,omitempty"`
 	Technology            techutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`

@@ -297,6 +297,11 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	scanResults.ScaResults = flatResults
 
+
+	if err = recordResFunc(scanResults); err != nil {
+		return err
+	}
+	
 	if err = utils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
@@ -307,13 +312,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		return
 	}
 
-	if err != nil {
-		return err
-	}
-
-	if err = recordResFunc(scanResults); err != nil {
-		return err
-	}
 
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
