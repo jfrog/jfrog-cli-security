@@ -65,6 +65,20 @@ func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, mi
 	}
 }
 
+func VerifyJsonScanTokenValidationResults(t *testing.T, content string, minInactives int) {
+	var results formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(content), &results)
+	if assert.NoError(t, err) {
+		count_inactives := 0
+		for _, result := range results.Secrets {
+			if result.TokenValidation == "Inactive" {
+				count_inactives += 1
+			}
+		}
+		assert.GreaterOrEqual(t, count_inactives, minInactives)
+	}
+}
+
 func VerifySimpleJsonScanTokenValidationResults(t *testing.T, content string, minInactives int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)

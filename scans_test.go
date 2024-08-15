@@ -130,7 +130,7 @@ func TestDockerScan(t *testing.T) {
 
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	// image with inactive tokens
-	tokensImageToScan := "inactiveTokens:latest"
+	tokensImageToScan := "srmishj/inactive_tokens:latest"
 	runDockerScanWithTokenValidation(t, testCli, tokensImageToScan, 5)
 }
 
@@ -174,10 +174,10 @@ func runDockerScanWithTokenValidation(t *testing.T, testCli *coreTests.JfrogCli,
 	if assert.NoError(t, dockerPullCommand.Run()) {
 		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 		// Run docker scan on image
-		cmdArgs := []string{"docker", "scan", "--validate-secrets", imageTag, "--server-id=default", "--licenses", "--format=json", "--fail=false", "--min-severity=low", "--fixable-only"}
+		cmdArgs := []string{"docker", "scan", imageTag, "--validate-secrets", "--server-id=default", "--licenses", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			securityTestUtils.VerifySimpleJsonScanTokenValidationResults(t, output, minInactives)
+			securityTestUtils.VerifyJsonScanTokenValidationResults(t, output, minInactives)
 		}
 	}
 }
