@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -48,10 +50,7 @@ func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error)
 
 // Record the security command output
 func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
-	if !commandsummary.ShouldRecordSummary() {
-		return
-	}
-	manager, err := SecurityCommandsJobSummary()
+	manager, err := getRecordManager()
 	if err != nil || manager == nil {
 		return
 	}
@@ -61,6 +60,29 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	}
 	content.WorkingDirectory = wd
 	return manager.Record(content)
+}
+
+func getRecordManager() (manager *commandsummary.CommandSummary, err error) {
+	if !commandsummary.ShouldRecordSummary() {
+		return
+	}
+	return SecurityCommandsJobSummary()
+}
+
+func RecordSarifOutput(cmdResults *Results) (err error) {
+	manager, err := getRecordManager()
+	if err != nil || manager == nil {
+		return
+	}
+	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil)
+	if err != nil {
+		return err
+	}
+	out, err := json.Marshal(sarifReport)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	return manager.RecordWithIndex(out, commandsummary.SarifReport)
 }
 
 func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
