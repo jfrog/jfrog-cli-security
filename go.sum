@@ -606,8 +606,6 @@ github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/CycloneDX/cyclonedx-go v0.9.0 h1:inaif7qD8bivyxp7XLgxUYtOXWtDez7+j72qKTMQTb8=
 github.com/CycloneDX/cyclonedx-go v0.9.0/go.mod h1:NE/EWvzELOFlG6+ljX/QeMlVt9VKcTwu8u0ccsACEsw=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240818121656-05f136a52c54 h1:8uZMKPVdXRIJIMxSvWlTm5bT0NUvRXyzUcSwfObPlbE=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240818121656-05f136a52c54/go.mod h1:Ju0hfP+5KyVPxoDW0iPMutmGo7wrDwk33APWKsJM96E=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
@@ -900,6 +898,8 @@ github.com/jfrog/gofrog v1.7.5 h1:dFgtEDefJdlq9cqTRoe09RLxS5Bxbe1Ev5+E6SmZHcg=
 github.com/jfrog/gofrog v1.7.5/go.mod h1:jyGiCgiqSSR7k86hcUSu67XVvmvkkgWTmPsH25wI298=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
+github.com/jfrog/jfrog-cli-core/v2 v2.54.1 h1:oNIsqUVJ/P17qEcHgj9/c1nfO23stqqj1sHB7ldFNmQ=
+github.com/jfrog/jfrog-cli-core/v2 v2.54.1/go.mod h1:o8Ux0XiXWayxBXbtkMd5Vbs2YJZZDNiS9jtN6yQ4Ur8=
 github.com/jfrog/jfrog-client-go v1.44.1 h1:Dj2+gIWMInHe7MWX3XLRhPRnlFOm7jnbCrGSgFDSMFY=
 github.com/jfrog/jfrog-client-go v1.44.1/go.mod h1:cRCuMvRgWJ6fSdyYs1pknBin41LLcXY94UOl7KHiQ8U=
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
