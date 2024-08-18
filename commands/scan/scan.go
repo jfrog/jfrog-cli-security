@@ -398,7 +398,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
 				}
-				params.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+				if scanCmd.analyticsMetricsService != nil {
+					params.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+				}
 				if params.MultiScanId != "" {
 					xscManager := scanCmd.analyticsMetricsService.XscManager()
 					if xscManager != nil {
@@ -432,6 +434,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 				scanResults := utils.Results{
 					ScaResults:          []*utils.ScaScanResult{{XrayResults: []services.ScanResponse{*graphScanResults}}},
 					ExtendedScanResults: &utils.ExtendedScanResults{},
+					MultiScanId:         scanGraphParams.XrayGraphScanParams().MultiScanId,
 				}
 				if entitledForJas && scanCmd.commandSupportsJAS {
 					// Run Jas scans
@@ -446,7 +449,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
 					scanner := &jas.JasScanner{}
-					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanCmd.analyticsMetricsService.GetMsi(), techutils.Technology(graphScanResults.ScannedPackageType)))
+					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanResults.MultiScanId, techutils.Technology(graphScanResults.ScannedPackageType)))
 					if err != nil {
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
