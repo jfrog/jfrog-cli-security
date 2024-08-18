@@ -16,12 +16,8 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 	// Create and change directory to test workspace
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 	expectedTree := map[string]map[string]string{
 		"org.jfrog.example.gradle:shared:1.0":                             {},

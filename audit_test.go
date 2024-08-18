@@ -46,12 +46,8 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm")
 	// Copy the npm project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(npmProjectPath, tempDirPath, true, nil))
@@ -84,12 +80,8 @@ func testXrayAuditPnpm(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
 	// Copy the npm project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(npmProjectPath, tempDirPath, true, nil))
@@ -146,12 +138,8 @@ func testXrayAuditYarn(t *testing.T, projectDirName string, yarnCmd func()) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	yarnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName)
 	// Copy the Yarn project from the testdata to a temp directory
 	assert.NoError(t, biutils.CopyDir(yarnProjectPath, tempDirPath, true, nil))
@@ -267,12 +255,8 @@ func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech st
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	projectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
 	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -301,12 +285,8 @@ func testXrayAuditGradle(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	gradleProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle")
 	// Copy the gradle project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(gradleProjectPath, tempDirPath, true, nil))
@@ -331,12 +311,8 @@ func testXscAuditMaven(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
 	// Copy the maven project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
@@ -351,12 +327,8 @@ func TestXrayAuditNoTech(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
 	defer clientTests.ChangeDirAndAssert(t, prevWd)
 	// Run audit on empty folder, expect an error
@@ -408,12 +380,8 @@ func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	pipProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project")
 	// Copy the pip project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(pipProjectPath, tempDirPath, true, nil))
@@ -443,12 +411,8 @@ func testXrayAuditPipenv(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	pipenvProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project")
 	// Copy the pipenv project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(pipenvProjectPath, tempDirPath, true, nil))
@@ -473,12 +437,8 @@ func testXrayAuditPoetry(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	poetryProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project")
 	// Copy the poetry project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(poetryProjectPath, tempDirPath, true, nil))
@@ -571,12 +531,8 @@ func TestXrayAuditDetectTech(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
 	// Copy the maven project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
@@ -595,12 +551,8 @@ func TestXrayRecursiveScan(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty
-	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
-	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
-		securityTestUtils.CreateJfrogHomeConfig(t, true)
-		defer securityTestUtils.CleanTestsHomeEnv()
-	}
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers")
 	// Creating an inner NPM project
 	npmDirPath, err := os.MkdirTemp(tempDirPath, "npm-project")

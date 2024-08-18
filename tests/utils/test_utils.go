@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,4 +146,15 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
+}
+
+func ConfigureReleasesRepoForTest(t *testing.T) func() {
+	// Configure a new server named "default" in case RELEASES_REPO env variable is not empty.
+	// The name is set to "default" since this is the name the AM tests are expecting.
+	releasesRepo := os.Getenv("JFROG_CLI_RELEASES_REPO")
+	if releasesRepo != "" && strings.HasPrefix(releasesRepo, "default/") {
+		CreateJfrogHomeConfig(t, true)
+		return CleanTestsHomeEnv
+	}
+	return nil
 }
