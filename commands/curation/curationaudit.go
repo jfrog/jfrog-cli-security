@@ -498,8 +498,8 @@ func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (
 		return nil, err
 	}
 	if !exists {
-		return nil, errorutils.CheckErrorf("no config file was found! Before running the " + projectType.String() + " command on a " +
-			"project for the first time, the project should be configured using the 'jf " + projectType.String() + "c' command")
+		return nil, errorutils.CheckError(errors.New("no config file was found! Before running the " + projectType.String() + " command on a " +
+			"project for the first time, the project should be configured using the 'jf " + projectType.String() + "c' command"))
 	}
 	vConfig, err := project.ReadConfigFile(configFilePath, project.YAML)
 	if err != nil {
@@ -799,7 +799,7 @@ func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputForma
 		case string(outFormat.Json):
 			format = outFormat.Json
 		default:
-			err = errorutils.CheckErrorf("only the following output formats are supported: " + coreutils.ListToText(CurationOutputFormats))
+			err = errorutils.CheckError(errors.New("only the following output formats are supported: " + coreutils.ListToText(CurationOutputFormats)))
 		}
 	}
 	return
