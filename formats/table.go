@@ -129,7 +129,7 @@ type secretsTableRow struct {
 	lineColumn      string `col-name:"Line:Column"`
 	secret          string `col-name:"Secret"`
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
-	metadata        string `col-name:"Metadata" omitempty:"true"`
+	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
 }
 
 type iacOrSastTableRow struct {

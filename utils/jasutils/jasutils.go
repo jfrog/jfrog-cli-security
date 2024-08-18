@@ -92,7 +92,14 @@ var TokenValidationOrder = map[string]int{
 	"Unsupported": 3,
 	"Unavailable": 4,
 	"":            5,
-	"N/A":         6,
+	"Not a token": 6,
+}
+
+var TokenValidationStatusColors = map[string]string{
+	"Active":      color.New(color.Red).Render("Active"),
+	"Inactive":    color.New(color.Green).Render("Inactive"),
+	"Unsupported": "Unsupported",
+	"Unavailable": "Unavailable",
 }
 
 func ConvertApplicableToScore(applicability string) int {

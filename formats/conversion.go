@@ -1,6 +1,7 @@
 package formats
 
 import (
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"strconv"
 	"strings"
 )
@@ -150,13 +151,13 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow, tokenValidation bool) (table
 			secret:     rows[i].Snippet,
 		}
 		if tokenValidation {
-			newRow.tokenValidation = "N/A"
-			newRow.metadata = "N/A"
+			newRow.tokenValidation = "Not a token"
+			newRow.tokenInfo = "No Extra Info"
 			if rows[i].TokenValidation != "" {
-				newRow.tokenValidation = rows[i].TokenValidation
+				newRow.tokenValidation = jasutils.TokenValidationStatusColors[rows[i].TokenValidation]
 			}
-			if rows[i].Metadata != "" {
-				newRow.metadata = rows[i].Metadata
+			if strings.TrimSpace(rows[i].TokenInfo) != "" {
+				newRow.tokenInfo = rows[i].TokenInfo
 			}
 		}
 		tableRows = append(tableRows, newRow)

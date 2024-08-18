@@ -1115,7 +1115,7 @@ func TestPrepareSecrets(t *testing.T) {
 						SeverityNumValue: 11,
 					},
 					TokenValidation: "",
-					Metadata:        "",
+					TokenInfo:       "",
 					Finding:         "secret finding",
 					Location: formats.Location{
 						File:        "wd/file",
@@ -1132,7 +1132,7 @@ func TestPrepareSecrets(t *testing.T) {
 						SeverityNumValue: 11,
 					},
 					TokenValidation: "Inactive",
-					Metadata:        "",
+					TokenInfo:       "",
 					Finding:         "other secret finding",
 					Location: formats.Location{
 						File:        "wd/file",
@@ -1149,7 +1149,7 @@ func TestPrepareSecrets(t *testing.T) {
 						SeverityNumValue: 11,
 					},
 					TokenValidation: "Active",
-					Metadata:        "testmetadata",
+					TokenInfo:       "testmetadata",
 					Finding:         "another secret finding",
 					Location: formats.Location{
 						File:        "wd/file",

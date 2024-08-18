@@ -69,7 +69,7 @@ type SourceCodeRow struct {
 	Location
 	Finding            string       `json:"finding,omitempty"`
 	TokenValidation    string       `json:"tokenValidation,omitempty"`
-	Metadata           string       `json:"metadata,omitempty"`
+	TokenInfo          string       `json:"metadata,omitempty"`
 	ScannerDescription string       `json:"scannerDescription,omitempty"`
 	CodeFlow           [][]Location `json:"codeFlow,omitempty"`
 }

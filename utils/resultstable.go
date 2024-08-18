@@ -368,7 +368,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow
 				}
 				if tokenValidation := sarifutils.GetResultPropertyTokenValidation(secretResult); tokenValidation != "" {
 					newRow.TokenValidation = sarifutils.GetResultPropertyTokenValidation(secretResult)
-					newRow.Metadata = sarifutils.GetResultPropertyMetadata(secretResult)
+					newRow.TokenInfo = sarifutils.GetResultPropertyMetadata(secretResult)
 					tokenValidationActivated = true
 				}
 				secretsRows = append(secretsRows, newRow)

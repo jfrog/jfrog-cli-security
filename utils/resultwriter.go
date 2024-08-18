@@ -159,6 +159,7 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
 			return
 		}
+		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 	}
 	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.scanType) {
 		if err = PrintIacTable(rw.results.ExtendedScanResults.IacScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
