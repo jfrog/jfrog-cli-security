@@ -288,7 +288,7 @@ func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]str
 				return repoList, nil
 			}
 		}
-		return nil, errors.New(fmt.Sprintf("No repositories found for owner %s in %s at URL %s", cc.params.Owner, cc.params.ScmType, cc.params.ScmApiUrl))
+		return nil, fmt.Errorf(fmt.Sprintf("No repositories found for owner %s in %s at URL %s", cc.params.Owner, cc.params.ScmType, cc.params.ScmApiUrl))
 	}
 	return repos, nil
 }
