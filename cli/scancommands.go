@@ -232,7 +232,7 @@ func ScanCmd(c *components.Context) error {
 		SetThreads(threads).
 		SetSpec(specFile).
 		SetOutputFormat(format).
-		SetProject(getProject(c)).
+		SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -258,9 +258,9 @@ func validateXrayContext(c *components.Context, serverDetails *coreConfig.Server
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		contextFlag++
 	}
-	// if isProjectProvided(c) {
-	// 	contextFlag++
-	// }
+	if isProjectProvided(c) {
+		contextFlag++
+	}
 	if c.GetStringFlagValue(flags.RepoPath) != "" {
 		contextFlag++
 	}
@@ -283,14 +283,10 @@ func getMinimumSeverity(c *components.Context) (severity severityutils.Severity,
 }
 
 func isProjectProvided(c *components.Context) bool {
-	return getProject(c) != ""
-}
-
-func getProject(c *components.Context) string {
 	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project)
+		return c.GetStringFlagValue(flags.Project) != ""
 	}
-	return os.Getenv(coreutils.Project)
+	return os.Getenv(coreutils.Project) != ""
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
@@ -316,7 +312,7 @@ func createDefaultScanSpec(c *components.Context, defaultTarget string) *spec.Sp
 
 func shouldIncludeVulnerabilities(c *components.Context) bool {
 	// If no context was provided by the user, no Violations will be triggered by Xray, so include general vulnerabilities in the command output
-	return c.GetStringFlagValue(flags.Watches) == "" && c.GetStringFlagValue(flags.RepoPath) == ""
+	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
 }
 
 func splitByCommaAndTrim(paramValue string) (res []string) {
@@ -454,7 +450,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
-		SetProject(getProject(c)).
+	SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -600,7 +596,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format).
-		SetProject(getProject(c)).
+		SetProject(c.GetStringFlagValue(flags.Project)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
