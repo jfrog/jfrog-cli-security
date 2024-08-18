@@ -6,5 +6,8 @@ import (
 )
 
 func main() {
-	plugins.PluginMain(cli.GetJfrogCliSecurityApp())
+	app := cli.GetJfrogCliSecurityApp()
+	// Add docker scan command
+	app.Commands = append(app.Commands, cli.DockerScanMockCommand())
+	plugins.PluginMain(app)
 }

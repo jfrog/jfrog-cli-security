@@ -103,6 +103,9 @@ const (
 	FixableOnly         = "fixable-only"
 	Rescan              = "rescan"
 	Vuln                = "vuln"
+	buildPrefix         = "build-"
+	BuildVuln           = buildPrefix + Vuln
+	ScanVuln            = scanPrefix + Vuln
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -134,22 +137,22 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, Project, Vuln, OutputFormat, Fail, ExtendedTable, Rescan,
+		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly,
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -215,7 +218,8 @@ var flagsMap = map[string]components.Flag{
 	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
 	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fixed version only."),
 	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
-	Vuln:                components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
+	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
+	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray."),
 	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
 	ExcludeTestDeps:     components.NewBoolFlag(ExcludeTestDeps, "[Gradle] Set to true if you'd like to exclude Gradle test dependencies from Xray scanning."),
 	useWrapperAudit: components.NewBoolFlag(

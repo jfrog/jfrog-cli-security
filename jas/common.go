@@ -120,6 +120,9 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Jas reports has only one invocation
 		// Set the actual working directory to the invocation, not the analyzerManager directory
 		// Also used to calculate relative paths if needed with it
+		if len(sarifRun.Invocations) == 0 {
+			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
+		}
 		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
@@ -172,7 +175,7 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 			if rule.Properties == nil {
 				rule.WithProperties(sarif.NewPropertyBag().Properties)
 			}
-			rule.Properties[severityutils.SarifSeverityRuleProperty] = score
+			rule.Properties[severityutils.SarifSeverityRuleProperty] = fmt.Sprintf("%.1f", score)
 		}
 	}
 }

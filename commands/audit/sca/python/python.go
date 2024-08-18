@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/gofrog/version"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -29,6 +30,8 @@ import (
 const (
 	PythonPackageTypeIdentifier = "pypi://"
 	pythonReportFile            = "report.json"
+
+	CurationPipMinimumVersion = "23.0.0"
 )
 
 type AuditPython struct {
@@ -206,7 +209,8 @@ func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 		}
 	}
 	// Run 'poetry install'
-	return restoreEnv, executeCommand("poetry", "install")
+	_, err = executeCommand("poetry", "install")
+	return restoreEnv, err
 }
 
 func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
@@ -222,7 +226,8 @@ func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 		return restoreEnv, runPipenvInstallFromRemoteRegistry(auditPython.Server, auditPython.RemotePypiRepo)
 	}
 	// Run 'pipenv install -d'
-	return restoreEnv, executeCommand("pipenv", "install", "-d")
+	_, err = executeCommand("pipenv", "install", "-d")
+	return restoreEnv, err
 }
 
 func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
@@ -242,6 +247,10 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	var curationCachePip string
 	var reportFileName string
 	if auditPython.IsCurationCmd {
+		// upgrade pip version to 23.0.0, as it is required for the curation command.
+		if err = upgradePipVersion(CurationPipMinimumVersion); err != nil {
+			log.Warn(fmt.Sprintf("Failed to upgrade pip version, err: %v", err))
+		}
 		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
@@ -250,10 +259,10 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 
 	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
 	var reqErr error
-	err = executeCommand("python", pipInstallArgs...)
+	_, err = executeCommand("python", pipInstallArgs...)
 	if err != nil && auditPython.PipRequirementsFile == "" {
 		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
-		reqErr = executeCommand("python", pipInstallArgs...)
+		_, reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
 			log.Debug(reqErr.Error())
@@ -269,16 +278,33 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 	return
 }
 
-func executeCommand(executable string, args ...string) error {
+func upgradePipVersion(atLeastVersion string) (err error) {
+	output, err := executeCommand("python", "-m", "pip", "--version")
+	if err != nil {
+		return
+	}
+	outputVersion := ""
+	if splitVersion := strings.Split(output, " "); len(splitVersion) > 1 {
+		outputVersion = splitVersion[1]
+	}
+	log.Debug("Current pip version in virtual env:", outputVersion)
+	if version.NewVersion(outputVersion).AtLeast(atLeastVersion) {
+		return
+	}
+	_, err = executeCommand("python", "-m", "pip", "install", "--upgrade", "pip")
+	return
+}
+
+func executeCommand(executable string, args ...string) (string, error) {
 	installCmd := exec.Command(executable, args...)
 	maskedCmdString := coreutils.GetMaskedCommandString(installCmd)
 	log.Debug("Running", maskedCmdString)
 	output, err := installCmd.CombinedOutput()
 	if err != nil {
 		sca.LogExecutableVersion(executable)
-		return errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
+		return string(output), errorutils.CheckErrorf("%q command failed: %s - %s", maskedCmdString, err.Error(), output)
 	}
-	return nil
+	return string(output), nil
 }
 
 func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName string, customArgs ...string) []string {
@@ -348,7 +374,8 @@ func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoNa
 		return err
 	}
 	args := []string{"install", "-d", utils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtUrl}
-	return executeCommand("pipenv", args...)
+	_, err = executeCommand("pipenv", args...)
+	return err
 }
 
 // Execute virtualenv command: "virtualenv venvdir" / "python3 -m venv venvdir" and set path
@@ -364,11 +391,11 @@ func SetPipVirtualEnvPath() (restoreEnv func() error, err error) {
 		cmdArgs = append(cmdArgs, windowsPyArg)
 	}
 	cmdArgs = append(cmdArgs, "-m", "venv", venvdirName)
-	err = executeCommand(pythonPath, cmdArgs...)
+	_, err = executeCommand(pythonPath, cmdArgs...)
 	if err != nil {
 		// Failed running 'python -m venv', trying to run 'virtualenv'
 		log.Debug("Failed running python venv:", err.Error())
-		err = executeCommand("virtualenv", "-p", pythonPath, venvdirName)
+		_, err = executeCommand("virtualenv", "-p", pythonPath, venvdirName)
 		if err != nil {
 			return
 		}

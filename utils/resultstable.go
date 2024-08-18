@@ -773,16 +773,25 @@ func simplifyViolations(scanViolations []services.Violation, multipleRoots bool)
 				continue
 			}
 			uniqueViolations[packageKey] = &services.Violation{
-				Summary:       violation.Summary,
-				Severity:      violation.Severity,
-				ViolationType: violation.ViolationType,
-				Components:    map[string]services.Component{vulnerableComponentId: violation.Components[vulnerableComponentId]},
-				WatchName:     violation.WatchName,
-				IssueId:       violation.IssueId,
-				Cves:          violation.Cves,
-				LicenseKey:    violation.LicenseKey,
-				LicenseName:   violation.LicenseName,
-				Technology:    violation.Technology,
+				Summary:             violation.Summary,
+				Severity:            violation.Severity,
+				ViolationType:       violation.ViolationType,
+				Components:          map[string]services.Component{vulnerableComponentId: violation.Components[vulnerableComponentId]},
+				WatchName:           violation.WatchName,
+				IssueId:             violation.IssueId,
+				Cves:                violation.Cves,
+				LicenseKey:          violation.LicenseKey,
+				LicenseName:         violation.LicenseName,
+				RiskReason:          violation.RiskReason,
+				IsEol:               violation.IsEol,
+				EolMessage:          violation.EolMessage,
+				LatestVersion:       violation.LatestVersion,
+				NewerVersions:       violation.NewerVersions,
+				Cadence:             violation.Cadence,
+				Commits:             violation.Commits,
+				Committers:          violation.Committers,
+				ExtendedInformation: violation.ExtendedInformation,
+				Technology:          violation.Technology,
 			}
 		}
 	}
