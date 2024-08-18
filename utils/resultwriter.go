@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	CurrentWorkflowNameEnvVar = "GITHUB_WORKFLOW"
+	BaseDocumentationURL           = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	CurrentWorkflowNameEnvVar      = "GITHUB_WORKFLOW"
 	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
 )
 
@@ -201,7 +201,6 @@ func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLi
 	}
 
 	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(ScaScan, results, xrayRun)...)
-	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(ContextualAnalysisScan, results, results.ExtendedScanResults.ApplicabilityScanResults...)...)
 	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(IacScan, results, results.ExtendedScanResults.IacScanResults...)...)
 	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(SecretsScan, results, results.ExtendedScanResults.SecretsScanResults...)...)
 	report.Runs = append(report.Runs, patchRunsToPassIngestionRules(SastScan, results, results.ExtendedScanResults.SastScanResults...)...)
@@ -214,10 +213,10 @@ func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLi
 	if err != nil {
 		return
 	}
-	xrayRun := sarif.NewRunWithInformationURI("JFrog Xray SCA", BaseDocumentationURL+"sca")
+	xrayRun := sarif.NewRunWithInformationURI("JFrog Xray Scanner", BaseDocumentationURL+"sca")
 	xrayRun.Tool.Driver.Version = &results.XrayVersion
 	if len(xrayJson.Vulnerabilities) > 0 || len(xrayJson.SecurityViolations) > 0 || len(xrayJson.LicensesViolations) > 0 {
-		if err = extractXrayIssuesToSarifRun(xrayRun, xrayJson); err != nil {
+		if err = extractXrayIssuesToSarifRun(results, xrayRun, xrayJson); err != nil {
 			return
 		}
 	}
@@ -225,26 +224,26 @@ func convertXrayResponsesToSarifRun(results *Results, isMultipleRoots, includeLi
 	return
 }
 
-func extractXrayIssuesToSarifRun(run *sarif.Run, xrayJson formats.SimpleJsonResults) error {
+func extractXrayIssuesToSarifRun(results *Results, run *sarif.Run, xrayJson formats.SimpleJsonResults) error {
 	for _, vulnerability := range xrayJson.Vulnerabilities {
-		if err := addXrayCveIssueToSarifRun(vulnerability, run); err != nil {
+		if err := addXrayCveIssueToSarifRun(results, vulnerability, run); err != nil {
 			return err
 		}
 	}
 	for _, violation := range xrayJson.SecurityViolations {
-		if err := addXrayCveIssueToSarifRun(violation, run); err != nil {
+		if err := addXrayCveIssueToSarifRun(results, violation, run); err != nil {
 			return err
 		}
 	}
 	for _, license := range xrayJson.LicensesViolations {
-		if err := addXrayLicenseViolationToSarifRun(license, run); err != nil {
+		if err := addXrayLicenseViolationToSarifRun(results, license, run); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func addXrayCveIssueToSarifRun(issue formats.VulnerabilityOrViolationRow, run *sarif.Run) (err error) {
+func addXrayCveIssueToSarifRun(results *Results, issue formats.VulnerabilityOrViolationRow, run *sarif.Run) (err error) {
 	maxCveScore, err := findMaxCVEScore(issue.Cves)
 	if err != nil {
 		return
@@ -260,6 +259,7 @@ func addXrayCveIssueToSarifRun(issue formats.VulnerabilityOrViolationRow, run *s
 	cveId := GetIssueIdentifier(issue.Cves, issue.IssueId)
 	markdownDescription := getSarifTableDescription(formattedDirectDependencies, maxCveScore, issue.Applicable, issue.FixedVersions)
 	addXrayIssueToSarifRun(
+		results.ResultType,
 		cveId,
 		issue.ImpactedDependencyName,
 		issue.ImpactedDependencyVersion,
@@ -275,12 +275,13 @@ func addXrayCveIssueToSarifRun(issue formats.VulnerabilityOrViolationRow, run *s
 	return
 }
 
-func addXrayLicenseViolationToSarifRun(license formats.LicenseRow, run *sarif.Run) (err error) {
+func addXrayLicenseViolationToSarifRun(results *Results, license formats.LicenseRow, run *sarif.Run) (err error) {
 	formattedDirectDependencies, err := getDirectDependenciesFormatted(license.Components)
 	if err != nil {
 		return
 	}
 	addXrayIssueToSarifRun(
+		results.ResultType,
 		license.LicenseKey,
 		license.ImpactedDependencyName,
 		license.ImpactedDependencyVersion,
@@ -296,21 +297,27 @@ func addXrayLicenseViolationToSarifRun(license formats.LicenseRow, run *sarif.Ru
 	return
 }
 
-func addXrayIssueToSarifRun(issueId, impactedDependencyName, impactedDependencyVersion string, severity severityutils.Severity, severityScore, summary, title, markdownDescription string, components []formats.ComponentRow, location *sarif.Location, run *sarif.Run) {
+func addXrayIssueToSarifRun(resultType CommandType, issueId, impactedDependencyName, impactedDependencyVersion string, severity severityutils.Severity, severityScore, summary, title, markdownDescription string, components []formats.ComponentRow, location *sarif.Location, run *sarif.Run) {
 	// Add rule if not exists
 	ruleId := getXrayIssueSarifRuleId(impactedDependencyName, impactedDependencyVersion, issueId)
 	if rule, _ := run.GetRuleById(ruleId); rule == nil {
 		addXrayRule(ruleId, title, severityScore, summary, markdownDescription, run)
 	}
 	// Add result for each component
-
 	for _, directDependency := range components {
 		msg := getXrayIssueSarifHeadline(directDependency.Name, directDependency.Version, issueId)
 		if result := run.CreateResultForRule(ruleId).WithMessage(sarif.NewTextMessage(msg)).WithLevel(severityutils.SeverityToSarifSeverityLevel(severity).String()); location != nil {
+			if resultType == DockerImage {
+				location.LogicalLocations = append(location.LogicalLocations, sarifutils.NewLogicalLocation(getDockerLayerFromDependency(directDependency), "layer"))
+			}
 			result.AddLocation(location)
 		}
 	}
+}
 
+// extract the layer from the dependency: sha<number>__<layer>.tar
+func getDockerLayerFromDependency(dependency formats.ComponentRow) string {
+	return strings.TrimSuffix(strings.Split(dependency.Name, "__")[1], ".tar")
 }
 
 func getDescriptorFullPath(tech techutils.Technology, run *sarif.Run) (string, error) {
@@ -448,7 +455,7 @@ func getXrayIssueSarifRuleId(depName, version, key string) string {
 }
 
 func getXrayIssueSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("[%s] %s %s", key, depName, version)
+	return strings.TrimSpace(fmt.Sprintf("[%s] %s %s", key, depName, version))
 }
 
 func getXrayLicenseSarifHeadline(depName, version, key string) string {
@@ -512,11 +519,11 @@ func findMaxCVEScore(cves []formats.CveRow) (string, error) {
 func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results, runs ...*sarif.Run) []*sarif.Run {
 	// Since we run in temp directories files should be relative
 	// Patch by converting the file paths to relative paths according to the invocations
-	convertPathsToRelative(cmdResults.ResultType, subScanType, runs...)
+	convertPaths(cmdResults.ResultType, subScanType, runs...)
 	for _, run := range runs {
-		if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
+		if cmdResults.ResultType.IsTargetBinary() && subScanType == SecretsScan {
 			// Patch the tool name in case of binary scan
-			sarifutils.SetRunToolName("JFrog Binary Secrets scanner", run)
+			sarifutils.SetRunToolName("JFrog Binary Secrets Scanner", run)
 		}
 		for _, rule := range run.Tool.Driver.Rules {
 			// Github code scanning ingestion rules rejects rules without help content.
@@ -528,26 +535,37 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 			if rule.Name != nil && rule.ID == *rule.Name {
 				rule.Name = nil
 			}
-			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
+			if cmdResults.ResultType.IsTargetBinary() && subScanType == SecretsScan {
 				// Patch the rule name in case of binary scan
 				sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 			}
 		}
-		// Github code scanning ingestion rules rejects results without locations.
-		// Patch by removing results without locations.
+
 		results := []*sarif.Result{}
 		for _, result := range run.Results {
 			if len(result.Locations) == 0 {
+				// Github code scanning ingestion rules rejects results without locations.
+				// Patch by removing results without locations.
+				log.Debug(fmt.Sprintf("[%s] Removing result [ruleId=%s] without locations: %s", subScanType.String(), sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result)))
 				continue
 			}
-			if (cmdResults.ResultType == Binary || cmdResults.ResultType == DockerImage) && subScanType == SecretsScan {
-				sarifutils.SetResultMsgMarkdown(getSecretInBinaryMarkdownMsg(cmdResults, result), result)
+			if cmdResults.ResultType.IsTargetBinary() {
+				if subScanType == SecretsScan {
+					if cmdResults.ResultType == DockerImage {
+						// For Docker secret scan, patch the logical location if not exists
+						patchDockerSecretLocations(result)
+					}
+					sarifutils.SetResultMsgMarkdown(getSecretInBinaryMarkdownMsg(cmdResults, result), result)
+				} else {
+					sarifutils.SetResultMsgMarkdown(getScaInBinaryMarkdownMsg(cmdResults, result), result)
+				}
+				// For Binary scans, patch the physical location if applicable
+				convertBinaryPhysicalLocations(cmdResults, run, result)
 			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
 				calculateResultFingerprints(cmdResults, run, result)
 			}
-			convertLocationsToActionWorkflowFileIfNeeded(cmdResults, subScanType, result)
 			results = append(results, result)
 		}
 		run.Results = results
@@ -555,37 +573,66 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 	return runs
 }
 
-func convertLocationsToActionWorkflowFileIfNeeded(cmdResults *Results, subScanType SubScanType, result *sarif.Result) {
-	actionName := os.Getenv(CurrentWorkflowNameEnvVar)
-	if actionName == "" || (cmdResults.ResultType != Binary && cmdResults.ResultType != DockerImage) || subScanType != SecretsScan {
-		return
-	}
-	// Get the workflow file path base on the action name
-	actionPath := getWorkflowFilePath(os.Getenv(CurrentWorkflowNameEnvVar))
+// Patch the URI to be the file path from sha<number>/<hash>/
+// Extract the layer from the location URI, adds it as a logical location kind "layer"
+func patchDockerSecretLocations(result *sarif.Result) {
 	for _, location := range result.Locations {
-		// Patch the location to the result to be the workflow file - Reset the uri and region
-		location.PhysicalLocation.ArtifactLocation = sarif.NewArtifactLocation().WithUri(actionPath)
-		location.PhysicalLocation.Region = sarif.NewRegion().WithStartLine(1).WithEndLine(1).WithStartColumn(1).WithEndColumn(2)
+		uri := sarifutils.GetLocationFileName(location)
+		if index := strings.Index(uri, "/"); index != -1 {
+			// Set Logical location kind "layer" with the layer hash
+			location.LogicalLocations = append(location.LogicalLocations, sarifutils.NewLogicalLocation(uri[:index], "layer"))
+			sarifutils.SetLocationFileName(location, uri[index:])
+		}
 	}
 }
 
-func getWorkflowFilePath(workflowName string) string {
-	// Search in the .github/workflows directory
-	// Search for the workflow file
+func convertBinaryPhysicalLocations(cmdResults *Results, run *sarif.Run, result *sarif.Result) {
+	if patchedLocation := getPatchedBinaryLocation(cmdResults, run); patchedLocation != "" {
+		for _, location := range result.Locations {
+			// Patch the location - Reset the uri and region
+			location.PhysicalLocation = sarifutils.NewPhysicalLocation(patchedLocation)
+		}
+	}
+}
+
+func getPatchedBinaryLocation(cmdResults *Results, run *sarif.Run) (patchedLocation string) {
+	if cmdResults.ResultType == DockerImage {
+		if patchedLocation = getDockerfileLocationIfExists(run); patchedLocation != "" {
+			return
+		}
+	}
+	return getWorkflowFileLocationIfExists()
+}
+
+func getDockerfileLocationIfExists(run *sarif.Run) string {
+	potentialLocations := []string{filepath.Join("Dockerfile"), sarifutils.GetFullLocationFileName("Dockerfile", run.Invocations)}
+	for _, location := range potentialLocations {
+		if exists, err := fileutils.IsFileExists(location, false); err == nil && exists {
+			log.Debug(fmt.Sprintf("Dockerfile found in %s, replacing the location", location))
+			return location
+		}
+	}
+	return ""
+}
+
+func getWorkflowFileLocationIfExists() string {
+	workflowName := os.Getenv(CurrentWorkflowNameEnvVar)
+	// Check if exists in the .github/workflows directory as file name or in the content, return the file path or empty string
 	if files, err := fileutils.ListFiles(GithubBaseWorkflowDir, false); err == nil && len(files) > 0 {
 		for _, file := range files {
-			// Search file content for the workflow name or the file name
 			if strings.Contains(file, workflowName) {
+				log.Debug(fmt.Sprintf("Found workflow file %s at %s, replacing the location", workflowName, file))
 				return file
 			}
+		}
+		for _, file := range files {
 			if content, err := fileutils.ReadFile(file); err == nil && strings.Contains(string(content), workflowName) {
+				log.Debug(fmt.Sprintf("Found workflow name %s in %s, replacing the location", workflowName, file))
 				return file
 			}
 		}
 	}
-	log.Debug(fmt.Sprintf("Workflow file not found for %s", workflowName))
-	// If not found, return a path with the workflow name
-	return filepath.Join(GithubBaseWorkflowDir,fmt. Sprintf("%s.yml", workflowName))
+	return ""
 }
 
 func getSecretInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) string {
@@ -597,6 +644,14 @@ func getSecretInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) str
 		content += " docker"
 	}
 	content += " scanning:"
+	return content + getBaseBinaryDescriptionMarkdown(SecretsScan, cmdResults, result)
+}
+
+func getScaInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) string {
+	return sarifutils.GetResultMsgText(result) + getBaseBinaryDescriptionMarkdown(ScaScan, cmdResults, result)
+}
+
+func getBaseBinaryDescriptionMarkdown(subScanType SubScanType, cmdResults *Results, result *sarif.Result) (content string) {
 	// If in github action, add the workflow name and run number
 	if os.Getenv(CurrentWorkflowNameEnvVar) != "" {
 		content += fmt.Sprintf("\nGithub Actions Workflow: %s", os.Getenv(CurrentWorkflowNameEnvVar))
@@ -610,7 +665,7 @@ func getSecretInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) str
 			content += fmt.Sprintf("\nImage: %s", imageTag)
 		}
 	}
-	return content + getLocationMarkdownString(cmdResults.ResultType, result.Locations[0])
+	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, result, result.Locations[0])
 }
 
 func getDockerImageTag(cmdResults *Results) string {
@@ -629,32 +684,59 @@ func getDockerImageTag(cmdResults *Results) string {
 // * Layer: <HASH>
 // * Filepath: <PATH>
 // * Evidence: <Snippet>
-func getLocationMarkdownString(commandType CommandType, location *sarif.Location) (content string) {
+func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, result *sarif.Result, location *sarif.Location) (content string) {
 	if location == nil {
 		return ""
 	}
-	uri := sarifutils.GetLocationFileName(location)
 	if commandType == DockerImage {
+		// TODO: for sca also and windows
 		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
-		content += fmt.Sprintf("Layer: %s\n", uri[:strings.Index(uri, "/")])
-		uri = uri[strings.Index(uri, "/")+1:]
+		if layer := getDockerLayer(commandType, location); layer != "" {
+			content += fmt.Sprintf("\nLayer: %s", layer)
+		}
 	}
-	content += fmt.Sprintf("Filepath: %s", uri)
-	content += fmt.Sprintf("\nEvidence: %s", sarifutils.GetLocationSnippet(location))
+	if subScanType != SecretsScan {
+		return
+	}
+	content += fmt.Sprintf("\nFilepath: %s", sarifutils.GetLocationFileName(location))
+	if snippet := sarifutils.GetLocationSnippet(location); snippet != "" {
+		content += fmt.Sprintf("\nEvidence: %s", snippet)
+	}
 	return
 }
 
-func convertPathsToRelative(commandType CommandType, subScanType SubScanType, runs ...*sarif.Run) {
-	// Convert base on invocation for source code
-	sarifutils.ConvertRunsPathsToRelative(runs...)
-	if subScanType != SecretsScan || (commandType != Binary && commandType != DockerImage) {
+func getDockerLayer(commandType CommandType, location *sarif.Location) string {
+	// If location has logical location with kind "layer" return it
+	if logicalLocation := sarifutils.GetLogicalLocation("layer", location); logicalLocation != nil && logicalLocation.Name != nil {
+		return *logicalLocation.Name
+	}
+	return ""
+}
+
+func getDockerFilePath(commandType CommandType, location *sarif.Location) string {
+	uri := sarifutils.GetLocationFileName(location)
+	if commandType == DockerImage {
+		// Split location URI to the content before the first / (sha256) and the content after it (relative path)
+		return uri[strings.Index(uri, "/")+1:]
+	}
+	return uri
+}
+
+func convertPaths(commandType CommandType, subScanType SubScanType, runs ...*sarif.Run) {
+	if commandType != DockerImage {
+		// Convert base on invocation for source code
+		sarifutils.ConvertRunsPathsToRelative(runs...)
 		return
 	}
-	// Invocation can't handle converting to relative since we are scanning a binary/image
+	if subScanType != SecretsScan {
+		return
+	}
 	for _, run := range runs {
 		for _, result := range run.Results {
 			for _, location := range result.Locations {
-				// For docker scan, search for 'sha256/' and remove it and all the path before it. leaving only the sha256 hash and the relative path in it, if exists
+				// TODO: check for windows
+				// For docker scan, search for 'sha256/' and remove it and all the path before it.
+				// leaving only the sha256 hash and the relative path in it, if exists
 				sarifutils.SetLocationFileName(location, sarifutils.GetLocationFileName(location)[strings.Index(sarifutils.GetLocationFileName(location), "sha256/")+7:])
 			}
 		}

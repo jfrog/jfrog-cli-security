@@ -213,7 +213,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 	}
 
 	if len(scanErrors) > 0 {
-		return errorutils.CheckErrorf(scanErrors[0].ErrorMessage)
+		return errorutils.CheckError(errors.New(scanErrors[0].ErrorMessage))
 	}
 	log.Info("Enrich process completed successfully.")
 	return nil

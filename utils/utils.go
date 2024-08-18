@@ -2,8 +2,8 @@ package utils
 
 import (
 	"crypto"
-	"fmt"
 	"encoding/hex"
+	"fmt"
 	"strings"
 )
 
@@ -41,6 +41,10 @@ type CommandType string
 
 func (s SubScanType) String() string {
 	return string(s)
+}
+
+func (s CommandType) IsTargetBinary() bool {
+	return s == Binary || s == DockerImage
 }
 
 func GetAllSupportedScans() []SubScanType {

@@ -19,6 +19,32 @@ func NewReport() (*sarif.Report, error) {
 	return report, nil
 }
 
+func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
+	return &sarif.PhysicalLocation{
+		ArtifactLocation: &sarif.ArtifactLocation{
+			URI: &physicalPath,
+		},
+	}
+}
+
+func NewPhysicalLocationWithRegion(physicalPath string, startRow, endRow, startCol, endCol int) *sarif.PhysicalLocation {
+	location := NewPhysicalLocation(physicalPath)
+	location.Region = &sarif.Region{
+		StartLine:   &startRow,
+		EndLine:     &endRow,
+		StartColumn: &startCol,
+		EndColumn:   &endCol,
+	}
+	return location
+}
+
+func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
+	return &sarif.LogicalLocation{
+		Name: &name,
+		Kind: &kind,
+	}
+}
+
 func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
 	out, err := json.Marshal(report)
 	if err != nil {
@@ -79,6 +105,19 @@ func isSameLocation(location *sarif.Location, other *sarif.Location) bool {
 	return GetLocationId(location) == GetLocationId(other)
 }
 
+func GetLogicalLocation(kind string, location *sarif.Location) *sarif.LogicalLocation {
+	if location == nil {
+		return nil
+	}
+	// Search for a logical location that has the same kind as the location
+	for _, logicalLocation := range location.LogicalLocations {
+		if logicalLocation.Kind != nil && *logicalLocation.Kind == kind {
+			return logicalLocation
+		}
+	}
+	return nil
+}
+
 func GetLocationId(location *sarif.Location) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
 		GetLocationFileName(location),
@@ -95,6 +134,41 @@ func SetRunToolName(toolName string, run *sarif.Run) {
 		run.Tool.Driver = &sarif.ToolComponent{}
 	}
 	run.Tool.Driver.Name = toolName
+}
+
+func SetRunToolFullDescriptionText(txt string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMultiformatMessageString(txt)
+		return
+	}
+	run.Tool.Driver.FullDescription.Text = &txt
+}
+
+func SetRunToolFullDescriptionMarkdown(markdown string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMarkdownMultiformatMessageString(markdown)
+	}
+	run.Tool.Driver.FullDescription.Markdown = &markdown
+}
+
+func GetRunToolFullDescriptionText(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Text != nil {
+		return *run.Tool.Driver.FullDescription.Text
+	}
+	return ""
+}
+
+func GetRunToolFullDescriptionMarkdown(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Markdown != nil {
+		return *run.Tool.Driver.FullDescription.Markdown
+	}
+	return ""
 }
 
 func GetRunToolName(run *sarif.Run) string {
