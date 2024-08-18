@@ -213,7 +213,9 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 
 	scanResults := utils.NewAuditResults()
 	scanResults.XrayVersion = xrayVersion
-	scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+	if scanCmd.analyticsMetricsService != nil {
+		scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+	}
 
 	scanResults.ExtendedScanResults.EntitledForJas, err = jas.IsEntitledForJas(xrayManager, xrayVersion)
 	errGroup := new(errgroup.Group)
