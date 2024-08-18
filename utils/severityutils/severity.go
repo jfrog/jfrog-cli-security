@@ -192,7 +192,7 @@ func ParseSeverity(severity string, sarifSeverity bool) (parsed Severity, err er
 
 func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus jasutils.ApplicabilityStatus) (details *SeverityDetails, err error) {
 	if applicabilityStatus == jasutils.NotScanned {
-		err = errorutils.CheckErrorf("only the following severities are supported: " + coreutils.ListToText(supportedApplicabilityStatuses()))
+		err = errorutils.CheckErrorf("only the following severities are supported: %s", coreutils.ListToText(supportedApplicabilityStatuses()))
 		return
 	}
 	parsed, err := ParseSeverity(severity, sarifSeverity)

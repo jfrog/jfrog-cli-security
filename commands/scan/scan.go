@@ -319,7 +319,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		}
 	}
 	if len(scanErrors) > 0 {
-		return errorutils.CheckErrorf(scanErrors[0].ErrorMessage)
+		return errorutils.CheckError(errors.New(scanErrors[0].ErrorMessage))
 	}
 	log.Info("Scan completed successfully.")
 	return nil
