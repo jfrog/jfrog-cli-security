@@ -129,7 +129,7 @@ func TestDockerScan(t *testing.T) {
 	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0)
 
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	// image with inactive tokens
+	// #nosec G101 -- Image with dummy token for tests
 	tokensImageToScan := "srmishj/inactive_tokens:latest"
 	runDockerScanWithTokenValidation(t, testCli, tokensImageToScan, 5)
 }
