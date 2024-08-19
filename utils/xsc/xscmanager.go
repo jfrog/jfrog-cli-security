@@ -2,15 +2,11 @@ package xsc
 
 import (
 	"fmt"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	clientconfig "github.com/jfrog/jfrog-client-go/config"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
-	"github.com/jfrog/jfrog-client-go/xsc/services"
-
-	clientconfig "github.com/jfrog/jfrog-client-go/config"
 )
 
 const minXscVersionForErrorReport = "1.7.7"
