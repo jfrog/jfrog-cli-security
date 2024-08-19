@@ -42,7 +42,7 @@ import (
 )
 
 const dockerScanCmdHiddenName = "dockerscan"
-const skipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
+const SkipCurationAfterFailureEnv = "JFROG_CLI_SKIP_CURATION_AFTER_FAILURE"
 
 func getAuditAndScansCommands() []components.Command {
 	return []components.Command{
@@ -544,7 +544,7 @@ func CurationInspectAfterFailure(c *cli.Context, cmdName string, technology tech
 
 func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) error {
 	// check the command supported
-	curationAuditCommand, err, runCuration := shouldRunCurationAfterFailure(c, tech, cmdName, originError)
+	curationAuditCommand, err, runCuration := ShouldRunCurationAfterFailure(c, tech, cmdName, originError)
 	if err != nil {
 		return err
 	}
@@ -555,12 +555,12 @@ func CurationCmdPostInstallationFailure(c *components.Context, tech techutils.Te
 	return progressbar.ExecWithProgress(curationAuditCommand)
 }
 
-func shouldRunCurationAfterFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) (curationCmd *curation.CurationAuditCommand, err error, runCuration bool) {
+func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technology, cmdName string, originError error) (curationCmd *curation.CurationAuditCommand, err error, runCuration bool) {
 	if !IsSupportedCommandForCurationInspect(cmdName) {
 		return
 	}
 	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
-		os.Getenv(skipCurationAfterFailureEnv) == "true" {
+		os.Getenv(SkipCurationAfterFailureEnv) == "true" {
 		return
 	}
 	// check if the error is a forbidden error, if so, we don't want to run the curation audit automatically.

@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/build-info-go/utils"
@@ -90,7 +91,7 @@ func TestShouldRunCurationAfterFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			if tt.envSkipCuration != "" {
-				callBack := clienttestutils.SetEnvWithCallbackAndAssert(t, skipCurationAfterFailureEnv, tt.envSkipCuration)
+				callBack := clienttestutils.SetEnvWithCallbackAndAssert(t, SkipCurationAfterFailureEnv, tt.envSkipCuration)
 				defer callBack()
 			}
 			if tt.envOutputDirPath != "" {
@@ -107,13 +108,19 @@ func TestShouldRunCurationAfterFailure(t *testing.T) {
 			defer callback()
 
 			serverMock, c, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.String(), "system/version") {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"xray_version":"3.99.0"}`))
+					assert.NoError(t, err)
+					return
+				}
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(`{"feature_id":"curation","entitled":` + strconv.FormatBool(tt.isEntitledForCuration) + `}`))
 				assert.NoError(t, err)
 			})
 			defer serverMock.Close()
 
-			configFilePath := WriteServerDetailsConfigFileBytes(t, c.ArtifactoryUrl, path.Join(pathToProjectDir, ".jfrog"), false)
+			configFilePath := createCliConfig(t, c.ArtifactoryUrl, pathToProjectDir)
 			defer func() {
 				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
 			}()
@@ -121,7 +128,7 @@ func TestShouldRunCurationAfterFailure(t *testing.T) {
 			callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, pathToProjectDir)
 			defer callbackPreTest()
 
-			_, err, runCuration := shouldRunCurationAfterFailure(&components.Context{}, techutils.Npm, tt.cmdName, tt.originError)
+			_, err, runCuration := ShouldRunCurationAfterFailure(&components.Context{}, techutils.Npm, tt.cmdName, tt.originError)
 
 			// Verify the expected behavior
 			assert.Equal(t, tt.expectedRunCuration, runCuration)
@@ -131,30 +138,16 @@ func TestShouldRunCurationAfterFailure(t *testing.T) {
 	}
 }
 
-func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
-	var username, password string
-	if !withoutCreds {
-		username = "admin"
-		password = "password"
+func createCliConfig(t *testing.T, url string, configPath string) string {
+	server := &config.ServerDetails{
+		User:           "admin",
+		Password:       "password",
+		Url:            url,
+		ArtifactoryUrl: url,
+		XrayUrl:        url,
 	}
-	serverDetails := config.ConfigV5{
-		Servers: []*config.ServerDetails{
-			{
-				ServerId:       "test",
-				User:           username,
-				Password:       password,
-				Url:            url,
-				ArtifactoryUrl: url,
-				IsDefault:      true,
-				XrayUrl:        url,
-			},
-		},
-		Version: "v" + strconv.Itoa(coreutils.GetCliConfigVersion()),
-	}
-
-	detailsByte, err := json.Marshal(serverDetails)
-	assert.NoError(t, err)
-	confFilePath := filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
-	assert.NoError(t, os.WriteFile(confFilePath, detailsByte, 0644))
-	return confFilePath
+	configCmd := commonCommands.NewConfigCommand(commonCommands.AddOrEdit, "test").
+		SetDetails(server).SetUseBasicAuthOnly(true).SetInteractive(false)
+	assert.NoError(t, configCmd.Run())
+	return filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
 }
