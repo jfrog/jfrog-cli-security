@@ -1,6 +1,7 @@
 package severityutils
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/gookit/color"
@@ -29,6 +30,34 @@ const (
 	Low      Severity = "Low"
 	Unknown  Severity = "Unknown"
 )
+
+var (
+	//go:embed resources/criticalSeverity.svg
+	CriticalIcon string
+	//go:embed resources/highSeverity.svg
+	HighIcon string
+	//go:embed resources/mediumSeverity.svg
+	MediumIcon string
+	//go:embed resources/lowSeverity.svg
+	LowIcon string
+	//go:embed resources/unknownSeverity.svg
+	UnknownIcon string
+)
+
+func GetSeverityIcon(severity Severity) string {
+	switch severity {
+	case Critical:
+		return CriticalIcon
+	case High:
+		return HighIcon
+	case Medium:
+		return MediumIcon
+	case Low:
+		return LowIcon
+	default:
+		return UnknownIcon
+	}
+}
 
 type Severity string
 

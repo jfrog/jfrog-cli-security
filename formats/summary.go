@@ -33,7 +33,40 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 	return
 }
 
+type IScanSummaryResult struct {
+	Target string `json:"target,omitempty"`
+	Vulnerabilities *ScanSummaryVulnerabilities `json:"vulnerabilities"`
+	Violations *ScanSummaryViolations `json:"violations"`
+	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
+}
+
+type ScanSummaryVulnerabilities struct {
+	ScaScanResults     *ScanScaResult `json:"sca,omitempty"`
+	IacScanResults     *SummaryCount  `json:"iac,omitempty"`
+	SecretsScanResults *SummaryCount  `json:"secrets,omitempty"`
+	SastScanResults    *SummaryCount  `json:"sast,omitempty"`
+}
+
+type ScanSummaryViolations struct {
+	Watches []string `json:"watches,omitempty"`
+	Violations TwoLevelSummaryCount `json:"policy_violations,omitempty"`
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 type ScanSummaryResult struct {
+	IndexKeys 	 []string                      `json:"index_keys,omitempty"`
 	Target          string                      `json:"target,omitempty"`
 	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
 	Violations      TwoLevelSummaryCount        `json:"violations,omitempty"`
