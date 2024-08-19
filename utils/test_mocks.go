@@ -53,7 +53,7 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 		if r.RequestURI == "/xsc/api/v1/profile/"+TestConfigProfileName {
 			if r.Method == http.MethodGet {
 				w.WriteHeader(http.StatusOK)
-				content, err := os.ReadFile("../xsc/configProfileExample.json")
+				content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
 				if err != nil {
 					return
 				}
