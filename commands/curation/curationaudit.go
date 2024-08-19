@@ -799,7 +799,7 @@ func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputForma
 		case string(outFormat.Json):
 			format = outFormat.Json
 		default:
-			err = errorutils.CheckError(errors.New("only the following output formats are supported: %s", coreutils.ListToText(CurationOutputFormats)))
+			err = errorutils.CheckErrorf("only the following output formats are supported: %s", coreutils.ListToText(CurationOutputFormats))
 		}
 	}
 	return
