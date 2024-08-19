@@ -398,19 +398,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
 				}
-				if scanCmd.analyticsMetricsService != nil {
-					params.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
-				}
-				if params.MultiScanId != "" {
-					xscManager := scanCmd.analyticsMetricsService.XscManager()
-					if xscManager != nil {
-						version, err := xscManager.GetVersion()
-						if err != nil {
-							log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-						}
-						params.XscVersion = version
-					}
-				}
+				params.MultiScanId, params.XscVersion = xsc.GetXscMsiAndVersion(scanCmd.analyticsMetricsService)
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
