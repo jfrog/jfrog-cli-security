@@ -388,7 +388,7 @@ func getFilesList(updatesUrl string, flags *OfflineUpdatesFlags) (vulnerabilitie
 	var urls FilesList
 	err = json.Unmarshal(body, &urls)
 	if err != nil {
-		err = errorutils.CheckError(errors.New("Failed parsing json response: " + string(body)))
+		err = errorutils.CheckErrorf("Failed parsing json response: %s", string(body))
 		return
 	}
 

@@ -2,7 +2,6 @@ package sarifutils
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -31,7 +30,7 @@ func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err erro
 func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
 	report, err := sarif.Open(fileName)
 	if errorutils.CheckError(err) != nil {
-		err = errors.New("can't read valid Sarif run from " + fileName + ": " + err.Error())
+		err = fmt.Errorf("can't read valid Sarif run from %s: %s", fileName, err.Error())
 		return
 	}
 	sarifRuns = report.Runs
