@@ -516,7 +516,7 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	if validateSecrets {
 		args = append(args, "--secrets", "--validate-secrets")
 	}
-	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), "--threads="+threads)
+	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
