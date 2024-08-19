@@ -1,13 +1,11 @@
 package xsc
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
-	"os"
 )
 
 func GetConfigProfile(serverDetails *config.ServerDetails, profileName string) (*services.ConfigProfile, error) {
@@ -31,20 +29,4 @@ func GetConfigProfile(serverDetails *config.ServerDetails, profileName string) (
 		err = fmt.Errorf("failed to get config profile '%s': %q", profileName, err)
 	}
 	return configProfile, err
-}
-
-// TODO delete when done testing agains an operating server with the new ConfigProfile endpoints
-func MockGetConfigProfile() (*services.ConfigProfile, error) {
-	var configProfile *services.ConfigProfile
-	content, err := os.ReadFile("/Users/erant/Desktop/jfrog/jfrog-cli-security/tests/testdata/other/configProfile/configProfileExample.json")
-	if err != nil {
-		err = fmt.Errorf("failed to read config profile json file: %q", err)
-		return nil, err
-	}
-	err = json.Unmarshal(content, &configProfile)
-	if err != nil {
-		err = fmt.Errorf("failed to unmarshal config profile json: %q", err)
-		return nil, err
-	}
-	return configProfile, nil
 }
