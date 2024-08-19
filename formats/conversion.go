@@ -151,12 +151,12 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow, tokenValidation bool) (table
 			secret:     rows[i].Snippet,
 		}
 		if tokenValidation {
-			newRow.tokenValidation = "Not a token"
-			newRow.tokenInfo = "No Extra Info"
+			newRow.tokenValidation = jasutils.TokenValidationStatusForNonTokens
+			newRow.tokenInfo = jasutils.MissingMetadata
 			if rows[i].TokenValidation != "" {
-				newRow.tokenValidation = jasutils.TokenValidationStatusColors[rows[i].TokenValidation]
+				newRow.tokenValidation = jasutils.TokenValidationStatus(rows[i].TokenValidation).ToString()
 			}
-			if strings.TrimSpace(rows[i].TokenInfo) != "" {
+			if rows[i].TokenInfo != "" {
 				newRow.tokenInfo = rows[i].TokenInfo
 			}
 		}

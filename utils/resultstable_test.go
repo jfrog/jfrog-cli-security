@@ -1011,9 +1011,10 @@ func TestPrepareIac(t *testing.T) {
 
 func TestPrepareSecrets(t *testing.T) {
 	testCases := []struct {
-		name           string
-		input          []*sarif.Run
-		expectedOutput []formats.SourceCodeRow
+		name                 string
+		isTokenValidationRun bool
+		input                []*sarif.Run
+		expectedOutput       []formats.SourceCodeRow
 	}{
 		{
 			name:           "No Secret run",
@@ -1098,7 +1099,8 @@ func TestPrepareSecrets(t *testing.T) {
 			},
 		},
 		{
-			name: "Prepare Secret run - with results and tokens validation",
+			name:                 "Prepare Secret run - with results and tokens validation",
+			isTokenValidationRun: true,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("secret finding", "rule2", "note", sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet"))),
 				sarifutils.CreateRunWithDummyResults(
@@ -1166,8 +1168,14 @@ func TestPrepareSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rows, _ := prepareSecrets(tc.input, false)
+			rows, isTokenValidation := prepareSecrets(tc.input, false)
 			assert.ElementsMatch(t, tc.expectedOutput, rows)
+			if tc.isTokenValidationRun {
+				assert.Equal(t, isTokenValidation, true)
+				assert.Equal(t, "Active", rows[0].TokenValidation)
+				assert.Equal(t, "Inactive", rows[1].TokenValidation)
+				assert.Equal(t, "", rows[2].TokenValidation)
+			}
 		})
 	}
 }

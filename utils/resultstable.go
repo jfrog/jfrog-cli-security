@@ -367,8 +367,8 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow
 					},
 				}
 				if tokenValidation := sarifutils.GetResultPropertyTokenValidation(secretResult); tokenValidation != "" {
-					newRow.TokenValidation = sarifutils.GetResultPropertyTokenValidation(secretResult)
-					newRow.TokenInfo = sarifutils.GetResultPropertyMetadata(secretResult)
+					newRow.TokenValidation = strings.TrimSpace(sarifutils.GetResultPropertyTokenValidation(secretResult))
+					newRow.TokenInfo = strings.TrimSpace(sarifutils.GetResultPropertyMetadata(secretResult))
 					tokenValidationActivated = true
 				}
 				secretsRows = append(secretsRows, newRow)
@@ -377,10 +377,10 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) ([]formats.SourceCodeRow
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
-		if jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] != jasutils.TokenValidationOrder[secretsRows[j].TokenValidation] {
-			return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
+		if secretsRows[i].SeverityNumValue != secretsRows[j].SeverityNumValue {
+			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 		}
-		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
 	})
 
 	return secretsRows, tokenValidationActivated

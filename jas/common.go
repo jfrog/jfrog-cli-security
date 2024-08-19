@@ -277,13 +277,13 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	dynamicTokenVersionMismatchErr := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
 	if dynamicTokenVersionMismatchErr != nil {
 		if validateSecrets {
-			log.Warn("Token validation (--validate-secrets flag) is not supported in your xray version")
+			log.Info(fmt.Sprintf("Token validation (--validate-secrets flag) is not supported in your xray version, your xray version is %s and the minimum is %s", xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion))
 		}
 		return false
 	}
 	// Ordered By importance
 	// first check for flag and second check for env var
-	if validateSecrets || strings.ToLower(os.Getenv("JF_VALIDATE_SECRETS")) == "true" {
+	if validateSecrets || strings.ToLower(os.Getenv(JfSecretValidationEnvVariable)) == "true" {
 		return true
 	}
 	// third check for platform api

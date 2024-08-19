@@ -149,19 +149,21 @@ func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
 
 func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	tests := []struct {
-		name           string
-		msi            string
-		technologies   []techutils.Technology
-		expectedOutput map[string]string
+		name            string
+		msi             string
+		validateSecrets bool
+		technologies    []techutils.Technology
+		expectedOutput  map[string]string
 	}{
 		{
 			name:         "One valid technology",
 			msi:          "msi",
 			technologies: []techutils.Technology{techutils.Maven},
 			expectedOutput: map[string]string{
-				JfPackageManagerEnvVariable: string(techutils.Maven),
-				JfLanguageEnvVariable:       string(techutils.Java),
-				utils.JfMsiEnvVariable:      "msi",
+				JfPackageManagerEnvVariable:   string(techutils.Maven),
+				JfLanguageEnvVariable:         string(techutils.Java),
+				JfSecretValidationEnvVariable: "false",
+				utils.JfMsiEnvVariable:        "msi",
 			},
 		},
 		{
@@ -169,7 +171,8 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			msi:          "msi",
 			technologies: []techutils.Technology{techutils.Maven, techutils.Npm},
 			expectedOutput: map[string]string{
-				utils.JfMsiEnvVariable: "msi",
+				JfSecretValidationEnvVariable: "false",
+				utils.JfMsiEnvVariable:        "msi",
 			},
 		},
 		{
@@ -177,13 +180,24 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			msi:          "msi",
 			technologies: []techutils.Technology{},
 			expectedOutput: map[string]string{
-				utils.JfMsiEnvVariable: "msi",
+				utils.JfMsiEnvVariable:        "msi",
+				JfSecretValidationEnvVariable: "false",
+			},
+		},
+		{
+			name:            "with validate secrets",
+			msi:             "msi",
+			validateSecrets: true,
+			technologies:    []techutils.Technology{},
+			expectedOutput: map[string]string{
+				utils.JfMsiEnvVariable:        "msi",
+				JfSecretValidationEnvVariable: "true",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, false, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.validateSecrets, test.technologies...))
 		})
 	}
 }

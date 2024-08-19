@@ -40,7 +40,7 @@ func TestXrayAuditNpmJson(t *testing.T) {
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1, 0)
 }
 
 func testAuditNpm(t *testing.T, format string, withVuln bool) string {
@@ -72,7 +72,7 @@ func TestXrayAuditPnpmJson(t *testing.T) {
 
 func TestXrayAuditPnpmSimpleJson(t *testing.T) {
 	output := testXrayAuditPnpm(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1, 0)
 }
 
 func testXrayAuditPnpm(t *testing.T, format string) string {
@@ -101,7 +101,7 @@ func TestXrayAuditYarnV2Json(t *testing.T) {
 func TestXrayAuditYarnV2SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v3", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
-		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1, 0)
 	})
 }
 
@@ -127,7 +127,7 @@ func TestXrayAuditYarnV1JsonWithoutDevDependencies(t *testing.T) {
 func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
-		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1, 0)
 	})
 }
 
@@ -241,7 +241,7 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 		t.Run(fmt.Sprintf("projectName:%s,runInstallCommand:%t", test.projectName, runInstallCommand),
 			func(t *testing.T) {
 				output := testXrayAuditNuget(t, test.projectName, test.format, test.restoreTech)
-				securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, test.minVulnerabilities, test.minLicences)
+				securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, test.minVulnerabilities, test.minLicences, 0)
 			})
 	}
 }
@@ -272,7 +272,7 @@ func TestXrayAuditGradleJson(t *testing.T) {
 
 func TestXrayAuditGradleSimpleJson(t *testing.T) {
 	output := testXrayAuditGradle(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 3)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 3, 0)
 }
 
 func testXrayAuditGradle(t *testing.T, format string) string {
@@ -296,7 +296,7 @@ func TestXrayAuditMavenJson(t *testing.T) {
 
 func TestXrayAuditMavenSimpleJson(t *testing.T) {
 	output := testXscAuditMaven(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1, 0)
 }
 
 func testXscAuditMaven(t *testing.T, format string) string {
@@ -340,7 +340,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 25, 2)
 }
 
@@ -351,7 +351,7 @@ func TestXrayAuditPipJson(t *testing.T) {
 
 func TestXrayAuditPipSimpleJson(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.SimpleJson), "")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1, 0)
 }
 
 func TestXrayAuditPipJsonWithRequirementsFile(t *testing.T) {
@@ -361,7 +361,7 @@ func TestXrayAuditPipJsonWithRequirementsFile(t *testing.T) {
 
 func TestXrayAuditPipSimpleJsonWithRequirementsFile(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.SimpleJson), "requirements.txt")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 2, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 2, 0, 0)
 }
 
 func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
@@ -390,7 +390,7 @@ func TestXrayAuditPipenvJson(t *testing.T) {
 
 func TestXrayAuditPipenvSimpleJson(t *testing.T) {
 	output := testXrayAuditPipenv(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1, 0)
 }
 
 func testXrayAuditPipenv(t *testing.T, format string) string {
@@ -414,7 +414,7 @@ func TestXrayAuditPoetryJson(t *testing.T) {
 
 func TestXrayAuditPoetrySimpleJson(t *testing.T) {
 	output := testXrayAuditPoetry(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1, 0)
 }
 
 func testXrayAuditPoetry(t *testing.T, format string) string {
@@ -446,9 +446,9 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3")
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
 	// Verify that scan results are printed
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0, 0)
 	// Verify that JAS results are not printed
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
 }
@@ -470,34 +470,35 @@ func getNoJasAuditMockCommand() components.Command {
 }
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
-	output := testXrayAuditJasWithTokenValidation(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3")
-	securityTestUtils.VerifySimpleJsonScanTokenValidationResults(t, output, 5)
+	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 0, 0, 5)
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3")
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
 }
 
-func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets ...bool) string {
+func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -511,15 +512,11 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	assert.NoError(t, err)
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
-	if validateSecrets[0] {
-		return testCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--validate-secrets", "--secrets", "--format="+string(format.SimpleJson), "--threads="+threads)
+	args := []string{"audit", "--format=" + string(format.SimpleJson), "--threads=" + threads}
+	if validateSecrets {
+		args = append(args, "--secrets", "--validate-secrets")
 	}
 	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), "--threads="+threads)
-}
-
-func testXrayAuditJasWithTokenValidation(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string) string {
-	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	return testXrayAuditJas(t, testCli, project, threads, true)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {

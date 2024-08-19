@@ -64,7 +64,7 @@ func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testAuditNpm(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1, 0)
 }
 
 func TestXscAuditMavenJson(t *testing.T) {
@@ -78,7 +78,7 @@ func TestXscAuditMavenSimpleJson(t *testing.T) {
 	restoreFunc := initXscTest(t)
 	defer restoreFunc()
 	output := testXscAuditMaven(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1, 0)
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {

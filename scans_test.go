@@ -48,7 +48,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1, 0)
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
@@ -62,7 +62,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1, 0)
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
@@ -118,7 +118,7 @@ func TestDockerScan(t *testing.T) {
 		"redhat/ubi8-micro:8.4",
 	}
 	for _, imageName := range imagesToScan {
-		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3)
+		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3, 0, false)
 	}
 
 	// On Xray 3.40.3 there is a bug whereby xray fails to scan docker image with 0 vulnerabilities,
@@ -126,12 +126,12 @@ func TestDockerScan(t *testing.T) {
 	securityTestUtils.ValidateXrayVersion(t, "3.41.0")
 
 	// Image with 0 vulnerabilities
-	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0)
+	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0, 0, false)
 
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	// #nosec G101 -- Image with dummy token for tests
 	tokensImageToScan := "srmishj/inactive_tokens:latest"
-	runDockerScanWithTokenValidation(t, testCli, tokensImageToScan, 5)
+	runDockerScan(t, testCli, tokensImageToScan, "", 0, 0, 0, 5, true)
 }
 
 func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
@@ -141,7 +141,7 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
-func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {
+func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int, minInactives int, validateSecrets bool) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
 	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
@@ -149,10 +149,18 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 	if assert.NoError(t, dockerPullCommand.Run()) {
 		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
 		// Run docker scan on image
-		cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--format=json", "--fail=false", "--min-severity=low", "--fixable-only"}
+		cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
+		if validateSecrets {
+			cmdArgs = append(cmdArgs, "--validate-secrets", "--format=simple-json")
+		} else {
+			cmdArgs = append(cmdArgs, "--format=json")
+		}
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
-		if assert.NotEmpty(t, output) {
+		if assert.NotEmpty(t, output) && !validateSecrets {
 			securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
+		}
+		if assert.NotEmpty(t, output) && validateSecrets {
+			securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 0, 0, minInactives)
 		}
 		// Run docker scan on image with watch
 		if watchName == "" {
@@ -162,22 +170,6 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
-		}
-	}
-}
-
-func runDockerScanWithTokenValidation(t *testing.T, testCli *coreTests.JfrogCli, imageName string, minInactives int) {
-	// Pull image from docker repo
-	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
-	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
-	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
-	if assert.NoError(t, dockerPullCommand.Run()) {
-		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
-		// Run docker scan on image
-		cmdArgs := []string{"docker", "scan", imageTag, "--validate-secrets", "--server-id=default", "--licenses", "--format=simple-json", "--fail=false", "--min-severity=low", "--fixable-only"}
-		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
-		if assert.NotEmpty(t, output) {
-			securityTestUtils.VerifyJsonScanTokenValidationResults(t, output, minInactives)
 		}
 	}
 }
