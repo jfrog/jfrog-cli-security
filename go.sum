@@ -633,10 +633,10 @@ github.com/apache/thrift v0.16.0/go.mod h1:PHK3hniurgQaNMZYaCLEqXKsYK8upmhPbmdP2
 github.com/apparentlymart/go-textseg/v13 v13.0.0/go.mod h1:ZK2fH7c4NqDTLtiYLvIkEghdlcqw7yxLeM89kiTRPUo=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
-github.com/asafambar/build-info-go v1.8.9-0.20240813103022-2cc938affc4c h1:WziT3LrEwkHgD3ivsLmSuxS+OF4N3iTL6ozof8WskhE=
-github.com/asafambar/build-info-go v1.8.9-0.20240813103022-2cc938affc4c/go.mod h1:6mdtqjREK76bHNODXakqKR/+ksJ9dvfLS7H57BZtnLY=
-github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240813112942-31f89dba3afc h1:jGEmZaRymsSbJMHdOJOFqj9H+N9Zsuss2+eskn7Bkoc=
-github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240813112942-31f89dba3afc/go.mod h1:SDCmwmSyM4EWWTQiOQ1ova2VLjTdB7i9tT6TpF2iVdQ=
+github.com/asafambar/build-info-go v1.8.9-0.20240819133117-c3f52700927d h1:GS9yDbl7Moer5ODbWu+DPcQtyCYlmRL4TAdt1l+b/Vo=
+github.com/asafambar/build-info-go v1.8.9-0.20240819133117-c3f52700927d/go.mod h1:6mdtqjREK76bHNODXakqKR/+ksJ9dvfLS7H57BZtnLY=
+github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240819133546-22288f633206 h1:Lze6JBSkUhPY+qJ2TufYK3rtQIbNirS03bNknZvAR5k=
+github.com/asafambar/jfrog-cli-core/v2 v2.0.0-20240819133546-22288f633206/go.mod h1:CnQjmBNJiayJrLJbVxD9xH0c9lrnlrgR5qKYBP6OO/I=
 github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
 github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=

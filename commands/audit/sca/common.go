@@ -169,7 +169,7 @@ func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map
 }
 
 func GetMsgToUserForCurationBlock(isCurationCmd bool, tech techutils.Technology, cmdOutput string) (msgToUser string) {
-	if isCurationCmd && buildInfoUtils.IsForbiddenOutput(tech.String(), cmdOutput) {
+	if isCurationCmd && buildInfoUtils.IsForbiddenOutput(buildInfoUtils.PackageManager(tech.String()), cmdOutput) {
 		msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, tech)
 	}
 	return

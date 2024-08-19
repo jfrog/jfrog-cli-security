@@ -569,7 +569,7 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 	// 2. check if the error message contains the forbidden error message, in case the output included in the error message.
 	forBiddenError := &buildInfoUtils.ForbiddenError{}
 	if !errors.Is(originError, forBiddenError) && !strings.Contains(originError.Error(), forBiddenError.Error()) &&
-		!buildInfoUtils.IsForbiddenOutput(tech.String(), originError.Error()) {
+		!buildInfoUtils.IsForbiddenOutput(buildInfoUtils.PackageManager(tech.String()), originError.Error()) {
 		return
 	}
 	// If the command is not running in the context of GitHub actions, we don't want to run the curation audit automatically
