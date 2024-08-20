@@ -113,3 +113,11 @@ func validateAnalyticsBasicEvent(t *testing.T, output string) {
 	assert.NotEmpty(t, event.TotalScanDuration)
 	assert.True(t, event.TotalFindings > 0)
 }
+
+func TestAdvancedSecurityDockerScanWithXsc(t *testing.T) {
+	testCli, cleanup := initNativeDockerWithXrayTest(t)
+	restoreFunc := initXscTest(t)
+	defer restoreFunc()
+	defer cleanup()
+	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
+}
