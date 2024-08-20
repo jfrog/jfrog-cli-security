@@ -623,6 +623,18 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}}},
 		},
 		{
+			name: "missing context cve",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "missing_context", sarifutils.CreateDummyPassingResult("applic_testCve1")),
+				},
+				EntitledForJas: true,
+			},
+			cves:           []services.Cve{{Id: "testCve1"}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}}},
+		},
+		{
 			name: "undetermined cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
@@ -709,17 +721,17 @@ func TestGetApplicableCveValue(t *testing.T) {
 			},
 		},
 		{
-			name: "new scan statuses - undetermined wins not covered",
+			name: "new scan statuses - missing context wins applicable",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", sarifutils.CreateDummyPassingResult("applic_testCve2")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "missing_context", sarifutils.CreateDummyPassingResult("applic_testCve1")),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
-			expectedResult: jasutils.ApplicabilityUndetermined,
-			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String()}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}},
 			},
 		},
 	}
