@@ -5,24 +5,178 @@ import (
 )
 
 const (
+	IacResult   SummaryResultType = "IAC"
+	SecretsResult SummaryResultType = "Secrets"
+	SastResult  SummaryResultType = "SAST"
+	ScaSecurityResult SummaryResultType = "SCA"
+	ScaLicenseResult SummaryResultType = "License"
+	ScaOperationalResult SummaryResultType = "Operational"
+
+	NoStatus = ""
+)
+type SummaryResultType string
+
+func (srt SummaryResultType) String() string {
+	return string(srt)
+}
+
+type ResultsSummary struct {
+	BaseJfrogUrl string			 `json:"base_jfrog_url,omitempty"`
+	Scans []ScanSummary `json:"scans"`
+}
+
+type ScanSummary struct {
+	Target          string                      `json:"target"`
+	Vulnerabilities *ScanResultSummary		  `json:"vulnerabilities,omitempty"`
+	Violations      *ScanViolationsSummary		  `json:"violations,omitempty"`
+	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
+}
+
+type ScanResultSummary struct {
+	ScaResults    *ScaScanResultSummary `json:"sca,omitempty"`
+	IacResults    *ResultSummary  `json:"iac,omitempty"`
+	SecretsResults *ResultSummary  `json:"secrets,omitempty"`
+	SastResults   *ResultSummary  `json:"sast,omitempty"`
+}
+
+type ScanViolationsSummary struct {
+	Watches []string `json:"watches,omitempty"`
+	ScanResultSummary
+}
+
+type ScaScanResultSummary struct {
+	Security ResultSummary `json:"security,omitempty"`
+	License  ResultSummary `json:"license,omitempty"`
+	OperationalRisk ResultSummary `json:"operational_risk,omitempty"`
+}
+
+type CuratedPackages struct {
+	Blocked  []BlockedPackages `json:"blocked,omitempty"`
+	Approved int                  `json:"approved,omitempty"`
+}
+
+type BlockedPackages struct {
+	Policy string `json:"policy,omitempty"`
+	Condition string `json:"condition,omitempty"`
+	Packages []string `json:"packages"`
+}
+
+type ResultSummary map[string]map[string]int
+
+func (rs ResultSummary) GetTotal() (total int) {
+	for _, count := range rs {
+		for _, c := range count {
+			total += c
+		}
+	}
+	return
+}
+
+func (srs *ScanResultSummary) GetTotal(filterTypes ...SummaryResultType) (total int) {
+	if srs.IacResults != nil && isFilterApply(IacResult, filterTypes) {
+		total += srs.IacResults.GetTotal()
+	}
+	if srs.SecretsResults != nil && isFilterApply(SecretsResult, filterTypes) {
+		total += srs.SecretsResults.GetTotal()
+	}
+	if srs.SastResults != nil && isFilterApply(SastResult, filterTypes) {
+		total += srs.SastResults.GetTotal()
+	}
+	if srs.ScaResults == nil {
+		return
+	}
+	if isFilterApply(ScaSecurityResult, filterTypes) {
+		total += srs.ScaResults.Security.GetTotal()
+	}
+	if isFilterApply(ScaLicenseResult, filterTypes) {
+		total += srs.ScaResults.License.GetTotal()
+	}
+	if isFilterApply(ScaOperationalResult, filterTypes) {
+		total += srs.ScaResults.OperationalRisk.GetTotal()
+	}
+	return
+}
+
+func isFilterApply(key SummaryResultType, filterTypes []SummaryResultType) bool {
+	if len(filterTypes) == 0 {
+		return true
+	}
+	for _, filterType := range filterTypes {
+		if key == filterType {
+			return true
+		}
+	}
+	return false
+}
+
+func (rs *ResultsSummary) getTotalVulnerabilities(filterTypes ...SummaryResultType) (total int) {
+	for _, scan := range rs.Scans {
+		if scan.Vulnerabilities != nil {
+			total += getTotalIssues(scan.Vulnerabilities, filterTypes...)
+		}
+	}
+	return
+}
+
+func (rs *ResultsSummary) getTotalViolations(filterTypes ...SummaryResultType) (total int) {
+	for _, scan := range rs.Scans {
+		if scan.Violations != nil {
+			total += getTotalIssues(&scan.Violations.ScanResultSummary, filterTypes...)
+		}
+	}
+	return
+}
+
+func getTotalIssues(summary *ScanResultSummary, filterTypes ...SummaryResultType) (total int) {
+	if summary == nil {
+		return
+	}
+	return summary.GetTotal(filterTypes...)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const (
 	ScaScan     SummarySubScanType = "SCA"
 	IacScan     SummarySubScanType = "IAC"
 	SecretsScan SummarySubScanType = "Secrets"
 	SastScan    SummarySubScanType = "SAST"
 
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
-
 type SummarySubScanType string
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
-}
 
 type SummaryResults struct {
+	BaseJfrogUrl string             `json:"base_jfrog_url,omitempty"`
 	Scans []ScanSummaryResult `json:"scans"`
 }
 
@@ -33,54 +187,58 @@ func (sr SummaryResults) GetTotalIssueCount() (total int) {
 	return
 }
 
-type IScanSummaryResult struct {
-	Target string `json:"target,omitempty"`
-	Vulnerabilities *ScanSummaryVulnerabilities `json:"vulnerabilities"`
-	Violations *ScanSummaryViolations `json:"violations"`
-	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
+// Severity -> Status -> Count
+type SeverityCount map[severityutils.Severity]map[string]int
+
+func GetVulnerabilitiesSummaries(summaries ...SummaryResults) (vulnerabilitiesSummary *ScanVulnerabilitiesSummary) {
+	scaResults := &ScanScaResult{}
+	iacResults := &SummaryCount{}
+	secretsResults := &SummaryCount{}
+	sastResults := &SummaryCount{}
+	for _, summary := range summaries {
+		for _, scan := range summary.Scans {
+			if scan.Vulnerabilities != nil {
+				vulnerabilitiesSummaries = append(vulnerabilitiesSummaries, *scan.Vulnerabilities)
+			}
+		}
+	}
+	vulnerabilitiesSummary = &ScanVulnerabilitiesSummary{}
+	
+	return
 }
 
-type ScanSummaryVulnerabilities struct {
-	ScaScanResults     *ScanScaResult `json:"sca,omitempty"`
-	IacScanResults     *SummaryCount  `json:"iac,omitempty"`
-	SecretsScanResults *SummaryCount  `json:"secrets,omitempty"`
-	SastScanResults    *SummaryCount  `json:"sast,omitempty"`
+func GetViolationSummaries(summaries ...SummaryResults) (violationsSummary *ScanSummaryViolations) {
+	watches := []string{}
+	scaResults := &ScanScaResult{}
+	iacResults := &SummaryCount{}
+	secretsResults := &SummaryCount{}
+	sastResults := &SummaryCount{}
+	for _, summary := range summaries {
+		for _, scan := range summary.Scans {
+			if scan.Violations != nil {
+				violationsSummary = append(violationsSummary, *scan.Violations)
+			}
+		}
+	}
+	violationsSummary = &ScanSummaryViolations{Watches: watches}
+	return
 }
+
+type ScanSummaryResult struct {
+	Target          string                      `json:"target,omitempty"`
+	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
+	Violations      *ScanSummaryViolations        `json:"violations,omitempty"`
+	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
+}
+
+// type CuratedPackages struct {
+// 	Blocked  TwoLevelSummaryCount `json:"blocked,omitempty"`
+// 	Approved int                  `json:"approved,omitempty"`
+// }
 
 type ScanSummaryViolations struct {
 	Watches []string `json:"watches,omitempty"`
-	Violations TwoLevelSummaryCount `json:"policy_violations,omitempty"`
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-type ScanSummaryResult struct {
-	IndexKeys 	 []string                      `json:"index_keys,omitempty"`
-	Target          string                      `json:"target,omitempty"`
-	Vulnerabilities *ScanVulnerabilitiesSummary `json:"vulnerabilities,omitempty"`
-	Violations      TwoLevelSummaryCount        `json:"violations,omitempty"`
-	CuratedPackages *CuratedPackages            `json:"curated,omitempty"`
-}
-
-type CuratedPackages struct {
-	Blocked  TwoLevelSummaryCount `json:"blocked,omitempty"`
-	Approved int                  `json:"approved,omitempty"`
-}
-
-type ScanViolationsSummary struct {
-	Watches []string `json:"watches,omitempty"`
-	Violations      TwoLevelSummaryCount  `json:"policy_violations,omitempty"`
+	ScanVulnerabilitiesSummary
 }
 
 type ScanVulnerabilitiesSummary struct {
@@ -90,10 +248,68 @@ type ScanVulnerabilitiesSummary struct {
 	SastScanResults    *SummaryCount  `json:"sast,omitempty"`
 }
 
+// Returns a TwoLevelSummaryCount with the counts described in the summary
+// Severity -> status -> Count
+func (ss *ScanVulnerabilitiesSummary) GetSummaryDetails() (summary TwoLevelSummaryCount) {
+	summary = TwoLevelSummaryCount{}
+	if ss.ScaScanResults != nil {
+		for severity, statusCount := range ss.ScaScanResults.SecurityFindings {
+			if summary[severity] == nil {
+				summary[severity] = statusCount
+			} else {
+				for status, count := range statusCount {	
+					summary[severity][status] += count
+				}
+			}
+		}
+		if ss.ScaScanResults.LicenseFindings != nil {
+			for severity, count := range *ss.ScaScanResults.LicenseFindings {
+				if summary[severity] == nil {
+					summary[severity] = SummaryCount{NoStatus: count}
+				} else {
+					summary[severity][NoStatus] += count
+				}
+			}
+		}
+		if ss.ScaScanResults.OperationalRiskFindings != nil {
+			for severity, count := range *ss.ScaScanResults.OperationalRiskFindings {
+				if summary[severity] == nil {
+					summary[severity] = SummaryCount{NoStatus: count}
+				} else {
+					summary[severity][NoStatus] += count
+				}
+			}
+		}
+	}
+	if ss.IacScanResults != nil {
+		for severity, count := range *ss.IacScanResults {
+			if summary[severity] == nil {
+				summary[severity] = SummaryCount{NoStatus: count}
+			} else {
+				summary[severity][NoStatus] += count
+			}
+		}
+	}
+	if ss.SecretsScanResults != nil {
+		for severity, count := range *ss.SecretsScanResults {
+			if summary[severity] == nil {
+				summary[severity] = SummaryCount{NoStatus: count}
+			} else {
+				summary[severity][NoStatus] += count
+			}
+		}
+	}
+	return
+}
+
 type ScanScaResult struct {
-	ScanId string `json:"scan_id,omitempty"`
-	SummaryCount   TwoLevelSummaryCount `json:"sca,omitempty"`
-	UniqueFindings int                  `json:"unique_findings,omitempty"`
+	ScanIds []string `json:"scan_ids,omitempty"`
+	// Severity -> Applicable status -> Count
+	SecurityFindings TwoLevelSummaryCount `json:"security_findings,omitempty"`
+	// Severity -> Count
+	LicenseFindings *SummaryCount `json:"license_findings,omitempty"`
+	// Severity -> Count
+	OperationalRiskFindings *SummaryCount `json:"operational_risk_findings,omitempty"`
 }
 
 func (s *ScanSummaryResult) HasIssues() bool {

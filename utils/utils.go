@@ -23,7 +23,17 @@ const (
 	IacScan                SubScanType = "iac"
 	SastScan               SubScanType = "sast"
 	SecretsScan            SubScanType = "secrets"
+
+	ViolationTypeSecurity        ViolationIssueType = "Security"
+	ViolationTypeLicense         ViolationIssueType = "License"
+	ViolationTypeOperationalRisk ViolationIssueType = "Operational Risk"
 )
+
+type ViolationIssueType string
+
+func (v ViolationIssueType) String() string {
+	return string(v)
+}
 
 type SubScanType string
 

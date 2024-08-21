@@ -277,7 +277,7 @@ func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
 }
 
 func formatPolicyAndCond(policy, cond string) string {
-	return fmt.Sprintf("Policy: %s, Condition: %s", policy, cond)
+	return fmt.Sprintf("Violated Policy: %s, Condition: %s", policy, cond)
 }
 
 // The unique identifier of a package includes the package name with its version
