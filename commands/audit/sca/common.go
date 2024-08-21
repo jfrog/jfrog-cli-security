@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -167,24 +168,9 @@ func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map
 	}
 }
 
-func SuspectCurationBlockedError(isCurationCmd bool, tech techutils.Technology, cmdOutput string) (msgToUser string) {
-	if !isCurationCmd {
-		return
-	}
-	switch tech {
-	case techutils.Maven:
-		if strings.Contains(cmdOutput, "status code: 403") || strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") ||
-			strings.Contains(cmdOutput, "status code: 500") {
-			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Maven)
-		}
-	case techutils.Pip:
-		if strings.Contains(strings.ToLower(cmdOutput), "http error 403") {
-			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Pip)
-		}
-	case techutils.Go:
-		if strings.Contains(strings.ToLower(cmdOutput), "403 forbidden") {
-			msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, techutils.Go)
-		}
+func GetMsgToUserForCurationBlock(isCurationCmd bool, tech techutils.Technology, cmdOutput string) (msgToUser string) {
+	if isCurationCmd && buildInfoUtils.IsForbiddenOutput(buildInfoUtils.PackageManager(tech.String()), cmdOutput) {
+		msgToUser = fmt.Sprintf(CurationErrorMsgToUserTemplate, tech)
 	}
 	return
 }
