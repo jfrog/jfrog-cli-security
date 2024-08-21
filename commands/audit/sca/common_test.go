@@ -339,7 +339,7 @@ func TestSuspectCurationBlockedError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, SuspectCurationBlockedError(tt.isCurationCmd, tt.tech, tt.output), tt.expect)
+			assert.Equal(t, GetMsgToUserForCurationBlock(tt.isCurationCmd, tt.tech, tt.output), tt.expect)
 		})
 	}
 }
