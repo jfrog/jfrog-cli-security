@@ -6,7 +6,7 @@ require (
 	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.9.33
+	github.com/jfrog/build-info-go v1.9.34
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.5
 	github.com/jfrog/jfrog-apps-config v1.0.1
@@ -116,7 +116,7 @@ require (
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-replace github.com/jfrog/jfrog-client-go => github.com/eranturgeman/jfrog-client-go v0.0.0-20240819141220-e887308e4fde
+replace github.com/jfrog/jfrog-client-go => github.com/eranturgeman/jfrog-client-go v0.0.0-20240821061855-b77673df1292
 
 //replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
