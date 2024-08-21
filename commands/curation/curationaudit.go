@@ -249,12 +249,10 @@ func (ca *CurationAuditCommand) Run() (err error) {
 func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
 	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
-		blocked := convertBlocked(packagesStatus.packagesStatus)
-
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				Approved: packagesStatus.totalNumberOfPackages - len(blocked),
-				Blocked: blocked,
+				PackageCount: packagesStatus.totalNumberOfPackages,
+				Blocked: convertBlocked(packagesStatus.packagesStatus),
 			},
 		})
 
@@ -268,6 +266,31 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 			}})
 	}
 	return summaryResults
+}
+
+func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
+	blocked := []formats.BlockedPackages{}
+	for _, pkg := range pkgStatus {
+		for _, policy := range pkg.Policy {
+			blocked = 
+
+			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
+			if _, ok := blocked[polAndCond]; !ok {
+				blocked[polAndCond] = formats.SummaryCount{}
+			}
+			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
+			blocked[polAndCond][uniqId]++
+		}
+		if pkg.Action == blocked {
+			blocked = append(blocked, formats.BlockedPackages{
+				PackageName:    pkg.PackageName,
+				PackageVersion: pkg.PackageVersion,
+				Reason:         pkg.BlockingReason,
+				Policies:       pkg.Policy,
+			})
+		}
+	}
+	return blocked
 }
 
 func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {

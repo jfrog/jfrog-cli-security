@@ -1,8 +1,8 @@
 package formats
 
-// import (
-// 	"github.com/jfrog/gofrog/datastructures"
-// )
+import (
+	"github.com/jfrog/gofrog/datastructures"
+)
 
 const (
 	IacResult            SummaryResultType = "IAC"
@@ -55,13 +55,25 @@ type ScaScanResultSummary struct {
 
 type CuratedPackages struct {
 	Blocked  []BlockedPackages `json:"blocked,omitempty"`
-	Approved int               `json:"approved,omitempty"`
+	PackageCount int               `json:"num_packages,omitempty"`
 }
 
 type BlockedPackages struct {
 	Policy    string   `json:"policy,omitempty"`
 	Condition string   `json:"condition,omitempty"`
 	Packages  []string `json:"packages"`
+}
+
+func (cp *CuratedPackages) GetApprovedCount() int {
+	return cp.PackageCount - cp.GetBlockCount()
+}
+
+func (cp *CuratedPackages) GetBlockCount() int {
+	allBlocked := []string{}
+	for _, blocked := range cp.Blocked {
+		allBlocked = append(allBlocked, blocked.Packages...)
+	}
+	return datastructures.MakeSetFromElements(allBlocked...).Size()
 }
 
 type ResultSummary map[string]map[string]int
