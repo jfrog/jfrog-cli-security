@@ -246,10 +246,19 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	return
 }
 
-func convertResultsToSummary(results map[string]*CurationReport) formats.SummaryResults {
-	summaryResults := formats.SummaryResults{}
+func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
+	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
 		blocked := convertBlocked(packagesStatus.packagesStatus)
+
+		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
+			CuratedPackages: &formats.CuratedPackages{
+				Approved: packagesStatus.totalNumberOfPackages - len(blocked),
+				Blocked: blocked,
+			},
+		})
+
+		
 		approved := packagesStatus.totalNumberOfPackages - blocked.GetCountOfKeys(false)
 
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummaryResult{Target: projectPath,

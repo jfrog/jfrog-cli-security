@@ -82,9 +82,13 @@ func (r *Results) IsIssuesFound() bool {
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
 func (r *Results) CountScanResultsFindings() (total int) {
-	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
+	summary := formats.ResultsSummary{Scans: r.getScanSummaryByTargets()}
+	if summary.HasViolations() {
+		return summary.GetTotalViolations()
+	}
+	return summary.GetTotalVulnerabilities()
 }
-func (r *Results) GetSummary() (summary formats.SummaryResults) {
+func (r *Results) GetSummary() (summary formats.ResultsSummary) {
 	if len(r.ScaResults) <= 1 {
 		summary.Scans = r.getScanSummaryByTargets()
 		return
@@ -96,7 +100,7 @@ func (r *Results) GetSummary() (summary formats.SummaryResults) {
 }
 
 // Returns a summary for the provided targets. If no targets are provided, a summary for all targets is returned.
-func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
+func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummary) {
 	if len(targets) == 0 {
 		// No filter, one scan summary for all targets
 		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))
