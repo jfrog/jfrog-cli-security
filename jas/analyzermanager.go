@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	EntitlementsMinVersion                    = "3.66.5"
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
 	defaultAnalyzerManagerVersion             = "1.8.13"
