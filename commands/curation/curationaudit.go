@@ -4,26 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
-	"sync"
-
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -33,7 +24,15 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
 )
 
 const (
@@ -314,16 +313,24 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
+	serverDetails, err = ca.GetAuth(tech)
+	if err != nil {
+		return
+	}
+	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
 			return
 		}
 	}
 	serverDetails, err = ca.PackageManagerConfig.ServerDetails()
-	if err != nil {
-		return
-	}
-	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
 	if err != nil {
 		return
 	}
@@ -498,8 +505,8 @@ func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (
 		return nil, err
 	}
 	if !exists {
-		return nil, errorutils.CheckErrorf("no config file was found! Before running the " + projectType.String() + " command on a " +
-			"project for the first time, the project should be configured using the 'jf " + projectType.String() + "c' command")
+		return nil, errorutils.CheckErrorf("no config file was found! Before running the %s command on a "+
+			"project for the first time, the project should be configured using the 'jf %s c' command", projectType.String(), projectType.String())
 	}
 	vConfig, err := project.ReadConfigFile(configFilePath, project.YAML)
 	if err != nil {
@@ -799,8 +806,21 @@ func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputForma
 		case string(outFormat.Json):
 			format = outFormat.Json
 		default:
-			err = errorutils.CheckErrorf("only the following output formats are supported: " + coreutils.ListToText(CurationOutputFormats))
+			err = errorutils.CheckErrorf("only the following output formats are supported: %s", coreutils.ListToText(CurationOutputFormats))
 		}
 	}
 	return
+}
+
+func IsEntitledForCuration(xrayManager *xrayClient.XrayServicesManager) (entitled bool, err error) {
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return
+	}
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); err != nil {
+		log.Debug(err)
+		return
+	}
+	return xrayManager.IsEntitled("curation")
+
 }

@@ -133,7 +133,7 @@
             "visible": true
           },
           "4": {
-            "ref": "ninja/1.11.1",
+            "ref": "ninja/1.12.1",
             "run": true,
             "libs": false,
             "skip": false,
@@ -154,16 +154,16 @@
       "1": {
         "ref": "zlib/1.3.1#f52e03ae3d251dec704634230cd806a2",
         "id": "1",
-        "recipe": "Cache",
+        "recipe": "Downloaded",
         "package_id": "b647c43bfefae3f830561ca202b6cfd935b56205",
         "prev": "6b307bbcbae23635c4006543ffdbf3ef",
         "rrev": "f52e03ae3d251dec704634230cd806a2",
         "rrev_timestamp": 1708593606.497,
         "prev_timestamp": 1708593932.513,
-        "remote": null,
-        "binary_remote": null,
+        "remote": "conancenter",
+        "binary_remote": "conancenter",
         "build_id": null,
-        "binary": "Cache",
+        "binary": "Download",
         "invalid_build": false,
         "info_invalid": null,
         "name": "zlib",
@@ -216,7 +216,7 @@
         "generators": [],
         "python_requires": null,
         "system_requires": {},
-        "recipe_folder": "/home/igorz/.conan2/p/zlib41bd3946e7341/e",
+        "recipe_folder": "/home/runner/.conan2/p/zlib41bd3946e7341/e",
         "source_folder": null,
         "build_folder": null,
         "generators_folder": null,
@@ -674,7 +674,7 @@
         "generators": [],
         "python_requires": null,
         "system_requires": {},
-        "recipe_folder": "/home/igorz/.conan2/p/opensd7bdf135944e1/e",
+        "recipe_folder": "/home/runner/.conan2/p/opensd7bdf135944e1/e",
         "source_folder": null,
         "build_folder": null,
         "generators_folder": null,
@@ -803,15 +803,15 @@
         "test": false
       },
       "3": {
-        "ref": "meson/1.4.1#edd3ecbcb4b295d2f084be5bb944f1af",
+        "ref": "meson/1.4.1#d1b27e4988cfee59b212addebb1474d5",
         "id": "3",
-        "recipe": "Cache",
+        "recipe": "Downloaded",
         "package_id": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
         "prev": "4a43a051838fc016591c956c0389e89e",
-        "rrev": "edd3ecbcb4b295d2f084be5bb944f1af",
+        "rrev": "d1b27e4988cfee59b212addebb1474d5",
         "rrev_timestamp": 1717121413.971,
         "prev_timestamp": 1717121751.058,
-        "remote": null,
+        "remote": "conancenter",
         "binary_remote": "conancenter",
         "build_id": null,
         "binary": "Download",
@@ -823,7 +823,7 @@
         "url": "https://github.com/conan-io/conan-center-index",
         "license": "Apache-2.0",
         "author": null,
-        "description": "Meson is a project to create the best possible next-generation build system",
+        "description": "a project to create the best possible next-generation build system",
         "homepage": "https://github.com/mesonbuild/meson",
         "build_policy": null,
         "upload_policy": null,
@@ -836,18 +836,18 @@
         "options_description": null,
         "version": "1.4.1",
         "topics": [
-          "meson",
           "mesonbuild",
           "build-system"
         ],
         "package_type": "application",
+        "languages": [],
         "settings": {},
         "options": {},
         "options_definitions": {},
         "generators": [],
         "python_requires": null,
         "system_requires": {},
-        "recipe_folder": "/home/igorz/.conan2/p/mesondba9cc745bd8c/e",
+        "recipe_folder": "/home/runner/.conan2/p/meson35a199cfb96c1/e",
         "source_folder": null,
         "build_folder": null,
         "generators_folder": null,
@@ -884,9 +884,10 @@
         "conf_info": {},
         "label": "meson/1.4.1",
         "info": {},
+        "vendor": false,
         "dependencies": {
           "4": {
-            "ref": "ninja/1.11.1",
+            "ref": "ninja/1.12.1",
             "run": true,
             "libs": false,
             "skip": false,
@@ -905,15 +906,15 @@
         "test": false
       },
       "4": {
-        "ref": "ninja/1.11.1#77587f8c8318662ac8e5a7867eb4be21",
+        "ref": "ninja/1.12.1#fd583651bf0c6a901943495d49878803",
         "id": "4",
-        "recipe": "Cache",
+        "recipe": "Downloaded",
         "package_id": "3593751651824fb813502c69c971267624ced41a",
-        "prev": "60e6fc0f973babfbed66a66af22a4f02",
-        "rrev": "77587f8c8318662ac8e5a7867eb4be21",
+        "prev": "a46e32b2b79add597b73d8b42c415ed1",
+        "rrev": "fd583651bf0c6a901943495d49878803",
         "rrev_timestamp": 1684431244.21,
         "prev_timestamp": 1684431632.795,
-        "remote": null,
+        "remote": "conancenter",
         "binary_remote": "conancenter",
         "build_id": null,
         "binary": "Download",
@@ -936,12 +937,13 @@
         "win_bash_run": null,
         "default_options": null,
         "options_description": null,
-        "version": "1.11.1",
+        "version": "1.12.1",
         "topics": [
           "ninja",
           "build"
         ],
         "package_type": "application",
+        "languages": [],
         "settings": {
           "os": "Linux",
           "arch": "x86_64",
@@ -956,7 +958,7 @@
         "generators": [],
         "python_requires": null,
         "system_requires": {},
-        "recipe_folder": "/home/igorz/.conan2/p/ninja19c9f8e277acc/e",
+        "recipe_folder": "/home/runner/.conan2/p/ninja5a60db2c3ec7a/e",
         "source_folder": null,
         "build_folder": null,
         "generators_folder": null,
@@ -991,7 +993,7 @@
           }
         },
         "conf_info": {},
-        "label": "ninja/1.11.1",
+        "label": "ninja/1.12.1",
         "info": {
           "settings": {
             "os": "Linux",
@@ -999,6 +1001,7 @@
             "build_type": "Release"
           }
         },
+        "vendor": false,
         "dependencies": {},
         "context": "host",
         "test": false
@@ -1008,7 +1011,9 @@
       "0": "None"
     },
     "overrides": {},
-    "resolved_ranges": {},
+    "resolved_ranges": {
+      "ninja/[>=1.10.2 <2]": "ninja/1.12.1"
+    },
     "replaced_requires": {},
     "error": null
   }
