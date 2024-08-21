@@ -236,7 +236,7 @@ func ScanCmd(c *components.Context) error {
 		SetThreads(threads).
 		SetSpec(specFile).
 		SetOutputFormat(format).
-		SetProject(c.GetStringFlagValue(flags.Project)).
+		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -287,10 +287,14 @@ func getMinimumSeverity(c *components.Context) (severity severityutils.Severity,
 }
 
 func isProjectProvided(c *components.Context) bool {
+	return getProject(c) != ""
+}
+
+func getProject(c *components.Context) string {
 	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project) != ""
+		return c.GetStringFlagValue(flags.Project)
 	}
-	return os.Getenv(coreutils.Project) != ""
+	return os.Getenv(coreutils.Project)
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
@@ -454,7 +458,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
-		SetProject(c.GetStringFlagValue(flags.Project)).
+		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -689,7 +693,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format).
-		SetProject(c.GetStringFlagValue(flags.Project)).
+		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
