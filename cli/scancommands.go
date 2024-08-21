@@ -697,7 +697,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
-		SetThreads(threads)
+		SetThreads(threads).
+		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
