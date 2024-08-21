@@ -18,7 +18,6 @@ import (
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -95,17 +94,7 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 	commonParams.ProjectKey = auditCmd.projectKey
 	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
-	commonParams.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
-	if commonParams.MultiScanId != "" {
-		xscManager := auditCmd.analyticsMetricsService.XscManager()
-		if xscManager != nil {
-			version, err := xscManager.GetVersion()
-			if err != nil {
-				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-			}
-			commonParams.XscVersion = version
-		}
-	}
+	commonParams.MultiScanId, commonParams.XscVersion = xsc.GetXscMsiAndVersion(auditCmd.analyticsMetricsService)
 	return commonParams
 }
 
