@@ -286,7 +286,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technolo
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, EntitlementsMinVersion); e != nil {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
 		log.Debug(e)
 		return
 	}
