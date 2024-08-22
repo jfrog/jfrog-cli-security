@@ -3,9 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/exp/slices"
-	"os"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -14,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -93,11 +91,7 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 		Watches:  auditCmd.watches,
 		ScanType: services.Dependency,
 	}
-	if auditCmd.projectKey == "" {
-		commonParams.ProjectKey = os.Getenv(coreutils.Project)
-	} else {
-		commonParams.ProjectKey = auditCmd.projectKey
-	}
+	commonParams.ProjectKey = auditCmd.projectKey
 	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
 	commonParams.MultiScanId, commonParams.XscVersion = xsc.GetXscMsiAndVersion(auditCmd.analyticsMetricsService)
