@@ -42,6 +42,20 @@
                 "text": "Scanner for CVE-2020-1747"
               }
             },
+	     {
+              "id": "applic_CVE-2020-1751",
+              "name": "CVE-2020-1751",
+              "properties": {
+                "applicability": "missing_context"
+              },
+              "fullDescription": {
+                "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class).",
+                "markdown": "The scanner checks whether any of the following vulnerable functions are called:\n\n-  `yaml.full_load()`\n-  `yaml.load()` only unsafe calls (without specifying `SafeLoader` as the `Loader`class)."
+              },
+              "shortDescription": {
+                "text": "Scanner for CVE-2020-1751"
+              }
+            },
             {
               "id": "applic_CVE-2020-7788",
               "name": "CVE-2020-7788",
