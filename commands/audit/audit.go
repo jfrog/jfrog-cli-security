@@ -3,7 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -92,11 +91,7 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 		Watches:  auditCmd.watches,
 		ScanType: services.Dependency,
 	}
-	if auditCmd.projectKey == "" {
-		commonParams.ProjectKey = os.Getenv(coreutils.Project)
-	} else {
-		commonParams.ProjectKey = auditCmd.projectKey
-	}
+	commonParams.ProjectKey = auditCmd.projectKey
 	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
 	commonParams.MultiScanId, commonParams.XscVersion = xsc.GetXscMsiAndVersion(auditCmd.analyticsMetricsService)
