@@ -682,9 +682,9 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - applicable wins all statuses",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve3"), []string{"applicability"}, []string{"not_covered"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve3"), []string{"applicability"}, []string{"not_covered"}),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
@@ -698,8 +698,8 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - not covered wins not applicable",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
@@ -712,8 +712,8 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "new scan statuses - undetermined wins not covered",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"undetermined"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"undetermined"}),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
@@ -726,7 +726,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name: "undetermined with undetermined reason",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability", "undetermined_reason"}, []string{"undetermined", "however"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability", "undetermined_reason"}, []string{"undetermined", "however"}),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve2"}},

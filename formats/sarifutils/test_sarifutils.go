@@ -1,6 +1,8 @@
 package sarifutils
 
-import "github.com/owenrumney/go-sarif/v2/sarif"
+import (
+	"github.com/owenrumney/go-sarif/v2/sarif"
+)
 
 func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 	run := sarif.NewRunWithInformationURI("", "")
@@ -13,7 +15,10 @@ func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 	return run
 }
 
-func CreateRunWithDummyResultAndRuleMultipleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+	if len(properties) != len(values) {
+		return nil
+	}
 	run := sarif.NewRunWithInformationURI("", "")
 	if result.RuleID != nil {
 		run.AddRule(*result.RuleID)
