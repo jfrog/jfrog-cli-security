@@ -722,6 +722,19 @@ func TestGetApplicableCveValue(t *testing.T) {
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String()}},
 			},
 		},
+		{
+			name: "undetermined with undetermined reason",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					sarifutils.CreateRunWithDummyResultAndRuleMultipleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability", "undetermined_reason"}, []string{"undetermined", "however"}),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve2"}},
+			expectedResult: jasutils.ApplicabilityUndetermined,
+			expectedCves: []formats.CveRow{
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String(), UndeterminedReason: "however"}},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

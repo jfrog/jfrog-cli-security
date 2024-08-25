@@ -24,6 +24,19 @@ func CreateRunWithDummyResultAndRuleProperties(property, value string, result *s
 	return run
 }
 
+func CreateRunWithDummyResultAndRuleMultipleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+	run := sarif.NewRunWithInformationURI("", "")
+	if result.RuleID != nil {
+		run.AddRule(*result.RuleID)
+	}
+	run.AddResult(result)
+	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties, len(properties))
+	for index, _ := range properties {
+		run.Tool.Driver.Rules[0].Properties[properties[index]] = values[index]
+	}
+	return run
+}
+
 func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
 	return &sarif.Result{
 		Message:   *sarif.NewTextMessage(msg),
