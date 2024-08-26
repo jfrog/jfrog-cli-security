@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"golang.org/x/exp/maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -241,8 +242,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-
-	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
+	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{ResultType: utils.Curation, Summary: convertResultsToSummary(results)}))
 	return
 }
 
@@ -252,64 +252,33 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
 				PackageCount: packagesStatus.totalNumberOfPackages,
-				Blocked: convertBlocked(packagesStatus.packagesStatus),
+				Blocked: getBlocked(packagesStatus.packagesStatus),
 			},
 		})
-
-		
-		approved := packagesStatus.totalNumberOfPackages - blocked.GetCountOfKeys(false)
-
-		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummaryResult{Target: projectPath,
-			CuratedPackages: &formats.CuratedPackages{
-				Blocked:  blocked,
-				Approved: approved,
-			}})
 	}
 	return summaryResults
 }
 
 func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
-	blocked := []formats.BlockedPackages{}
+	blockedMap := map[string]formats.BlockedPackages{}
 	for _, pkg := range pkgStatus {
 		for _, policy := range pkg.Policy {
-			blocked = 
-
-			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
-			if _, ok := blocked[polAndCond]; !ok {
-				blocked[polAndCond] = formats.SummaryCount{}
+			polAndCondKey := strings.Join([]string{policy.Policy, policy.Condition}, " ")
+			if _, ok := blockedMap[polAndCondKey]; !ok {
+				blockedMap[polAndCondKey] = formats.BlockedPackages{
+					Policy:    policy.Policy,
+					Condition: policy.Condition,
+					Packages: make(map[string]int),
+				}
 			}
 			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
-			blocked[polAndCond][uniqId]++
-		}
-		if pkg.Action == blocked {
-			blocked = append(blocked, formats.BlockedPackages{
-				PackageName:    pkg.PackageName,
-				PackageVersion: pkg.PackageVersion,
-				Reason:         pkg.BlockingReason,
-				Policies:       pkg.Policy,
-			})
-		}
-	}
-	return blocked
-}
-
-func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
-	blocked := formats.TwoLevelSummaryCount{}
-	for _, pkg := range pkgStatus {
-		for _, policy := range pkg.Policy {
-			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
-			if _, ok := blocked[polAndCond]; !ok {
-				blocked[polAndCond] = formats.SummaryCount{}
+			if _, ok := blockedMap[polAndCondKey].Packages[uniqId]; !ok {
+				blockedMap[polAndCondKey].Packages[uniqId] = 0
 			}
-			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
-			blocked[polAndCond][uniqId]++
+			blockedMap[polAndCondKey].Packages[uniqId]++
 		}
 	}
-	return blocked
-}
-
-func formatPolicyAndCond(policy, cond string) string {
-	return fmt.Sprintf("Violated Policy: %s, Condition: %s", policy, cond)
+	return maps.Values(blockedMap)
 }
 
 // The unique identifier of a package includes the package name with its version

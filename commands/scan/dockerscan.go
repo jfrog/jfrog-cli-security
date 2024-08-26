@@ -106,7 +106,11 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 
-		return utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{ResultType: utils.Build, Summary: scanResults.GetSummary()}, dsc.imageTag)
+		return utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{
+			ResultType: utils.Docker,
+			Args: utils.NewDockerScanArgs(dsc.serverDetails, dsc.imageTag),
+			Summary: scanResults.GetSummary(),
+		})
 	})
 }
 

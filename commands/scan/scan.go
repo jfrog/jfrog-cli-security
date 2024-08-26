@@ -191,7 +191,11 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Binary})
+		return utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{
+			ResultType: utils.Binary,
+			Args: utils.NewBinaryScanArgs(scanCmd.serverDetails),
+			Summary: scanResults.GetSummary(),
+		})
 	})
 }
 

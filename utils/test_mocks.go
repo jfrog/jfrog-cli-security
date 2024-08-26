@@ -12,6 +12,7 @@ import (
 )
 
 const TestMsi = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+const TestScaScanId = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
 

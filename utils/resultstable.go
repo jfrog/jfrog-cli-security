@@ -90,7 +90,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 			return nil, nil, nil, err
 		}
 		switch violation.ViolationType {
-		case formats.ViolationTypeSecurity.String():
+		case ViolationTypeSecurity.String():
 			cves := convertCves(violation.Cves)
 			if results.ExtendedScanResults.EntitledForJas {
 				for i := range cves {
@@ -125,7 +125,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					},
 				)
 			}
-		case formats.ViolationTypeLicense.String():
+		case ViolationTypeLicense.String():
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
@@ -144,7 +144,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					},
 				)
 			}
-		case formats.ViolationTypeOperationalRisk.String():
+		case ViolationTypeOperationalRisk.String():
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
