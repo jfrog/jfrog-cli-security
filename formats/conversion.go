@@ -142,25 +142,17 @@ func ConvertToOperationalRiskViolationScanTableRow(rows []OperationalRiskViolati
 	return
 }
 
-func ConvertToSecretsTableRow(rows []SourceCodeRow, tokenValidation bool) (tableRows []secretsTableRow) {
+func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow) {
 	for i := range rows {
-		newRow := secretsTableRow{
-			severity:   rows[i].Severity,
-			file:       rows[i].File,
-			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
-			secret:     rows[i].Snippet,
-		}
-		if tokenValidation {
-			newRow.tokenValidation = jasutils.TokenValidationStatusForNonTokens
-			newRow.tokenInfo = jasutils.MissingMetadata
-			if rows[i].TokenValidation != "" {
-				newRow.tokenValidation = jasutils.TokenValidationStatus(rows[i].TokenValidation).ToString()
-			}
-			if rows[i].TokenInfo != "" {
-				newRow.tokenInfo = rows[i].TokenInfo
-			}
-		}
-		tableRows = append(tableRows, newRow)
+		tableRows = append(tableRows, secretsTableRow{
+			severity:        rows[i].Severity,
+			file:            rows[i].File,
+			lineColumn:      strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			secret:          rows[i].Snippet,
+			tokenValidation: jasutils.TokenValidationStatus(rows[i].TokenValidation).ToString(),
+			tokenInfo:       jasutils.TokenValidationStatus(rows[i].TokenInfo).String(),
+		})
+
 	}
 	return
 }

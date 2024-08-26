@@ -16,7 +16,6 @@ const (
 
 const (
 	TokenValidationStatusForNonTokens = "Not a token"
-	MissingMetadata                   = "No extra info"
 )
 
 const (

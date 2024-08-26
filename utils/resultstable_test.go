@@ -1168,10 +1168,9 @@ func TestPrepareSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rows, isTokenValidation := prepareSecrets(tc.input, false)
+			rows := prepareSecrets(tc.input, false)
 			assert.ElementsMatch(t, tc.expectedOutput, rows)
 			if tc.isTokenValidationRun {
-				assert.Equal(t, isTokenValidation, true)
 				assert.Equal(t, "Active", rows[0].TokenValidation)
 				assert.Equal(t, "Inactive", rows[1].TokenValidation)
 				assert.Equal(t, "", rows[2].TokenValidation)
