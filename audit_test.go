@@ -332,15 +332,15 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	assert.NoError(t, biutils.CopyDir(multiProject, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
 	defer clientTests.ChangeDirAndAssert(t, prevWd)
-	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s",
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s, %s",
 		filepath.Join(tempDirPath, "package-managers", "maven", "maven"), filepath.Join(tempDirPath, "package-managers", "nuget", "single4.0"),
-		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"))
+		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"), filepath.Join(tempDirPath, "package-managers", "go", "missing-context"))
 	// Configure a new server named "default"
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 25, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 25, 2, 1)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
@@ -449,7 +449,7 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	// Verify that scan results are printed
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	// Verify that JAS results are not printed
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
 func getNoJasAuditMockCommand() components.Command {
@@ -471,24 +471,24 @@ func getNoJasAuditMockCommand() components.Command {
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2, 0)
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2, 0)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3")
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2, 0)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3")
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1, 0)
 }
 
 func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string) string {
@@ -577,5 +577,5 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 	defer chdirCallback()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0)
 }

@@ -1048,9 +1048,9 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 }
 
 // If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
-// If at one cve is missing context -> final value is missing context
 // If at least one cve is applicable -> final value is applicable
 // Else if at least one cve is undetermined -> final value is undetermined
+// Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
 func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
@@ -1058,16 +1058,17 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 		return jasutils.NotScanned
 	}
 	foundUndetermined := false
+	foundMissingContext := false
 	foundNotCovered := false
 	for _, status := range applicabilityStatuses {
-		if status == jasutils.MissingContext {
-			return jasutils.MissingContext
-		}
 		if status == jasutils.Applicable {
 			return jasutils.Applicable
 		}
 		if status == jasutils.ApplicabilityUndetermined {
 			foundUndetermined = true
+		}
+		if status == jasutils.MissingContext {
+			foundMissingContext = true
 		}
 		if status == jasutils.NotCovered {
 			foundNotCovered = true
@@ -1076,6 +1077,9 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	}
 	if foundUndetermined {
 		return jasutils.ApplicabilityUndetermined
+	}
+	if foundMissingContext {
+		return jasutils.MissingContext
 	}
 	if foundNotCovered {
 		return jasutils.NotCovered
