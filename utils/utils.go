@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	NodeModulesPattern = "**/*node_modules*/**"
-	JfMsiEnvVariable   = "JF_MSI"
+	NodeModulesPattern     = "**/*node_modules*/**"
+	JfMsiEnvVariable       = "JF_MSI"
+	EntitlementsMinVersion = "3.66.5"
 )
 
 var (
