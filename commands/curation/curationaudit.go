@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -22,12 +23,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -36,6 +31,13 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const (
@@ -61,6 +63,7 @@ const (
 
 	MinArtiPassThroughSupport = "7.82.0"
 	MinArtiGolangSupport      = "7.87.0"
+	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassTHroughSupport = "3.92.0"
 )
 
@@ -76,6 +79,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	},
 	techutils.Go: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Go, utils.CurationSupportFlag, MinArtiGolangSupport)
+	},
+	techutils.Nuget: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Nuget, utils.CurationSupportFlag, MinArtiNuGetSupport)
 	},
 }
 
@@ -611,6 +617,10 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 				return err
 			}
 		}
+		// Due to CreateAlternativeVersionForms, it's expected that for NuGet some of the URLs will be missing
+		if resp.StatusCode == http.StatusNotFound && nc.tech == techutils.Nuget {
+			continue
+		}
 		if resp != nil && resp.StatusCode >= 400 && resp.StatusCode != http.StatusForbidden {
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
@@ -622,6 +632,12 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			if pkStatus != nil {
 				p.Store(pkStatus.BlockedPackageUrl, pkStatus)
 			}
+		}
+		if nc.tech == techutils.Nuget {
+			// DotNet can have multiple URLs only due to CreateAlternativeVersionForms.
+			// Once the matching version was found, we can stop iterating.
+			// See CreateAlternativeVersionForms for more details.
+			return nil
 		}
 	}
 	return nil
@@ -712,6 +728,9 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return
 	case techutils.Go:
 		return getGoNameScopeAndVersion(node.Id, artiUrl, repo)
+	case techutils.Nuget:
+		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
@@ -731,6 +750,25 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 		version = allParts[1]
 	}
 	return
+}
+
+// input- id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33
+// input - repo: libs-release
+// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
+func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	id = strings.TrimPrefix(id, "nuget://")
+	allParts := strings.Split(id, ":")
+	if len(allParts) != 2 {
+		return
+	}
+	name = allParts[0]
+	version = allParts[1]
+
+	downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/api/nuget/v3/"+repo+"/registration-semver2/Download/"+strings.ToLower(name)+"/"+version)
+	for _, ver := range dependencies.CreateAlternativeVersionForms(version) {
+		downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/api/nuget/v3/"+repo+"/registration-semver2/Download/"+strings.ToLower(name)+"/"+ver)
+	}
+	return downloadUrls, allParts[0], allParts[1]
 }
 
 // input - id: go://github.com/kennygrant/sanitize:v1.2.4
