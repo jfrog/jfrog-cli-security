@@ -71,15 +71,19 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 			}
 		}
 	}
-	if configProfile == nil {
-		if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.ContextualAnalysisScan) {
-			log.Debug("Skipping contextual analysis scan as requested by input...")
-			return err
-		}
-		for _, module := range scanner.JFrogAppsConfig.Modules {
-			if err = addModuleJasScanTask(module, jasutils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
-				return
-			}
+
+	if configProfile != nil {
+		log.Debug("Config profile is in use. Skipping Contextual Analysis scan as it is not currently supported with a config profile...")
+		return
+	}
+
+	if len(scansToPreform) > 0 && !slices.Contains(scansToPreform, utils.ContextualAnalysisScan) {
+		log.Debug("Skipping contextual analysis scan as requested by input...")
+		return err
+	}
+	for _, module := range scanner.JFrogAppsConfig.Modules {
+		if err = addModuleJasScanTask(module, jasutils.Applicability, securityParallelRunner, runContextualScan(securityParallelRunner, scanner, scanResults, module, directDependencies, thirdPartyApplicabilityScan, scanType), errHandlerFunc); err != nil {
+			return
 		}
 	}
 	return err
