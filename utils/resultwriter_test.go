@@ -494,7 +494,7 @@ func TestGetSummary(t *testing.T) {
 
 	testCases := []struct {
 		name                   string
-		results                Results
+		results                *Results
 		includeVulnerabilities bool
 		includeViolations      bool
 		expected               formats.ResultsSummary
@@ -502,7 +502,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name:                   "Vulnerabilities only",
 			includeVulnerabilities: true,
-			results: Results{
+			results: &Results{
 				ScaResults: []*ScaScanResult{{
 					Target:      "target1",
 					XrayResults: getDummyScaTestResults(true, true),
@@ -519,7 +519,7 @@ func TestGetSummary(t *testing.T) {
 		{
 			name:              "Violations only",
 			includeViolations: true,
-			results: Results{
+			results: &Results{
 				ScaResults: []*ScaScanResult{{
 					Target:      "target1",
 					XrayResults: getDummyScaTestResults(true, true),
@@ -537,7 +537,7 @@ func TestGetSummary(t *testing.T) {
 			name:                   "Vulnerabilities and Violations",
 			includeVulnerabilities: true,
 			includeViolations:      true,
-			results: Results{
+			results: &Results{
 				ScaResults: []*ScaScanResult{
 					{
 						Target:      "violationTarget",
@@ -561,7 +561,7 @@ func TestGetSummary(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			summary := ToSummary(&testCase.results, testCase.includeVulnerabilities, testCase.includeViolations)
+			summary := ToSummary(testCase.results, testCase.includeVulnerabilities, testCase.includeViolations)
 			assert.Equal(t, testCase.expected, summary)
 		})
 	}

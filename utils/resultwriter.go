@@ -671,6 +671,12 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 				issueId := violation.IssueId
 				severity := severityutils.GetSeverity(violation.Severity).String()
 				violationType := ViolationIssueType(violation.ViolationType)
+				if _, ok := vioUniqueFindings[violationType]; !ok {
+					vioUniqueFindings[violationType] = formats.ResultSummary{}
+				}
+				if _, ok := vioUniqueFindings[violationType][severity]; !ok {
+					vioUniqueFindings[violationType][severity] = map[string]int{}
+				}
 				if violationType == ViolationTypeSecurity {
 					applicableRuns := []*sarif.Run{}
 					if extendedScanResults != nil {
@@ -703,7 +709,7 @@ func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResu
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			if vulnerabilities.ScaResults == nil {
-				vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
+				vulnerabilities.ScaResults = &formats.ScaScanResultSummary{Security: formats.ResultSummary{}}
 			}
 			vulnerabilities.ScaResults.ScanIds = append(vulnerabilities.ScaResults.ScanIds, xrayResult.ScanId)
 			vulnerabilities.ScaResults.MoreInfoUrls = append(vulnerabilities.ScaResults.MoreInfoUrls, xrayResult.XrayDataUrl)
@@ -768,6 +774,9 @@ func getJasSummaryFindings(runs ...*sarif.Run) *formats.ResultSummary {
 			if err != nil {
 				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", resultLevel, err.Error()))
 				severity = severityutils.Unknown
+			}
+			if _, ok := summary[severity.String()]; !ok {
+				summary[severity.String()] = map[string]int{}
 			}
 			summary[severity.String()][formats.NoStatus] += len(result.Locations)
 		}
