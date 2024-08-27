@@ -43,11 +43,13 @@ type ScanResultSummary struct {
 
 type ScanViolationsSummary struct {
 	Watches []string `json:"watches,omitempty"`
+	FailBuild bool `json:"fail_build,omitempty"`
 	ScanResultSummary
 }
 
 type ScaScanResultSummary struct {
-	ScanId          string        `json:"scan_id,omitempty"`
+	ScanIds         []string        `json:"scan_ids,omitempty"`
+	MoreInfoUrls   	[]string        `json:"more_info_urls,omitempty"`
 	Security        ResultSummary `json:"security,omitempty"`
 	License         ResultSummary `json:"license,omitempty"`
 	OperationalRisk ResultSummary `json:"operational_risk,omitempty"`
@@ -120,13 +122,6 @@ func (rs *ResultsSummary) GetTotalViolations(filterTypes ...SummaryResultType) (
 	return
 }
 
-func (rs *ResultsSummary) GetScanIds() (scanIds []string) {
-	for _, scan := range rs.Scans {
-		scanIds = append(scanIds, scan.GetScanIds()...)
-	}
-	return
-}
-
 func (sc *ScanSummary) HasCuratedPackages() bool {
 	return sc.CuratedPackages != nil
 }
@@ -153,9 +148,16 @@ func (sc *ScanSummary) GetScanIds() (scanIds []string) {
 	return
 }
 
+func (srs *ScanResultSummary) GetMoreInfoUrls() (urls []string) {
+	if srs.ScaResults != nil {
+		urls = append(urls, srs.ScaResults.MoreInfoUrls...)
+	}
+	return
+}
+
 func (srs *ScanResultSummary) GetScanIds() (scanIds []string) {
 	if srs.ScaResults != nil {
-		scanIds = append(scanIds, srs.ScaResults.ScanId)
+		scanIds = append(scanIds, srs.ScaResults.ScanIds...)
 	}
 	return
 }
@@ -222,75 +224,60 @@ func (ss *ScanResultSummary) GetSummaryBySeverity() (summary ResultSummary) {
 	return
 }
 
-func GetViolationSummaries(summaries ...ResultsSummary) ([]string, *ScanViolationsSummary) {
+func GetViolationSummaries(summaries ...ResultsSummary) (*ScanViolationsSummary) {
 	if len(summaries) == 0 {
-		return nil, nil
+		return nil
 	}
 	violationsSummary := &ScanViolationsSummary{}
 	watches := datastructures.MakeSet[string]()
-	scanIds := []string{}
+	failBuild := false
 	foundViolations := false
 	for _, summary := range summaries {
-		urlInfo = MergeUrlInfo(urlInfo, summary.UrlInfo)
 		for _, scan := range summary.Scans {
 			if scan.Violations == nil {
 				continue
 			}
 			foundViolations = true
 			watches.AddElements(scan.Violations.Watches...)
-			extractIssuesToSummary(&scan.Violations.ScanResultSummary, &urlInfo, &violationsSummary.ScanResultSummary)
+			failBuild = failBuild || scan.Violations.FailBuild
+			extractIssuesToSummary(&scan.Violations.ScanResultSummary, &violationsSummary.ScanResultSummary)
 		}
 	}
 	if !foundViolations {
-		return scanIds, nil
+		return nil
 	}
 	violationsSummary.Watches = watches.ToSlice()
-	return scanIds, violationsSummary
+	violationsSummary.FailBuild = failBuild
+	return violationsSummary
 }
 
-func GetVulnerabilitiesSummaries(summaries ...ResultsSummary) ([]string, bool, *ScanResultSummary) {
+func GetVulnerabilitiesSummaries(summaries ...ResultsSummary) (*ScanResultSummary) {
 	if len(summaries) == 0 {
-		return false, nil
+		return nil
 	}
 	vulnerabilitiesSummary := &ScanResultSummary{}
-	urlInfo := UrlInfo{}
-	showVulnerabilities := false
+	foundVulnerabilities := false
 	for _, summary := range summaries {
-		urlInfo = MergeUrlInfo(urlInfo, summary.UrlInfo)
 		for _, scan := range summary.Scans {
 			if scan.Vulnerabilities == nil {
 				continue
 			}
-			showVulnerabilities = true
-			extractIssuesToSummary(scan.Vulnerabilities, &urlInfo, vulnerabilitiesSummary)
+			foundVulnerabilities = true
+			extractIssuesToSummary(scan.Vulnerabilities, vulnerabilitiesSummary)
 		}
 	}
-	return urlInfo, showVulnerabilities, vulnerabilitiesSummary
-}
-
-func MergeUrlInfo(urlInfos ...UrlInfo) (destination UrlInfo) {
-	for _, info := range urlInfos {
-		if destination.BaseJfrogUrl == "" {
-			destination.BaseJfrogUrl = info.BaseJfrogUrl
-		}
-		destination.ScanIds = append(destination.ScanIds, info.ScanIds...)
-		if destination.DockerImage == "" {
-			destination.DockerImage = info.DockerImage
-		}
-		if destination.BuildName == "" {
-			destination.BuildName = info.BuildName
-		}
-		destination.BuildNumbers = append(destination.BuildNumbers, info.BuildNumbers...)
+	if !foundVulnerabilities {
+		return nil
 	}
-	return destination
+	return vulnerabilitiesSummary
 }
 
-func extractIssuesToSummary(issues *ScanResultSummary, destinationUrlInfo *UrlInfo, destination *ScanResultSummary) {
+func extractIssuesToSummary(issues *ScanResultSummary, destination *ScanResultSummary) {
 	if issues.ScaResults != nil {
-		destinationUrlInfo.ScanIds = append(destinationUrlInfo.ScanIds, issues.ScaResults.ScanId)
 		if destination.ScaResults == nil {
 			destination.ScaResults = &ScaScanResultSummary{}
 		}
+		destination.ScaResults.ScanIds = append(destination.ScaResults.ScanIds, issues.ScaResults.ScanIds...)
 		if issues.ScaResults.Security.GetTotal() > 0 {
 			destination.ScaResults.Security = MergeResultSummaries(destination.ScaResults.Security, issues.ScaResults.Security)
 		}

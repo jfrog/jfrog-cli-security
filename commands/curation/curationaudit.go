@@ -242,7 +242,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{ResultType: utils.Curation, Summary: convertResultsToSummary(results)}))
+	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
 

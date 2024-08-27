@@ -22,15 +22,15 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 	testPlatformUrl := "https://test-platform-url"
 	testCases := []struct {
 		name                string
-		index 			 	commandsummary.Index
-		args 			    *ResultSummaryArgs
-		violations 			bool
+		index               commandsummary.Index
+		args                *ResultSummaryArgs
+		violations          bool
 		content             []formats.ResultsSummary
-		NoExtendedView		bool
+		NoExtendedView      bool
 		expectedContentPath string
 	}{
 		{
-			name: "Security Section (Curation)",
+			name:                "Security Section (Curation)",
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "security_section.md"),
 			content: []formats.ResultsSummary{
 				{
@@ -41,21 +41,21 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 								PackageCount: 6,
 								Blocked: []formats.BlockedPackages{
 									{
-										Policy:   "Malicious",
+										Policy:    "Malicious",
 										Condition: "Malicious package",
-										Packages: map[string]int{"npm://lodash:1.0.0": 1},
+										Packages:  map[string]int{"npm://lodash:1.0.0": 1},
 									},
 									{
-										Policy:   "cvss_score",
+										Policy:    "cvss_score",
 										Condition: "cvss score higher than 4.0",
-										Packages: map[string]int{"npm://underscore:1.0.0": 1, "npm://test:2.0.0": 1},
+										Packages:  map[string]int{"npm://underscore:1.0.0": 1, "npm://test:2.0.0": 1},
 									},
 								},
 							},
 						},
 						{
-							Target: filepath.Join(wd, "application2"),
-							CuratedPackages: &formats.CuratedPackages{PackageCount: 3 },
+							Target:          filepath.Join(wd, "application2"),
+							CuratedPackages: &formats.CuratedPackages{PackageCount: 3},
 						},
 					},
 				},
@@ -65,9 +65,9 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 						CuratedPackages: &formats.CuratedPackages{
 							PackageCount: 5,
 							Blocked: []formats.BlockedPackages{{
-								Policy:  "Aged",
+								Policy:    "Aged",
 								Condition: "Package is aged",
-								Packages: map[string]int{"npm://test:1.0.0": 1},
+								Packages:  map[string]int{"npm://test:1.0.0": 1},
 							}},
 						},
 					}},
@@ -75,92 +75,94 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			},
 		},
 		{
-			name: "No vulnerabilities",
-			index: commandsummary.BinariesScan,
+			name:                "No vulnerabilities",
+			index:               commandsummary.BinariesScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "no_vulnerabilities.md"),
-			args: &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target:          filepath.Join(wd, "binary-name"),
-					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanId: TestScaScanId}},
+					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{"https://test-url"}}},
 				}},
 			}},
 		},
 		{
-			name: "Violations - Not defined",
-			index: commandsummary.BinariesScan,
-			violations: true,
+			name:                "Violations - Not defined",
+			index:               commandsummary.BinariesScan,
+			violations:          true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_defined.md"),
+			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
 					Target:          filepath.Join(wd, "binary-name"),
-					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanId: TestScaScanId}},
+					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}}},
 				}},
 			}},
 		},
 		{
-			name: "No violations",
-			index: commandsummary.BinariesScan,
-			violations: true,
+			name:                "No violations",
+			index:               commandsummary.BinariesScan,
+			violations:          true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "no_violations.md"),
+			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
-					Target:     filepath.Join(wd, "other-binary-name"),
+					Target: filepath.Join(wd, "other-binary-name"),
 					Violations: &formats.ScanViolationsSummary{
-						Watches: []string{},
-						ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanId: TestScaScanId}},
+						Watches:           []string{},
+						ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{"https://test-url"}}},
 					},
 				}},
 			}},
 		},
 		{
-			name: "Build Scan Vulnerabilities",
-			index: commandsummary.BuildScan,
+			name:                "Build Scan Vulnerabilities",
+			index:               commandsummary.BuildScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "build_scan_vulnerabilities.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, BuildName: "build-name", BuildNumbers: []string{"build-number"}},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{BuildName: "build-name", BuildNumbers: []string{"build-number"}, BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
-					Target:          "build-name (build-number)",
+					Target: "build-name (build-number)",
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-						ScanId: TestScaScanId,
+						ScanIds: []string{TestScaScanId},
+						MoreInfoUrls: []string{"https://test-url"},
 						Security: formats.ResultSummary{"High": map[string]int{formats.NoStatus: 3}, "Medium": map[string]int{formats.NoStatus: 1}, "Unknown": map[string]int{formats.NoStatus: 20}},
 					}},
 				}},
 			}},
 		},
 		{
-			name: "Binary Scan Vulnerabilities",
-			index: commandsummary.BinariesScan,
+			name:                "Binary Scan Vulnerabilities",
+			index:               commandsummary.BinariesScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "binary_vulnerabilities.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
-					Target:          filepath.Join(wd, "binary-with-issues"),
+					Target: filepath.Join(wd, "binary-with-issues"),
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-						ScanId: TestScaScanId,
+						ScanIds: []string{TestScaScanId, "scan-id-2"},
 						Security: formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
 					}},
 				}},
 			}},
 		},
 		{
-			name: "Docker Scan Vulnerabilities",
-			index: commandsummary.DockerScan,
+			name:                "Docker Scan Vulnerabilities",
+			index:               commandsummary.DockerScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "docker_vulnerabilities.md"),
+			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{DockerImage: "dockerImage:version" ,BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
-					Target:          filepath.Join(wd, "image.tar"),
+					Target: filepath.Join(wd, "image.tar"),
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
-							ScanId: TestScaScanId,
+							ScanIds: []string{TestScaScanId},
+							MoreInfoUrls: []string{"https://test-url"},
 							Security: formats.ResultSummary{
-								"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2 ,jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1}, 
-								"High": map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
-								"Low": map[string]int{jasutils.NotApplicable.String(): 3},
-								"Unknown": map[string]int{jasutils.NotCovered.String(): 1},
+								"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
+								"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
+								"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
+								"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
 							},
 						},
 						SecretsResults: &formats.ResultSummary{
@@ -171,27 +173,28 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			}},
 		},
 		{
-			name: "Violations - Not extendedView",
-			index: commandsummary.DockerScan,
-			violations: true,
-			NoExtendedView: true,
+			name:                "Violations - Not extendedView",
+			index:               commandsummary.DockerScan,
+			violations:          true,
+			NoExtendedView:      true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_extendedView.md"),
+			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
 			content: []formats.ResultsSummary{{
-				UrlInfo: formats.UrlInfo{DockerImage: "dockerImage:version" ,BaseJfrogUrl: testPlatformUrl, ScanIds: []string{TestScaScanId}},
 				Scans: []formats.ScanSummary{{
-					Target:          filepath.Join(wd, "image.tar"),
-					Violations: &formats.ScanViolationsSummary {
+					Target: filepath.Join(wd, "image.tar"),
+					Violations: &formats.ScanViolationsSummary{
 						Watches: []string{"watch1", "watch2"},
 						ScanResultSummary: formats.ScanResultSummary{
 							ScaResults: &formats.ScaScanResultSummary{
-								ScanId: TestScaScanId,
+								ScanIds: []string{TestScaScanId},
+								MoreInfoUrls: []string{"https://test-url"},
 								Security: formats.ResultSummary{
-									"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2 ,jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1}, 
-									"High": map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
-									"Low": map[string]int{jasutils.NotApplicable.String(): 3},
-									"Unknown": map[string]int{jasutils.NotCovered.String(): 1},
+									"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
+									"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
+									"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
+									"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
 								},
-								License: formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
+								License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
 								OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
 							},
 							SecretsResults: &formats.ResultSummary{"Medium": map[string]int{formats.NoStatus: 3}},
@@ -201,8 +204,8 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			}},
 		},
 		{
-			name: "Vulnerability not requested",
-			index: commandsummary.DockerScan,
+			name:    "Vulnerability not requested",
+			index:   commandsummary.DockerScan,
 			content: []formats.ResultsSummary{},
 		},
 	}
@@ -229,7 +232,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 }
 
 func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commandsummary.Index, args ResultSummaryArgs, violations, extendedView bool) (markdown string, err error) {
-	securityJobSummary :=  &SecurityJobSummary{}
+	securityJobSummary := &SecurityJobSummary{}
 	var generator DynamicMarkdownGenerator
 	switch index {
 	case commandsummary.BuildScan:

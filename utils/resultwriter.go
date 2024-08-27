@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -608,6 +608,168 @@ func NewFailBuildError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the violations found are set to fail builds that include them"}
 }
 
-func ToSummary(serverDetails *config.ServerDetails, cmdResult *Results) formats.ResultsSummary {
+func ToSummary(cmdResult *Results, includeVulnerabilities, includeViolations bool) (summary formats.ResultsSummary) {
+	if len(cmdResult.ScaResults) <= 1 {
+		summary.Scans = GetScanSummaryByTargets(cmdResult, includeVulnerabilities, includeViolations)
+		return
+	}
+	for _, scaScan := range cmdResult.ScaResults {
+		summary.Scans = append(summary.Scans, GetScanSummaryByTargets(cmdResult, includeVulnerabilities, includeViolations, scaScan.Target)...)
+	}
+	return
+}
 
+func GetScanSummaryByTargets(r *Results, includeVulnerabilities, includeViolations bool, targets ...string) (summaries []formats.ScanSummary) {
+	if len(targets) == 0 {
+		// No filter, one scan summary for all targets
+		summaries = append(summaries, getScanSummary(includeVulnerabilities, includeViolations, r.ExtendedScanResults, r.ScaResults...))
+		return
+	}
+	for _, target := range targets {
+		// Get target sca results
+		targetScaResults := []*ScaScanResult{}
+		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
+			targetScaResults = append(targetScaResults, targetScaResult)
+		}
+		// Get target extended results
+		targetExtendedResults := r.ExtendedScanResults
+		if targetExtendedResults != nil {
+			targetExtendedResults = targetExtendedResults.GetResultsForTarget(target)
+		}
+		summaries = append(summaries, getScanSummary(includeVulnerabilities, includeViolations, targetExtendedResults, targetScaResults...))
+	}
+	return
+}
+
+func getScanSummary(includeVulnerabilities, includeViolations bool, extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary formats.ScanSummary) {
+	if len(scaResults) == 1 {
+		summary.Target = scaResults[0].Target
+	}
+	if includeViolations {
+		summary.Violations = getScanViolationsSummary(extendedScanResults, scaResults...)
+	}
+	if includeVulnerabilities {
+		summary.Vulnerabilities = getScanSecurityVulnerabilitiesSummary(extendedScanResults, scaResults...)
+	}
+	return
+}
+
+func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (violations *formats.ScanViolationsSummary) {
+	watches := datastructures.MakeSet[string]()
+	failBuild := false
+	scanIds := []string{}
+	moreInfoUrls := []string{}
+	vioUniqueFindings := map[ViolationIssueType]formats.ResultSummary{}
+	// Parse unique findings
+	for _, scaResult := range scaResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			scanIds = append(scanIds, xrayResult.ScanId)
+			moreInfoUrls = append(moreInfoUrls, xrayResult.XrayDataUrl)
+			for _, violation := range xrayResult.Violations {
+				watches.Add(violation.WatchName)
+				failBuild = failBuild || violation.FailBuild
+				issueId := violation.IssueId
+				severity := severityutils.GetSeverity(violation.Severity)
+				violationType := ViolationIssueType(violation.ViolationType)
+				if violationType == ViolationTypeSecurity {
+					applicableRuns := []*sarif.Run{}
+					if extendedScanResults != nil {
+						applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
+					}
+					vioUniqueFindings[violationType][severity.String()] = mergeMaps(vioUniqueFindings[violationType][severity.String()], getSecuritySummaryFindings(violation.Cves, issueId, severity, violation.Components, applicableRuns...))
+				} else {
+					// License, Operational Risk
+					vioUniqueFindings[violationType][severity.String()][formats.NoStatus] += len(violation.Components)
+				}
+			}
+		}
+	}
+	violations = &formats.ScanViolationsSummary{
+		Watches: watches.ToSlice(),
+		FailBuild: failBuild,
+		ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
+			ScanIds: scanIds,
+			Security: vioUniqueFindings[ViolationTypeSecurity],
+			License: vioUniqueFindings[ViolationTypeLicense],
+			OperationalRisk: vioUniqueFindings[ViolationTypeOperationalRisk],
+		},
+	}}
+	return
+}
+
+func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (vulnerabilities *formats.ScanResultSummary) {
+	vulnerabilities = &formats.ScanResultSummary{}
+	scanIds := []string{}
+	moreInfoUrls := []string{}
+	for _, scaResult := range scaResults {
+		for _, xrayResult := range scaResult.XrayResults {
+			if vulnerabilities.ScaResults == nil {
+				vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
+			}
+			scanIds = append(scanIds, xrayResult.ScanId)
+			moreInfoUrls = append(moreInfoUrls, xrayResult.XrayDataUrl)
+			for _, vulnerability := range xrayResult.Vulnerabilities {
+				issueId := vulnerability.IssueId
+				severity := severityutils.GetSeverity(vulnerability.Severity)
+				applicableRuns := []*sarif.Run{}
+				if extendedScanResults != nil {
+					applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
+				}
+				vulnerabilities.ScaResults.Security[severity.String()] = mergeMaps(vulnerabilities.ScaResults.Security[severity.String()], getSecuritySummaryFindings(vulnerability.Cves, issueId, severity, vulnerability.Components, applicableRuns...))
+			}
+		}
+	}
+	if vulnerabilities.ScaResults != nil {
+		vulnerabilities.ScaResults.ScanIds = scanIds
+		vulnerabilities.ScaResults.MoreInfoUrls = moreInfoUrls
+	}
+	vulnerabilities.IacResults = getJasSummaryFindings(extendedScanResults.IacScanResults...)
+	vulnerabilities.SecretsResults = getJasSummaryFindings(extendedScanResults.SecretsScanResults...)
+	vulnerabilities.SastResults = getJasSummaryFindings(extendedScanResults.SastScanResults...)
+	return
+}
+
+func getSecuritySummaryFindings(cves []services.Cve, issueId string, severity severityutils.Severity, components map[string]services.Component, applicableRuns ...*sarif.Run) map[string]int {
+	uniqueFindings := map[string]int{}
+	for _, cve := range cves {
+		applicableStatus := jasutils.NotScanned
+		if applicableInfo := getCveApplicabilityField(getCveId(cve, issueId), applicableRuns, components); applicableInfo != nil {
+			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
+		}
+		uniqueFindings[applicableStatus.String()] += 1
+	}
+	return uniqueFindings
+}
+
+func getCveId(cve services.Cve, defaultIssueId string) string {
+	if cve.Id == "" {
+		return defaultIssueId
+	}
+	return cve.Id
+}
+
+func mergeMaps(m1, m2 map[string]int) map[string]int {
+	for k, v := range m2 {
+		m1[k] += v
+	}
+	return m1
+}
+
+func getJasSummaryFindings(runs ...*sarif.Run) (*formats.ResultSummary) {
+	if len(runs) == 0 {
+		return nil
+	}
+	summary := formats.ResultSummary{}
+	for _, run := range runs {
+		for _, result := range run.Results {
+			resultLevel := sarifutils.GetResultLevel(result)
+			severity, err := severityutils.ParseSeverity(resultLevel, true)
+			if err != nil {
+				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", resultLevel, err.Error()))
+				severity = severityutils.Unknown
+			}
+			summary[severity.String()][formats.NoStatus] += len(result.Locations)
+		}
+	}
+	return &summary
 }

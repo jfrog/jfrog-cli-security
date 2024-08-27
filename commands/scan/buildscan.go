@@ -183,11 +183,13 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-	err = utils.RecordSecurityCommandSummary(utils.ScanCommandResultSummary{
-		ResultType: utils.Build, 
-		Args: utils.NewBuildScanArgs(bsc.serverDetails, params.BuildName, params.BuildNumber),
-		Summary: utils.ToSummary(bsc.serverDetails, scanResults),
-	}) // scanResults.GetSummary()},
+	err = utils.RecordSecurityCommandSummary(utils.NewBuildScanSummary(
+		scanResults,
+		bsc.serverDetails,
+		bsc.includeVulnerabilities,
+		bsc.buildConfiguration.GetProject() != "",
+		params.BuildName, params.BuildNumber,
+	))
 	return
 }
 

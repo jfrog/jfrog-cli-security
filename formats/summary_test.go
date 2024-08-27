@@ -82,8 +82,12 @@ func TestResultSummary(t *testing.T) {
 }
 
 func TestScanResultSummary(t *testing.T) {
+	ids := []string{"id1", "id2"}
+	urls := []string{"url1", "url2"}
 	testSummary := ScanResultSummary{
 		ScaResults: &ScaScanResultSummary{ 
+			ScanIds: ids,
+			MoreInfoUrls: urls,
 			Security: ResultSummary{"Critical": map[string]int{"Status": 1}, "High": map[string]int{NoStatus: 1}},
 			License: ResultSummary{"High": map[string]int{NoStatus: 1}},
 			OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
@@ -96,6 +100,8 @@ func TestScanResultSummary(t *testing.T) {
 		summary  ScanResultSummary
 		resultTypeFilters []SummaryResultType
 		expectedTotal int
+		expectedScanIds []string
+		expectedMoreInfoUrls []string
 	}{
 		{
 			name: "No Issues",
@@ -105,18 +111,24 @@ func TestScanResultSummary(t *testing.T) {
 			name: "No filters",
 			summary: testSummary,
 			expectedTotal: 6,
+			expectedScanIds: ids,
+			expectedMoreInfoUrls: urls,
 		},
 		{
 			name: "One filter",
 			summary: testSummary,
 			resultTypeFilters: []SummaryResultType{ScaSecurityResult},
 			expectedTotal: 2,
+			expectedScanIds: ids,
+			expectedMoreInfoUrls: urls,
 		},
 		{
 			name: "Multiple filters",
 			summary: testSummary,
 			resultTypeFilters: []SummaryResultType{ScaSecurityResult, ScaLicenseResult, IacResult, SecretsResult, SastResult},
 			expectedTotal: 5,
+			expectedScanIds: ids,
+			expectedMoreInfoUrls: urls,
 		},
 	}
 
@@ -124,6 +136,8 @@ func TestScanResultSummary(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			assert.Equal(t, testCase.expectedTotal, testCase.summary.GetTotal(testCase.resultTypeFilters...))
 			assert.Equal(t, testCase.expectedTotal > 0, testCase.summary.HasIssues())
+			assert.ElementsMatch(t, testCase.expectedScanIds, testCase.summary.GetScanIds())
+			assert.ElementsMatch(t, testCase.expectedMoreInfoUrls, testCase.summary.GetMoreInfoUrls())
 		})
 	}
 }
@@ -187,7 +201,7 @@ func TestScanSummary(t *testing.T) {
 func TestResultsSummary(t *testing.T) {
 	testScans := []ScanSummary{
 		{Vulnerabilities: &ScanResultSummary{SecretsResults: &ResultSummary{"High": map[string]int{"Status": 4}}}},
-		{Violations: &ScanViolationsSummary{ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{ScanId: "id", License: ResultSummary{"Medium": map[string]int{NoStatus: 2}}} ,SastResults: &ResultSummary{"High": map[string]int{"Status": 1}}}}},
+		{Violations: &ScanViolationsSummary{ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{License: ResultSummary{"Medium": map[string]int{NoStatus: 2}}} ,SastResults: &ResultSummary{"High": map[string]int{"Status": 1}}}}},
 		{Vulnerabilities: &ScanResultSummary{SastResults: &ResultSummary{"Medium": map[string]int{NoStatus: 1}}}},
 		{Vulnerabilities: &ScanResultSummary{ScaResults: &ScaScanResultSummary{Security: ResultSummary{"Critical": map[string]int{"Status": 3}}}}},
 		{Vulnerabilities: &ScanResultSummary{ScaResults: &ScaScanResultSummary{Security: ResultSummary{"High": map[string]int{NoStatus: 1}, "Low": map[string]int{NoStatus: 1}}}}},
@@ -198,7 +212,6 @@ func TestResultsSummary(t *testing.T) {
 		filters []SummaryResultType
 		expectedTotalVulnerabilities int
 		expectedTotalViolations int
-		expectedScanIds []string
 	}{
 		{
 			name: "Empty",
@@ -223,40 +236,58 @@ func TestResultsSummary(t *testing.T) {
 			assert.Equal(t, testCase.expectedTotalVulnerabilities, testCase.summary.GetTotalVulnerabilities(testCase.filters...))
 			assert.Equal(t, testCase.expectedTotalViolations, testCase.summary.GetTotalViolations(testCase.filters...))
 			assert.Equal(t, testCase.expectedTotalViolations > 0, testCase.summary.HasViolations())
-			assert.Equal(t, testCase.expectedScanIds, testCase.summary.GetScanIds())
 		})
 	}
 }
 
 func TestGetVulnerabilitiesSummaries(t *testing.T) {
+	dummyScaResults := &ScaScanResultSummary{Security: ResultSummary{"High": map[string]int{NoStatus: 1}}}
+	dummyResultSummary := &ResultSummary{"Medium": map[string]int{NoStatus: 1}}
 	testCases := []struct {
 		name    string
 		input []ResultsSummary
-		expectedUrlInfo UrlInfo
 		expectedShowVulnerabilities bool
 		expectedVulnerabilitiesSummaries *ScanResultSummary
 	}{
 		{
-			name: "Empty",
+			name: "Vulnerabilities not requested",
 			input: []ResultsSummary{},
-			expectedUrlInfo: UrlInfo{},
 		},
 		{
 			name: "No Vulnerabilities",
+			expectedShowVulnerabilities: true,
+			input: []ResultsSummary{{Scans: []ScanSummary{{Target:"target", Vulnerabilities: &ScanResultSummary{}}}}},
+			expectedVulnerabilitiesSummaries: &ScanResultSummary{},
 		},
 		{
 			name: "Single input",
+			expectedShowVulnerabilities: true,
+			input: []ResultsSummary{{Scans: []ScanSummary{{Target:"target", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary}}}}},
+			expectedVulnerabilitiesSummaries: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary},
 		},
 		{
 			name: "Multiple inputs",
+			expectedShowVulnerabilities: true,
+			input: []ResultsSummary{
+				{Scans: []ScanSummary{{Target:"target1", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults}}}},
+				{
+					Scans: []ScanSummary{
+						{Target:"target2", Vulnerabilities: &ScanResultSummary{SecretsResults: dummyResultSummary}},
+						{Target:"target3", Vulnerabilities: &ScanResultSummary{SastResults: dummyResultSummary}},
+					},
+				},
+			},
+			expectedVulnerabilitiesSummaries: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary, SastResults: dummyResultSummary},
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			urlInfo, showVulnerabilities, vulnerabilitiesSummaries := GetVulnerabilitiesSummaries(testCase.input...)
-			assert.Equal(t, testCase.expectedUrlInfo, urlInfo)
-			assert.Equal(t, testCase.expectedShowVulnerabilities, showVulnerabilities)
-			assert.Equal(t, testCase.expectedVulnerabilitiesSummaries, vulnerabilitiesSummaries)
+			vulnerabilitiesSummaries := GetVulnerabilitiesSummaries(testCase.input...)
+			if testCase.expectedShowVulnerabilities {
+				assert.Equal(t, testCase.expectedVulnerabilitiesSummaries, vulnerabilitiesSummaries)
+			} else {
+				assert.Nil(t, vulnerabilitiesSummaries)
+			}
 		})
 	}
 }
@@ -265,29 +296,34 @@ func TestGetViolationSummaries(t *testing.T) {
 	testCases := []struct {
 		name    string
 		input []ResultsSummary
-		expectedUrlInfo UrlInfo
+		expectedShowViolations bool
 		expectedViolationSummaries *ResultSummary
 	}{
 		{
-			name: "Empty",
+			name: "violation context not defined",
 			input: []ResultsSummary{},
-			expectedUrlInfo: UrlInfo{},
 		},
 		{
 			name: "No Violations",
+			expectedShowViolations: true,
 		},
 		{
 			name: "Single input",
+			expectedShowViolations: true,
 		},
 		{
 			name: "Multiple inputs",
+			expectedShowViolations: true,
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			urlInfo, violationSummaries := GetViolationSummaries(testCase.input...)
-			assert.Equal(t, testCase.expectedUrlInfo, urlInfo)
-			assert.Equal(t, testCase.expectedViolationSummaries, violationSummaries)
+			violationSummaries := GetViolationSummaries(testCase.input...)
+			if testCase.expectedShowViolations {
+				assert.Equal(t, testCase.expectedViolationSummaries, violationSummaries)
+			} else {
+				assert.Nil(t, violationSummaries)
+			}
 		})
 	}
 }
