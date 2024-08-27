@@ -689,6 +689,7 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 		FailBuild: failBuild,
 		ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
 			ScanIds:         scanIds,
+			MoreInfoUrls:    moreInfoUrls,
 			Security:        vioUniqueFindings[ViolationTypeSecurity],
 			License:         vioUniqueFindings[ViolationTypeLicense],
 			OperationalRisk: vioUniqueFindings[ViolationTypeOperationalRisk],
