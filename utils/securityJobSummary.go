@@ -37,6 +37,7 @@ const (
 	RedColor      HtmlTag = "<span style=\"color:red\">%s</span>"
 	OrangeColor   HtmlTag = "<span style=\"color:orange\">%s</span>"
 	GreenColor    HtmlTag = "<span style=\"color:green\">%s</span>"
+	TabTag		  HtmlTag = "&Tab;%s"
 
 	ApplicableStatus    SeverityStatus = "%d Applicable"
 	NotApplicableStatus SeverityStatus = "%d Not Applicable"
@@ -391,7 +392,8 @@ func generateResultsMarkdown(index commandsummary.Index, violations bool, moreIn
 	if !content.HasIssues() {
 		markdown = getNoIssuesMarkdown(violations)
 	} else {
-		markdown = getResultsTypesSummaryString(violations, content) + getResultsSeveritySummaryString(violations, content)
+		markdown = getResultsTypesSummaryString(violations, content)
+		markdown += NewLine.Format(getResultsSeveritySummaryString(violations, content))
 		if moreInfoUrl != "" {
 			markdown += NewLine.Format(moreInfoUrl)
 		}
@@ -405,7 +407,7 @@ func getNoIssuesMarkdown(violations bool) (markdown string) {
 	if violations {
 		noIssuesStr = "No violations found"
 	}
-	return PreFormat.Format(getCenteredSvgWithText(PassedSvg, noIssuesStr))
+	return getCenteredSvgWithText(PassedSvg, noIssuesStr)
 }
 
 func getCenteredSvgWithText(svg, text string) (markdown string) {
@@ -421,33 +423,33 @@ func getResultsTypesSummaryString(violations bool, summary *formats.ScanResultSu
 	if summary.ScaResults != nil {
 		if violations {
 			if count := summary.GetTotal(formats.ScaSecurityResult); count > 0 {
-				content += fmt.Sprintf("\t%d %s", count, formats.ScaSecurityResult.String())
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaSecurityResult.String()))
 			}
 			if count := summary.GetTotal(formats.ScaOperationalResult); count > 0 {
-				content += fmt.Sprintf("\t%d %s", count, formats.ScaOperationalResult.String())
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaOperationalResult.String()))
 			}
 			if count := summary.GetTotal(formats.ScaLicenseResult); count > 0 {
-				content += fmt.Sprintf("\t%d %s", count, formats.ScaLicenseResult.String())
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaLicenseResult.String()))
 			}
 		} else {
 			if count := summary.GetTotal(formats.ScaSecurityResult); count > 0 {
-				content += fmt.Sprintf("\t%d %s", count, formats.ScaResult.String())
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaResult.String()))
 			}
 		}
 	}
 	if summary.SecretsResults != nil {
 		if count := summary.GetTotal(formats.SecretsResult); count > 0 {
-			content += fmt.Sprintf("\t%d %s", count, formats.SecretsResult.String())
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.SecretsResult.String()))
 		}
 	}
 	if summary.SastResults != nil {
 		if count := summary.GetTotal(formats.SastResult); count > 0 {
-			content += fmt.Sprintf("\t%d %s", count, formats.SastResult.String())
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.SastResult.String()))
 		}
 	}
 	if summary.IacResults != nil {
 		if count := summary.GetTotal(formats.IacResult); count > 0 {
-			content += fmt.Sprintf("\t%d %s", count, formats.IacResult.String())
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.IacResult.String()))
 		}
 	}
 	return
@@ -455,19 +457,19 @@ func getResultsTypesSummaryString(violations bool, summary *formats.ScanResultSu
 
 func getResultsSeveritySummaryString(violations bool, summary *formats.ScanResultSummary) (markdown string) {
 	details := summary.GetSummaryBySeverity()
-	if _, ok := details[severityutils.Critical.String()]; ok {
+	if details.GetTotal(severityutils.Critical.String()) >  0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Critical, details))
 	}
-	if _, ok := details[severityutils.High.String()]; ok {
+	if details.GetTotal(severityutils.High.String()) >  0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.High, details))
 	}
-	if _, ok := details[severityutils.Medium.String()]; ok {
+	if details.GetTotal(severityutils.Medium.String()) >  0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Medium, details))
 	}
-	if _, ok := details[severityutils.Low.String()]; ok {
+	if details.GetTotal(severityutils.Low.String()) >  0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Low, details))
 	}
-	if _, ok := details[severityutils.Unknown.String()]; ok {
+	if details.GetTotal(severityutils.Unknown.String()) >  0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Unknown, details))
 	}
 	return
@@ -478,7 +480,7 @@ func getSeverityMarkdown(severity severityutils.Severity, details formats.Result
 	severityStr := severity.String()
 	totalSeverityIssues := details.GetTotal(severityStr)
 	severityMarkdown := fmt.Sprintf("%d %s%s", totalSeverityIssues, severityStr, getSeverityStatusesCountString(details[severityStr]))
-	return NewLine.Format(getCenteredSvgWithText(svg, severityMarkdown))
+	return getCenteredSvgWithText(svg, severityMarkdown)
 }
 
 func getSeverityStatusesCountString(statusCounts map[string]int) string {
@@ -486,10 +488,9 @@ func getSeverityStatusesCountString(statusCounts map[string]int) string {
 }
 
 func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[SeverityStatus]int) {
+	displayData = map[SeverityStatus]int{}
 	for status, count := range statusCounts {
 		switch status {
-		case jasutils.NotScanned.String():
-			continue
 		case jasutils.Applicability.String():
 			displayData[ApplicableStatus] += count
 		case jasutils.NotApplicable.String():
