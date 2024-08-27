@@ -4,22 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"golang.org/x/exp/maps"
-	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
-	"sync"
 
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
-
-=======
->>>>>>> upstream/dev
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"

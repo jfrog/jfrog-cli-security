@@ -7,18 +7,18 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.9.34
-	github.com/jfrog/build-info-go v1.9.34
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.5
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-core/v2 v2.55.2
-	github.com/jfrog/jfrog-client-go v1.44.2
+	github.com/jfrog/jfrog-client-go v1.45.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/sync v0.7.0
-	golang.org/x/text v0.16.0
+	github.com/urfave/cli v1.22.15
+	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
+	golang.org/x/sync v0.8.0
+	golang.org/x/text v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -114,8 +114,8 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// EyalDelarea:subscription-based-summary
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240821141131-a3efa83b7e34
+// EyalDelarea:new_summary_ui
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240827094519-d3ac16611ed1
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
