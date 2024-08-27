@@ -1,1 +1,1 @@
-<pre><div style="display: flex; align-items: center; text-align: center"><img alt="success.svg" src=https://raw.githubusercontent.com/attiasas/jfrog-cli-security/main/improve_job_summary/resources//statusIcons/success.svg> No violations found</div></pre>
+<pre><div style="display: flex; align-items: center; text-align: center"><img alt="passed.svg" src=https://raw.githubusercontent.com/attiasas/jfrog-cli-security/improve_job_summary/resources/statusIcons/passed.svg> No violations found</div></pre>

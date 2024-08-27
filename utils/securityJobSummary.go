@@ -57,7 +57,7 @@ func (s SeverityStatus) Format(count int) string {
 }
 
 func getStatusIcon(failed bool) string {
-	statusIconPath := "success.svg"
+	statusIconPath := "passed.svg"
 	if failed {
 		statusIconPath = "failed.svg"
 	}
