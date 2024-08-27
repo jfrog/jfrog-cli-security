@@ -89,40 +89,6 @@ func (r *Results) CountScanResultsFindings(includeVulnerabilities, includeViolat
 	return summary.GetTotalVulnerabilities()
 }
 
-// func (r *Results) GetSummary() (summary formats.ResultsSummary) {
-// 	if len(r.ScaResults) <= 1 {
-// 		summary.Scans = r.getScanSummaryByTargets()
-// 		return
-// 	}
-// 	for _, scaScan := range r.ScaResults {
-// 		summary.Scans = append(summary.Scans, r.getScanSummaryByTargets(scaScan.Target)...)
-// 	}
-// 	return
-// }
-
-// // Returns a summary for the provided targets. If no targets are provided, a summary for all targets is returned.
-// func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummary) {
-// 	if len(targets) == 0 {
-// 		// No filter, one scan summary for all targets
-// 		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))
-// 		return
-// 	}
-// 	for _, target := range targets {
-// 		// Get target sca results
-// 		targetScaResults := []*ScaScanResult{}
-// 		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
-// 			targetScaResults = append(targetScaResults, targetScaResult)
-// 		}
-// 		// Get target extended results
-// 		targetExtendedResults := r.ExtendedScanResults
-// 		if targetExtendedResults != nil {
-// 			targetExtendedResults = targetExtendedResults.GetResultsForTarget(target)
-// 		}
-// 		summaries = append(summaries, getScanSummary(targetExtendedResults, targetScaResults...))
-// 	}
-// 	return
-// }
-
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
 	Target                string                  `json:"Target"`
