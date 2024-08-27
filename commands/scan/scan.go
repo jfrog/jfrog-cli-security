@@ -200,7 +200,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	})
 }
 
-func hasViolationContext(watches []string, projectKey string, ) bool {
+func hasViolationContext(watches []string, projectKey string) bool {
 	return len(watches) > 0 || projectKey != ""
 }
 

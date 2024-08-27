@@ -442,7 +442,6 @@ func TestJSONMarshall(t *testing.T) {
 	}
 }
 
-
 func TestGetSummary(t *testing.T) {
 	dummyExtendedScanResults := &ExtendedScanResults{
 		ApplicabilityScanResults: []*sarif.Run{
@@ -467,26 +466,26 @@ func TestGetSummary(t *testing.T) {
 
 	expectedVulnerabilities := &formats.ScanResultSummary{
 		ScaResults: &formats.ScaScanResultSummary{
-			ScanIds: []string{TestScaScanId},
+			ScanIds:      []string{TestScaScanId},
 			MoreInfoUrls: []string{TestMoreInfoUrl},
 			Security: formats.ResultSummary{
 				"Critical": map[string]int{jasutils.ApplicabilityUndetermined.String(): 1},
-				"High": map[string]int{jasutils.NotApplicable.String(): 1},
+				"High":     map[string]int{jasutils.NotApplicable.String(): 1},
 			},
 		},
 		SecretsResults: &formats.ResultSummary{"Low": map[string]int{jasutils.NotScanned.String(): 2}},
-		SastResults: &formats.ResultSummary{"Low": map[string]int{jasutils.NotScanned.String(): 1}},
+		SastResults:    &formats.ResultSummary{"Low": map[string]int{jasutils.NotScanned.String(): 1}},
 	}
 	expectedViolations := &formats.ScanViolationsSummary{
-		Watches: []string{"test-watch-name", "test-watch-name2"},
+		Watches:   []string{"test-watch-name", "test-watch-name2"},
 		FailBuild: true,
 		ScanResultSummary: formats.ScanResultSummary{
 			ScaResults: &formats.ScaScanResultSummary{
-				ScanIds: []string{TestScaScanId},
+				ScanIds:      []string{TestScaScanId},
 				MoreInfoUrls: []string{TestMoreInfoUrl},
 				Security: formats.ResultSummary{
 					"Critical": map[string]int{jasutils.ApplicabilityUndetermined.String(): 1},
-					"High": map[string]int{jasutils.NotApplicable.String(): 1},
+					"High":     map[string]int{jasutils.NotApplicable.String(): 1},
 				},
 				License: formats.ResultSummary{"High": map[string]int{jasutils.NotScanned.String(): 1}},
 			},
@@ -494,14 +493,14 @@ func TestGetSummary(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name         string
-		results      Results
+		name                   string
+		results                Results
 		includeVulnerabilities bool
-		includeViolations bool
-		expected     formats.ResultsSummary
+		includeViolations      bool
+		expected               formats.ResultsSummary
 	}{
 		{
-			name: 	   "Vulnerabilities only",
+			name:                   "Vulnerabilities only",
 			includeVulnerabilities: true,
 			results: Results{
 				ScaResults: []*ScaScanResult{{
@@ -512,13 +511,13 @@ func TestGetSummary(t *testing.T) {
 			},
 			expected: formats.ResultsSummary{
 				Scans: []formats.ScanSummary{{
-					Target: "target1",
+					Target:          "target1",
 					Vulnerabilities: expectedVulnerabilities,
 				}},
 			},
 		},
 		{
-			name: 	   "Violations only",
+			name:              "Violations only",
 			includeViolations: true,
 			results: Results{
 				ScaResults: []*ScaScanResult{{
@@ -529,15 +528,15 @@ func TestGetSummary(t *testing.T) {
 			},
 			expected: formats.ResultsSummary{
 				Scans: []formats.ScanSummary{{
-					Target: "target1",
+					Target:     "target1",
 					Violations: expectedViolations,
 				}},
 			},
 		},
 		{
-			name: 	   "Vulnerabilities and Violations",
+			name:                   "Vulnerabilities and Violations",
 			includeVulnerabilities: true,
-			includeViolations: true,
+			includeViolations:      true,
 			results: Results{
 				ScaResults: []*ScaScanResult{
 					{
@@ -553,9 +552,9 @@ func TestGetSummary(t *testing.T) {
 			},
 			expected: formats.ResultsSummary{
 				Scans: []formats.ScanSummary{{
-					Target: "target1",
+					Target:          "target1",
 					Vulnerabilities: expectedVulnerabilities,
-					Violations: expectedViolations,
+					Violations:      expectedViolations,
 				}},
 			},
 		},

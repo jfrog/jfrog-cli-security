@@ -252,7 +252,7 @@ func convertResultsToSummary(results map[string]*CurationReport) formats.Results
 		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
 				PackageCount: packagesStatus.totalNumberOfPackages,
-				Blocked: getBlocked(packagesStatus.packagesStatus),
+				Blocked:      getBlocked(packagesStatus.packagesStatus),
 			},
 		})
 	}
@@ -268,7 +268,7 @@ func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
 				blockedMap[polAndCondKey] = formats.BlockedPackages{
 					Policy:    policy.Policy,
 					Condition: policy.Condition,
-					Packages: make(map[string]int),
+					Packages:  make(map[string]int),
 				}
 			}
 			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)

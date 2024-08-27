@@ -42,14 +42,14 @@ type ScanResultSummary struct {
 }
 
 type ScanViolationsSummary struct {
-	Watches []string `json:"watches,omitempty"`
-	FailBuild bool `json:"fail_build,omitempty"`
+	Watches   []string `json:"watches,omitempty"`
+	FailBuild bool     `json:"fail_build,omitempty"`
 	ScanResultSummary
 }
 
 type ScaScanResultSummary struct {
-	ScanIds         []string        `json:"scan_ids,omitempty"`
-	MoreInfoUrls   	[]string        `json:"more_info_urls,omitempty"`
+	ScanIds         []string      `json:"scan_ids,omitempty"`
+	MoreInfoUrls    []string      `json:"more_info_urls,omitempty"`
 	Security        ResultSummary `json:"security,omitempty"`
 	License         ResultSummary `json:"license,omitempty"`
 	OperationalRisk ResultSummary `json:"operational_risk,omitempty"`
@@ -224,7 +224,7 @@ func (ss *ScanResultSummary) GetSummaryBySeverity() (summary ResultSummary) {
 	return
 }
 
-func GetViolationSummaries(summaries ...ResultsSummary) (*ScanViolationsSummary) {
+func GetViolationSummaries(summaries ...ResultsSummary) *ScanViolationsSummary {
 	if len(summaries) == 0 {
 		return nil
 	}
@@ -251,7 +251,7 @@ func GetViolationSummaries(summaries ...ResultsSummary) (*ScanViolationsSummary)
 	return violationsSummary
 }
 
-func GetVulnerabilitiesSummaries(summaries ...ResultsSummary) (*ScanResultSummary) {
+func GetVulnerabilitiesSummaries(summaries ...ResultsSummary) *ScanResultSummary {
 	if len(summaries) == 0 {
 		return nil
 	}
@@ -325,10 +325,6 @@ func MergeResultSummaries(summaries ...ResultSummary) (merged ResultSummary) {
 	}
 	return
 }
-
-
-
-
 
 // const (
 // 	ScaScan     SummarySubScanType = "SCA"

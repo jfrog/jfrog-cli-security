@@ -889,9 +889,9 @@ func Test_convertResultsToSummary(t *testing.T) {
 						CuratedPackages: &formats.CuratedPackages{
 							PackageCount: 5,
 							Blocked: []formats.BlockedPackages{{
-								Policy:   "policy1",
-								Condition:     "cond1",
-								Packages: map[string]int{"test1:1.0.0": 1},
+								Policy:    "policy1",
+								Condition: "cond1",
+								Packages:  map[string]int{"test1:1.0.0": 1},
 							}},
 						},
 					},
@@ -961,14 +961,14 @@ func Test_convertResultsToSummary(t *testing.T) {
 							PackageCount: 6,
 							Blocked: []formats.BlockedPackages{
 								{
-									Policy:   "policy1",
-									Condition:     "cond1",
-									Packages: map[string]int{"test1:1.0.0": 1},
+									Policy:    "policy1",
+									Condition: "cond1",
+									Packages:  map[string]int{"test1:1.0.0": 1},
 								},
 								{
-									Policy:   "policy2",
-									Condition:     "cond2",
-									Packages: map[string]int{"test1:1.0.0": 1, "test2:2.0.0": 1, "test3:3.0.0": 1},
+									Policy:    "policy2",
+									Condition: "cond2",
+									Packages:  map[string]int{"test1:1.0.0": 1, "test2:2.0.0": 1, "test3:3.0.0": 1},
 								},
 							},
 						},

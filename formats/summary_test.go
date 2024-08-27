@@ -8,14 +8,14 @@ import (
 
 func TestCuratedPackages(t *testing.T) {
 	testCases := []struct {
-		name     string
-		curatedPackages CuratedPackages
+		name             string
+		curatedPackages  CuratedPackages
 		expectedApproved int
-		expectedBlocked int
+		expectedBlocked  int
 	}{
-		{ "Empty", CuratedPackages{}, 0, 0 },
-		{ "Approved", CuratedPackages{PackageCount: 1}, 1, 0 },
-		{ "Blocked", CuratedPackages{Blocked: []BlockedPackages{{Packages: map[string]int{"npm://test:1.0.0": 1}}}, PackageCount: 1}, 0, 1 },
+		{"Empty", CuratedPackages{}, 0, 0},
+		{"Approved", CuratedPackages{PackageCount: 1}, 1, 0},
+		{"Blocked", CuratedPackages{Blocked: []BlockedPackages{{Packages: map[string]int{"npm://test:1.0.0": 1}}}, PackageCount: 1}, 0, 1},
 		{
 			"Multiple",
 			CuratedPackages{
@@ -34,7 +34,7 @@ func TestCuratedPackages(t *testing.T) {
 				PackageCount: 9,
 			},
 			6, 3,
-		},	
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -46,32 +46,32 @@ func TestCuratedPackages(t *testing.T) {
 
 func TestResultSummary(t *testing.T) {
 	testSummary := ResultSummary{
-		"High": map[string]int{NoStatus: 1, "Status1": 2},
-		"Medium": map[string]int{"Status1": 3, "Status2": 4},
-		"Low": map[string]int{NoStatus: 15},
+		"High":    map[string]int{NoStatus: 1, "Status1": 2},
+		"Medium":  map[string]int{"Status1": 3, "Status2": 4},
+		"Low":     map[string]int{NoStatus: 15},
 		"Unknown": map[string]int{"Status2": 6},
 	}
 	testCases := []struct {
-		name     string
-		summary  ResultSummary
+		name            string
+		summary         ResultSummary
 		severityFilters []string
-		expectedTotal int
+		expectedTotal   int
 	}{
 		{
-			name: "Empty",
-			summary: ResultSummary{},
+			name:          "Empty",
+			summary:       ResultSummary{},
 			expectedTotal: 0,
 		},
 		{
-			name: "No filters",
-			summary: testSummary,
+			name:          "No filters",
+			summary:       testSummary,
 			expectedTotal: 31,
 		},
 		{
-			name: "With filters",
-			summary: testSummary,
+			name:            "With filters",
+			summary:         testSummary,
 			severityFilters: []string{"Critical", "High", "Low"},
-			expectedTotal: 18,
+			expectedTotal:   18,
 		},
 	}
 	for _, testCase := range testCases {
@@ -85,49 +85,49 @@ func TestScanResultSummary(t *testing.T) {
 	ids := []string{"id1", "id2"}
 	urls := []string{"url1", "url2"}
 	testSummary := ScanResultSummary{
-		ScaResults: &ScaScanResultSummary{ 
-			ScanIds: ids,
-			MoreInfoUrls: urls,
-			Security: ResultSummary{"Critical": map[string]int{"Status": 1}, "High": map[string]int{NoStatus: 1}},
-			License: ResultSummary{"High": map[string]int{NoStatus: 1}},
+		ScaResults: &ScaScanResultSummary{
+			ScanIds:         ids,
+			MoreInfoUrls:    urls,
+			Security:        ResultSummary{"Critical": map[string]int{"Status": 1}, "High": map[string]int{NoStatus: 1}},
+			License:         ResultSummary{"High": map[string]int{NoStatus: 1}},
 			OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
 		},
 		SecretsResults: &ResultSummary{"Medium": map[string]int{NoStatus: 1}},
-		SastResults: &ResultSummary{"High": map[string]int{"Status": 1}},
+		SastResults:    &ResultSummary{"High": map[string]int{"Status": 1}},
 	}
 	testCases := []struct {
-		name     string
-		summary  ScanResultSummary
-		resultTypeFilters []SummaryResultType
-		expectedTotal int
-		expectedScanIds []string
+		name                 string
+		summary              ScanResultSummary
+		resultTypeFilters    []SummaryResultType
+		expectedTotal        int
+		expectedScanIds      []string
 		expectedMoreInfoUrls []string
 	}{
 		{
-			name: "No Issues",
+			name:    "No Issues",
 			summary: ScanResultSummary{ScaResults: &ScaScanResultSummary{}, SecretsResults: &ResultSummary{}},
 		},
 		{
-			name: "No filters",
-			summary: testSummary,
-			expectedTotal: 6,
-			expectedScanIds: ids,
+			name:                 "No filters",
+			summary:              testSummary,
+			expectedTotal:        6,
+			expectedScanIds:      ids,
 			expectedMoreInfoUrls: urls,
 		},
 		{
-			name: "One filter",
-			summary: testSummary,
-			resultTypeFilters: []SummaryResultType{ScaSecurityResult},
-			expectedTotal: 2,
-			expectedScanIds: ids,
+			name:                 "One filter",
+			summary:              testSummary,
+			resultTypeFilters:    []SummaryResultType{ScaSecurityResult},
+			expectedTotal:        2,
+			expectedScanIds:      ids,
 			expectedMoreInfoUrls: urls,
 		},
 		{
-			name: "Multiple filters",
-			summary: testSummary,
-			resultTypeFilters: []SummaryResultType{ScaSecurityResult, ScaLicenseResult, IacResult, SecretsResult, SastResult},
-			expectedTotal: 5,
-			expectedScanIds: ids,
+			name:                 "Multiple filters",
+			summary:              testSummary,
+			resultTypeFilters:    []SummaryResultType{ScaSecurityResult, ScaLicenseResult, IacResult, SecretsResult, SastResult},
+			expectedTotal:        5,
+			expectedScanIds:      ids,
 			expectedMoreInfoUrls: urls,
 		},
 	}
@@ -147,45 +147,45 @@ func TestScanSummary(t *testing.T) {
 	vulnerabilities := &ScanResultSummary{SecretsResults: &ResultSummary{"High": map[string]int{"Status": 1}}}
 	violations := &ScanViolationsSummary{ScanResultSummary: *vulnerabilities, Watches: []string{"watch1", "watch2"}}
 	testCases := []struct {
-		name     string
-		summary  ScanSummary
+		name                       string
+		summary                    ScanSummary
 		expectedHasCuratedPackages bool
 		expectedHasBlockedPackages bool
-		expectedHasViolations bool
+		expectedHasViolations      bool
 		expectedHasVulnerabilities bool
 	}{
 		{
-			name: "Empty",
+			name:    "Empty",
 			summary: ScanSummary{},
 		},
 		{
-			name: "CuratedPackages",
-			summary: ScanSummary{CuratedPackages: &CuratedPackages{PackageCount: 1}, Vulnerabilities: &ScanResultSummary{}},
+			name:                       "CuratedPackages",
+			summary:                    ScanSummary{CuratedPackages: &CuratedPackages{PackageCount: 1}, Vulnerabilities: &ScanResultSummary{}},
 			expectedHasCuratedPackages: true,
 		},
 		{
-			name: "BlockedPackages",
-			summary: ScanSummary{CuratedPackages: curatedBlocked, Violations: &ScanViolationsSummary{}},
+			name:                       "BlockedPackages",
+			summary:                    ScanSummary{CuratedPackages: curatedBlocked, Violations: &ScanViolationsSummary{}},
 			expectedHasCuratedPackages: true,
 			expectedHasBlockedPackages: true,
 		},
 		{
-			name: "Vulnerabilities",
-			summary: ScanSummary{Vulnerabilities: vulnerabilities},
+			name:                       "Vulnerabilities",
+			summary:                    ScanSummary{Vulnerabilities: vulnerabilities},
 			expectedHasVulnerabilities: true,
 		},
 		{
-			name: "Violations",
-			summary: ScanSummary{Violations: violations},
+			name:                  "Violations",
+			summary:               ScanSummary{Violations: violations},
 			expectedHasViolations: true,
 		},
 		{
-			name: "All",
-			summary: ScanSummary{ CuratedPackages: curatedBlocked, Vulnerabilities: vulnerabilities, Violations: violations },
+			name:                       "All",
+			summary:                    ScanSummary{CuratedPackages: curatedBlocked, Vulnerabilities: vulnerabilities, Violations: violations},
 			expectedHasCuratedPackages: true,
 			expectedHasBlockedPackages: true,
 			expectedHasVulnerabilities: true,
-			expectedHasViolations: true,
+			expectedHasViolations:      true,
 		},
 	}
 	for _, testCase := range testCases {
@@ -201,34 +201,34 @@ func TestScanSummary(t *testing.T) {
 func TestResultsSummary(t *testing.T) {
 	testScans := []ScanSummary{
 		{Vulnerabilities: &ScanResultSummary{SecretsResults: &ResultSummary{"High": map[string]int{"Status": 4}}}},
-		{Violations: &ScanViolationsSummary{ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{License: ResultSummary{"Medium": map[string]int{NoStatus: 2}}} ,SastResults: &ResultSummary{"High": map[string]int{"Status": 1}}}}},
+		{Violations: &ScanViolationsSummary{ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{License: ResultSummary{"Medium": map[string]int{NoStatus: 2}}}, SastResults: &ResultSummary{"High": map[string]int{"Status": 1}}}}},
 		{Vulnerabilities: &ScanResultSummary{SastResults: &ResultSummary{"Medium": map[string]int{NoStatus: 1}}}},
 		{Vulnerabilities: &ScanResultSummary{ScaResults: &ScaScanResultSummary{Security: ResultSummary{"Critical": map[string]int{"Status": 3}}}}},
 		{Vulnerabilities: &ScanResultSummary{ScaResults: &ScaScanResultSummary{Security: ResultSummary{"High": map[string]int{NoStatus: 1}, "Low": map[string]int{NoStatus: 1}}}}},
 	}
 	testCases := []struct {
-		name     string
-		summary  ResultsSummary
-		filters []SummaryResultType
+		name                         string
+		summary                      ResultsSummary
+		filters                      []SummaryResultType
 		expectedTotalVulnerabilities int
-		expectedTotalViolations int
+		expectedTotalViolations      int
 	}{
 		{
-			name: "Empty",
+			name:    "Empty",
 			summary: ResultsSummary{},
 		},
 		{
-			name: "No filters",
-			summary: ResultsSummary{Scans: testScans},
+			name:                         "No filters",
+			summary:                      ResultsSummary{Scans: testScans},
 			expectedTotalVulnerabilities: 10,
-			expectedTotalViolations: 3,
+			expectedTotalViolations:      3,
 		},
 		{
-			name: "With filters",
-			summary: ResultsSummary{Scans: testScans},
-			filters: []SummaryResultType{ScaLicenseResult, IacResult, SecretsResult},
+			name:                         "With filters",
+			summary:                      ResultsSummary{Scans: testScans},
+			filters:                      []SummaryResultType{ScaLicenseResult, IacResult, SecretsResult},
 			expectedTotalVulnerabilities: 4,
-			expectedTotalViolations: 2,
+			expectedTotalViolations:      2,
 		},
 	}
 	for _, testCase := range testCases {
@@ -244,36 +244,36 @@ func TestGetVulnerabilitiesSummaries(t *testing.T) {
 	dummyScaResults := &ScaScanResultSummary{Security: ResultSummary{"High": map[string]int{NoStatus: 1}}}
 	dummyResultSummary := &ResultSummary{"Medium": map[string]int{NoStatus: 1}}
 	testCases := []struct {
-		name    string
-		input []ResultsSummary
-		expectedShowVulnerabilities bool
+		name                             string
+		input                            []ResultsSummary
+		expectedShowVulnerabilities      bool
 		expectedVulnerabilitiesSummaries *ScanResultSummary
 	}{
 		{
-			name: "Vulnerabilities not requested",
+			name:  "Vulnerabilities not requested",
 			input: []ResultsSummary{},
 		},
 		{
-			name: "No Vulnerabilities",
-			expectedShowVulnerabilities: true,
-			input: []ResultsSummary{{Scans: []ScanSummary{{Target:"target", Vulnerabilities: &ScanResultSummary{}}}}},
+			name:                             "No Vulnerabilities",
+			expectedShowVulnerabilities:      true,
+			input:                            []ResultsSummary{{Scans: []ScanSummary{{Target: "target", Vulnerabilities: &ScanResultSummary{}}}}},
 			expectedVulnerabilitiesSummaries: &ScanResultSummary{},
 		},
 		{
-			name: "Single input",
-			expectedShowVulnerabilities: true,
-			input: []ResultsSummary{{Scans: []ScanSummary{{Target:"target", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary}}}}},
+			name:                             "Single input",
+			expectedShowVulnerabilities:      true,
+			input:                            []ResultsSummary{{Scans: []ScanSummary{{Target: "target", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary}}}}},
 			expectedVulnerabilitiesSummaries: &ScanResultSummary{ScaResults: dummyScaResults, SecretsResults: dummyResultSummary},
 		},
 		{
-			name: "Multiple inputs",
+			name:                        "Multiple inputs",
 			expectedShowVulnerabilities: true,
 			input: []ResultsSummary{
-				{Scans: []ScanSummary{{Target:"target1", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults}}}},
+				{Scans: []ScanSummary{{Target: "target1", Vulnerabilities: &ScanResultSummary{ScaResults: dummyScaResults}}}},
 				{
 					Scans: []ScanSummary{
-						{Target:"target2", Vulnerabilities: &ScanResultSummary{SecretsResults: dummyResultSummary}},
-						{Target:"target3", Vulnerabilities: &ScanResultSummary{SastResults: dummyResultSummary}},
+						{Target: "target2", Vulnerabilities: &ScanResultSummary{SecretsResults: dummyResultSummary}},
+						{Target: "target3", Vulnerabilities: &ScanResultSummary{SastResults: dummyResultSummary}},
 					},
 				},
 			},
@@ -294,25 +294,25 @@ func TestGetVulnerabilitiesSummaries(t *testing.T) {
 
 func TestGetViolationSummaries(t *testing.T) {
 	testCases := []struct {
-		name    string
-		input []ResultsSummary
-		expectedShowViolations bool
+		name                       string
+		input                      []ResultsSummary
+		expectedShowViolations     bool
 		expectedViolationSummaries *ResultSummary
 	}{
 		{
-			name: "violation context not defined",
+			name:  "violation context not defined",
 			input: []ResultsSummary{},
 		},
 		{
-			name: "No Violations",
+			name:                   "No Violations",
 			expectedShowViolations: true,
 		},
 		{
-			name: "Single input",
+			name:                   "Single input",
 			expectedShowViolations: true,
 		},
 		{
-			name: "Multiple inputs",
+			name:                   "Multiple inputs",
 			expectedShowViolations: true,
 		},
 	}
@@ -327,16 +327,6 @@ func TestGetViolationSummaries(t *testing.T) {
 		})
 	}
 }
-
-
-
-
-
-
-
-
-
-
 
 // func TestSummaryCount(t *testing.T) {
 // 	testCases := []struct {

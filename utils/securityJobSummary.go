@@ -237,7 +237,7 @@ func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) 
 		return
 	}
 	markdown, err = GenerateSecuritySectionMarkdown(curationData)
-	if err == nil && markdown != ""{
+	if err == nil && markdown != "" {
 		markdown = Details.Format("Security", markdown)
 	}
 	return
@@ -326,11 +326,11 @@ func getBlockedPackages(blockedSummary map[string]int) string {
 }
 
 type DynamicMarkdownGenerator struct {
-	index               commandsummary.Index
-	extendedView        bool
-	dataFiles           []string
-	content             []formats.ResultsSummary
-	args                ResultSummaryArgs
+	index        commandsummary.Index
+	extendedView bool
+	dataFiles    []string
+	content      []formats.ResultsSummary
+	args         ResultSummaryArgs
 }
 
 func (mg *DynamicMarkdownGenerator) loadContentFromFiles() (err error) {

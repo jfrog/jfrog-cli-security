@@ -685,15 +685,15 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 		}
 	}
 	violations = &formats.ScanViolationsSummary{
-		Watches: watches.ToSlice(),
+		Watches:   watches.ToSlice(),
 		FailBuild: failBuild,
 		ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-			ScanIds: scanIds,
-			Security: vioUniqueFindings[ViolationTypeSecurity],
-			License: vioUniqueFindings[ViolationTypeLicense],
+			ScanIds:         scanIds,
+			Security:        vioUniqueFindings[ViolationTypeSecurity],
+			License:         vioUniqueFindings[ViolationTypeLicense],
 			OperationalRisk: vioUniqueFindings[ViolationTypeOperationalRisk],
 		},
-	}}
+		}}
 	return
 }
 
@@ -755,7 +755,7 @@ func mergeMaps(m1, m2 map[string]int) map[string]int {
 	return m1
 }
 
-func getJasSummaryFindings(runs ...*sarif.Run) (*formats.ResultSummary) {
+func getJasSummaryFindings(runs ...*sarif.Run) *formats.ResultSummary {
 	if len(runs) == 0 {
 		return nil
 	}

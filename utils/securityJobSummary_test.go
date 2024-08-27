@@ -91,7 +91,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			index:               commandsummary.BinariesScan,
 			violations:          true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_defined.md"),
-			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target:          filepath.Join(wd, "binary-name"),
@@ -104,7 +104,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			index:               commandsummary.BinariesScan,
 			violations:          true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "no_violations.md"),
-			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "other-binary-name"),
@@ -124,9 +124,9 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: "build-name (build-number)",
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-						ScanIds: []string{TestScaScanId},
+						ScanIds:      []string{TestScaScanId},
 						MoreInfoUrls: []string{"https://test-url"},
-						Security: formats.ResultSummary{"High": map[string]int{formats.NoStatus: 3}, "Medium": map[string]int{formats.NoStatus: 1}, "Unknown": map[string]int{formats.NoStatus: 20}},
+						Security:     formats.ResultSummary{"High": map[string]int{formats.NoStatus: 3}, "Medium": map[string]int{formats.NoStatus: 1}, "Unknown": map[string]int{formats.NoStatus: 20}},
 					}},
 				}},
 			}},
@@ -140,7 +140,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "binary-with-issues"),
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-						ScanIds: []string{TestScaScanId, "scan-id-2"},
+						ScanIds:  []string{TestScaScanId, "scan-id-2"},
 						Security: formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
 					}},
 				}},
@@ -150,13 +150,13 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			name:                "Docker Scan Vulnerabilities",
 			index:               commandsummary.DockerScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "docker_vulnerabilities.md"),
-			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "image.tar"),
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
-							ScanIds: []string{TestScaScanId},
+							ScanIds:      []string{TestScaScanId},
 							MoreInfoUrls: []string{"https://test-url"},
 							Security: formats.ResultSummary{
 								"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
@@ -178,7 +178,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			violations:          true,
 			NoExtendedView:      true,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_extendedView.md"),
-			args: 			  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "image.tar"),
@@ -186,7 +186,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 						Watches: []string{"watch1", "watch2"},
 						ScanResultSummary: formats.ScanResultSummary{
 							ScaResults: &formats.ScaScanResultSummary{
-								ScanIds: []string{TestScaScanId},
+								ScanIds:      []string{TestScaScanId},
 								MoreInfoUrls: []string{"https://test-url"},
 								Security: formats.ResultSummary{
 									"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
