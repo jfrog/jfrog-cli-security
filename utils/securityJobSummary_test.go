@@ -177,7 +177,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			index:               commandsummary.DockerScan,
 			violations:          true,
 			NoExtendedView:      true,
-			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_extendedView.md"),
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_not_extended_view.md"),
 			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{

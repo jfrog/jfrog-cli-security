@@ -747,6 +747,9 @@ func getCveId(cve services.Cve, defaultIssueId string) string {
 }
 
 func mergeMaps(m1, m2 map[string]int) map[string]int {
+	if m1 == nil {
+		return m2
+	}
 	for k, v := range m2 {
 		m1[k] += v
 	}
