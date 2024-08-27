@@ -34,6 +34,7 @@ const (
 	Link          HtmlTag = "<a href=\"%s\">%s</a>"
 	NewLine       HtmlTag = "<br>%s"
 	Details       HtmlTag = "<details><summary>%s</summary>%s</details>"
+	DetailsOpen   HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
 	RedColor      HtmlTag = "<span style=\"color:red\">%s</span>"
 	OrangeColor   HtmlTag = "<span style=\"color:orange\">%s</span>"
 	GreenColor    HtmlTag = "<span style=\"color:green\">%s</span>"
@@ -214,19 +215,19 @@ func loadContent(dataFiles []string, filterSections ...SecuritySummarySection) (
 }
 
 func (js *SecurityJobSummary) BinaryScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths}
+	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths, extendedView: true}
 	err = generator.loadContentFromFiles()
 	return
 }
 
 func (js *SecurityJobSummary) BuildScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths}
+	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths, extendedView: true}
 	err = generator.loadContentFromFiles()
 	return
 }
 
 func (js *SecurityJobSummary) DockerScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths}
+	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths, extendedView: true}
 	err = generator.loadContentFromFiles()
 	return
 }
@@ -244,7 +245,12 @@ func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) 
 	}
 	markdown, err = GenerateSecuritySectionMarkdown(curationData)
 	if err == nil && markdown != "" {
-		markdown = Details.Format("Security", markdown)
+		failed := false
+		status := ""
+		if failed {
+			status += " " + FailedSvg
+		}
+		markdown = DetailsOpen.Format("🔒 " + fmt.Sprintf("Security Summary%s", status), markdown)
 	}
 	return
 }
@@ -333,11 +339,11 @@ func getBlockedPackages(blockedSummary map[string]int) string {
 
 type EmptyMarkdownGenerator struct{}
 
-func (g *EmptyMarkdownGenerator) GetViolations() (content string) {
+func (g EmptyMarkdownGenerator) GetViolations() (content string) {
 	return PreFormat.Format("Not Scanned")
 }
 
-func (g *EmptyMarkdownGenerator) GetVulnerabilities() (content string) {
+func (g EmptyMarkdownGenerator) GetVulnerabilities() (content string) {
 	return PreFormat.Format("Not Scanned")
 }
 
@@ -358,7 +364,7 @@ func (mg *DynamicMarkdownGenerator) loadContentFromFiles() (err error) {
 	return
 }
 
-func (mg *DynamicMarkdownGenerator) GetViolations() (content string) {
+func (mg DynamicMarkdownGenerator) GetViolations() (content string) {
 	summary := formats.GetViolationSummaries(mg.content...)
 	if summary == nil {
 		content = PreFormat.Format("No watch is defined")
@@ -378,7 +384,7 @@ func (mg *DynamicMarkdownGenerator) GetViolations() (content string) {
 	return
 }
 
-func (mg *DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
+func (mg DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
 	summary := formats.GetVulnerabilitiesSummaries(mg.content...)
 	if summary == nil {
 		// We are in violation mode and vulnerabilities are not requested (no info to show)
