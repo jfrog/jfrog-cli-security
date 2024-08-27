@@ -37,7 +37,7 @@ const (
 	RedColor      HtmlTag = "<span style=\"color:red\">%s</span>"
 	OrangeColor   HtmlTag = "<span style=\"color:orange\">%s</span>"
 	GreenColor    HtmlTag = "<span style=\"color:green\">%s</span>"
-	TabTag		  HtmlTag = "&Tab;%s"
+	TabTag        HtmlTag = "&Tab;%s"
 
 	ApplicableStatus    SeverityStatus = "%d Applicable"
 	NotApplicableStatus SeverityStatus = "%d Not Applicable"
@@ -61,9 +61,9 @@ func (s SeverityStatus) Format(count int) string {
 
 type SecurityJobSummary struct{}
 
-func NewCurationSummary(Summary formats.ResultsSummary) (summary ScanCommandResultSummary) {
+func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
 	summary.ResultType = Curation
-	summary.Summary = Summary
+	summary.Summary = cmdResult
 	return
 }
 
@@ -236,7 +236,6 @@ func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGene
 	return
 }
 
-
 // Generate the Security section (Curation)
 func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
 	curationData, _, err := loadContent(dataFilePaths, Curation)
@@ -365,7 +364,7 @@ func (mg *DynamicMarkdownGenerator) GetViolations() (content string) {
 		content = PreFormat.Format("No watch is defined")
 		return
 	}
-	resultsMarkdown := generateResultsMarkdown(mg.index, true, getJfrogUrl(mg.index, mg.args, &summary.ScanResultSummary, mg.extendedView), &summary.ScanResultSummary)
+	resultsMarkdown := generateResultsMarkdown(true, getJfrogUrl(mg.index, mg.args, &summary.ScanResultSummary, mg.extendedView), &summary.ScanResultSummary)
 	if len(summary.Watches) == 0 {
 		content = resultsMarkdown
 		return
@@ -385,7 +384,7 @@ func (mg *DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
 		// We are in violation mode and vulnerabilities are not requested (no info to show)
 		return
 	}
-	content = generateResultsMarkdown(mg.index, false, getJfrogUrl(mg.index, mg.args, summary, mg.extendedView), summary)
+	content = generateResultsMarkdown(false, getJfrogUrl(mg.index, mg.args, summary, mg.extendedView), summary)
 	return
 }
 
@@ -404,12 +403,12 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 	return
 }
 
-func generateResultsMarkdown(index commandsummary.Index, violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
+func generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
 	if !content.HasIssues() {
 		markdown = getNoIssuesMarkdown(violations)
 	} else {
 		markdown = getResultsTypesSummaryString(violations, content)
-		markdown += NewLine.Format(getResultsSeveritySummaryString(violations, content))
+		markdown += NewLine.Format(getResultsSeveritySummaryString(content))
 		if moreInfoUrl != "" {
 			markdown += NewLine.Format(moreInfoUrl)
 		}
@@ -471,21 +470,21 @@ func getResultsTypesSummaryString(violations bool, summary *formats.ScanResultSu
 	return
 }
 
-func getResultsSeveritySummaryString(violations bool, summary *formats.ScanResultSummary) (markdown string) {
+func getResultsSeveritySummaryString(summary *formats.ScanResultSummary) (markdown string) {
 	details := summary.GetSummaryBySeverity()
-	if details.GetTotal(severityutils.Critical.String()) >  0 {
+	if details.GetTotal(severityutils.Critical.String()) > 0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Critical, details))
 	}
-	if details.GetTotal(severityutils.High.String()) >  0 {
+	if details.GetTotal(severityutils.High.String()) > 0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.High, details))
 	}
-	if details.GetTotal(severityutils.Medium.String()) >  0 {
+	if details.GetTotal(severityutils.Medium.String()) > 0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Medium, details))
 	}
-	if details.GetTotal(severityutils.Low.String()) >  0 {
+	if details.GetTotal(severityutils.Low.String()) > 0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Low, details))
 	}
-	if details.GetTotal(severityutils.Unknown.String()) >  0 {
+	if details.GetTotal(severityutils.Unknown.String()) > 0 {
 		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Unknown, details))
 	}
 	return

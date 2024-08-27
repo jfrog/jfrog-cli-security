@@ -669,17 +669,17 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 				watches.Add(violation.WatchName)
 				failBuild = failBuild || violation.FailBuild
 				issueId := violation.IssueId
-				severity := severityutils.GetSeverity(violation.Severity)
+				severity := severityutils.GetSeverity(violation.Severity).String()
 				violationType := ViolationIssueType(violation.ViolationType)
 				if violationType == ViolationTypeSecurity {
 					applicableRuns := []*sarif.Run{}
 					if extendedScanResults != nil {
 						applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
 					}
-					vioUniqueFindings[violationType][severity.String()] = mergeMaps(vioUniqueFindings[violationType][severity.String()], getSecuritySummaryFindings(violation.Cves, issueId, severity, violation.Components, applicableRuns...))
+					vioUniqueFindings[violationType][severity] = mergeMaps(vioUniqueFindings[violationType][severity], getSecuritySummaryFindings(violation.Cves, issueId, violation.Components, applicableRuns...))
 				} else {
 					// License, Operational Risk
-					vioUniqueFindings[violationType][severity.String()][formats.NoStatus] += len(violation.Components)
+					vioUniqueFindings[violationType][severity][formats.NoStatus] += len(violation.Components)
 				}
 			}
 		}
@@ -699,29 +699,26 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 
 func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (vulnerabilities *formats.ScanResultSummary) {
 	vulnerabilities = &formats.ScanResultSummary{}
-	scanIds := []string{}
-	moreInfoUrls := []string{}
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			if vulnerabilities.ScaResults == nil {
 				vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 			}
-			scanIds = append(scanIds, xrayResult.ScanId)
-			moreInfoUrls = append(moreInfoUrls, xrayResult.XrayDataUrl)
+			vulnerabilities.ScaResults.ScanIds = append(vulnerabilities.ScaResults.ScanIds, xrayResult.ScanId)
+			vulnerabilities.ScaResults.MoreInfoUrls = append(vulnerabilities.ScaResults.MoreInfoUrls, xrayResult.XrayDataUrl)
 			for _, vulnerability := range xrayResult.Vulnerabilities {
 				issueId := vulnerability.IssueId
-				severity := severityutils.GetSeverity(vulnerability.Severity)
+				severity := severityutils.GetSeverity(vulnerability.Severity).String()
 				applicableRuns := []*sarif.Run{}
 				if extendedScanResults != nil {
 					applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
 				}
-				vulnerabilities.ScaResults.Security[severity.String()] = mergeMaps(vulnerabilities.ScaResults.Security[severity.String()], getSecuritySummaryFindings(vulnerability.Cves, issueId, severity, vulnerability.Components, applicableRuns...))
+				vulnerabilities.ScaResults.Security[severity] = mergeMaps(vulnerabilities.ScaResults.Security[severity], getSecuritySummaryFindings(vulnerability.Cves, issueId, vulnerability.Components, applicableRuns...))
 			}
 		}
 	}
-	if vulnerabilities.ScaResults != nil {
-		vulnerabilities.ScaResults.ScanIds = scanIds
-		vulnerabilities.ScaResults.MoreInfoUrls = moreInfoUrls
+	if extendedScanResults == nil {
+		return
 	}
 	vulnerabilities.IacResults = getJasSummaryFindings(extendedScanResults.IacScanResults...)
 	vulnerabilities.SecretsResults = getJasSummaryFindings(extendedScanResults.SecretsScanResults...)
@@ -729,7 +726,7 @@ func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResu
 	return
 }
 
-func getSecuritySummaryFindings(cves []services.Cve, issueId string, severity severityutils.Severity, components map[string]services.Component, applicableRuns ...*sarif.Run) map[string]int {
+func getSecuritySummaryFindings(cves []services.Cve, issueId string, components map[string]services.Component, applicableRuns ...*sarif.Run) map[string]int {
 	uniqueFindings := map[string]int{}
 	for _, cve := range cves {
 		applicableStatus := jasutils.NotScanned

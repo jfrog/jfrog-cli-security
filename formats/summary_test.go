@@ -297,23 +297,105 @@ func TestGetViolationSummaries(t *testing.T) {
 		name                       string
 		input                      []ResultsSummary
 		expectedShowViolations     bool
-		expectedViolationSummaries *ResultSummary
+		expectedViolationSummaries *ScanViolationsSummary
 	}{
 		{
 			name:  "violation context not defined",
 			input: []ResultsSummary{},
 		},
 		{
-			name:                   "No Violations",
-			expectedShowViolations: true,
+			name:                       "No Violations",
+			expectedShowViolations:     true,
+			input:                      []ResultsSummary{{Scans: []ScanSummary{{Target: "target", Violations: &ScanViolationsSummary{}}}}},
+			expectedViolationSummaries: &ScanViolationsSummary{},
 		},
 		{
 			name:                   "Single input",
 			expectedShowViolations: true,
+			input: []ResultsSummary{{Scans: []ScanSummary{
+				{
+					Target: "target1",
+					Violations: &ScanViolationsSummary{
+						Watches:   []string{"watch1"},
+						FailBuild: true,
+						ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+							Security:        ResultSummary{"Critical": map[string]int{NoStatus: 1}},
+							OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
+						}},
+					},
+				},
+				{
+					Target: "target2",
+					Violations: &ScanViolationsSummary{
+						Watches: []string{"watch2"},
+						ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+							Security: ResultSummary{"High": map[string]int{NoStatus: 1}},
+							License:  ResultSummary{"High": map[string]int{NoStatus: 1}},
+						}},
+					},
+				},
+			}}},
+			expectedViolationSummaries: &ScanViolationsSummary{
+				Watches:   []string{"watch1", "watch2"},
+				FailBuild: true,
+				ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+					Security:        ResultSummary{"Critical": map[string]int{NoStatus: 1}, "High": map[string]int{NoStatus: 1}},
+					License:         ResultSummary{"High": map[string]int{NoStatus: 1}},
+					OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
+				}},
+			},
 		},
 		{
 			name:                   "Multiple inputs",
 			expectedShowViolations: true,
+			input: []ResultsSummary{
+				{
+					Scans: []ScanSummary{
+						{
+							Target: "target1",
+							Violations: &ScanViolationsSummary{
+								Watches: []string{"watch1"},
+								ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+									Security:        ResultSummary{"Critical": map[string]int{NoStatus: 1}},
+									OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
+								}},
+							},
+						},
+						{
+							Target: "target2",
+							Violations: &ScanViolationsSummary{
+								Watches: []string{"watch2"},
+								ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+									Security: ResultSummary{"High": map[string]int{NoStatus: 1}},
+									License:  ResultSummary{"High": map[string]int{NoStatus: 1}},
+								}},
+							},
+						},
+					},
+				},
+				{
+					Scans: []ScanSummary{
+						{
+							Target: "target3",
+							Violations: &ScanViolationsSummary{
+								Watches: []string{"watch1"},
+								ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+									Security: ResultSummary{"Critical": map[string]int{NoStatus: 1, "status": 2}, "High": map[string]int{NoStatus: 1}},
+									License:  ResultSummary{"Medium": map[string]int{NoStatus: 1}},
+								}},
+							},
+						},
+					},
+				},
+			},
+			expectedViolationSummaries: &ScanViolationsSummary{
+				Watches: []string{"watch1", "watch2"},
+				ScanResultSummary: ScanResultSummary{ScaResults: &ScaScanResultSummary{
+					Security:        ResultSummary{"Critical": map[string]int{NoStatus: 2, "status": 2}, "High": map[string]int{NoStatus: 2}},
+					License:         ResultSummary{"High": map[string]int{NoStatus: 1}, "Medium": map[string]int{NoStatus: 1}},
+					OperationalRisk: ResultSummary{"Low": map[string]int{NoStatus: 1}},
+				}},
+			},
 		},
 	}
 	for _, testCase := range testCases {
