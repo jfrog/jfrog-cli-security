@@ -213,23 +213,29 @@ func loadContent(dataFiles []string, filterSections ...SecuritySummarySection) (
 	return data, args, nil
 }
 
-func (js *SecurityJobSummary) BinaryScanMarkdown(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+func (js *SecurityJobSummary) BinaryScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
 	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths}
 	err = generator.loadContentFromFiles()
 	return
 }
 
-func (js *SecurityJobSummary) BuildScanMarkdown(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+func (js *SecurityJobSummary) BuildScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
 	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths}
 	err = generator.loadContentFromFiles()
 	return
 }
 
-func (js *SecurityJobSummary) DockerScanMarkdown(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+func (js *SecurityJobSummary) DockerScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
 	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths}
 	err = generator.loadContentFromFiles()
 	return
 }
+
+func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGenerator, _ error) {
+	generator = EmptyMarkdownGenerator{}
+	return
+}
+
 
 // Generate the Security section (Curation)
 func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
@@ -326,6 +332,16 @@ func getBlockedPackages(blockedSummary map[string]int) string {
 	return content
 }
 
+type EmptyMarkdownGenerator struct{}
+
+func (g *EmptyMarkdownGenerator) GetViolations() (content string) {
+	return PreFormat.Format("Not Scanned")
+}
+
+func (g *EmptyMarkdownGenerator) GetVulnerabilities() (content string) {
+	return PreFormat.Format("Not Scanned")
+}
+
 type DynamicMarkdownGenerator struct {
 	index        commandsummary.Index
 	extendedView bool
@@ -343,7 +359,7 @@ func (mg *DynamicMarkdownGenerator) loadContentFromFiles() (err error) {
 	return
 }
 
-func (mg *DynamicMarkdownGenerator) GetViolations() (content string, _ error) {
+func (mg *DynamicMarkdownGenerator) GetViolations() (content string) {
 	summary := formats.GetViolationSummaries(mg.content...)
 	if summary == nil {
 		content = PreFormat.Format("No watch is defined")
@@ -363,7 +379,7 @@ func (mg *DynamicMarkdownGenerator) GetViolations() (content string, _ error) {
 	return
 }
 
-func (mg *DynamicMarkdownGenerator) GetVulnerabilities() (content string, err error) {
+func (mg *DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
 	summary := formats.GetVulnerabilitiesSummaries(mg.content...)
 	if summary == nil {
 		// We are in violation mode and vulnerabilities are not requested (no info to show)

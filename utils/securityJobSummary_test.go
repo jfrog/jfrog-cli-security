@@ -236,11 +236,11 @@ func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commands
 	var generator DynamicMarkdownGenerator
 	switch index {
 	case commandsummary.BuildScan:
-		generator, err = securityJobSummary.BuildScanMarkdown([]string{})
+		generator, err = securityJobSummary.BuildScan([]string{})
 	case commandsummary.DockerScan:
-		generator, err = securityJobSummary.DockerScanMarkdown([]string{})
+		generator, err = securityJobSummary.DockerScan([]string{})
 	case commandsummary.BinariesScan:
-		generator, err = securityJobSummary.BinaryScanMarkdown([]string{})
+		generator, err = securityJobSummary.BinaryScan([]string{})
 	}
 	if err != nil {
 		return
@@ -249,9 +249,9 @@ func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commands
 	generator.args = args
 	generator.content = content
 	if violations {
-		markdown, err = generator.GetViolations()
+		markdown = generator.GetViolations()
 	} else {
-		markdown, err = generator.GetVulnerabilities()
+		markdown = generator.GetVulnerabilities()
 	}
 	return
 }
