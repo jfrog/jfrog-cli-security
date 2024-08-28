@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -96,15 +98,16 @@ func NewBinaryScanSummary(cmdResults *Results, serverDetails *config.ServerDetai
 	return newResultSummary(cmdResults, Binary, serverDetails, vulnerabilitiesReqested, violationsReqested)
 }
 
+func NewAuditScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
+	return newResultSummary(cmdResults, Modules, serverDetails, vulnerabilitiesReqested, violationsReqested)
+}
+
 type ResultSummaryArgs struct {
-	// Url to more details in JFrog UI
-	// MoreInfoUrl string `json:"more_info_url,omitempty"`
 	BaseJfrogUrl string `json:"base_jfrog_url,omitempty"`
 	// Args to id the result
 	DockerImage  string   `json:"docker_image,omitempty"`
 	BuildName    string   `json:"build_name,omitempty"`
 	BuildNumbers []string `json:"build_numbers,omitempty"`
-	// ScanIds 	 []string `json:"scan_ids,omitempty"`
 }
 
 func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...string) string {
@@ -152,10 +155,30 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	if err != nil || manager == nil {
 		return
 	}
+	wd, err := coreutils.GetWorkingDirectory()
+	if err != nil {
+		return
+	}
+	updateSummaryNamesToRelativePath(&content.Summary, wd)
 	if index := getDataIndexFromSection(content.ResultType); index != "" {
 		return recordIndexData(manager, content, index)
 	}
 	return manager.Record(content)
+}
+
+func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string) {
+	for i, scan := range summary.Scans {
+		if scan.Target == "" {
+			continue
+		}
+		if !strings.HasPrefix(scan.Target, wd) {
+			continue
+		}
+		if scan.Target == wd {
+			summary.Scans[i].Target = filepath.Base(wd)
+		}
+		summary.Scans[i].Target = strings.TrimPrefix(scan.Target, wd)
+	}
 }
 
 func getDataIndexFromSection(section SecuritySummarySection) commandsummary.Index {
@@ -163,6 +186,8 @@ func getDataIndexFromSection(section SecuritySummarySection) commandsummary.Inde
 	case Build:
 		return commandsummary.BuildScan
 	case Binary:
+		return commandsummary.BinariesScan
+	case Modules:
 		return commandsummary.BinariesScan
 	case Docker:
 		return commandsummary.DockerScan
@@ -247,16 +272,7 @@ func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) 
 	if err != nil {
 		return
 	}
-	markdown, err = GenerateSecuritySectionMarkdown(curationData)
-	if err == nil && markdown != "" {
-		failed := false
-		status := ""
-		if failed {
-			status += " " + getStatusIcon(true)
-		}
-		markdown = DetailsOpen.Format("🔒 " + fmt.Sprintf("Security Summary%s", status), markdown)
-	}
-	return
+	return GenerateSecuritySectionMarkdown(curationData)
 }
 
 func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (markdown string, err error) {
@@ -264,7 +280,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 		return
 	}
 	// Create the markdown content
-	markdown += fmt.Sprintf("#### %s\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|", Curation)
+	markdown += fmt.Sprintf("\n\n#### %s\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|", Curation)
 	for i := range curationData {
 		for _, summary := range curationData[i].Scans {
 			status := getStatusIcon(false)
@@ -274,6 +290,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 			markdown += fmt.Sprintf("\n| %s | %s | %s |", status, summary.Target, PreFormat.Format(getCurationDetailsString(summary)))
 		}
 	}
+	markdown = DetailsOpen.Format("🔒 Security Summary", markdown)
 	return
 }
 
@@ -315,11 +332,9 @@ func getCurationDetailsString(summary formats.ScanSummary) (content string) {
 	})
 	// Display the blocked packages
 	for _, blockStruct := range blocked {
-		content += NewLine.Format(
-			Details.Format(
-				fmt.Sprintf("%s (%s)", blockStruct.BlockedType, BoldTxt.FormatInt(len(blockStruct.BlockedSummary))),
-				getBlockedPackages(blockStruct.BlockedSummary),
-			),
+		content += Details.Format(
+			fmt.Sprintf("%s (%s)", blockStruct.BlockedType, BoldTxt.FormatInt(len(blockStruct.BlockedSummary))),
+			getBlockedPackages(blockStruct.BlockedSummary),
 		)
 	}
 	return
@@ -335,8 +350,13 @@ func formatPolicyAndCond(policy, cond string) string {
 
 func getBlockedPackages(blockedSummary map[string]int) string {
 	content := ""
-	for blockedPackage, _ := range blockedSummary {
-		content += NewLine.Format(fmt.Sprintf("📦 %s", blockedPackage))
+	for blockedPackage := range blockedSummary {
+		blockedPackageStr := fmt.Sprintf("📦 %s", blockedPackage)
+		if len(content) > 0 {
+			content += NewLine.Format(blockedPackageStr)
+		} else {
+			content += blockedPackageStr
+		}
 	}
 	return content
 }

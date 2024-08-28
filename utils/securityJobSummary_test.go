@@ -204,9 +204,14 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			}},
 		},
 		{
-			name:    "Vulnerability not requested",
-			index:   commandsummary.DockerScan,
-			content: []formats.ResultsSummary{},
+			name:  "Vulnerability not requested",
+			index: commandsummary.DockerScan,
+			args:  &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "image.tar"),
+				}},
+			}},
 		},
 	}
 	for _, testCase := range testCases {
@@ -216,6 +221,9 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			if testCase.expectedContentPath != "" {
 				expectedContent = getOutputFromFile(t, testCase.expectedContentPath)
 			}
+			for i := range testCase.content {
+				updateSummaryNamesToRelativePath(&testCase.content[i], wd)
+			}
 			var summary string
 			var err error
 			// Generate the summary
@@ -223,7 +231,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				summary, err = GenerateSecuritySectionMarkdown(testCase.content)
 			} else {
 				assert.NotNil(t, testCase.args)
-				summary, err = createDummyDynamicMarkdown(testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
+				summary, err = createDummyDynamicMarkdown(wd, testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, expectedContent, summary)
@@ -231,7 +239,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 	}
 }
 
-func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commandsummary.Index, args ResultSummaryArgs, violations, extendedView bool) (markdown string, err error) {
+func createDummyDynamicMarkdown(wd string, content []formats.ResultsSummary, index commandsummary.Index, args ResultSummaryArgs, violations, extendedView bool) (markdown string, err error) {
 	securityJobSummary := &SecurityJobSummary{}
 	var generator DynamicMarkdownGenerator
 	switch index {

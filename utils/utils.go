@@ -25,9 +25,9 @@ const (
 	SastScan               SubScanType = "sast"
 	SecretsScan            SubScanType = "secrets"
 
-	ViolationTypeSecurity        ViolationIssueType = "Security"
-	ViolationTypeLicense         ViolationIssueType = "License"
-	ViolationTypeOperationalRisk ViolationIssueType = "Operational Risk"
+	ViolationTypeSecurity        ViolationIssueType = "security"
+	ViolationTypeLicense         ViolationIssueType = "license"
+	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
 
 type ViolationIssueType string

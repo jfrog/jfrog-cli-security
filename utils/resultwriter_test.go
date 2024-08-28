@@ -3,6 +3,7 @@ package utils
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -538,23 +539,17 @@ func TestGetSummary(t *testing.T) {
 			includeVulnerabilities: true,
 			includeViolations:      true,
 			results: &Results{
-				ScaResults: []*ScaScanResult{
-					{
-						Target:      "violationTarget",
-						XrayResults: getDummyScaTestResults(false, true),
-					},
-					{
-						Target:      "vulnerabilityTarget",
-						XrayResults: getDummyScaTestResults(true, false),
-					},
-				},
+				ScaResults: []*ScaScanResult{{
+					Target:      "target1",
+					XrayResults: getDummyScaTestResults(true, true),
+				}},
 				ExtendedScanResults: dummyExtendedScanResults,
 			},
 			expected: formats.ResultsSummary{
 				Scans: []formats.ScanSummary{{
 					Target:          "target1",
-					Vulnerabilities: expectedVulnerabilities,
 					Violations:      expectedViolations,
+					Vulnerabilities: expectedVulnerabilities,
 				}},
 			},
 		},
@@ -562,6 +557,17 @@ func TestGetSummary(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			summary := ToSummary(testCase.results, testCase.includeVulnerabilities, testCase.includeViolations)
+			for _, scan := range summary.Scans {
+				if scan.Vulnerabilities != nil {
+					sort.Strings(scan.Vulnerabilities.ScaResults.ScanIds)
+					sort.Strings(scan.Vulnerabilities.ScaResults.MoreInfoUrls)
+				}
+				if scan.Violations != nil {
+					sort.Strings(scan.Violations.Watches)
+					sort.Strings(scan.Violations.ScanResultSummary.ScaResults.ScanIds)
+					sort.Strings(scan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls)
+				}
+			}
 			assert.Equal(t, testCase.expected, summary)
 		})
 	}
@@ -578,7 +584,7 @@ func getDummyScaTestResults(vulnerability, violation bool) (responses []services
 	if violation {
 		response.Violations = []services.Violation{
 			{ViolationType: ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
-			{ViolationType: ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: ViolationTypeSecurity.String(), FailBuild: true, WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 			{ViolationType: ViolationTypeLicense.String(), WatchName: "test-watch-name2", IssueId: "MIT", Severity: "High", LicenseKey: "MIT", Components: map[string]services.Component{"issueId_direct_dependency": {}}},
 		}
 	}

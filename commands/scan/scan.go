@@ -321,7 +321,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
-		SetIsMultipleRootProject(true).
+		SetIsMultipleRootProject(scanResults.IsMultipleProject()).
 		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
 		return
