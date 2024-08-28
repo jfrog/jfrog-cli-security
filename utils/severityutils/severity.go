@@ -33,7 +33,29 @@ const (
 	Unknown  Severity = "Unknown"
 )
 
-func GetSeverityIcon(severity Severity) string {
+func GetSeverityIcon(severity Severity, svg bool) string {
+	if svg {
+		return getSeveritySvgIcon(severity)
+	}
+	return getSeverityEmojiIcon(severity)
+}
+
+func getSeverityEmojiIcon(severity Severity) string {
+	switch severity {
+	case Critical:
+		return "❗️"
+	case High:
+		return "🔴"
+	case Medium:
+		return "🟠"
+	case Low:
+		return "🟡"
+	default:
+		return "⚪️"
+	}
+}
+
+func getSeveritySvgIcon(severity Severity) string {
 	var severityIconPath string
 	switch severity {
 	case Critical:

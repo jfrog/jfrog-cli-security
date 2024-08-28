@@ -115,9 +115,9 @@ func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...strin
 		return ""
 	}
 	if index == commandsummary.BuildScan {
-		return fmt.Sprintf("%s/ui/scans-list/builds-scans", rsa.BaseJfrogUrl)
+		return fmt.Sprintf("%sui/scans-list/builds-scans", rsa.BaseJfrogUrl)
 	} else {
-		baseUrl := fmt.Sprintf("%s/ui/onDemandScanning", rsa.BaseJfrogUrl)
+		baseUrl := fmt.Sprintf("%sui/onDemandScanning", rsa.BaseJfrogUrl)
 		if len(scanIds) == 1 {
 			return fmt.Sprintf("%s/%s", baseUrl, scanIds[0])
 		}
@@ -244,19 +244,19 @@ func loadContent(dataFiles []string, filterSections ...SecuritySummarySection) (
 }
 
 func (js *SecurityJobSummary) BinaryScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths, extendedView: true}
+	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
 	err = generator.loadContentFromFiles()
 	return
 }
 
 func (js *SecurityJobSummary) BuildScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths, extendedView: true}
+	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
 	err = generator.loadContentFromFiles()
 	return
 }
 
 func (js *SecurityJobSummary) DockerScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
-	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths, extendedView: true}
+	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
 	err = generator.loadContentFromFiles()
 	return
 }
@@ -364,11 +364,11 @@ func getBlockedPackages(blockedSummary map[string]int) string {
 type EmptyMarkdownGenerator struct{}
 
 func (g EmptyMarkdownGenerator) GetViolations() (content string) {
-	return PreFormat.Format("Not Scanned")
+	return PreFormat.Format("ℹ️ Not Scanned")
 }
 
 func (g EmptyMarkdownGenerator) GetVulnerabilities() (content string) {
-	return PreFormat.Format("Not Scanned")
+	return PreFormat.Format("ℹ️ Not Scanned")
 }
 
 type DynamicMarkdownGenerator struct {
@@ -521,11 +521,18 @@ func getResultsSeveritySummaryString(summary *formats.ScanResultSummary) (markdo
 }
 
 func getSeverityMarkdown(severity severityutils.Severity, details formats.ResultSummary) (markdown string) {
-	svg := ImgTag.Format(severity.String(), severityutils.GetSeverityIcon(severity))
+	svg := getSeverityIcon(severity, false)
 	severityStr := severity.String()
 	totalSeverityIssues := details.GetTotal(severityStr)
 	severityMarkdown := fmt.Sprintf("%d %s%s", totalSeverityIssues, severityStr, getSeverityStatusesCountString(details[severityStr]))
 	return getCenteredSvgWithText(svg, severityMarkdown)
+}
+
+func getSeverityIcon(severity severityutils.Severity, svg bool) string {
+	if svg {
+		return ImgTag.Format(severity.String(), severityutils.GetSeverityIcon(severity, true))
+	}
+	return severityutils.GetSeverityIcon(severity, false)
 }
 
 func getSeverityStatusesCountString(statusCounts map[string]int) string {
