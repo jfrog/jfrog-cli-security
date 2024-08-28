@@ -16,7 +16,7 @@ require (
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.15
-	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/sync v0.8.0
 	golang.org/x/text v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -93,7 +93,7 @@ require (
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
-	github.com/vbauerster/mpb/v8 v8.7.5 // indirect
+	github.com/vbauerster/mpb/v8 v8.8.3 // indirect
 	github.com/xanzy/go-gitlab v0.95.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
@@ -104,7 +104,7 @@ require (
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
@@ -115,7 +115,7 @@ require (
 )
 
 // EyalDelarea:new_summary_ui
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828104302-87f64895ec73
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828143528-4cafa4ab55f9
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
