@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,17 +13,9 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/exp/maps"
-
-	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
-	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-core/v2/common/project"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/auth"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -31,6 +24,16 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
+
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
@@ -72,21 +75,21 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Pip, utils.CurationSupportFlag, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
 	techutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Maven, utils.CurationSupportFlag, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Maven, MinArtiPassThroughSupport)
 	},
 	techutils.Go: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Go, utils.CurationSupportFlag, MinArtiGolangSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Go, MinArtiGolangSupport)
 	},
 	techutils.Nuget: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Nuget, utils.CurationSupportFlag, MinArtiNuGetSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, envName string, minArtiVersion string) (bool, error) {
-	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
+	if flag, err := clientutils.GetBoolEnvValue(utils.CurationSupportFlag, false); flag {
 		return true, nil
 	} else if err != nil {
 		log.Error(err)
