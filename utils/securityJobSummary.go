@@ -261,9 +261,8 @@ func (js *SecurityJobSummary) DockerScan(filePaths []string) (generator DynamicM
 	return
 }
 
-func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGenerator, _ error) {
-	generator = EmptyMarkdownGenerator{}
-	return
+func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGenerator) {
+	return EmptyMarkdownGenerator{}
 }
 
 // Generate the Security section (Curation)

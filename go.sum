@@ -606,8 +606,8 @@ github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/CycloneDX/cyclonedx-go v0.9.0 h1:inaif7qD8bivyxp7XLgxUYtOXWtDez7+j72qKTMQTb8=
 github.com/CycloneDX/cyclonedx-go v0.9.0/go.mod h1:NE/EWvzELOFlG6+ljX/QeMlVt9VKcTwu8u0ccsACEsw=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828143528-4cafa4ab55f9 h1:4aDpoUcWlQEr3NIfStGRr98h7EpsuhzZxKsWQW7sntY=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828143528-4cafa4ab55f9/go.mod h1:WRVczIRHrJV6xcQtjW5lGENl+qnDkn7qQMJ9s2/fT8E=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828151259-7cbc89381b06 h1:p4Zmyqu/xna4qiqYbJEsAG8zXrVqzdMMmyWLKOp0GEU=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828151259-7cbc89381b06/go.mod h1:WRVczIRHrJV6xcQtjW5lGENl+qnDkn7qQMJ9s2/fT8E=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=

@@ -115,7 +115,7 @@ require (
 )
 
 // EyalDelarea:new_summary_ui
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828143528-4cafa4ab55f9
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828151259-7cbc89381b06
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
