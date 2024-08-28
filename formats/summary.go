@@ -233,14 +233,14 @@ func GetViolationSummaries(summaries ...ResultsSummary) *ScanViolationsSummary {
 	failBuild := false
 	foundViolations := false
 	for _, summary := range summaries {
-		for _, scan := range summary.Scans {
-			if scan.Violations == nil {
+		for i := range summary.Scans {
+			if summary.Scans[i].Violations == nil {
 				continue
 			}
 			foundViolations = true
-			watches.AddElements(scan.Violations.Watches...)
-			failBuild = failBuild || scan.Violations.FailBuild
-			extractIssuesToSummary(&scan.Violations.ScanResultSummary, &violationsSummary.ScanResultSummary)
+			watches.AddElements(summary.Scans[i].Violations.Watches...)
+			failBuild = failBuild || summary.Scans[i].Violations.FailBuild
+			extractIssuesToSummary(&summary.Scans[i].Violations.ScanResultSummary, &violationsSummary.ScanResultSummary)
 		}
 	}
 	if !foundViolations {
@@ -258,12 +258,12 @@ func GetVulnerabilitiesSummaries(summaries ...ResultsSummary) *ScanResultSummary
 	vulnerabilitiesSummary := &ScanResultSummary{}
 	foundVulnerabilities := false
 	for _, summary := range summaries {
-		for _, scan := range summary.Scans {
-			if scan.Vulnerabilities == nil {
+		for i := range summary.Scans {
+			if summary.Scans[i].Vulnerabilities == nil {
 				continue
 			}
 			foundVulnerabilities = true
-			extractIssuesToSummary(scan.Vulnerabilities, vulnerabilitiesSummary)
+			extractIssuesToSummary(summary.Scans[i].Vulnerabilities, vulnerabilitiesSummary)
 		}
 	}
 	if !foundVulnerabilities {
