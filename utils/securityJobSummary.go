@@ -420,7 +420,7 @@ func (mg DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
 
 func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *formats.ScanResultSummary, extendedView bool) (url string) {
 	if !extendedView {
-		return
+		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
 	}
 	if summary.ScaResults != nil {
 		if moreInfoUrls := summary.ScaResults.MoreInfoUrls; len(moreInfoUrls) > 0 {
