@@ -231,7 +231,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				summary, err = GenerateSecuritySectionMarkdown(testCase.content)
 			} else {
 				assert.NotNil(t, testCase.args)
-				summary, err = createDummyDynamicMarkdown(wd, testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
+				summary, err = createDummyDynamicMarkdown(testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, expectedContent, summary)
@@ -239,7 +239,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 	}
 }
 
-func createDummyDynamicMarkdown(wd string, content []formats.ResultsSummary, index commandsummary.Index, args ResultSummaryArgs, violations, extendedView bool) (markdown string, err error) {
+func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commandsummary.Index, args ResultSummaryArgs, violations, extendedView bool) (markdown string, err error) {
 	securityJobSummary := &SecurityJobSummary{}
 	var generator DynamicMarkdownGenerator
 	switch index {

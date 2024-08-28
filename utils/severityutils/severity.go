@@ -34,7 +34,7 @@ const (
 )
 
 func GetSeverityIcon(severity Severity) string {
-	severityIconPath := ""
+	var severityIconPath string
 	switch severity {
 	case Critical:
 		severityIconPath = "criticalSeverity.svg"
