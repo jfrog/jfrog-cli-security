@@ -472,7 +472,7 @@ func getNoJasAuditMockCommand() components.Command {
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
@@ -484,12 +484,12 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2)
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 0, 2, 2)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 1, 2, 2)
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
