@@ -156,8 +156,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "image.tar"),
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
-							ScanIds:      []string{TestScaScanId},
-							MoreInfoUrls: []string{"https://test-url"},
+							ScanIds: []string{TestScaScanId},
 							Security: formats.ResultSummary{
 								"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
 								"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
@@ -183,7 +182,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "image.tar"),
 					Violations: &formats.ScanViolationsSummary{
-						Watches: []string{"watch1", "watch2"},
+						Watches: []string{"watch1"},
 						ScanResultSummary: formats.ScanResultSummary{
 							ScaResults: &formats.ScaScanResultSummary{
 								ScanIds:      []string{TestScaScanId},

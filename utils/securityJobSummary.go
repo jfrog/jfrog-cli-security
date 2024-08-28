@@ -452,7 +452,7 @@ func getNoIssuesMarkdown(violations bool) (markdown string) {
 	if violations {
 		noIssuesStr = "No violations found"
 	}
-	return getCenteredSvgWithText(getStatusIcon(false), noIssuesStr)
+	return noIssuesStr
 }
 
 func getCenteredSvgWithText(svg, text string) (markdown string) {
