@@ -950,7 +950,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 							},
 						},
 					},
-					totalNumberOfPackages: 5,
+					totalNumberOfPackages: 6,
 				},
 			},
 			expected: formats.ResultsSummary{
