@@ -278,6 +278,7 @@ func extractIssuesToSummary(issues *ScanResultSummary, destination *ScanResultSu
 			destination.ScaResults = &ScaScanResultSummary{}
 		}
 		destination.ScaResults.ScanIds = append(destination.ScaResults.ScanIds, issues.ScaResults.ScanIds...)
+		destination.ScaResults.MoreInfoUrls = append(destination.ScaResults.MoreInfoUrls, issues.ScaResults.MoreInfoUrls...)
 		if issues.ScaResults.Security.GetTotal() > 0 {
 			destination.ScaResults.Security = MergeResultSummaries(destination.ScaResults.Security, issues.ScaResults.Security)
 		}
