@@ -660,7 +660,7 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 	failBuild := false
 	scanIds := []string{}
 	moreInfoUrls := []string{}
-	vioUniqueFindings := map[ViolationIssueType]formats.ResultSummary{}
+	violationsUniqueFindings := map[ViolationIssueType]formats.ResultSummary{}
 	// Parse unique findings
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
@@ -675,21 +675,21 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 				parsed.Add(violation.IssueId)
 				severity := severityutils.GetSeverity(violation.Severity).String()
 				violationType := ViolationIssueType(violation.ViolationType)
-				if _, ok := vioUniqueFindings[violationType]; !ok {
-					vioUniqueFindings[violationType] = formats.ResultSummary{}
+				if _, ok := violationsUniqueFindings[violationType]; !ok {
+					violationsUniqueFindings[violationType] = formats.ResultSummary{}
 				}
-				if _, ok := vioUniqueFindings[violationType][severity]; !ok {
-					vioUniqueFindings[violationType][severity] = map[string]int{}
+				if _, ok := violationsUniqueFindings[violationType][severity]; !ok {
+					violationsUniqueFindings[violationType][severity] = map[string]int{}
 				}
 				if violationType == ViolationTypeSecurity {
 					applicableRuns := []*sarif.Run{}
 					if extendedScanResults != nil {
 						applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
 					}
-					vioUniqueFindings[violationType][severity] = mergeMaps(vioUniqueFindings[violationType][severity], getSecuritySummaryFindings(violation.Cves, violation.IssueId, violation.Components, applicableRuns...))
+					violationsUniqueFindings[violationType][severity] = mergeMaps(violationsUniqueFindings[violationType][severity], getSecuritySummaryFindings(violation.Cves, violation.IssueId, violation.Components, applicableRuns...))
 				} else {
 					// License, Operational Risk
-					vioUniqueFindings[violationType][severity][formats.NoStatus] += 1
+					violationsUniqueFindings[violationType][severity][formats.NoStatus] += 1
 				}
 			}
 		}
@@ -700,9 +700,9 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 		ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
 			ScanIds:         scanIds,
 			MoreInfoUrls:    moreInfoUrls,
-			Security:        vioUniqueFindings[ViolationTypeSecurity],
-			License:         vioUniqueFindings[ViolationTypeLicense],
-			OperationalRisk: vioUniqueFindings[ViolationTypeOperationalRisk],
+			Security:        violationsUniqueFindings[ViolationTypeSecurity],
+			License:         violationsUniqueFindings[ViolationTypeLicense],
+			OperationalRisk: violationsUniqueFindings[ViolationTypeOperationalRisk],
 		},
 		}}
 	return

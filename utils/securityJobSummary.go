@@ -114,10 +114,13 @@ type ResultSummaryArgs struct {
 }
 
 func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...string) string {
+	if rsa.BaseJfrogUrl == "" {
+		rsa.BaseJfrogUrl = commandsummary.StaticMarkdownConfig.GetPlatformUrl()
+	}
 	if index == commandsummary.BuildScan {
-		return fmt.Sprintf("%sui/scans-list/builds-scans", commandsummary.StaticMarkdownConfig.GetPlatformUrl())
+		return fmt.Sprintf("%sui/scans-list/builds-scans", rsa.BaseJfrogUrl)
 	} else {
-		baseUrl := fmt.Sprintf("%sui/onDemandScanning", commandsummary.StaticMarkdownConfig.GetPlatformUrl())
+		baseUrl := fmt.Sprintf("%sui/onDemandScanning", rsa.BaseJfrogUrl)
 		if len(scanIds) == 1 {
 			return fmt.Sprintf("%s/%s", baseUrl, scanIds[0])
 		}

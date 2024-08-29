@@ -23,9 +23,9 @@ var (
 	}
 	violationResults = formats.ScanResultSummary{
 		ScaResults: &formats.ScaScanResultSummary{
-			ScanIds:      []string{TestScaScanId},
-			MoreInfoUrls: []string{"https://test-url"},
-			Security: securityScaResults,
+			ScanIds:         []string{TestScaScanId},
+			MoreInfoUrls:    []string{"https://test-url"},
+			Security:        securityScaResults,
 			License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
 			OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
 		},
@@ -173,7 +173,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "image.tar"),
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
-							ScanIds: []string{TestScaScanId},
+							ScanIds:  []string{TestScaScanId},
 							Security: securityScaResults,
 						},
 						SecretsResults: &formats.ResultSummary{
@@ -193,7 +193,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "image.tar"),
 					Violations: &formats.ScanViolationsSummary{
-						Watches: []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
+						Watches:           []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
 						ScanResultSummary: violationResults,
 					},
 				}},
@@ -210,7 +210,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "image.tar"),
 					Violations: &formats.ScanViolationsSummary{
-						Watches: []string{"watch1"},
+						Watches:           []string{"watch1"},
 						ScanResultSummary: violationResults,
 					},
 				}},

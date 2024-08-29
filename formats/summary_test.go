@@ -16,7 +16,7 @@ func TestCuratedPackages(t *testing.T) {
 	}{
 		{"Empty", CuratedPackages{}, 0, 0},
 		{"Approved", CuratedPackages{PackageCount: 1}, 1, 0},
-		{"Blocked", CuratedPackages{Blocked: []BlockedPackages{{Packages: map[string]int{"npm://test:1.0.0": 1}}}, PackageCount: 1}, 0, 1},
+		{"Blocked", CuratedPackages{Blocked: []BlockedPackages{{Policy: "Test", Condition: "Test condition", Packages: map[string]int{"npm://test:1.0.0": 1}}}, PackageCount: 1}, 0, 1},
 		{
 			"Multiple",
 			CuratedPackages{
