@@ -59,3 +59,20 @@ func IsReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
 	}
 	return true
 }
+
+func GetXscMsiAndVersion(analyticsMetricsService *AnalyticsMetricsService) (multiScanId, xscVersion string) {
+	var err error
+	if analyticsMetricsService != nil {
+		multiScanId = analyticsMetricsService.GetMsi()
+	}
+	if multiScanId != "" {
+		xscManager := analyticsMetricsService.XscManager()
+		if xscManager != nil {
+			xscVersion, err = xscManager.GetVersion()
+			if err != nil {
+				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
+			}
+		}
+	}
+	return
+}

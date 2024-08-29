@@ -22,10 +22,9 @@ import (
 )
 
 const (
-	EntitlementsMinVersion                    = "3.66.5"
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.8.13"
+	defaultAnalyzerManagerVersion             = "1.8.14"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"

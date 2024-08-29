@@ -6,6 +6,7 @@ require (
 	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
+<<<<<<< HEAD
 	github.com/jfrog/build-info-go v1.9.33
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.5
@@ -15,6 +16,18 @@ require (
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
+=======
+	github.com/jfrog/build-info-go v1.9.34
+	github.com/jfrog/froggit-go v1.16.1
+	github.com/jfrog/gofrog v1.7.5
+	github.com/jfrog/jfrog-apps-config v1.0.1
+	github.com/jfrog/jfrog-cli-core/v2 v2.55.2
+	github.com/jfrog/jfrog-client-go v1.44.2
+	github.com/magiconair/properties v1.8.7
+	github.com/owenrumney/go-sarif/v2 v2.3.0
+	github.com/stretchr/testify v1.9.0
+	github.com/urfave/cli v1.22.15
+>>>>>>> upstream/dev
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	golang.org/x/sync v0.8.0
 	golang.org/x/text v0.17.0
@@ -92,7 +105,10 @@ require (
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
+<<<<<<< HEAD
 	github.com/urfave/cli v1.22.15 // indirect
+=======
+>>>>>>> upstream/dev
 	github.com/vbauerster/mpb/v8 v8.7.5 // indirect
 	github.com/xanzy/go-gitlab v0.95.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
@@ -119,6 +135,6 @@ replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-c
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
-//replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
+// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev

@@ -3,6 +3,7 @@ package scan
 import (
 	"bytes"
 	"fmt"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,6 +80,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 	}
 
 	// Perform scan on image.tar
+	dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
 		Target(dsc.targetRepoPath).
@@ -104,6 +106,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			scanResults.ScaResults[i].Name = dsc.imageTag
 		}
 		utils.RecordSarifOutput(scanResults)
+		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.BinarySection})
 	})
 }
