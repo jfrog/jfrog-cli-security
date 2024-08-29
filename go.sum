@@ -606,8 +606,8 @@ github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/CycloneDX/cyclonedx-go v0.9.0 h1:inaif7qD8bivyxp7XLgxUYtOXWtDez7+j72qKTMQTb8=
 github.com/CycloneDX/cyclonedx-go v0.9.0/go.mod h1:NE/EWvzELOFlG6+ljX/QeMlVt9VKcTwu8u0ccsACEsw=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828151259-7cbc89381b06 h1:p4Zmyqu/xna4qiqYbJEsAG8zXrVqzdMMmyWLKOp0GEU=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240828151259-7cbc89381b06/go.mod h1:WRVczIRHrJV6xcQtjW5lGENl+qnDkn7qQMJ9s2/fT8E=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240829095200-1f14b0d8000d h1:JyOEEQIjBOOSM+7tbNOOYDj4w0P6krfgx4ihYoqdOPc=
+github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240829095200-1f14b0d8000d/go.mod h1:g4VChCFPZay8xceNfV/Lq6PLdeNkLnf6ZIb4HTtYeVw=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
@@ -892,8 +892,8 @@ github.com/jedib0t/go-pretty/v6 v6.5.9 h1:ACteMBRrrmm1gMsXe9PSTOClQ63IXDUt03H5U+
 github.com/jedib0t/go-pretty/v6 v6.5.9/go.mod h1:zbn98qrYlh95FIhwwsbIip0LYpwSG8SUOScs+v9/t0E=
 github.com/jfrog/archiver/v3 v3.6.1 h1:LOxnkw9pOn45DzCbZNFV6K0+6dCsQ0L8mR3ZcujO5eI=
 github.com/jfrog/archiver/v3 v3.6.1/go.mod h1:VgR+3WZS4N+i9FaDwLZbq+jeU4B4zctXL+gL4EMzfLw=
-github.com/jfrog/build-info-go v1.9.34 h1:bPnW58VpclbpBe/x8XEu/2BIviEOoJrJ5PkRRcmU3Co=
-github.com/jfrog/build-info-go v1.9.34/go.mod h1:6mdtqjREK76bHNODXakqKR/+ksJ9dvfLS7H57BZtnLY=
+github.com/jfrog/build-info-go v1.9.35 h1:P53Ckbuin0GYrq0LWMY0GZSptJcQwiUyW6lqTbXKdcc=
+github.com/jfrog/build-info-go v1.9.35/go.mod h1:6mdtqjREK76bHNODXakqKR/+ksJ9dvfLS7H57BZtnLY=
 github.com/jfrog/froggit-go v1.16.1 h1:FBIM1qevX/ag9unfmpGzfmZ36D8ulOJ+DPTSFUk3l5U=
 github.com/jfrog/froggit-go v1.16.1/go.mod h1:TEJSzgiV+3D/GVGE8Y6j46ut1jrBLD1FL6WdMdKwwCE=
 github.com/jfrog/gofrog v1.7.5 h1:dFgtEDefJdlq9cqTRoe09RLxS5Bxbe1Ev5+E6SmZHcg=

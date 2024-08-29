@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
@@ -40,6 +41,8 @@ const (
 
 	ApplicableStatus    SeverityStatus = "%d Applicable"
 	NotApplicableStatus SeverityStatus = "%d Not Applicable"
+
+	maxWatchesInLine = 4
 )
 
 type SecuritySummarySection string
@@ -347,17 +350,17 @@ func formatPolicyAndCond(policy, cond string) string {
 	return fmt.Sprintf("%s %s, %s %s", BoldTxt.Format("Violated Policy:"), policy, BoldTxt.Format("Condition:"), cond)
 }
 
-func getBlockedPackages(blockedSummary map[string]int) string {
-	content := ""
-	for blockedPackage := range blockedSummary {
+func getBlockedPackages(blockedSummary map[string]int) (content string) {
+	blocked := maps.Keys(blockedSummary)
+	sort.Strings(blocked)
+	for i, blockedPackage := range blocked {
 		blockedPackageStr := fmt.Sprintf("📦 %s", blockedPackage)
-		if len(content) > 0 {
-			content += NewLine.Format(blockedPackageStr)
-		} else {
-			content += blockedPackageStr
+		if i > 0 {
+			blockedPackageStr = NewLine.Format(blockedPackageStr)
 		}
+		content += blockedPackageStr
 	}
-	return content
+	return
 }
 
 type EmptyMarkdownGenerator struct{}
@@ -398,12 +401,39 @@ func (mg DynamicMarkdownGenerator) GetViolations() (content string) {
 		content = resultsMarkdown
 		return
 	}
-	watches := "watch"
-	if len(summary.Watches) > 1 {
-		watches += "es"
+	content = getWatchesMarkdown(summary.Watches) + NewLine.Format(resultsMarkdown)
+	return
+}
+
+// If more than maxWatchesInLine watches, put maxWatchesInLine at each line
+func getWatchesMarkdown(watches []string) (content string) {
+	sort.Strings(watches)
+	watchesStr := ""
+	multiLine := len(watches) > maxWatchesInLine
+	for i := 0; i < len(watches); i += maxWatchesInLine {
+		j := i + maxWatchesInLine
+		if j > len(watches) {
+			j = len(watches)
+		}
+		watchLine := strings.Join(watches[i:j], ", ")
+		if multiLine {
+			watchLine = NewLine.Format(watchLine)
+		}
+		watchesStr += watchLine
 	}
-	watches += ": " + strings.Join(summary.Watches, ", ")
-	content = PreFormat.Format(watches) + NewLine.Format(resultsMarkdown)
+	prefix := "watch"
+	if len(watches) > 1 {
+		prefix += "es"
+	}
+	content = PreFormat.Format(prefix + ": " + watchesStr)
+	// if len(watches) < 5 {
+	// 	return PreFormat.Format(watchesStr + ": " + strings.Join(watches, ", "))
+	// }
+	// for i:= 0; i < len(watches); i += 5 {
+	// 	j := i + 5
+	// 	if j > len(watches) {
+
+	// }
 	return
 }
 

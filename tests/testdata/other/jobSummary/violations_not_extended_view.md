@@ -1,1 +1,1 @@
-<pre>watch: watch1</pre><br><pre>23 Policy Violations:&Tab;17 Security&Tab;2 Operational&Tab;1 License&Tab;3 Secrets<br><br><a href="https://myplatform.com/">🐸 Unlock detailed findings</a></pre>
+<pre>watch: watch1</pre><br><pre>26 Policy Violations:&Tab;20 Security&Tab;2 Operational&Tab;1 License&Tab;3 Secrets<br><br><a href="https://jfrog.com/help/r/jfrog-and-github-integration-guide/jfrog-and-github-integration-features-matrix">🐸 Unlock detailed findings</a></pre>

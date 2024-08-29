@@ -14,6 +14,23 @@ import (
 
 var (
 	summaryExpectedContentDir = filepath.Join("..", "tests", "testdata", "other", "jobSummary")
+
+	securityScaResults = formats.ResultSummary{
+		"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
+		"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
+		"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
+		"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
+	}
+	violationResults = formats.ScanResultSummary{
+		ScaResults: &formats.ScaScanResultSummary{
+			ScanIds:      []string{TestScaScanId},
+			MoreInfoUrls: []string{"https://test-url"},
+			Security: securityScaResults,
+			License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
+			OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
+		},
+		SecretsResults: &formats.ResultSummary{"Medium": map[string]int{formats.NoStatus: 3}},
+	}
 )
 
 func TestGenerateJobSummaryMarkdown(t *testing.T) {
@@ -157,16 +174,27 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
 							ScanIds: []string{TestScaScanId},
-							Security: formats.ResultSummary{
-								"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
-								"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
-								"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
-								"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
-							},
+							Security: securityScaResults,
 						},
 						SecretsResults: &formats.ResultSummary{
 							"Medium": map[string]int{formats.NoStatus: 3},
 						},
+					},
+				}},
+			}},
+		},
+		{
+			name:                "Violations",
+			index:               commandsummary.DockerScan,
+			violations:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: testPlatformUrl, DockerImage: "dockerImage:version"},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "image.tar"),
+					Violations: &formats.ScanViolationsSummary{
+						Watches: []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
+						ScanResultSummary: violationResults,
 					},
 				}},
 			}},
@@ -183,21 +211,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "image.tar"),
 					Violations: &formats.ScanViolationsSummary{
 						Watches: []string{"watch1"},
-						ScanResultSummary: formats.ScanResultSummary{
-							ScaResults: &formats.ScaScanResultSummary{
-								ScanIds:      []string{TestScaScanId},
-								MoreInfoUrls: []string{"https://test-url"},
-								Security: formats.ResultSummary{
-									"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
-									"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
-									"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
-									"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
-								},
-								License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
-								OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
-							},
-							SecretsResults: &formats.ResultSummary{"Medium": map[string]int{formats.NoStatus: 3}},
-						},
+						ScanResultSummary: violationResults,
 					},
 				}},
 			}},
