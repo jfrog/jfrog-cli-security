@@ -26,21 +26,21 @@ const (
 	Docker   SecuritySummarySection = "Docker Image Scans"
 	Curation SecuritySummarySection = "Curation Audit"
 
-	PreFormat     HtmlTag = "<pre>%s</pre>"
-	ImgTag        HtmlTag = "<img alt=\"%s\" src=%s>"
-	CenterContent HtmlTag = "<div style=\"display: flex; align-items: center; text-align: center\">%s</div>"
-	BoldTxt       HtmlTag = "<b>%s</b>"
-	Link          HtmlTag = "<a href=\"%s\">%s</a>"
-	NewLine       HtmlTag = "<br>%s"
-	Details       HtmlTag = "<details><summary>%s</summary>%s</details>"
-	DetailsOpen   HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
-	RedColor      HtmlTag = "<span style=\"color:red\">%s</span>"
-	OrangeColor   HtmlTag = "<span style=\"color:orange\">%s</span>"
-	GreenColor    HtmlTag = "<span style=\"color:green\">%s</span>"
-	TabTag        HtmlTag = "&Tab;%s"
+	PreFormat              HtmlTag = "<pre>%s</pre>"
+	ImgTag                 HtmlTag = "<img alt=\"%s\" src=%s>"
+	CenterContent          HtmlTag = "<div style=\"display: flex; align-items: center; text-align: center\">%s</div>"
+	BoldTxt                HtmlTag = "<b>%s</b>"
+	Link                   HtmlTag = "<a href=\"%s\">%s</a>"
+	NewLine                HtmlTag = "<br>%s"
+	DetailsWithSummary     HtmlTag = "<details><summary>%s</summary>%s</details>"
+	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
+	RedColor               HtmlTag = "<span style=\"color:red\">%s</span>"
+	OrangeColor            HtmlTag = "<span style=\"color:orange\">%s</span>"
+	GreenColor             HtmlTag = "<span style=\"color:green\">%s</span>"
+	TabTag                 HtmlTag = "&Tab;%s"
 
-	ApplicableStatus    SeverityStatus = "%d Applicable"
-	NotApplicableStatus SeverityStatus = "%d Not Applicable"
+	ApplicableStatusCount    SeverityStatus = "%d Applicable"
+	NotApplicableStatusCount SeverityStatus = "%d Not Applicable"
 
 	maxWatchesInLine = 4
 )
@@ -292,7 +292,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 			markdown += fmt.Sprintf("\n| %s | %s | %s |", status, summary.Target, PreFormat.Format(getCurationDetailsString(summary)))
 		}
 	}
-	markdown = DetailsOpen.Format("🔒 Security Summary", markdown)
+	markdown = DetailsOpenWithSummary.Format("🔒 Security Summary", markdown)
 	return
 }
 
@@ -334,7 +334,7 @@ func getCurationDetailsString(summary formats.ScanSummary) (content string) {
 	})
 	// Display the blocked packages
 	for _, blockStruct := range blocked {
-		content += Details.Format(
+		content += DetailsWithSummary.Format(
 			fmt.Sprintf("%s (%s)", blockStruct.BlockedType, BoldTxt.FormatInt(len(blockStruct.BlockedSummary))),
 			getBlockedPackages(blockStruct.BlockedSummary),
 		)
@@ -578,9 +578,9 @@ func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[Se
 	for status, count := range statusCounts {
 		switch status {
 		case jasutils.Applicability.String():
-			displayData[ApplicableStatus] += count
+			displayData[ApplicableStatusCount] += count
 		case jasutils.NotApplicable.String():
-			displayData[NotApplicableStatus] += count
+			displayData[NotApplicableStatusCount] += count
 		}
 	}
 	return displayData
@@ -591,11 +591,11 @@ func generateSeverityStatusesCountString(displayData map[SeverityStatus]int) str
 		return ""
 	}
 	display := []string{}
-	if count, ok := displayData[ApplicableStatus]; ok {
-		display = append(display, ApplicableStatus.Format(count))
+	if count, ok := displayData[ApplicableStatusCount]; ok {
+		display = append(display, ApplicableStatusCount.Format(count))
 	}
-	if count, ok := displayData[NotApplicableStatus]; ok {
-		display = append(display, NotApplicableStatus.Format(count))
+	if count, ok := displayData[NotApplicableStatusCount]; ok {
+		display = append(display, NotApplicableStatusCount.Format(count))
 	}
 	return fmt.Sprintf(" (%s)", strings.Join(display, ", "))
 }

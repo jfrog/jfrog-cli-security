@@ -36,7 +36,7 @@ var (
 func TestGenerateJobSummaryMarkdown(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
-	testPlatformUrl := "https://test-platform-url/"
+	testPlatformUrl := "https://test-platform-url.jfrog.io/"
 	testCases := []struct {
 		name                string
 		index               commandsummary.Index
