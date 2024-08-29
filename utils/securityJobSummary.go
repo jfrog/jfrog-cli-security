@@ -393,7 +393,7 @@ func (mg DynamicMarkdownGenerator) GetViolations() (content string) {
 		content = PreFormat.Format("No watch is defined")
 		return
 	}
-	resultsMarkdown := generateResultsMarkdown(true, getJfrogUrl(mg.index, mg.args, &summary.ScanResultSummary, mg.extendedView), &summary.ScanResultSummary)
+	resultsMarkdown := mg.generateResultsMarkdown(true, getJfrogUrl(mg.index, mg.args, &summary.ScanResultSummary, mg.extendedView), &summary.ScanResultSummary)
 	if len(summary.Watches) == 0 {
 		content = resultsMarkdown
 		return
@@ -413,7 +413,7 @@ func (mg DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
 		// We are in violation mode and vulnerabilities are not requested (no info to show)
 		return
 	}
-	content = generateResultsMarkdown(false, getJfrogUrl(mg.index, mg.args, summary, mg.extendedView), summary)
+	content = mg.generateResultsMarkdown(false, getJfrogUrl(mg.index, mg.args, summary, mg.extendedView), summary)
 	return
 }
 
@@ -432,12 +432,16 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 	return
 }
 
-func generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
+func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
 	if !content.HasIssues() {
 		markdown = getNoIssuesMarkdown(violations)
 	} else {
 		markdown = getResultsTypesSummaryString(violations, content)
-		markdown += NewLine.Format(getResultsSeveritySummaryString(content))
+		details := ""
+		if mg.extendedView {
+			details = getResultsSeveritySummaryString(content)
+		}
+		markdown += NewLine.Format(details)
 		if moreInfoUrl != "" {
 			markdown += NewLine.Format(moreInfoUrl)
 		}
