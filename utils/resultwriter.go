@@ -564,7 +564,9 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
-				calculateResultFingerprints(cmdResults, run, result)
+				if err := calculateResultFingerprints(cmdResults, run, result); err != nil {
+					log.Warn(fmt.Sprintf("Failed to calculate the fingerprint for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), err.Error()))
+				}
 			}
 			results = append(results, result)
 		}
@@ -605,7 +607,7 @@ func getPatchedBinaryLocation(cmdResults *Results, run *sarif.Run) (patchedLocat
 }
 
 func getDockerfileLocationIfExists(run *sarif.Run) string {
-	potentialLocations := []string{filepath.Join("Dockerfile"), sarifutils.GetFullLocationFileName("Dockerfile", run.Invocations)}
+	potentialLocations := []string{filepath.Clean("Dockerfile"), sarifutils.GetFullLocationFileName("Dockerfile", run.Invocations)}
 	for _, location := range potentialLocations {
 		if exists, err := fileutils.IsFileExists(location, false); err == nil && exists {
 			log.Debug(fmt.Sprintf("Dockerfile found in %s, replacing the location", location))
@@ -758,7 +760,7 @@ func calculateResultFingerprints(cmdResults *Results, run *sarif.Run, result *sa
 	if err != nil {
 		return err
 	}
-	sarifutils.SetResultFingerprint("jfrogHash", hashValue, result)
+	sarifutils.SetResultFingerprint("jfrogFingerprintHash", hashValue, result)
 	return nil
 }
 

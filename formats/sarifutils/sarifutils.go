@@ -226,7 +226,7 @@ func GetResultRuleId(result *sarif.Result) string {
 }
 
 func IsFingerprintsExists(result *sarif.Result) bool {
-	return result.Fingerprints != nil && len(result.Fingerprints) > 0
+	return len(result.Fingerprints) > 0
 }
 
 func SetResultFingerprint(algorithm, value string, result *sarif.Result) {
