@@ -2,14 +2,12 @@ package severityutils
 
 import (
 	_ "embed"
-	"fmt"
 	"strings"
 
 	"github.com/gookit/color"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"golang.org/x/text/cases"
@@ -33,10 +31,7 @@ const (
 	Unknown  Severity = "Unknown"
 )
 
-func GetSeverityIcon(severity Severity, svg bool) string {
-	if svg {
-		return getSeveritySvgIcon(severity)
-	}
+func GetSeverityIcon(severity Severity) string {
 	return getSeverityEmojiIcon(severity)
 }
 
@@ -53,23 +48,6 @@ func getSeverityEmojiIcon(severity Severity) string {
 	default:
 		return "⚪️"
 	}
-}
-
-func getSeveritySvgIcon(severity Severity) string {
-	var severityIconPath string
-	switch severity {
-	case Critical:
-		severityIconPath = "criticalSeverity.svg"
-	case High:
-		severityIconPath = "highSeverity.svg"
-	case Medium:
-		severityIconPath = "mediumSeverity.svg"
-	case Low:
-		severityIconPath = "lowSeverity.svg"
-	default:
-		severityIconPath = "unknownSeverity.svg"
-	}
-	return fmt.Sprintf("%s/severityIcons/%s", resources.BaseResourcesUrl, severityIconPath)
 }
 
 type Severity string

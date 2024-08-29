@@ -114,13 +114,10 @@ type ResultSummaryArgs struct {
 }
 
 func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...string) string {
-	if rsa.BaseJfrogUrl == "" {
-		return ""
-	}
 	if index == commandsummary.BuildScan {
-		return fmt.Sprintf("%sui/scans-list/builds-scans", rsa.BaseJfrogUrl)
+		return fmt.Sprintf("%sui/scans-list/builds-scans", commandsummary.StaticMarkdownConfig.GetPlatformUrl())
 	} else {
-		baseUrl := fmt.Sprintf("%sui/onDemandScanning", rsa.BaseJfrogUrl)
+		baseUrl := fmt.Sprintf("%sui/onDemandScanning", commandsummary.StaticMarkdownConfig.GetPlatformUrl())
 		if len(scanIds) == 1 {
 			return fmt.Sprintf("%s/%s", baseUrl, scanIds[0])
 		}
@@ -466,7 +463,7 @@ func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, more
 	if !content.HasIssues() {
 		markdown = getNoIssuesMarkdown(violations)
 	} else {
-		markdown = getResultsTypesSummaryString(violations, content)
+		markdown = getResultsTypesSummaryString(mg.index, violations, content)
 		details := ""
 		if mg.extendedView {
 			details = getResultsSeveritySummaryString(content)
@@ -492,11 +489,15 @@ func getCenteredSvgWithText(svg, text string) (markdown string) {
 	return CenterContent.Format(fmt.Sprintf("%s %s", svg, text))
 }
 
-func getResultsTypesSummaryString(violations bool, summary *formats.ScanResultSummary) (content string) {
+func getResultsTypesSummaryString(index commandsummary.Index, violations bool, summary *formats.ScanResultSummary) (content string) {
 	if violations {
 		content = fmt.Sprintf("%d Policy Violations:", summary.GetTotal())
 	} else {
-		content = fmt.Sprintf("%d Security Issues:", summary.GetTotal())
+		if index == commandsummary.DockerScan || index == commandsummary.BinariesScan {
+			content = fmt.Sprintf("%d Security issues are grouped by CVE number:", summary.GetTotal())
+		} else {
+			content = fmt.Sprintf("%d Security Issues:", summary.GetTotal())
+		}
 	}
 	if summary.ScaResults != nil {
 		if violations {
@@ -554,18 +555,15 @@ func getResultsSeveritySummaryString(summary *formats.ScanResultSummary) (markdo
 }
 
 func getSeverityMarkdown(severity severityutils.Severity, details formats.ResultSummary) (markdown string) {
-	svg := getSeverityIcon(severity, false)
+	svg := getSeverityIcon(severity)
 	severityStr := severity.String()
 	totalSeverityIssues := details.GetTotal(severityStr)
 	severityMarkdown := fmt.Sprintf("%d %s%s", totalSeverityIssues, severityStr, getSeverityStatusesCountString(details[severityStr]))
 	return getCenteredSvgWithText(svg, severityMarkdown)
 }
 
-func getSeverityIcon(severity severityutils.Severity, svg bool) string {
-	if svg {
-		return ImgTag.Format(severity.String(), severityutils.GetSeverityIcon(severity, true))
-	}
-	return severityutils.GetSeverityIcon(severity, false)
+func getSeverityIcon(severity severityutils.Severity) string {
+	return severityutils.GetSeverityIcon(severity)
 }
 
 func getSeverityStatusesCountString(statusCounts map[string]int) string {

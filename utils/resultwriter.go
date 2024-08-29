@@ -656,6 +656,7 @@ func getScanSummary(includeVulnerabilities, includeViolations bool, extendedScan
 
 func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (violations *formats.ScanViolationsSummary) {
 	watches := datastructures.MakeSet[string]()
+	parsed := datastructures.MakeSet[string]()
 	failBuild := false
 	scanIds := []string{}
 	moreInfoUrls := []string{}
@@ -668,7 +669,10 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 			for _, violation := range xrayResult.Violations {
 				watches.Add(violation.WatchName)
 				failBuild = failBuild || violation.FailBuild
-				issueId := violation.IssueId
+				if parsed.Exists(violation.IssueId) {
+					continue
+				}
+				parsed.Add(violation.IssueId)
 				severity := severityutils.GetSeverity(violation.Severity).String()
 				violationType := ViolationIssueType(violation.ViolationType)
 				if _, ok := vioUniqueFindings[violationType]; !ok {
@@ -682,10 +686,10 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 					if extendedScanResults != nil {
 						applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
 					}
-					vioUniqueFindings[violationType][severity] = mergeMaps(vioUniqueFindings[violationType][severity], getSecuritySummaryFindings(violation.Cves, issueId, violation.Components, applicableRuns...))
+					vioUniqueFindings[violationType][severity] = mergeMaps(vioUniqueFindings[violationType][severity], getSecuritySummaryFindings(violation.Cves, violation.IssueId, violation.Components, applicableRuns...))
 				} else {
 					// License, Operational Risk
-					vioUniqueFindings[violationType][severity][formats.NoStatus] += len(violation.Components)
+					vioUniqueFindings[violationType][severity][formats.NoStatus] += 1
 				}
 			}
 		}
@@ -706,6 +710,7 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 
 func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (vulnerabilities *formats.ScanResultSummary) {
 	vulnerabilities = &formats.ScanResultSummary{}
+	parsed := datastructures.MakeSet[string]()
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
 			if vulnerabilities.ScaResults == nil {
@@ -714,13 +719,16 @@ func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResu
 			vulnerabilities.ScaResults.ScanIds = append(vulnerabilities.ScaResults.ScanIds, xrayResult.ScanId)
 			vulnerabilities.ScaResults.MoreInfoUrls = append(vulnerabilities.ScaResults.MoreInfoUrls, xrayResult.XrayDataUrl)
 			for _, vulnerability := range xrayResult.Vulnerabilities {
-				issueId := vulnerability.IssueId
+				if parsed.Exists(vulnerability.IssueId) {
+					continue
+				}
+				parsed.Add(vulnerability.IssueId)
 				severity := severityutils.GetSeverity(vulnerability.Severity).String()
 				applicableRuns := []*sarif.Run{}
 				if extendedScanResults != nil {
 					applicableRuns = append(applicableRuns, extendedScanResults.ApplicabilityScanResults...)
 				}
-				vulnerabilities.ScaResults.Security[severity] = mergeMaps(vulnerabilities.ScaResults.Security[severity], getSecuritySummaryFindings(vulnerability.Cves, issueId, vulnerability.Components, applicableRuns...))
+				vulnerabilities.ScaResults.Security[severity] = mergeMaps(vulnerabilities.ScaResults.Security[severity], getSecuritySummaryFindings(vulnerability.Cves, vulnerability.IssueId, vulnerability.Components, applicableRuns...))
 			}
 		}
 	}
