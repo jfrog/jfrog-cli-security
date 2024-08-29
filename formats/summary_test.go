@@ -24,7 +24,7 @@ func TestCuratedPackages(t *testing.T) {
 					{
 						Policy:    "Test",
 						Condition: "Test condition",
-						Packages:  map[string]int{"npm://test:1.0.0": 1},
+						Packages:  map[string]int{"npm://test:1.0.0": 1, "npm://test3:1.0.0": 1},
 					},
 					{
 						Policy:    "Test2",
