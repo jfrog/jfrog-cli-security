@@ -402,8 +402,8 @@ func TestGetViolationSummaries(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			violationSummaries := GetViolationSummaries(testCase.input...)
-			sort.Strings(violationSummaries.Watches)
 			if testCase.expectedShowViolations {
+				sort.Strings(violationSummaries.Watches)
 				assert.Equal(t, testCase.expectedViolationSummaries, violationSummaries)
 			} else {
 				assert.Nil(t, violationSummaries)
