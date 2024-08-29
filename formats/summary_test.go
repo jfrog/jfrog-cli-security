@@ -1,6 +1,7 @@
 package formats
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -401,6 +402,7 @@ func TestGetViolationSummaries(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			violationSummaries := GetViolationSummaries(testCase.input...)
+			sort.Strings(violationSummaries.Watches)
 			if testCase.expectedShowViolations {
 				assert.Equal(t, testCase.expectedViolationSummaries, violationSummaries)
 			} else {
