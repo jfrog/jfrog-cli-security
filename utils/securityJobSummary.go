@@ -121,7 +121,7 @@ func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...strin
 		return fmt.Sprintf("%sui/scans-list/builds-scans", rsa.BaseJfrogUrl)
 	} else {
 		baseUrl := fmt.Sprintf("%sui/onDemandScanning", rsa.BaseJfrogUrl)
-		if len(scanIds) == 1 {
+		if len(scanIds) > 0 && scanIds[0] != "" {
 			return fmt.Sprintf("%s/%s", baseUrl, scanIds[0])
 		}
 		return fmt.Sprintf("%s/list", baseUrl)
@@ -451,10 +451,8 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 	if !extendedView {
 		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
 	}
-	if summary.ScaResults != nil {
-		if moreInfoUrls := summary.ScaResults.MoreInfoUrls; len(moreInfoUrls) > 0 {
-			return Link.Format(moreInfoUrls[0], "See the results of the scan in JFrog")
-		}
+	if moreInfoUrls := summary.GetMoreInfoUrls(); len(moreInfoUrls) > 0 {
+		return Link.Format(moreInfoUrls[0], "See the results of the scan in JFrog")
 	}
 	if defaultUrl := args.GetUrl(index, summary.GetScanIds()...); defaultUrl != "" {
 		return Link.Format(defaultUrl, "See the results of the scan in JFrog")

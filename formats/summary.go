@@ -153,7 +153,11 @@ func (sc *ScanSummary) GetScanIds() (scanIds []string) {
 
 func (srs *ScanResultSummary) GetMoreInfoUrls() (urls []string) {
 	if srs.ScaResults != nil {
-		urls = append(urls, srs.ScaResults.MoreInfoUrls...)
+		for _, url := range srs.ScaResults.MoreInfoUrls {
+			if url != "" {
+				urls = append(urls, url)
+			}
+		}
 	}
 	return
 }

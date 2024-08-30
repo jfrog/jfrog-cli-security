@@ -664,8 +664,12 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 	// Parse unique findings
 	for _, scaResult := range scaResults {
 		for _, xrayResult := range scaResult.XrayResults {
-			scanIds = append(scanIds, xrayResult.ScanId)
-			moreInfoUrls = append(moreInfoUrls, xrayResult.XrayDataUrl)
+			if xrayResult.ScanId != "" {
+				scanIds = append(scanIds, xrayResult.ScanId)
+			}
+			if xrayResult.XrayDataUrl != "" {
+				moreInfoUrls = append(moreInfoUrls, xrayResult.XrayDataUrl)
+			}
 			for _, violation := range xrayResult.Violations {
 				watches.Add(violation.WatchName)
 				failBuild = failBuild || violation.FailBuild
@@ -717,8 +721,12 @@ func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResu
 			if vulnerabilities.ScaResults == nil {
 				vulnerabilities.ScaResults = &formats.ScaScanResultSummary{Security: formats.ResultSummary{}}
 			}
-			vulnerabilities.ScaResults.ScanIds = append(vulnerabilities.ScaResults.ScanIds, xrayResult.ScanId)
-			vulnerabilities.ScaResults.MoreInfoUrls = append(vulnerabilities.ScaResults.MoreInfoUrls, xrayResult.XrayDataUrl)
+			if xrayResult.ScanId != "" {
+				vulnerabilities.ScaResults.ScanIds = append(vulnerabilities.ScaResults.ScanIds, xrayResult.ScanId)
+			}
+			if xrayResult.XrayDataUrl != "" {
+				vulnerabilities.ScaResults.MoreInfoUrls = append(vulnerabilities.ScaResults.MoreInfoUrls, xrayResult.XrayDataUrl)
+			}
 			for _, vulnerability := range xrayResult.Vulnerabilities {
 				if parsed.Exists(vulnerability.IssueId) {
 					continue
