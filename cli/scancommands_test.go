@@ -95,7 +95,7 @@ func TestShouldRunCurationAfterFailure(t *testing.T) {
 				defer callBack()
 			}
 			if tt.envOutputDirPath != "" {
-				callBack2 := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.OutputDirPathEnv, tt.envOutputDirPath)
+				callBack2 := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.SummaryOutputDirPathEnv, tt.envOutputDirPath)
 				defer callBack2()
 			}
 
