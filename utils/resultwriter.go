@@ -669,10 +669,11 @@ func getScanViolationsSummary(extendedScanResults *ExtendedScanResults, scaResul
 			for _, violation := range xrayResult.Violations {
 				watches.Add(violation.WatchName)
 				failBuild = failBuild || violation.FailBuild
-				if parsed.Exists(violation.IssueId) {
+				key := violation.IssueId + violation.WatchName
+				if parsed.Exists(key) {
 					continue
 				}
-				parsed.Add(violation.IssueId)
+				parsed.Add(key)
 				severity := severityutils.GetSeverity(violation.Severity).String()
 				violationType := ViolationIssueType(violation.ViolationType)
 				if _, ok := violationsUniqueFindings[violationType]; !ok {

@@ -1,12 +1,14 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,8 @@ import (
 
 var (
 	summaryExpectedContentDir = filepath.Join("..", "tests", "testdata", "other", "jobSummary")
+	testPlatformUrl           = "https://test-platform-url.jfrog.io/"
+	testMoreInfoUrl           = "https://test-more-info-url.jfrog.io/"
 
 	securityScaResults = formats.ResultSummary{
 		"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
@@ -24,7 +28,7 @@ var (
 	violationResults = formats.ScanResultSummary{
 		ScaResults: &formats.ScaScanResultSummary{
 			ScanIds:         []string{TestScaScanId},
-			MoreInfoUrls:    []string{"https://test-url"},
+			MoreInfoUrls:    []string{testMoreInfoUrl},
 			Security:        securityScaResults,
 			License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
 			OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
@@ -33,10 +37,156 @@ var (
 	}
 )
 
+func TestSaveLoadData(t *testing.T) {
+	testDockerScanSummary := ScanCommandResultSummary{
+		ResultType: Docker,
+		Args: &ResultSummaryArgs{
+			BaseJfrogUrl: testPlatformUrl,
+			DockerImage:  "dockerImage:version",
+		},
+		Summary: formats.ResultsSummary{
+			Scans: []formats.ScanSummary{
+				{
+					Target: filepath.Join("path", "to", "image.tar"),
+					Vulnerabilities: &formats.ScanResultSummary{
+						ScaResults: &formats.ScaScanResultSummary{
+							ScanIds:      []string{TestScaScanId},
+							MoreInfoUrls: []string{testMoreInfoUrl},
+							Security:     securityScaResults,
+						},
+					},
+					Violations: &formats.ScanViolationsSummary{
+						Watches:           []string{"watch1"},
+						ScanResultSummary: violationResults,
+					},
+				},
+			},
+		},
+	}
+	testBinaryScanSummary := ScanCommandResultSummary{
+		ResultType: Binary,
+		Args: &ResultSummaryArgs{
+			BaseJfrogUrl: testPlatformUrl,
+		},
+		Summary: formats.ResultsSummary{
+			Scans: []formats.ScanSummary{
+				{
+					Target: filepath.Join("path", "to", "binary"),
+					Vulnerabilities: &formats.ScanResultSummary{
+						ScaResults: &formats.ScaScanResultSummary{
+							ScanIds:  []string{"scan-id-1"},
+							Security: formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
+						},
+					},
+				},
+				{
+					Target: filepath.Join("path", "to", "binary2"),
+					Vulnerabilities: &formats.ScanResultSummary{
+						ScaResults: &formats.ScaScanResultSummary{
+							ScanIds: []string{"scan-id-2"},
+						},
+					},
+				},
+			},
+		},
+	}
+	testBuildScanSummary := ScanCommandResultSummary{
+		ResultType: Build,
+		Args: &ResultSummaryArgs{
+			BaseJfrogUrl: testPlatformUrl,
+			BuildName:    "build-name",
+			BuildNumbers: []string{"build-number"},
+		},
+		Summary: formats.ResultsSummary{
+			Scans: []formats.ScanSummary{
+				{
+					Target: "build-name (build-number)",
+					Violations: &formats.ScanViolationsSummary{
+						Watches:           []string{"watch"},
+						ScanResultSummary: violationResults,
+					},
+				},
+			},
+		},
+	}
+	testCurationSummary := ScanCommandResultSummary{
+		ResultType: Curation,
+		Summary: formats.ResultsSummary{
+			Scans: []formats.ScanSummary{
+				{
+					Target: filepath.Join("path", "to", "application"),
+					CuratedPackages: &formats.CuratedPackages{
+						PackageCount: 6,
+						Blocked: []formats.BlockedPackages{
+							{
+								Policy:    "Malicious",
+								Condition: "Malicious package",
+								Packages:  map[string]int{"npm://lodash:1.0.0": 1},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		content         []ScanCommandResultSummary
+		filterSections  []SecuritySummarySection
+		expectedArgs    ResultSummaryArgs
+		expectedContent []formats.ResultsSummary
+	}{
+		{
+			name:            "Single scan",
+			content:         []ScanCommandResultSummary{testDockerScanSummary},
+			expectedArgs:    *testDockerScanSummary.Args,
+			expectedContent: []formats.ResultsSummary{testDockerScanSummary.Summary},
+		},
+		{
+			name:    "Multiple scans",
+			content: []ScanCommandResultSummary{testDockerScanSummary, testBinaryScanSummary, testBuildScanSummary},
+			expectedArgs: ResultSummaryArgs{
+				BaseJfrogUrl: testPlatformUrl,
+				DockerImage:  "dockerImage:version",
+				BuildName:    "build-name",
+				BuildNumbers: []string{"build-number"},
+			},
+			expectedContent: []formats.ResultsSummary{testDockerScanSummary.Summary, testBinaryScanSummary.Summary, testBuildScanSummary.Summary},
+		},
+		{
+			name:            "Multiple scans with filter",
+			filterSections:  []SecuritySummarySection{Curation},
+			content:         []ScanCommandResultSummary{testDockerScanSummary, testBinaryScanSummary, testBuildScanSummary, testCurationSummary},
+			expectedContent: []formats.ResultsSummary{testCurationSummary.Summary},
+		},
+	}
+	tempDir, cleanUp := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUp()
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			dataFilePaths := []string{}
+			// Save the data
+			for i := range testCase.content {
+				updateSummaryNamesToRelativePath(&testCase.content[i].Summary, tempDir)
+				data, err := JSONMarshal(&testCase.content[i])
+				assert.NoError(t, err)
+				dataFilePath := filepath.Join(tempDir, fmt.Sprintf("data_%s_%d.json", testCase.name, i))
+				assert.NoError(t, os.WriteFile(dataFilePath, data, 0644))
+				dataFilePaths = append(dataFilePaths, dataFilePath)
+			}
+			// Load the data
+			loadedData, loadedArgs, err := loadContent(dataFilePaths, testCase.filterSections...)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, testCase.expectedContent, loadedData)
+			assert.Equal(t, testCase.expectedArgs, loadedArgs)
+		})
+	}
+}
+
 func TestGenerateJobSummaryMarkdown(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
-	testPlatformUrl := "https://test-platform-url.jfrog.io/"
 	testCases := []struct {
 		name                string
 		index               commandsummary.Index
@@ -99,7 +249,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
 					Target:          filepath.Join(wd, "binary-name"),
-					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{"https://test-url"}}},
+					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{testMoreInfoUrl}}},
 				}},
 			}},
 		},
@@ -127,7 +277,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "other-binary-name"),
 					Violations: &formats.ScanViolationsSummary{
 						Watches:           []string{},
-						ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{"https://test-url"}}},
+						ScanResultSummary: formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{ScanIds: []string{TestScaScanId}, MoreInfoUrls: []string{testMoreInfoUrl}}},
 					},
 				}},
 			}},
@@ -142,7 +292,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: "build-name (build-number)",
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
 						ScanIds:      []string{TestScaScanId},
-						MoreInfoUrls: []string{"https://test-url"},
+						MoreInfoUrls: []string{testMoreInfoUrl},
 						Security:     formats.ResultSummary{"High": map[string]int{formats.NoStatus: 3}, "Medium": map[string]int{formats.NoStatus: 1}, "Unknown": map[string]int{formats.NoStatus: 20}},
 					}},
 				}},
@@ -280,5 +430,5 @@ func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commands
 func getOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
+	return strings.ReplaceAll(string(content), "\r\n", "\n") // strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
 }

@@ -10,8 +10,8 @@ require (
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.5
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.55.2
-	github.com/jfrog/jfrog-client-go v1.45.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.55.6
+	github.com/jfrog/jfrog-client-go v1.46.1
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -114,8 +114,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// EyalDelarea:new_summary_ui
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20240829095200-1f14b0d8000d
+// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
