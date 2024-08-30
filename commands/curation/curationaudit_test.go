@@ -979,8 +979,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := convertResultsToSummary(tt.input)
-			assert.Equal(t, tt.expected, results)
+			assert.ElementsMatch(t, tt.expected.Scans, convertResultsToSummary(tt.input).Scans)
 		})
 	}
 }

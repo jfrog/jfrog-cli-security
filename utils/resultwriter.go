@@ -752,19 +752,16 @@ func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResu
 
 func getSecuritySummaryFindings(cves []services.Cve, issueId string, components map[string]services.Component, applicableRuns ...*sarif.Run) map[string]int {
 	uniqueFindings := map[string]int{}
-	cveIds := []string{}
 	for _, cve := range cves {
-		cveIds = append(cveIds, getCveId(cve, issueId))
-	}
-	if len(cveIds) == 0 {
-		cveIds = append(cveIds, issueId)
-	}
-	for _, cveId := range cveIds {
 		applicableStatus := jasutils.NotScanned
-		if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
+		if applicableInfo := getCveApplicabilityField(getCveId(cve, issueId), applicableRuns, components); applicableInfo != nil {
 			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
 		}
 		uniqueFindings[applicableStatus.String()] += 1
+	}
+	if len(cves) == 0 {
+		// XRAY-ID, no scanners for them
+		uniqueFindings[jasutils.NotCovered.String()] += 1
 	}
 	return uniqueFindings
 }

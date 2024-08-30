@@ -263,7 +263,7 @@ func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
 	blockedMap := map[string]formats.BlockedPackages{}
 	for _, pkg := range pkgStatus {
 		for _, policy := range pkg.Policy {
-			polAndCondKey := strings.Join([]string{policy.Policy, policy.Condition}, " ")
+			polAndCondKey := getPolicyAndConditionId(policy.Policy, policy.Condition)
 			if _, ok := blockedMap[polAndCondKey]; !ok {
 				blockedMap[polAndCondKey] = formats.BlockedPackages{
 					Policy:    policy.Policy,
@@ -284,6 +284,10 @@ func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
 // The unique identifier of a package includes the package name with its version
 func getPackageId(packageName, packageVersion string) string {
 	return fmt.Sprintf("%s:%s", packageName, packageVersion)
+}
+
+func getPolicyAndConditionId(policy, condition string) string {
+	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
