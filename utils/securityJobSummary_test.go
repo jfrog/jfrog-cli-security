@@ -307,8 +307,9 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				Scans: []formats.ScanSummary{{
 					Target: filepath.Join(wd, "binary-with-issues"),
 					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
-						ScanIds:  []string{TestScaScanId, "scan-id-2"},
-						Security: formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
+						ScanIds:      []string{TestScaScanId, "scan-id-2"},
+						MoreInfoUrls: []string{""},
+						Security:     formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
 					}},
 				}},
 			}},
