@@ -426,14 +426,6 @@ func getWatchesMarkdown(watches []string) (content string) {
 		prefix += "es"
 	}
 	content = PreFormat.Format(prefix + ": " + watchesStr)
-	// if len(watches) < 5 {
-	// 	return PreFormat.Format(watchesStr + ": " + strings.Join(watches, ", "))
-	// }
-	// for i:= 0; i < len(watches); i += 5 {
-	// 	j := i + 5
-	// 	if j > len(watches) {
-
-	// }
 	return
 }
 

@@ -324,8 +324,9 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "image.tar"),
 					Vulnerabilities: &formats.ScanResultSummary{
 						ScaResults: &formats.ScaScanResultSummary{
-							ScanIds:  []string{TestScaScanId},
-							Security: securityScaResults,
+							ScanIds:      []string{TestScaScanId},
+							MoreInfoUrls: []string{""},
+							Security:     securityScaResults,
 						},
 						SecretsResults: &formats.ResultSummary{
 							"Medium": map[string]int{formats.NoStatus: 3},
@@ -393,6 +394,8 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			// Generate the summary
 			if testCase.index == "" {
 				summary, err = GenerateSecuritySectionMarkdown(testCase.content)
+				// Replace all backslashes with forward slashes for Windows compatibility in tests
+				summary = strings.ReplaceAll(summary, string(filepath.Separator), "/")
 			} else {
 				assert.NotNil(t, testCase.args)
 				summary, err = createDummyDynamicMarkdown(testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
@@ -431,5 +434,5 @@ func createDummyDynamicMarkdown(content []formats.ResultsSummary, index commands
 func getOutputFromFile(t *testing.T, path string) string {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	return strings.ReplaceAll(string(content), "\r\n", "\n") // strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(content), "\r\n", "\n"), "/", string(filepath.Separator)), "<"+string(filepath.Separator), "</")
+	return strings.ReplaceAll(string(content), "\r\n", "\n")
 }
