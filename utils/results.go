@@ -82,41 +82,12 @@ func (r *Results) IsIssuesFound() bool {
 
 // Counts the total number of unique findings in the provided results.
 // A unique SCA finding is identified by a unique pair of vulnerability's/violation's issueId and component id or by a result returned from one of JAS scans.
-func (r *Results) CountScanResultsFindings() (total int) {
-	return formats.SummaryResults{Scans: r.getScanSummaryByTargets()}.GetTotalIssueCount()
-}
-func (r *Results) GetSummary() (summary formats.SummaryResults) {
-	if len(r.ScaResults) <= 1 {
-		summary.Scans = r.getScanSummaryByTargets()
-		return
+func (r *Results) CountScanResultsFindings(includeVulnerabilities, includeViolations bool) (total int) {
+	summary := formats.ResultsSummary{Scans: GetScanSummaryByTargets(r, includeVulnerabilities, includeViolations)}
+	if summary.HasViolations() {
+		return summary.GetTotalViolations()
 	}
-	for _, scaScan := range r.ScaResults {
-		summary.Scans = append(summary.Scans, r.getScanSummaryByTargets(scaScan.Target)...)
-	}
-	return
-}
-
-// Returns a summary for the provided targets. If no targets are provided, a summary for all targets is returned.
-func (r *Results) getScanSummaryByTargets(targets ...string) (summaries []formats.ScanSummaryResult) {
-	if len(targets) == 0 {
-		// No filter, one scan summary for all targets
-		summaries = append(summaries, getScanSummary(r.ExtendedScanResults, r.ScaResults...))
-		return
-	}
-	for _, target := range targets {
-		// Get target sca results
-		targetScaResults := []*ScaScanResult{}
-		if targetScaResult := r.getScaScanResultByTarget(target); targetScaResult != nil {
-			targetScaResults = append(targetScaResults, targetScaResult)
-		}
-		// Get target extended results
-		targetExtendedResults := r.ExtendedScanResults
-		if targetExtendedResults != nil {
-			targetExtendedResults = targetExtendedResults.GetResultsForTarget(target)
-		}
-		summaries = append(summaries, getScanSummary(targetExtendedResults, targetScaResults...))
-	}
-	return
+	return summary.GetTotalVulnerabilities()
 }
 
 type ScaScanResult struct {

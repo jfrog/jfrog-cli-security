@@ -1,56 +1,162 @@
 package utils
 
 import (
+	"errors"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/jfrog/gofrog/datastructures"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v2/sarif"
-	"golang.org/x/exp/maps"
 )
 
 const (
-	BuildSection    SecuritySummarySection = "Builds"
-	BinarySection   SecuritySummarySection = "Artifacts"
-	ModulesSection  SecuritySummarySection = "Modules"
-	CurationSection SecuritySummarySection = "Curation"
+	Build    SecuritySummarySection = "Build-info Scans"
+	Binary   SecuritySummarySection = "Artifact Scans"
+	Modules  SecuritySummarySection = "Source Code Scans"
+	Docker   SecuritySummarySection = "Docker Image Scans"
+	Curation SecuritySummarySection = "Curation Audit"
+
+	PreFormat              HtmlTag = "<pre>%s</pre>"
+	ImgTag                 HtmlTag = "<img alt=\"%s\" src=%s>"
+	CenterContent          HtmlTag = "<div style=\"display: flex; align-items: center; text-align: center\">%s</div>"
+	BoldTxt                HtmlTag = "<b>%s</b>"
+	Link                   HtmlTag = "<a href=\"%s\">%s</a>"
+	NewLine                HtmlTag = "<br>%s"
+	DetailsWithSummary     HtmlTag = "<details><summary>%s</summary>%s</details>"
+	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
+	RedColor               HtmlTag = "<span style=\"color:red\">%s</span>"
+	OrangeColor            HtmlTag = "<span style=\"color:orange\">%s</span>"
+	GreenColor             HtmlTag = "<span style=\"color:green\">%s</span>"
+	TabTag                 HtmlTag = "&Tab;%s"
+
+	ApplicableStatusCount    SeverityStatus = "%d Applicable"
+	NotApplicableStatusCount SeverityStatus = "%d Not Applicable"
+
+	maxWatchesInLine = 4
 )
 
 type SecuritySummarySection string
+type HtmlTag string
+type SeverityStatus string
 
-type ScanCommandSummaryResult struct {
-	Section          SecuritySummarySection `json:"section"`
-	WorkingDirectory string                 `json:"workingDirectory"`
-	Results          formats.SummaryResults `json:"results"`
+func (c HtmlTag) Format(args ...any) string {
+	return fmt.Sprintf(string(c), args...)
 }
 
-type SecurityCommandsSummary struct {
-	BuildScanCommands []formats.SummaryResults `json:"buildScanCommands"`
-	ScanCommands      []formats.SummaryResults `json:"scanCommands"`
-	AuditCommands     []formats.SummaryResults `json:"auditCommands"`
-	CurationCommands  []formats.SummaryResults `json:"curationCommands"`
+func (c HtmlTag) FormatInt(value int) string {
+	return fmt.Sprintf(string(c), fmt.Sprintf("%d", value))
+}
+
+func (s SeverityStatus) Format(count int) string {
+	return fmt.Sprintf(string(s), count)
+}
+
+func getStatusIcon(failed bool) string {
+	statusIconPath := "passed.svg"
+	if failed {
+		statusIconPath = "failed.svg"
+	}
+	return ImgTag.Format(statusIconPath, fmt.Sprintf("%s/statusIcons/%s", resources.BaseResourcesUrl, statusIconPath))
+}
+
+type SecurityJobSummary struct{}
+
+func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
+	summary.ResultType = Curation
+	summary.Summary = cmdResult
+	return
+}
+
+func newResultSummary(cmdResults *Results, section SecuritySummarySection, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
+	summary.ResultType = section
+	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
+	summary.Summary = ToSummary(cmdResults, vulnerabilitiesReqested, violationsReqested)
+	return
+}
+
+func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesReqested, violationsReqested)
+	summary.Args.BuildName = buildName
+	summary.Args.BuildNumbers = []string{buildNumber}
+	return
+}
+
+func NewDockerScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool, dockerImage string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, Docker, serverDetails, vulnerabilitiesReqested, violationsReqested)
+	summary.Args.DockerImage = dockerImage
+	return
+}
+
+func NewBinaryScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
+	return newResultSummary(cmdResults, Binary, serverDetails, vulnerabilitiesReqested, violationsReqested)
+}
+
+func NewAuditScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
+	return newResultSummary(cmdResults, Modules, serverDetails, vulnerabilitiesReqested, violationsReqested)
+}
+
+type ResultSummaryArgs struct {
+	BaseJfrogUrl string `json:"base_jfrog_url,omitempty"`
+	// Args to id the result
+	DockerImage  string   `json:"docker_image,omitempty"`
+	BuildName    string   `json:"build_name,omitempty"`
+	BuildNumbers []string `json:"build_numbers,omitempty"`
+}
+
+func (rsa ResultSummaryArgs) GetUrl(index commandsummary.Index, scanIds ...string) string {
+	if rsa.BaseJfrogUrl == "" {
+		rsa.BaseJfrogUrl = commandsummary.StaticMarkdownConfig.GetPlatformUrl()
+	}
+	if index == commandsummary.BuildScan {
+		return fmt.Sprintf("%sui/scans-list/builds-scans", rsa.BaseJfrogUrl)
+	} else {
+		baseUrl := fmt.Sprintf("%sui/onDemandScanning", rsa.BaseJfrogUrl)
+		if len(scanIds) > 0 && scanIds[0] != "" {
+			return fmt.Sprintf("%s/%s", baseUrl, scanIds[0])
+		}
+		return fmt.Sprintf("%s/list", baseUrl)
+	}
+}
+
+func (rsa ResultSummaryArgs) ToArgs(index commandsummary.Index) (args []string) {
+	if index == commandsummary.BuildScan {
+		args = append(args, rsa.BuildName)
+		args = append(args, rsa.BuildNumbers...)
+	} else if index == commandsummary.DockerScan {
+		args = append(args, rsa.DockerImage)
+	}
+	return
+}
+
+type ScanCommandResultSummary struct {
+	ResultType SecuritySummarySection `json:"resultType"`
+	Args       *ResultSummaryArgs     `json:"args,omitempty"`
+	Summary    formats.ResultsSummary `json:"summary"`
 }
 
 // Manage the job summary for security commands
-func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error) {
-	return commandsummary.New(&SecurityCommandsSummary{}, "security")
+func NewSecurityJobSummary() (js *commandsummary.CommandSummary, err error) {
+	return commandsummary.New(&SecurityJobSummary{}, "security")
 }
 
-// Record the security command output
-func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
-	manager, err := getRecordManager()
+// Record the security command outputs
+func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) {
+	if !commandsummary.ShouldRecordSummary() {
+		return
+	}
+	manager, err := NewSecurityJobSummary()
 	if err != nil || manager == nil {
 		return
 	}
@@ -58,7 +164,10 @@ func RecordSecurityCommandOutput(content ScanCommandSummaryResult) (err error) {
 	if err != nil {
 		return
 	}
-	content.WorkingDirectory = wd
+	updateSummaryNamesToRelativePath(&content.Summary, wd)
+	if index := getDataIndexFromSection(content.ResultType); index != "" {
+		return recordIndexData(manager, content, index)
+	}
 	return manager.Record(content)
 }
 
@@ -85,331 +194,7 @@ func RecordSarifOutput(cmdResults *Results) (err error) {
 	return manager.RecordWithIndex(out, commandsummary.SarifReport)
 }
 
-func (scs *SecurityCommandsSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
-	if err = loadContentFromFiles(dataFilePaths, scs); err != nil {
-		return "", fmt.Errorf("failed while creating security markdown: %w", err)
-	}
-	return ConvertSummaryToString(*scs)
-}
-
-func loadContentFromFiles(dataFilePaths []string, scs *SecurityCommandsSummary) (err error) {
-	for _, dataFilePath := range dataFilePaths {
-		// Load file content
-		var cmdResults ScanCommandSummaryResult
-		if err = commandsummary.UnmarshalFromFilePath(dataFilePath, &cmdResults); err != nil {
-			return fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
-		}
-		results := cmdResults.Results
-		// Update the working directory
-		updateSummaryNamesToRelativePath(&results, cmdResults.WorkingDirectory)
-		// Append the new data
-		switch cmdResults.Section {
-		case BuildSection:
-			scs.BuildScanCommands = append(scs.BuildScanCommands, results)
-		case BinarySection:
-			scs.ScanCommands = append(scs.ScanCommands, results)
-		case ModulesSection:
-			scs.AuditCommands = append(scs.AuditCommands, results)
-		case CurationSection:
-			scs.CurationCommands = append(scs.CurationCommands, results)
-		}
-	}
-	return
-}
-
-func (scs *SecurityCommandsSummary) GetOrderedSectionsWithContent() (sections []SecuritySummarySection) {
-	if len(scs.BuildScanCommands) > 0 {
-		sections = append(sections, BuildSection)
-	}
-	if len(scs.ScanCommands) > 0 {
-		sections = append(sections, BinarySection)
-	}
-	if len(scs.AuditCommands) > 0 {
-		sections = append(sections, ModulesSection)
-	}
-	if len(scs.CurationCommands) > 0 {
-		sections = append(sections, CurationSection)
-	}
-	return
-
-}
-
-func (scs *SecurityCommandsSummary) getSectionSummaries(section SecuritySummarySection) (summaries []formats.SummaryResults) {
-	switch section {
-	case BuildSection:
-		summaries = scs.BuildScanCommands
-	case BinarySection:
-		summaries = scs.ScanCommands
-	case ModulesSection:
-		summaries = scs.AuditCommands
-	case CurationSection:
-		summaries = scs.CurationCommands
-	}
-	return
-}
-
-func ConvertSummaryToString(results SecurityCommandsSummary) (summary string, err error) {
-	sectionsWithContent := results.GetOrderedSectionsWithContent()
-	addSectionTitle := len(sectionsWithContent) > 1
-	var sectionSummary string
-	for i, section := range sectionsWithContent {
-		sectionSummary = getSummaryString(results.getSectionSummaries(section)...)
-		if addSectionTitle {
-			if i > 0 {
-				summary += "\n"
-			}
-			summary += fmt.Sprintf("#### %s\n", section)
-		}
-		summary += sectionSummary
-	}
-	return
-}
-
-func getSummaryString(summaries ...formats.SummaryResults) (str string) {
-	parsed := 0
-	singleScan := isSingleCommandAndScan(summaries...)
-	if !singleScan {
-		str += "| Status | Id | Details |\n|--------|----|---------|\n"
-	}
-	for i := range summaries {
-		for _, scan := range summaries[i].Scans {
-			if parsed > 0 {
-				str += "\n"
-			}
-			str += GetScanSummaryString(scan, singleScan)
-			parsed++
-		}
-	}
-	return
-}
-
-func isSingleCommandAndScan(summaries ...formats.SummaryResults) bool {
-	if len(summaries) != 1 {
-		return false
-	}
-	if len(summaries[0].Scans) != 1 {
-		return false
-	}
-	// One command and one scan
-	return true
-}
-
-func GetScanSummaryString(summary formats.ScanSummaryResult, singleData bool) (content string) {
-	// single data -> no table
-	hasIssues := summary.HasIssues()
-	if !hasIssues {
-		if singleData {
-			return "```\n✅ No issues were found\n```"
-		}
-		return fmt.Sprintf("| ✅ | %s |  |", summary.Target)
-	}
-	issueDetails := getDetailsString(summary)
-	if singleData {
-		return fmt.Sprintf("<pre>%s</pre>", issueDetails)
-	}
-	return fmt.Sprintf("| ❌ | %s | <pre>%s</pre> |", summary.Target, issueDetails)
-}
-
-func getDetailsString(summary formats.ScanSummaryResult) string {
-	// If summary includes curation issues, then it means only curation issues are in this summary, no need to continue
-	if summary.HasBlockedCuration() {
-		return getBlockedCurationSummaryString(summary)
-	}
-	violationContent := getViolationSummaryString(summary)
-	vulnerabilitiesContent := getVulnerabilitiesSummaryString(summary)
-	delimiter := ""
-	if len(violationContent) > 0 && len(vulnerabilitiesContent) > 0 {
-		delimiter = "<br>"
-	}
-	return violationContent + delimiter + vulnerabilitiesContent
-}
-
-func getBlockedCurationSummaryString(summary formats.ScanSummaryResult) (content string) {
-	if !summary.HasBlockedCuration() {
-		return
-	}
-	content += fmt.Sprintf("Total Number of Packages: <b>%d</b>", summary.CuratedPackages.GetTotalPackages())
-	content += fmt.Sprintf("<br>🟢 Total Number of Approved Packages: <b>%d</b>", summary.CuratedPackages.Approved)
-	content += fmt.Sprintf("<br>🔴 Total Number of Blocked Packages: <b>%d</b>", summary.CuratedPackages.Blocked.GetCountOfKeys(false))
-	if summary.CuratedPackages.Blocked.GetTotal() > 0 {
-		var blocked []struct {
-			BlockedName  string
-			BlockedValue formats.SummaryCount
-		}
-		// Sort the blocked packages by name
-		for blockTypeName, blockTypeValue := range summary.CuratedPackages.Blocked {
-			blocked = append(blocked, struct {
-				BlockedName  string
-				BlockedValue formats.SummaryCount
-			}{BlockedName: blockTypeName, BlockedValue: blockTypeValue})
-		}
-		sort.Slice(blocked, func(i, j int) bool {
-			return blocked[i].BlockedName > blocked[j].BlockedName
-		})
-		// Display the blocked packages
-		for index, blockStruct := range blocked {
-			subScanPrefix := fmt.Sprintf("<br>%s", getListItemPrefix(index, len(blocked)))
-			subScanPrefix += blockStruct.BlockedName
-			content += fmt.Sprintf("%s (%d)", subScanPrefix, blockStruct.BlockedValue.GetTotal())
-		}
-	}
-	return
-}
-
-func getViolationSummaryString(summary formats.ScanSummaryResult) (content string) {
-	if !summary.HasViolations() {
-		return
-	}
-	content += fmt.Sprintf("Violations: <b>%d</b> -", summary.GetTotalViolationCount())
-	content += GetSummaryContentString(summary.Violations.GetCombinedLowerLevel(), ", ", true)
-	return
-}
-
-func getVulnerabilitiesSummaryString(summary formats.ScanSummaryResult) (content string) {
-	if !summary.HasSecurityVulnerabilities() {
-		return
-	}
-	content += fmt.Sprintf("Security Vulnerabilities: <b>%d</b> (%d unique)", summary.Vulnerabilities.GetTotalIssueCount(), summary.Vulnerabilities.GetTotalUniqueIssueCount())
-	// Display sub scans with issues
-	subScansWithIssues := summary.Vulnerabilities.GetSubScansWithIssues()
-	for i, subScanType := range subScansWithIssues {
-		content += fmt.Sprintf("<br>%s", getListItemPrefix(i, len(subScansWithIssues)))
-		subScanPrefix := fmt.Sprintf("%d ", summary.Vulnerabilities.GetSubScanTotalIssueCount(subScanType))
-		switch subScanType {
-		case formats.ScaScan:
-			subScanPrefix += "SCA "
-		case formats.IacScan:
-			subScanPrefix += "IAC "
-		case formats.SecretsScan:
-			subScanPrefix += "Secrets "
-		case formats.SastScan:
-			subScanPrefix += "SAST "
-		}
-		content += subScanPrefix + getSubScanSummaryCountsString(summary, subScanType, getPrefixPadding(subScanPrefix))
-	}
-	return
-}
-
-func getPrefixPadding(prefix string) int {
-	// 4 spaces for the list item prefix (len of symbol not equal to actual length)
-	return 4 + len(prefix)
-}
-
-func getListItemPrefix(index, total int) (content string) {
-	if index == total-1 {
-		content += "└── "
-		return
-	}
-	content += "├── "
-	return
-}
-
-func getSubScanSummaryCountsString(summary formats.ScanSummaryResult, subScanType formats.SummarySubScanType, padding int) (content string) {
-	switch subScanType {
-	case formats.ScaScan:
-		content += GetScaSummaryCountString(*summary.Vulnerabilities.ScaScanResults, padding)
-	case formats.IacScan:
-		content += GetSeveritySummaryCountString(*summary.Vulnerabilities.IacScanResults, padding)
-	case formats.SecretsScan:
-		content += GetSeveritySummaryCountString(*summary.Vulnerabilities.SecretsScanResults, padding)
-	case formats.SastScan:
-		content += GetSeveritySummaryCountString(*summary.Vulnerabilities.SastScanResults, padding)
-	}
-	return
-}
-
-func hasApplicableDataToDisplayInSummary(summary formats.TwoLevelSummaryCount) bool {
-	for _, statuses := range summary {
-		sorted := getSummarySortedKeysToDisplay(maps.Keys(statuses)...)
-		for _, status := range sorted {
-			if _, ok := statuses[status]; ok && statuses[status] > 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func GetScaSummaryCountString(summary formats.ScanScaResult, padding int) (content string) {
-	if summary.SummaryCount.GetTotal() == 0 {
-		return
-	}
-	if !hasApplicableDataToDisplayInSummary(summary.SummaryCount) {
-		return GetSeveritySummaryCountString(summary.SummaryCount.GetCombinedLowerLevel(), padding)
-	}
-	// Display contextual-analysis details
-	keys := getSummarySortedKeysToDisplay(maps.Keys(summary.SummaryCount)...)
-	for i, severity := range keys {
-		if i > 0 {
-			content += "<br>" + strings.Repeat(" ", padding)
-		}
-		statusCounts := summary.SummaryCount[severity]
-		content += fmt.Sprintf("%s%s",
-			fmt.Sprintf(summaryContentToFormatString[severity], statusCounts.GetTotal()),
-			GetSummaryContentString(statusCounts, ", ", true),
-		)
-	}
-	return
-}
-
-var (
-	// Convert summary of the given keys to the needed string
-	summaryContentToFormatString = map[string]string{
-		"Critical":                             `❗️ <span style="color:red">%d Critical</span>`,
-		"High":                                 `🔴 <span style="color:red">%d High</span>`,
-		"Medium":                               `🟠 <span style="color:orange">%d Medium</span>`,
-		"Low":                                  `🟡 <span style="color:yellow">%d Low</span>`,
-		"Unknown":                              `⚪️ <span style="color:white">%d Unknown</span>`,
-		jasutils.Applicable.String():           "%d " + jasutils.Applicable.String(),
-		jasutils.NotApplicable.String():        "%d " + jasutils.NotApplicable.String(),
-		formats.ViolationTypeSecurity.String(): "%d Security",
-		formats.ViolationTypeLicense.String():  "%d License",
-		formats.ViolationTypeOperationalRisk.String(): "%d Operational",
-	}
-	// AllowedSorted is the order of the keys to display in the summary
-	allowedSorted = []string{
-		"Critical", "High", "Medium", "Low", "Unknown",
-		jasutils.Applicable.String(), jasutils.NotApplicable.String(),
-		formats.ViolationTypeSecurity.String(), formats.ViolationTypeLicense.String(), formats.ViolationTypeOperationalRisk.String(),
-	}
-)
-
-func getSummarySortedKeysToDisplay(keys ...string) (sorted []string) {
-	if len(keys) == 0 {
-		return
-	}
-	keysSet := datastructures.MakeSetFromElements(keys...)
-	for _, key := range allowedSorted {
-		if keysSet.Exists(key) {
-			sorted = append(sorted, key)
-		}
-	}
-	return
-}
-
-func GetSeveritySummaryCountString(summary formats.SummaryCount, padding int) (content string) {
-	return GetSummaryContentString(summary, "<br>"+strings.Repeat(" ", padding), false)
-}
-
-func GetSummaryContentString(summary formats.SummaryCount, delimiter string, wrapWithBracket bool) (content string) {
-	// sort and filter
-	keys := getSummarySortedKeysToDisplay(maps.Keys(summary)...)
-	if len(keys) == 0 {
-		return
-	}
-	for i, key := range keys {
-		if i > 0 {
-			content += delimiter
-		}
-		content += fmt.Sprintf(summaryContentToFormatString[key], summary[key])
-	}
-	if wrapWithBracket {
-		content = fmt.Sprintf(" (%s)", content)
-	}
-	return
-}
-
-func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string) {
+func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string) {
 	for i, scan := range summary.Scans {
 		if scan.Target == "" {
 			continue
@@ -424,152 +209,408 @@ func updateSummaryNamesToRelativePath(summary *formats.SummaryResults, wd string
 	}
 }
 
-func getScanSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary formats.ScanSummaryResult) {
-	if len(scaResults) == 0 {
-		return
+func getDataIndexFromSection(section SecuritySummarySection) commandsummary.Index {
+	switch section {
+	case Build:
+		return commandsummary.BuildScan
+	case Binary:
+		return commandsummary.BinariesScan
+	case Modules:
+		return commandsummary.BinariesScan
+	case Docker:
+		return commandsummary.DockerScan
 	}
-	if len(scaResults) == 1 {
-		summary.Target = scaResults[0].Target
-	}
-	// Parse violations
-	summary.Violations = getScanViolationsSummary(scaResults...)
-	// Parse vulnerabilities
-	summary.Vulnerabilities = getScanSecurityVulnerabilitiesSummary(extendedScanResults, scaResults...)
-	return
+	// No index for the section
+	return ""
 }
 
-func getScanViolationsSummary(scaResults ...*ScaScanResult) (violations formats.TwoLevelSummaryCount) {
-	vioUniqueFindings := map[string]IssueDetails{}
-	if len(scaResults) == 0 {
-		return
-	}
-	// Parse unique findings
-	for _, scaResult := range scaResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			for _, violation := range xrayResult.Violations {
-				details := IssueDetails{FirstLevelValue: violation.ViolationType, SecondLevelValue: severityutils.GetSeverity(violation.Severity).String()}
-				for compId := range violation.Components {
-					if violation.ViolationType == formats.ViolationTypeSecurity.String() {
-						for _, cve := range violation.Cves {
-							vioUniqueFindings[getCveId(cve, violation.IssueId)+compId] = details
-						}
-					} else {
-						vioUniqueFindings[violation.IssueId+compId] = details
-					}
-				}
-			}
+func recordIndexData(manager *commandsummary.CommandSummary, content ScanCommandResultSummary, index commandsummary.Index) (err error) {
+	if index == commandsummary.BinariesScan {
+		for _, scan := range content.Summary.Scans {
+			err = errors.Join(err, manager.RecordWithIndex(newScanCommandResultSummary(content.ResultType, content.Args, scan), index, scan.Target))
 		}
-	}
-	// Aggregate
-	return issueDetailsToSummaryCount(vioUniqueFindings)
-}
-
-func getScanSecurityVulnerabilitiesSummary(extendedScanResults *ExtendedScanResults, scaResults ...*ScaScanResult) (summary *formats.ScanVulnerabilitiesSummary) {
-	summary = &formats.ScanVulnerabilitiesSummary{}
-	if extendedScanResults == nil {
-		summary.ScaScanResults = getScaSummaryResults(scaResults)
-		return
-	}
-	if len(scaResults) > 0 {
-		summary.ScaScanResults = getScaSummaryResults(scaResults, extendedScanResults.ApplicabilityScanResults...)
-	}
-	summary.IacScanResults = getJASSummaryCount(extendedScanResults.IacScanResults...)
-	summary.SecretsScanResults = getJASSummaryCount(extendedScanResults.SecretsScanResults...)
-	summary.SastScanResults = getJASSummaryCount(extendedScanResults.SastScanResults...)
-	return
-}
-
-type IssueDetails struct {
-	FirstLevelValue  string
-	SecondLevelValue string
-}
-
-func getCveId(cve services.Cve, defaultIssueId string) string {
-	if cve.Id == "" {
-		return defaultIssueId
-	}
-	return cve.Id
-}
-
-func getSecurityIssueFindings(cves []services.Cve, issueId string, severity severityutils.Severity, components map[string]services.Component, applicableRuns ...*sarif.Run) (findings, uniqueFindings map[string]IssueDetails) {
-	findings = map[string]IssueDetails{}
-	uniqueFindings = map[string]IssueDetails{}
-	for _, cve := range cves {
-		cveId := getCveId(cve, issueId)
-		applicableStatus := jasutils.NotScanned
-		if applicableInfo := getCveApplicabilityField(cveId, applicableRuns, components); applicableInfo != nil {
-			applicableStatus = jasutils.ConvertToApplicabilityStatus(applicableInfo.Status)
-		}
-		uniqueFindings[cveId] = IssueDetails{
-			FirstLevelValue:  severity.String(),
-			SecondLevelValue: applicableStatus.String(),
-		}
-		for compId := range components {
-			findings[cveId+compId] = uniqueFindings[cveId]
-		}
+	} else {
+		// Save the results based on the index and the provided arguments (keys)
+		// * Docker scan results are saved with the image tag as the key
+		// * Build scan results are saved with the build name and number as the key
+		err = manager.RecordWithIndex(content, index, content.Args.ToArgs(index)...)
 	}
 	return
 }
 
-func getScaSummaryResults(scaScanResults []*ScaScanResult, applicableRuns ...*sarif.Run) *formats.ScanScaResult {
-	vulFindings := map[string]IssueDetails{}
-	vulUniqueFindings := map[string]IssueDetails{}
-	if len(scaScanResults) == 0 {
-		return nil
+func newScanCommandResultSummary(resultType SecuritySummarySection, args *ResultSummaryArgs, scans ...formats.ScanSummary) ScanCommandResultSummary {
+	return ScanCommandResultSummary{ResultType: resultType, Args: args, Summary: formats.ResultsSummary{Scans: scans}}
+}
+
+func loadContent(dataFiles []string, filterSections ...SecuritySummarySection) ([]formats.ResultsSummary, ResultSummaryArgs, error) {
+	data := []formats.ResultsSummary{}
+	args := ResultSummaryArgs{}
+	for _, dataFilePath := range dataFiles {
+		// Load file content
+		var cmdResults ScanCommandResultSummary
+		if err := commandsummary.UnmarshalFromFilePath(dataFilePath, &cmdResults); err != nil {
+			return nil, args, fmt.Errorf("failed while Unmarshal '%s': %w", dataFilePath, err)
+		}
+		if len(filterSections) == 0 || (slices.Contains(filterSections, cmdResults.ResultType)) {
+			data = append(data, cmdResults.Summary)
+			if cmdResults.Args == nil {
+				continue
+			}
+			if args.BaseJfrogUrl == "" {
+				args.BaseJfrogUrl = cmdResults.Args.BaseJfrogUrl
+			}
+			if args.DockerImage == "" {
+				args.DockerImage = cmdResults.Args.DockerImage
+			}
+			if args.BuildName == "" {
+				args.BuildName = cmdResults.Args.BuildName
+			}
+			args.BuildNumbers = append(args.BuildNumbers, cmdResults.Args.BuildNumbers...)
+		}
 	}
-	// Aggregate unique findings
-	for _, scaResult := range scaScanResults {
-		for _, xrayResult := range scaResult.XrayResults {
-			for _, vulnerability := range xrayResult.Vulnerabilities {
-				vulFinding, vulUniqueFinding := getSecurityIssueFindings(vulnerability.Cves, vulnerability.IssueId, severityutils.GetSeverity(vulnerability.Severity), vulnerability.Components, applicableRuns...)
-				for key, value := range vulFinding {
-					vulFindings[key] = value
-				}
-				for key, value := range vulUniqueFinding {
-					vulUniqueFindings[key] = value
-				}
+	return data, args, nil
+}
+
+func (js *SecurityJobSummary) BinaryScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+	generator = DynamicMarkdownGenerator{index: commandsummary.BinariesScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
+	err = generator.loadContentFromFiles()
+	return
+}
+
+func (js *SecurityJobSummary) BuildScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+	generator = DynamicMarkdownGenerator{index: commandsummary.BuildScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
+	err = generator.loadContentFromFiles()
+	return
+}
+
+func (js *SecurityJobSummary) DockerScan(filePaths []string) (generator DynamicMarkdownGenerator, err error) {
+	generator = DynamicMarkdownGenerator{index: commandsummary.DockerScan, dataFiles: filePaths, extendedView: commandsummary.StaticMarkdownConfig.IsExtendedSummary()}
+	err = generator.loadContentFromFiles()
+	return
+}
+
+func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGenerator) {
+	return EmptyMarkdownGenerator{}
+}
+
+// Generate the Security section (Curation)
+func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
+	curationData, _, err := loadContent(dataFilePaths, Curation)
+	if err != nil {
+		return
+	}
+	return GenerateSecuritySectionMarkdown(curationData)
+}
+
+func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (markdown string, err error) {
+	if !hasCurationCommand(curationData) {
+		return
+	}
+	// Create the markdown content
+	markdown += fmt.Sprintf("\n\n#### %s\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|", Curation)
+	for i := range curationData {
+		for _, summary := range curationData[i].Scans {
+			status := getStatusIcon(false)
+			if summary.HasBlockedPackages() {
+				status = getStatusIcon(true)
+			}
+			markdown += fmt.Sprintf("\n| %s | %s | %s |", status, summary.Target, PreFormat.Format(getCurationDetailsString(summary)))
+		}
+	}
+	markdown = DetailsOpenWithSummary.Format("🔒 Security Summary", markdown)
+	return
+}
+
+func hasCurationCommand(data []formats.ResultsSummary) bool {
+	for _, summary := range data {
+		for _, scan := range summary.Scans {
+			if scan.HasCuratedPackages() {
+				return true
 			}
 		}
 	}
-	return &formats.ScanScaResult{
-		SummaryCount:   issueDetailsToSummaryCount(vulFindings),
-		UniqueFindings: issueDetailsToSummaryCount(vulUniqueFindings).GetTotal(),
-	}
+	return false
 }
 
-func issueDetailsToSummaryCount(uniqueFindings map[string]IssueDetails) formats.TwoLevelSummaryCount {
-	summary := formats.TwoLevelSummaryCount{}
-	for _, details := range uniqueFindings {
-		if _, ok := summary[details.FirstLevelValue]; !ok {
-			summary[details.FirstLevelValue] = formats.SummaryCount{}
+type blockedPackageByType struct {
+	BlockedType    string
+	BlockedSummary map[string]int
+}
+
+func getCurationDetailsString(summary formats.ScanSummary) (content string) {
+	if summary.CuratedPackages == nil {
+		return
+	}
+	content += fmt.Sprintf("Total Number of resolved packages: %s", BoldTxt.FormatInt(summary.CuratedPackages.PackageCount))
+	blockedPackages := summary.CuratedPackages.GetBlockedCount()
+	if blockedPackages == 0 {
+		return
+	}
+	content += NewLine.Format(fmt.Sprintf("🟢 Approved packages: %s", BoldTxt.FormatInt(summary.CuratedPackages.GetApprovedCount())))
+	content += NewLine.Format(fmt.Sprintf("🔴 Blocked packages: %s", BoldTxt.FormatInt(blockedPackages)))
+	// Display the blocked packages grouped by type
+	var blocked []blockedPackageByType
+	// Sort the blocked packages by name
+	for _, blockTypeValue := range summary.CuratedPackages.Blocked {
+		blocked = append(blocked, toBlockedPackgeByType(blockTypeValue))
+	}
+	sort.Slice(blocked, func(i, j int) bool {
+		return blocked[i].BlockedType > blocked[j].BlockedType
+	})
+	// Display the blocked packages
+	for _, blockStruct := range blocked {
+		content += DetailsWithSummary.Format(
+			fmt.Sprintf("%s (%s)", blockStruct.BlockedType, BoldTxt.FormatInt(len(blockStruct.BlockedSummary))),
+			getBlockedPackages(blockStruct.BlockedSummary),
+		)
+	}
+	return
+}
+
+func toBlockedPackgeByType(blockTypeValue formats.BlockedPackages) blockedPackageByType {
+	return blockedPackageByType{BlockedType: formatPolicyAndCond(blockTypeValue.Policy, blockTypeValue.Condition), BlockedSummary: blockTypeValue.Packages}
+}
+
+func formatPolicyAndCond(policy, cond string) string {
+	return fmt.Sprintf("%s %s, %s %s", BoldTxt.Format("Violated Policy:"), policy, BoldTxt.Format("Condition:"), cond)
+}
+
+func getBlockedPackages(blockedSummary map[string]int) (content string) {
+	blocked := maps.Keys(blockedSummary)
+	sort.Strings(blocked)
+	for i, blockedPackage := range blocked {
+		blockedPackageStr := fmt.Sprintf("📦 %s", blockedPackage)
+		if i > 0 {
+			blockedPackageStr = NewLine.Format(blockedPackageStr)
 		}
-		summary[details.FirstLevelValue][details.SecondLevelValue]++
+		content += blockedPackageStr
 	}
-	return summary
+	return
 }
 
-func getJASSummaryCount(runs ...*sarif.Run) *formats.SummaryCount {
-	if len(runs) == 0 {
-		return nil
+type EmptyMarkdownGenerator struct{}
+
+func (g EmptyMarkdownGenerator) GetViolations() (content string) {
+	return PreFormat.Format("ℹ️ Not Scanned")
+}
+
+func (g EmptyMarkdownGenerator) GetVulnerabilities() (content string) {
+	return PreFormat.Format("ℹ️ Not Scanned")
+}
+
+type DynamicMarkdownGenerator struct {
+	index        commandsummary.Index
+	extendedView bool
+	dataFiles    []string
+	content      []formats.ResultsSummary
+	args         ResultSummaryArgs
+}
+
+func (mg *DynamicMarkdownGenerator) loadContentFromFiles() (err error) {
+	if len(mg.content) > 0 {
+		// Already loaded
+		return
 	}
-	count := formats.SummaryCount{}
-	issueToSeverity := map[string]string{}
-	for _, run := range runs {
-		for _, result := range run.Results {
-			for _, location := range result.Locations {
-				resultLevel := sarifutils.GetResultLevel(result)
-				severity, err := severityutils.ParseSeverity(resultLevel, true)
-				if err != nil {
-					log.Warn(fmt.Sprintf("Failed to parse Sarif level %s. %s", resultLevel, err.Error()))
-					severity = severityutils.Unknown
-				}
-				severityutils.GetSeverity(sarifutils.GetResultLevel(result))
-				issueToSeverity[sarifutils.GetLocationId(location)] = severity.String()
+	mg.content, mg.args, err = loadContent(mg.dataFiles)
+	return
+}
+
+func (mg DynamicMarkdownGenerator) GetViolations() (content string) {
+	summary := formats.GetViolationSummaries(mg.content...)
+	if summary == nil {
+		content = PreFormat.Format("No watch is defined")
+		return
+	}
+	resultsMarkdown := mg.generateResultsMarkdown(true, getJfrogUrl(mg.index, mg.args, &summary.ScanResultSummary, mg.extendedView), &summary.ScanResultSummary)
+	if len(summary.Watches) == 0 {
+		content = resultsMarkdown
+		return
+	}
+	content = getWatchesMarkdown(summary.Watches) + NewLine.Format(resultsMarkdown)
+	return
+}
+
+// If more than maxWatchesInLine watches, put maxWatchesInLine at each line
+func getWatchesMarkdown(watches []string) (content string) {
+	sort.Strings(watches)
+	watchesStr := ""
+	multiLine := len(watches) > maxWatchesInLine
+	for i := 0; i < len(watches); i += maxWatchesInLine {
+		j := i + maxWatchesInLine
+		if j > len(watches) {
+			j = len(watches)
+		}
+		watchLine := strings.Join(watches[i:j], ", ")
+		if multiLine {
+			watchLine = NewLine.Format(watchLine)
+		}
+		watchesStr += watchLine
+	}
+	prefix := "watch"
+	if len(watches) > 1 {
+		prefix += "es"
+	}
+	content = PreFormat.Format(prefix + ": " + watchesStr)
+	return
+}
+
+func (mg DynamicMarkdownGenerator) GetVulnerabilities() (content string) {
+	summary := formats.GetVulnerabilitiesSummaries(mg.content...)
+	if summary == nil {
+		// We are in violation mode and vulnerabilities are not requested (no info to show)
+		return
+	}
+	content = mg.generateResultsMarkdown(false, getJfrogUrl(mg.index, mg.args, summary, mg.extendedView), summary)
+	return
+}
+
+func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *formats.ScanResultSummary, extendedView bool) (url string) {
+	if !extendedView {
+		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
+	}
+	if moreInfoUrls := summary.GetMoreInfoUrls(); len(moreInfoUrls) > 0 {
+		return Link.Format(moreInfoUrls[0], "See the results of the scan in JFrog")
+	}
+	if defaultUrl := args.GetUrl(index, summary.GetScanIds()...); defaultUrl != "" {
+		return Link.Format(defaultUrl, "See the results of the scan in JFrog")
+	}
+	return
+}
+
+func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
+	if !content.HasIssues() {
+		markdown = getNoIssuesMarkdown(violations)
+	} else {
+		markdown = getResultsTypesSummaryString(mg.index, violations, content)
+		details := ""
+		if mg.extendedView {
+			details = getResultsSeveritySummaryString(content)
+		}
+		markdown += NewLine.Format(details)
+		if moreInfoUrl != "" {
+			markdown += NewLine.Format(moreInfoUrl)
+		}
+	}
+	markdown = PreFormat.Format(markdown)
+	return
+}
+
+func getNoIssuesMarkdown(violations bool) (markdown string) {
+	noIssuesStr := "No security issues found"
+	if violations {
+		noIssuesStr = "No violations found"
+	}
+	return noIssuesStr
+}
+
+func getCenteredSvgWithText(svg, text string) (markdown string) {
+	return CenterContent.Format(fmt.Sprintf("%s %s", svg, text))
+}
+
+func getResultsTypesSummaryString(index commandsummary.Index, violations bool, summary *formats.ScanResultSummary) (content string) {
+	if violations {
+		content = fmt.Sprintf("%d Policy Violations:", summary.GetTotal())
+	} else {
+		if index == commandsummary.DockerScan || index == commandsummary.BinariesScan {
+			content = fmt.Sprintf("%d Security issues are grouped by CVE number:", summary.GetTotal())
+		} else {
+			content = fmt.Sprintf("%d Security Issues:", summary.GetTotal())
+		}
+	}
+	if summary.ScaResults != nil {
+		if violations {
+			if count := summary.GetTotal(formats.ScaSecurityResult); count > 0 {
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaSecurityResult.String()))
+			}
+			if count := summary.GetTotal(formats.ScaOperationalResult); count > 0 {
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaOperationalResult.String()))
+			}
+			if count := summary.GetTotal(formats.ScaLicenseResult); count > 0 {
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaLicenseResult.String()))
+			}
+		} else {
+			if count := summary.GetTotal(formats.ScaSecurityResult); count > 0 {
+				content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.ScaResult.String()))
 			}
 		}
 	}
-	for _, severity := range issueToSeverity {
-		count[severity]++
+	if summary.SecretsResults != nil {
+		if count := summary.GetTotal(formats.SecretsResult); count > 0 {
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.SecretsResult.String()))
+		}
 	}
-	return &count
+	if summary.SastResults != nil {
+		if count := summary.GetTotal(formats.SastResult); count > 0 {
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.SastResult.String()))
+		}
+	}
+	if summary.IacResults != nil {
+		if count := summary.GetTotal(formats.IacResult); count > 0 {
+			content += TabTag.Format(fmt.Sprintf("%d %s", count, formats.IacResult.String()))
+		}
+	}
+	return
+}
+
+func getResultsSeveritySummaryString(summary *formats.ScanResultSummary) (markdown string) {
+	details := summary.GetSummaryBySeverity()
+	if details.GetTotal(severityutils.Critical.String()) > 0 {
+		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Critical, details))
+	}
+	if details.GetTotal(severityutils.High.String()) > 0 {
+		markdown += NewLine.Format(getSeverityMarkdown(severityutils.High, details))
+	}
+	if details.GetTotal(severityutils.Medium.String()) > 0 {
+		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Medium, details))
+	}
+	if details.GetTotal(severityutils.Low.String()) > 0 {
+		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Low, details))
+	}
+	if details.GetTotal(severityutils.Unknown.String()) > 0 {
+		markdown += NewLine.Format(getSeverityMarkdown(severityutils.Unknown, details))
+	}
+	return
+}
+
+func getSeverityMarkdown(severity severityutils.Severity, details formats.ResultSummary) (markdown string) {
+	svg := getSeverityIcon(severity)
+	severityStr := severity.String()
+	totalSeverityIssues := details.GetTotal(severityStr)
+	severityMarkdown := fmt.Sprintf("%d %s%s", totalSeverityIssues, severityStr, getSeverityStatusesCountString(details[severityStr]))
+	return getCenteredSvgWithText(svg, severityMarkdown)
+}
+
+func getSeverityIcon(severity severityutils.Severity) string {
+	return severityutils.GetSeverityIcon(severity)
+}
+
+func getSeverityStatusesCountString(statusCounts map[string]int) string {
+	return generateSeverityStatusesCountString(getSeverityDisplayStatuses(statusCounts))
+}
+
+func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[SeverityStatus]int) {
+	displayData = map[SeverityStatus]int{}
+	for status, count := range statusCounts {
+		switch status {
+		case jasutils.Applicability.String():
+			displayData[ApplicableStatusCount] += count
+		case jasutils.NotApplicable.String():
+			displayData[NotApplicableStatusCount] += count
+		}
+	}
+	return displayData
+}
+
+func generateSeverityStatusesCountString(displayData map[SeverityStatus]int) string {
+	if len(displayData) == 0 {
+		return ""
+	}
+	display := []string{}
+	if count, ok := displayData[ApplicableStatusCount]; ok {
+		display = append(display, ApplicableStatusCount.Format(count))
+	}
+	if count, ok := displayData[NotApplicableStatusCount]; ok {
+		display = append(display, NotApplicableStatusCount.Format(count))
+	}
+	return fmt.Sprintf(" (%s)", strings.Join(display, ", "))
 }

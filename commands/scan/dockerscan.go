@@ -96,20 +96,19 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *utils.Results) (err error) {
-		if scanResults == nil || len(scanResults.ScaResults) == 0 {
+	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *utils.Results) (err error) {
+		if scanResults == nil {
 			return
-		}
-		for i := range scanResults.ScaResults {
-			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
-			scanResults.ScaResults[i].Target = dsc.imageTag
-			scanResults.ScaResults[i].Name = dsc.imageTag
 		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
-			return
-		}
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.BinarySection})
+
+		return utils.RecordSecurityCommandSummary(utils.NewDockerScanSummary(
+			scanResults,
+			dsc.ScanCommand.serverDetails,
+			dsc.ScanCommand.includeVulnerabilities,
+			hasViolationContext(dsc.ScanCommand.watches, dsc.ScanCommand.projectKey),
+			dsc.imageTag,
+		))
 	})
 }
 
