@@ -55,6 +55,12 @@ func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Lo
 	}
 }
 
+func CreateDummyResultWithPathAndLogicalLocation(fileName, logicalName, kind, property, value string) *sarif.Result {
+	result := CreateDummyResultInPath(fileName)
+	result.Locations[0].LogicalLocations = append(result.Locations[0].LogicalLocations, CreateLogicalLocationWithProperty(logicalName, kind, property, value))
+	return result
+}
+
 func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
 	return &sarif.Location{
 		PhysicalLocation: &sarif.PhysicalLocation{

@@ -567,11 +567,11 @@ func patchResults(subScanType SubScanType, cmdResults *Results, run *sarif.Run, 
 			sarifutils.SetResultMsgMarkdown(markdown, result)
 			// For Binary scans, override the physical location if applicable (after data already used for markdown)
 			convertBinaryPhysicalLocations(cmdResults, run, result)
-		}
-		// Calculate the fingerprints if not exists
-		if !sarifutils.IsFingerprintsExists(result) {
-			if err := calculateResultFingerprints(cmdResults, run, result); err != nil {
-				log.Warn(fmt.Sprintf("Failed to calculate the fingerprint for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), err.Error()))
+			// Calculate the fingerprints if not exists
+			if !sarifutils.IsFingerprintsExists(result) {
+				if err := calculateResultFingerprints(cmdResults, run, result); err != nil {
+					log.Warn(fmt.Sprintf("Failed to calculate the fingerprint for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), err.Error()))
+				}
 			}
 		}
 		patched = append(patched, result)
@@ -708,7 +708,11 @@ func getBaseBinaryDescriptionMarkdown(subScanType SubScanType, cmdResults *Resul
 			content += fmt.Sprintf("\nImage: %s", imageTag)
 		}
 	}
-	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, result, result.Locations[0])
+	var location *sarif.Location
+	if len(result.Locations) > 0 {
+		location = result.Locations[0]
+	}
+	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, location)
 }
 
 func getDockerImageTag(cmdResults *Results) string {
@@ -727,7 +731,7 @@ func getDockerImageTag(cmdResults *Results) string {
 // * Layer: <HASH>
 // * Filepath: <PATH>
 // * Evidence: <Snippet>
-func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, result *sarif.Result, location *sarif.Location) (content string) {
+func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, location *sarif.Location) (content string) {
 	if location == nil {
 		return ""
 	}
