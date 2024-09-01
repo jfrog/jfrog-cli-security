@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
+	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
 	if withViolation {
 		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
@@ -82,7 +83,7 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
-	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
+	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	scanArgs := []string{"scan", binariesPath, "--format=json", "--licenses"}
 	// Run without bypass flag and expect scan to fail
 	err := securityTests.PlatformCli.Exec(scanArgs...)
@@ -133,7 +134,7 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
-	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
+	return securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int) {
@@ -211,7 +212,7 @@ func TestCurationAudit(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, "")
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm")
+	multiProject := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm")
 	assert.NoError(t, biutils.CopyDir(multiProject, tempDirPath, true, nil))
 	rootDir, err := os.Getwd()
 	require.NoError(t, err)

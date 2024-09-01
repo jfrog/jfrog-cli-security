@@ -2,6 +2,7 @@ package tests
 
 import (
 	"flag"
+	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -49,16 +50,31 @@ var (
 	ciRunId         *string
 )
 
+func getTestUrlDefaultValue() string {
+	if os.Getenv(TestJfrogUrlEnvVar) != "" {
+		return os.Getenv(TestJfrogUrlEnvVar)
+	}
+	return "http://localhost:8081/"
+}
+
+func getTestUserDefaultValue() string {
+	if os.Getenv(TestJfrogUserEnvVar) != "" {
+		return os.Getenv(TestJfrogUserEnvVar)
+	}
+	return "admin"
+}
+
 func init() {
 	TestSecurity = flag.Bool("test.security", true, "Test Security")
 	TestDockerScan = flag.Bool("test.dockerScan", false, "Test Docker scan")
 
-	JfrogUrl = flag.String("jfrog.url", "http://localhost:8081/", "JFrog platform url")
-	JfrogUser = flag.String("jfrog.user", "admin", "JFrog platform  username")
+	JfrogUrl = flag.String("jfrog.url", getTestUrlDefaultValue(), "JFrog platform url")
+	JfrogUser = flag.String("jfrog.user", getTestUserDefaultValue(), "JFrog platform  username")
 	JfrogPassword = flag.String("jfrog.password", "password", "JFrog platform password")
+
 	JfrogSshKeyPath = flag.String("jfrog.sshKeyPath", "", "Ssh key file path")
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
-	JfrogAccessToken = flag.String("jfrog.adminToken", "", "JFrog platform admin token")
+	JfrogAccessToken = flag.String("jfrog.adminToken", os.Getenv(TestJfrogTokenEnvVar), "JFrog platform admin token")
 
 	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8082", "Container registry")
 

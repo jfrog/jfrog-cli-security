@@ -4,6 +4,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
@@ -21,7 +22,7 @@ func testVulns(t *testing.T, vulns []struct {
 
 func TestXrayEnrichSbomOutput(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, enrichgraph.EnrichMinimumVersionXray)
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	testCases := []struct {
 		name      string
@@ -40,7 +41,7 @@ func TestXrayEnrichSbomOutput(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			inputPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "other", "enrich", tc.inputPath)
+			inputPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "other", "enrich", tc.inputPath)
 			output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "sbom-enrich", inputPath)
 			if tc.isXml {
 				enrichedSbom := securityTestUtils.UnmarshalXML(t, output)

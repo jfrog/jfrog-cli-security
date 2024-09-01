@@ -7,17 +7,16 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -48,25 +47,6 @@ func InitSecurityTest(t *testing.T, xrayMinVersion string) {
 		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
 	}
 	ValidateXrayVersion(t, xrayMinVersion)
-}
-
-func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, true)
-	// Create mock cli with the mock commands.
-	commands := []components.Command{}
-	for _, mockCommand := range mockCommands {
-		commands = append(commands, mockCommand())
-	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands)), func() {
-		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
-	}
-}
-
-func GetTestResourcesPath() string {
-	dir, _ := os.Getwd()
-	return filepath.ToSlash(dir + "/tests/testdata/")
 }
 
 func CleanTestsHomeEnv() {
@@ -144,5 +124,20 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 	return watchParams.Name, func() {
 		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
+}
+
+func CreateTestProjectEnvInTempDir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
+	return tempDirPath, createTempDirCallback
+}
+
+func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := CreateTestProjectEnvInTempDir(t, projectPath)
+	prevWd := ChangeWD(t, tempDirPath)
+	return tempDirPath, func() {
+		createTempDirCallback()
+		clientTests.ChangeDirAndAssert(t, prevWd)
 	}
 }

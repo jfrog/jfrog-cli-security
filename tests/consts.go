@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +12,10 @@ const (
 	JvmLaunchEnvVar = "MAVEN_OPTS"
 	GoCacheEnvVar   = "GOMODCACHE"
 	PipCacheEnvVar  = "PIP_CACHE_DIR"
+
+	TestJfrogUrlEnvVar   = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
+	TestJfrogTokenEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
+	TestJfrogUserEnvVar  = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
 
 	MavenCacheRedirectionVal = "-Dmaven.repo.local="
 )
@@ -88,6 +94,11 @@ var reposConfigMap = map[*string]string{
 	&GoRemoteRepo:           GoRemoteRepositoryConfig,
 	&GoRepo:                 GoLocalRepositoryConfig,
 	&PypiRemoteRepo:         PypiRemoteRepositoryConfig,
+}
+
+func GetTestResourcesPath() string {
+	dir, _ := os.Getwd()
+	return filepath.ToSlash(dir + "/tests/testdata/")
 }
 
 // Return local and remote repositories for the test suites, respectfully

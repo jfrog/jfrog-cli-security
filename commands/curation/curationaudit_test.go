@@ -21,6 +21,7 @@ import (
 	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -409,10 +410,11 @@ func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvInTempDir(t, tt.pathToTest)
+			defer cleanUp()
 			// Set configuration for test
 			currentDir, err := os.Getwd()
 			assert.NoError(t, err)
-			configurationDir := tt.pathToTest
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
 			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
@@ -440,7 +442,7 @@ func TestDoCurationAudit(t *testing.T) {
 			}
 
 			// Set the working dir for project.
-			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
+			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(configurationDir, string(os.PathSeparator)+".jfrog"))
 			defer func() {
 				cacheFolder, err := utils.GetCurationCacheFolder()
 				require.NoError(t, err)

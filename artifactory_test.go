@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/generic"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -101,7 +102,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	for _, testCase := range testCases {
@@ -114,7 +115,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 func testSingleTechDependencyResolution(t *testing.T, testProjectPartialPath []string, resolveRepoName string, cacheRepoName string, projectType project.ProjectType) {
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	testProjectPath := filepath.Join(append([]string{filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers"}, testProjectPartialPath...)...)
+	testProjectPath := filepath.Join(append([]string{filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers"}, testProjectPartialPath...)...)
 	assert.NoError(t, biutils.CopyDir(testProjectPath, tempDirPath, true, nil))
 	rootDir, err := os.Getwd()
 	assert.NoError(t, err)

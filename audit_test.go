@@ -27,6 +27,7 @@ import (
 
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -46,7 +47,7 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm")
+	npmProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm")
 	// Copy the npm project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(npmProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -78,7 +79,7 @@ func testXrayAuditPnpm(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	npmProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
+	npmProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
 	// Copy the npm project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(npmProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -134,7 +135,7 @@ func testXrayAuditYarn(t *testing.T, projectDirName string, yarnCmd func()) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	yarnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName)
+	yarnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName)
 	// Copy the Yarn project from the testdata to a temp directory
 	assert.NoError(t, biutils.CopyDir(yarnProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -249,7 +250,7 @@ func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech st
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	projectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
+	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
 
 	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -278,7 +279,7 @@ func testXrayAuditGradle(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	gradleProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle")
+	gradleProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle")
 	// Copy the gradle project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(gradleProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -302,7 +303,7 @@ func testXscAuditMaven(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
+	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
 	// Copy the maven project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -327,7 +328,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects")
+	multiProject := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects")
 	// Copy the multi project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(multiProject, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -336,7 +337,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 		filepath.Join(tempDirPath, "package-managers", "maven", "maven"), filepath.Join(tempDirPath, "package-managers", "nuget", "single4.0"),
 		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"))
 	// Configure a new server named "default"
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
@@ -367,7 +368,7 @@ func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	pipProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project")
+	pipProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project")
 	// Copy the pip project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(pipProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -396,7 +397,7 @@ func testXrayAuditPipenv(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	pipenvProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project")
+	pipenvProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project")
 	// Copy the pipenv project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(pipenvProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -420,7 +421,7 @@ func testXrayAuditPoetry(t *testing.T, format string) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	poetryProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project")
+	poetryProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project")
 	// Copy the poetry project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(poetryProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -443,7 +444,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
+	cliToRun, cleanUp := securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3")
 	// Verify that scan results are printed
@@ -495,11 +496,11 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", project))
+	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project))
 	// Copy the multi project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
 	// Configure a new server named "default"
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	baseWd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -512,7 +513,7 @@ func TestXrayAuditDetectTech(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
+	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
 	// Copy the maven project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(mvnProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -530,7 +531,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers")
+	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers")
 	// Creating an inner NPM project
 	npmDirPath, err := os.MkdirTemp(tempDirPath, "npm-project")
 	assert.NoError(t, err)
@@ -566,11 +567,11 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps"))
+	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps"))
 	// Copy the multi project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
 	// Configure a new server named "default"
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	baseWd, err := os.Getwd()
 	assert.NoError(t, err)
