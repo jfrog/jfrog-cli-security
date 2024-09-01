@@ -619,7 +619,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d.tar", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
+					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d.tar", "7fbda0ebc8c5a215853f886ea097965f", "layer", "algorithm", "sha256"),
 				),
 			},
 		},
