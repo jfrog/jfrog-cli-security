@@ -45,6 +45,7 @@ const (
 	Binary      CommandType = "binary"
 	DockerImage CommandType = "docker_image"
 	Build       CommandType = "build"
+	Curation    CommandType = "curation"
 	SBOM        CommandType = "SBOM"
 )
 

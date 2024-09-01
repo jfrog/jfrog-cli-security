@@ -190,23 +190,17 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
+		if err = utils.RecordSarifOutput(scanResults); err != nil {
+			return
+		}
 		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(
 			scanResults,
 			scanCmd.serverDetails,
 			scanCmd.includeVulnerabilities,
 			hasViolationContext(scanCmd.watches, scanCmd.projectKey),
 		))
-	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
-		if err = utils.RecordSarifOutput(scanResults); err !=nil {
-			return
-		}
-		return utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.BinarySection})
 	})
-}
-
-func hasViolationContext(watches []string, projectKey string) bool {
-	return len(watches) > 0 || projectKey != ""
 }
 
 func hasViolationContext(watches []string, projectKey string) bool {
@@ -331,7 +325,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(scanResults.IsMultipleProject()).
-		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
 		return
 	}

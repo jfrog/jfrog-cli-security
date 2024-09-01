@@ -1,12 +1,10 @@
 package sarifutils
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -43,14 +41,6 @@ func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
 		Name: &name,
 		Kind: &kind,
 	}
-}
-
-func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
-	out, err := json.Marshal(report)
-	if err != nil {
-		return "", errorutils.CheckError(err)
-	}
-	return utils.IndentJson(out), nil
 }
 
 func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
@@ -234,6 +224,16 @@ func SetResultFingerprint(algorithm, value string, result *sarif.Result) {
 		result.Fingerprints = make(map[string]interface{})
 	}
 	result.Fingerprints[algorithm] = value
+}
+
+func GetResultLocationSnippets(result *sarif.Result) []string {
+	var snippets []string
+	for _, location := range result.Locations {
+		if snippet := GetLocationSnippet(location); snippet != "" {
+			snippets = append(snippets, snippet)
+		}
+	}
+	return snippets
 }
 
 func GetLocationSnippet(location *sarif.Location) string {

@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
@@ -436,7 +438,7 @@ func TestJSONMarshall(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			printedString, err := JSONMarshal(tc.resultString)
+			printedString, err := JSONMarshalNotEscaped(tc.resultString)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, string(printedString))
 		})
@@ -569,6 +571,106 @@ func TestGetSummary(t *testing.T) {
 				}
 			}
 			assert.Equal(t, testCase.expected, summary)
+		})
+	}
+}
+
+
+func TestPatchRunsToPassIngestionRules(t *testing.T) {
+	currentWd, err := os.Getwd()
+	assert.NoError(t, err)
+	wd, clenup := tests.CreateTempDirWithCallbackAndAssert(t)
+	defer clenup()
+	clientTests.ChangeDirWithCallback(t, currentWd, wd)
+	
+	testCases := []struct {
+		name            string
+		cmdResult       *Results
+		subScan         SubScanType
+		
+		input           []*sarif.Run
+		expectedResults []*sarif.Run
+	}{
+		{
+			name:            "No runs",
+			cmdResult:       &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:         SecretsScan,
+			input:           []*sarif.Run{},
+			expectedResults: []*sarif.Run{},
+		},
+		{
+			name: "Build scan - SCA",
+			cmdResult: &Results{ResultType: Build, ScaResults: []*ScaScanResult{{Name: "buildName (buildNumber)"}}},
+			subScan: ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateResultWithPropertyAndDummyLocation(filepath.Join("dir", "file"), jfrogFingerprintAlgorithmName, "879a3a246050efbcbea370e231982539")),
+			},
+		},
+		{
+			name: "Docker image scan - SCA",
+			cmdResult: &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan: ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithOneLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d.tar" , 0, 0, 0, 0, "snippet", "rule", "level"),	
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+				}),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResults(
+					sarifutils.CreateResultWithLocations("",  "rule", "level",
+					 	sarifutils.CreateLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d.tar", 0, 0, 0, 0, "snippet").WithLogicalLocations([]*sarif.LogicalLocation{
+							sarifutils.CreateLogicalLocationWithProperty("f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d","layer", "algorithm", "sha256"),
+						}),
+					 ),	
+				),
+			},
+		},
+		{
+			name: "Docker image scan - Secrets",
+			cmdResult: &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan: SecretsScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunNameWithResults("some tool name",
+					sarifutils.CreateResultWithOneLocation(fmt.Sprintf("file://%s/unpacked/filesystem/blobs/sha1/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js", wd) , 0, 0, 0, 0, "snippet", "rule", "level"),	
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+				}),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunNameWithResults(patchedBinarySecretScannerToolName,
+					sarifutils.CreateResultWithLocations("",  "rule", "level",
+					 	sarifutils.CreateLocation("usr/src/app/server/index.js", 0, 0, 0, 0, "snippet").WithLogicalLocations([]*sarif.LogicalLocation{
+							sarifutils.CreateLogicalLocationWithProperty("9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0","layer", "algorithm", "sha1"),
+						}),
+					 ),	
+				),
+			},
+		},
+		{
+			name: "Binary scan - SCA",
+		},
+		{
+			name: "Audit scan - SCA",
+		},
+		{
+			name: "Audit scan - Secrets",
+		},
+		{
+			name: "Audit scan - Sast",
+		},
+		{
+			name: "Audit scan - Iac",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			patchRunsToPassIngestionRules(tc.subScan, tc.cmdResult, tc.input...)
+			assert.ElementsMatch(t, tc.expectedResults, tc.input)
 		})
 	}
 }
