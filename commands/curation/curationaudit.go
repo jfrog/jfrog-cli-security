@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -240,48 +242,52 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-
-	err = errors.Join(err, utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: utils.Curation}))
+	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
 
-func convertResultsToSummary(results map[string]*CurationReport) formats.SummaryResults {
-	summaryResults := formats.SummaryResults{}
+func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
+	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
-		blocked := convertBlocked(packagesStatus.packagesStatus)
-		approved := packagesStatus.totalNumberOfPackages - blocked.GetCountOfKeys(false)
-
-		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummaryResult{Target: projectPath,
+		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				Blocked:  blocked,
-				Approved: approved,
-			}})
+				PackageCount: packagesStatus.totalNumberOfPackages,
+				Blocked:      getBlocked(packagesStatus.packagesStatus),
+			},
+		})
 	}
 	return summaryResults
 }
 
-func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
-	blocked := formats.TwoLevelSummaryCount{}
+func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
+	blockedMap := map[string]formats.BlockedPackages{}
 	for _, pkg := range pkgStatus {
 		for _, policy := range pkg.Policy {
-			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
-			if _, ok := blocked[polAndCond]; !ok {
-				blocked[polAndCond] = formats.SummaryCount{}
+			polAndCondKey := getPolicyAndConditionId(policy.Policy, policy.Condition)
+			if _, ok := blockedMap[polAndCondKey]; !ok {
+				blockedMap[polAndCondKey] = formats.BlockedPackages{
+					Policy:    policy.Policy,
+					Condition: policy.Condition,
+					Packages:  make(map[string]int),
+				}
 			}
 			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
-			blocked[polAndCond][uniqId]++
+			if _, ok := blockedMap[polAndCondKey].Packages[uniqId]; !ok {
+				blockedMap[polAndCondKey].Packages[uniqId] = 0
+			}
+			blockedMap[polAndCondKey].Packages[uniqId]++
 		}
 	}
-	return blocked
-}
-
-func formatPolicyAndCond(policy, cond string) string {
-	return fmt.Sprintf("Policy: %s, Condition: %s", policy, cond)
+	return maps.Values(blockedMap)
 }
 
 // The unique identifier of a package includes the package name with its version
 func getPackageId(packageName, packageVersion string) string {
 	return fmt.Sprintf("%s:%s", packageName, packageVersion)
+}
+
+func getPolicyAndConditionId(policy, condition string) string {
+	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
