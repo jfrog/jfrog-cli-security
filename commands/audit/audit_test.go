@@ -96,19 +96,18 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			// Create a mock server with all necessary calls in audit process
 			mockServer, serverDetails := utils.XrayServer(t, minXrayVersionForJas)
 			defer mockServer.Close()
 
-			// Create auditCmd -> auditParams
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat("table").
 				SetUseJas(true)
 
+			configProfile := testcase.configProfile
 			auditParams := NewAuditParams().
 				SetGraphBasicParams(auditBasicParams).
-				SetConfigProfile(&testcase.configProfile).
+				SetConfigProfile(&configProfile).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					RepoPath:               "",
 					ProjectKey:             "",
