@@ -736,7 +736,7 @@ func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubSca
 		return ""
 	}
 	if commandType == DockerImage {
-		if layer, algorithm := getDockerLayer(commandType, location); layer != "" {
+		if layer, algorithm := getDockerLayer(location); layer != "" {
 			if algorithm != "" {
 				content += fmt.Sprintf("\nLayer (%s): %s", algorithm, layer)
 			} else {
@@ -756,7 +756,7 @@ func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubSca
 	return
 }
 
-func getDockerLayer(commandType CommandType, location *sarif.Location) (layer, algorithm string) {
+func getDockerLayer(location *sarif.Location) (layer, algorithm string) {
 	// If location has logical location with kind "layer" return it
 	if logicalLocation := sarifutils.GetLogicalLocation("layer", location); logicalLocation != nil && logicalLocation.Name != nil {
 		layer = *logicalLocation.Name
@@ -1078,7 +1078,11 @@ func getSecuritySummaryFindings(cves []services.Cve, issueId string, components 
 	}
 	if len(cves) == 0 {
 		// XRAY-ID, no scanners for them
-		uniqueFindings[jasutils.NotCovered.String()] += 1
+		status := jasutils.NotScanned
+		if len(applicableRuns) > 0 {
+			status = jasutils.NotCovered
+		}
+		uniqueFindings[status.String()] += 1
 	}
 	return uniqueFindings
 }
