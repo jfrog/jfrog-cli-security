@@ -125,7 +125,12 @@ func (rsa ResultSummaryArgs) ToArgs(index commandsummary.Index) (args []string) 
 		args = append(args, rsa.BuildName)
 		args = append(args, rsa.BuildNumbers...)
 	} else if index == commandsummary.DockerScan {
-		args = append(args, rsa.DockerImage)
+		image := rsa.DockerImage
+		// if user did not provide image tag, add latest
+		if !strings.Contains(image, ":") {
+			image += ":latest"
+		}
+		args = append(args, image)
 	}
 	return
 }

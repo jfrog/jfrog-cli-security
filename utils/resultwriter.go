@@ -569,7 +569,7 @@ func patchResults(subScanType SubScanType, cmdResults *Results, run *sarif.Run, 
 			convertBinaryPhysicalLocations(cmdResults, run, result)
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
-				if err := calculateResultFingerprints(cmdResults, run, result); err != nil {
+				if err := calculateResultFingerprints(cmdResults.ResultType, run, result); err != nil {
 					log.Warn(fmt.Sprintf("Failed to calculate the fingerprint for result [ruleId=%s]: %s", sarifutils.GetResultRuleId(result), err.Error()))
 				}
 			}
@@ -597,15 +597,13 @@ func patchRunsToPassIngestionRules(subScanType SubScanType, cmdResults *Results,
 func convertPaths(commandType CommandType, subScanType SubScanType, runs ...*sarif.Run) {
 	// Convert base on invocation for source code
 	sarifutils.ConvertRunsPathsToRelative(runs...)
-	if subScanType != SecretsScan {
+	if !(commandType == DockerImage && subScanType == SecretsScan) {
 		return
 	}
 	for _, run := range runs {
 		for _, result := range run.Results {
-			if commandType == DockerImage {
-				// For Docker secret scan, patch the logical location if not exists
-				patchDockerSecretLocations(result)
-			}
+			// For Docker secret scan, patch the logical location if not exists
+			patchDockerSecretLocations(result)
 		}
 	}
 }
@@ -651,15 +649,20 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 	potentialLocations := []string{filepath.Clean("Dockerfile"), sarifutils.GetFullLocationFileName("Dockerfile", run.Invocations)}
 	for _, location := range potentialLocations {
 		if exists, err := fileutils.IsFileExists(location, false); err == nil && exists {
-			log.Debug(fmt.Sprintf("Dockerfile found in %s, replacing the location", location))
 			return location
 		}
 	}
 	return ""
 }
 
-func getWorkflowFileLocationIfExists() string {
+func getWorkflowFileLocationIfExists() (location string) {
 	workflowName := os.Getenv(CurrentWorkflowNameEnvVar)
+	if workflowName == "" {
+		return
+	}
+	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err != nil || !exists {
+		return
+	}
 	// Check if exists in the .github/workflows directory as file name or in the content, return the file path or empty string
 	if files, err := fileutils.ListFiles(GithubBaseWorkflowDir, false); err == nil && len(files) > 0 {
 		for _, file := range files {
@@ -675,7 +678,7 @@ func getWorkflowFileLocationIfExists() string {
 			}
 		}
 	}
-	return ""
+	return
 }
 
 func getSecretInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) string {
@@ -798,9 +801,8 @@ func getLayerContentFromComponentId(componentId string) (algorithm string, layer
 // there must be a way to use information contained in the result to construct a stable identifier for the result. We refer to this identifier as a fingerprint.
 // A result management system SHOULD construct a fingerprint by using information contained in the SARIF file such as:
 // The name of the tool that produced the result, the rule id, the file system path to the analysis target...
-func calculateResultFingerprints(cmdResults *Results, run *sarif.Run, result *sarif.Result) error {
-	if cmdResults.ResultType != DockerImage {
-		// Currently, we support only DockerImage scan
+func calculateResultFingerprints(resultType CommandType, run *sarif.Run, result *sarif.Result) error {
+	if !resultType.IsTargetBinary() {
 		return nil
 	}
 	ids := sarifutils.GetResultFileLocations(result)
