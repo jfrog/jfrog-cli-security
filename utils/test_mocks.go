@@ -12,10 +12,12 @@ import (
 	"testing"
 )
 
-const TestMsi = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
-const TestScaScanId = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
-const TestMoreInfoUrl = "https://www.jfrog.com"
-const TestConfigProfileName = "default-profile"
+const (
+	TestMsi               = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+	TestScaScanId         = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
+	TestMoreInfoUrl       = "https://www.jfrog.com"
+	TestConfigProfileName = "default-profile"
+)
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
 
@@ -43,7 +45,7 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 	serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
-			if err != nil {
+			if !assert.NoError(t, err) {
 				return
 			}
 		}
@@ -51,7 +53,7 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, TestMsi)))
-				if err != nil {
+				if !assert.NoError(t, err) {
 					return
 				}
 			}
@@ -60,11 +62,11 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 			if r.Method == http.MethodGet {
 				w.WriteHeader(http.StatusOK)
 				content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
-				if err != nil {
+				if !assert.NoError(t, err) {
 					return
 				}
 				_, err = w.Write(content)
-				if err != nil {
+				if !assert.NoError(t, err) {
 					return
 				}
 			}
