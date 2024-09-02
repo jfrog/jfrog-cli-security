@@ -35,7 +35,7 @@ func CreateXscRestsMockServer(t *testing.T, testHandler restsTestHandler) (*http
 
 func CreateXrayRestsMockServer(testHandler restsTestHandler) (*httptest.Server, *config.ServerDetails) {
 	testServer := CreateRestsMockServer(testHandler)
-	serverDetails := &config.ServerDetails{Url: testServer.URL + "/", XrayUrl: testServer.URL + "/xray/"} // TODO should I add the 'xray' suffix?
+	serverDetails := &config.ServerDetails{Url: testServer.URL + "/", XrayUrl: testServer.URL + "/xray/"}
 	return testServer, serverDetails
 }
 
