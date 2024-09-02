@@ -35,6 +35,7 @@ const (
 	MissingCveScore = "0"
 	maxPossibleCve  = 10.0
 
+	// #nosec G101 -- Not credentials.
 	patchedBinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
 	jfrogFingerprintAlgorithmName      = "jfrogFingerprintHash"
 )
