@@ -664,18 +664,23 @@ func getWorkflowFileLocationIfExists() (location string) {
 	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err != nil || !exists {
 		return
 	}
+	currentWd, err := os.Getwd()
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to get the current working directory to get workflow file location: %s", err.Error()))
+		return
+	}
 	// Check if exists in the .github/workflows directory as file name or in the content, return the file path or empty string
 	if files, err := fileutils.ListFiles(GithubBaseWorkflowDir, false); err == nil && len(files) > 0 {
 		for _, file := range files {
 			if strings.Contains(file, workflowName) {
 				log.Debug(fmt.Sprintf("Found workflow file %s at %s, replacing the location", workflowName, file))
-				return file
+				return strings.TrimPrefix(file, currentWd)
 			}
 		}
 		for _, file := range files {
 			if content, err := fileutils.ReadFile(file); err == nil && strings.Contains(string(content), workflowName) {
 				log.Debug(fmt.Sprintf("Found workflow name %s in %s, replacing the location", workflowName, file))
-				return file
+				return strings.TrimPrefix(file, currentWd)
 			}
 		}
 	}
@@ -700,8 +705,8 @@ func getScaInBinaryMarkdownMsg(cmdResults *Results, result *sarif.Result) string
 
 func getBaseBinaryDescriptionMarkdown(subScanType SubScanType, cmdResults *Results, result *sarif.Result) (content string) {
 	// If in github action, add the workflow name and run number
-	if os.Getenv(CurrentWorkflowNameEnvVar) != "" {
-		content += fmt.Sprintf("\nGithub Actions Workflow: %s", os.Getenv(CurrentWorkflowNameEnvVar))
+	if workflowLocation := getWorkflowFileLocationIfExists(); workflowLocation != "" {
+		content += fmt.Sprintf("\nGithub Actions Workflow: %s", workflowLocation)
 	}
 	if os.Getenv(CurrentWorkflowRunNumberEnvVar) != "" {
 		content += fmt.Sprintf("\nRun: %s", os.Getenv(CurrentWorkflowRunNumberEnvVar))

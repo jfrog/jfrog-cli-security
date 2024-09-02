@@ -616,21 +616,26 @@ func preparePatchTestEnv(t *testing.T) (string, string, func()) {
 	assert.NoError(t, err)
 	wd, cleanUpTempDir := tests.CreateTempDirWithCallbackAndAssert(t)
 	cleanUpWd := clientTests.ChangeDirWithCallback(t, currentWd, wd)
-	// Prepare dir content
-	// create dir named "DockerfileDir" in the temp dir and add a Dockerfile
 	dockerfileDir := filepath.Join(wd, "DockerfileDir")
 	err = fileutils.CreateDirIfNotExist(dockerfileDir)
+	// Prepare env content
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(dockerfileDir, "Dockerfile"), []byte("Dockerfile data"), 0644)
-	assert.NoError(t, err)
-	err = fileutils.CreateDirIfNotExist(filepath.Join(wd, GithubBaseWorkflowDir))
-	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(wd, GithubBaseWorkflowDir, "workflowFile.yml"), []byte("workflowFile.yml data"), 0644)
-	assert.NoError(t, err)
+	createDummyDockerfile(t, dockerfileDir)
+	createDummyGithubWorkflow(t, dockerfileDir)
+	createDummyGithubWorkflow(t, wd)
 	return wd, dockerfileDir, func() {
 		cleanUpWd()
 		cleanUpTempDir()
 	}
+}
+
+func createDummyGithubWorkflow(t *testing.T, baseDir string) {
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(baseDir, GithubBaseWorkflowDir)))
+	assert.NoError(t, os.WriteFile(filepath.Join(baseDir, GithubBaseWorkflowDir, "workflowFile.yml"), []byte("workflow name"), 0644))
+}
+
+func createDummyDockerfile(t *testing.T, baseDir string) {
+	assert.NoError(t, os.WriteFile(filepath.Join(baseDir, "Dockerfile"), []byte("Dockerfile data"), 0644))
 }
 
 func TestPatchRunsToPassIngestionRules(t *testing.T) {
@@ -695,7 +700,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithFingerprint("some-msg\nGithub Actions Workflow: workflowFile.yml\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", "jfrogFingerprintHash", "809cc81dc7cb39b84877606faae64f83",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", "jfrogFingerprintHash", "809cc81dc7cb39b84877606faae64f83",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
 						),
@@ -716,7 +721,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(dockerfileDir,
-					sarifutils.CreateDummyResultWithFingerprint("some-msg\nGithub Actions Workflow: workflowFile.yml\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", "jfrogFingerprintHash", "d5ff6a34398ff643223c1a09b06f29c4",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", "jfrogFingerprintHash", "d5ff6a34398ff643223c1a09b06f29c4",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation("Dockerfile")),
 						),
@@ -805,9 +810,15 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.withEnvVars {
-				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflowFile.yml")
+				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflow name")
 				defer cleanFileEnv()
 				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "123")
+				defer cleanRunNumEnv()
+			} else {
+				// Since the the env are provided by the
+				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "")
+				defer cleanFileEnv()
+				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "")
 				defer cleanRunNumEnv()
 			}
 			if tc.withDockerfile {
