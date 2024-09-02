@@ -234,6 +234,10 @@ func ParseToSeverityDetails(severity string, sarifSeverity, pretty bool, applica
 // -- Getters functions (With default values) --
 
 func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus, pretty bool) formats.SeverityDetails {
+	if applicabilityStatus == jasutils.NotScanned {
+		// Pass 'NotCovered' as default value to get priority
+		applicabilityStatus = jasutils.NotCovered
+	}
 	return GetSeverityDetails(severity, applicabilityStatus).ToDetails(severity, pretty)
 }
 
