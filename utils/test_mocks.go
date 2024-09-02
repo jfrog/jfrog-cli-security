@@ -33,6 +33,12 @@ func CreateXscRestsMockServer(t *testing.T, testHandler restsTestHandler) (*http
 	return testServer, serverDetails, serviceManager
 }
 
+func CreateXrayRestsMockServer(testHandler restsTestHandler) (*httptest.Server, *config.ServerDetails) {
+	testServer := CreateRestsMockServer(testHandler)
+	serverDetails := &config.ServerDetails{Url: testServer.URL + "/", XrayUrl: testServer.URL + "/xray/"} // TODO should I add the 'xray' suffix?
+	return testServer, serverDetails
+}
+
 func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xsc/api/v1/system/version" {
@@ -59,6 +65,36 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 				}
 				_, err = w.Write(content)
 				if err != nil {
+					return
+				}
+			}
+		}
+	})
+	return serverMock, serverDetails
+}
+
+func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.ServerDetails) {
+	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI == "/xray/api/v1/system/version" {
+			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, xrayVersion)))
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
+		if r.RequestURI == "/xray/api/v1/entitlements/feature/contextual_analysis" {
+			if r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				_, err := w.Write([]byte(`{"entitled": true, "feature_id": "contextual_analysis"}`))
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
+		}
+		if r.RequestURI == "/xray/api/v1/scan/graph" {
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+				_, err := w.Write([]byte(`{"scan_id" : "657692d5-87d1-463f-6654-5a9529d23339"}`))
+				if !assert.NoError(t, err) {
 					return
 				}
 			}
