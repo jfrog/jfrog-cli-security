@@ -44,7 +44,7 @@ func PrintViolationsTable(violations []services.Violation, results *Results, mul
 		return err
 	}
 	// Print tables, if scan is true; print the scan tables.
-	if results.ResultType == Binary || results.ResultType == DockerImage {
+	if results.ResultType.IsTargetBinary() {
 		err = coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(securityViolationsRows), "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
 			return err
@@ -198,7 +198,7 @@ func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results
 		return err
 	}
 
-	if scanType == Binary || scanType == DockerImage {
+	if scanType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(vulnerabilitiesRows), "Vulnerable Components", "✨ No vulnerable components were found ✨", printExtended)
 	}
 	var emptyTableMessage string
@@ -305,7 +305,7 @@ func PrintLicensesTable(licenses []services.License, printExtended bool, scanTyp
 	if err != nil {
 		return err
 	}
-	if scanType == Binary || scanType == DockerImage {
+	if scanType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertToLicenseScanTableRow(licensesRows), "Licenses", "No licenses were found", printExtended)
 	}
 	return coreutils.PrintTable(formats.ConvertToLicenseTableRow(licensesRows), "Licenses", "No licenses were found", printExtended)

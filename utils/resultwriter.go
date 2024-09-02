@@ -181,7 +181,7 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 }
 
 func shouldPrintTable(requestedScans []SubScanType, subScan SubScanType, scanType CommandType) bool {
-	if (scanType == Binary || scanType == DockerImage) && (subScan == IacScan || subScan == SastScan) {
+	if scanType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
