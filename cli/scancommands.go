@@ -197,6 +197,13 @@ func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
 	}
+
+	if len(c.Arguments) > 1 {
+		log.Warn(fmt.Sprintf("Too many arguments provided (%d in total).\n"+
+			"Some flags might be mistaken as arguments and ignored, which could prevent them from affecting the command as intended.\n"+
+			"Please ensure all provided flags are valid and provided correct order. For more details: 'jf %s --help'", len(c.Arguments), c.CommandName))
+	}
+
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
 		return err
