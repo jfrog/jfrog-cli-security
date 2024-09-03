@@ -568,7 +568,7 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 	if !IsSupportedCommandForCurationInspect(cmdName) {
 		return
 	}
-	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
+	if os.Getenv(coreutils.SummaryOutputDirPathEnv) == "" ||
 		os.Getenv(SkipCurationAfterFailureEnv) == "true" {
 		return
 	}

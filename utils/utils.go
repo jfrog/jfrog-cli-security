@@ -19,13 +19,22 @@ var (
 )
 
 const (
-	ContextualAnalysisScan    SubScanType = "contextual_analysis"
-	ScaScan                   SubScanType = "sca"
-	IacScan                   SubScanType = "iac"
-	SastScan                  SubScanType = "sast"
-	SecretsScan               SubScanType = "secrets"
-	SecretTokenValidationScan SubScanType = "secrets_token_validation"
+	ContextualAnalysisScan SubScanType = "contextual_analysis"
+	ScaScan                SubScanType = "sca"
+	IacScan                SubScanType = "iac"
+	SastScan               SubScanType = "sast"
+	SecretsScan            SubScanType = "secrets"
+	ViolationTypeSecurity        ViolationIssueType = "security"
+	ViolationTypeLicense         ViolationIssueType = "license"
+	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+  SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
+
+type ViolationIssueType string
+
+func (v ViolationIssueType) String() string {
+	return string(v)
+}
 
 type SubScanType string
 
