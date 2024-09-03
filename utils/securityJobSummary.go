@@ -29,7 +29,7 @@ const (
 	Link                   HtmlTag = "<a href=\"%s\">%s</a>"
 	NewLine                HtmlTag = "<br>%s"
 	DetailsWithSummary     HtmlTag = "<details><summary>%s</summary>%s</details>"
-	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
+	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s\n</details>"
 	TabTag                 HtmlTag = "&Tab;%s"
 
 	ApplicableStatusCount    SeverityDisplayStatus = "%d Applicable"
