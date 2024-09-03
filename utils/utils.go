@@ -83,3 +83,12 @@ func splitEnvVar(envVar string) (key, value string) {
 	}
 	return split[0], strings.Join(split[1:], "=")
 }
+
+// This is a general error message for the CLI commands.
+// Due to the way we parse the commands, in some cases flags might be mistaken as arguments and therefore they will not go though the command's flags verifications.
+// When this happens it could prevent the flag from affecting the command as intended. This error message informes the user about this issue
+func GetCliTooManyArgsErrorMessage(numberOfArguments int, commandName string) string {
+	return fmt.Sprintf("Too many arguments provided (%d in total).\n"+
+		"Some flags might be mistaken as arguments and ignored, which could prevent them from affecting the command as intended.\n"+
+		"Please ensure all provided flags are valid and provided correct order. For more details: 'jf %s --help'", numberOfArguments, commandName)
+}
