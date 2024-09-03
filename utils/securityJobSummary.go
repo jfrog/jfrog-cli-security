@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,11 +15,13 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
 const (
@@ -189,6 +192,37 @@ func RecordSarifOutput(cmdResults *Results) (err error) {
 		return errorutils.CheckError(err)
 	}
 	return manager.RecordWithIndex(out, commandsummary.SarifReport)
+}
+
+func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
+	if len(dataFilePaths) == 0 {
+		return
+	}
+	// Load the content of the files
+	reports := []*sarif.Report{}
+	for _, dataFilePath := range dataFilePaths {
+		if report, e := loadSarifReport(dataFilePath); e != nil {
+			err = errors.Join(err, e)
+		} else {
+			reports = append(reports, report)
+		}
+	}
+	if err != nil {
+		return
+	}
+	combined, err := sarifutils.CombineReports(reports...)
+	if err != nil {
+		return
+	}
+	return JSONMarshalNotEscaped(combined)
+}
+
+func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
+	fileData, err := os.ReadFile(dataFilePath)
+	if err != nil {
+		return
+	}
+	return sarif.FromBytes(fileData)
 }
 
 func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string) {
