@@ -811,8 +811,10 @@ func calculateResultFingerprints(resultType CommandType, run *sarif.Run, result 
 	if !resultType.IsTargetBinary() {
 		return nil
 	}
-	ids := sarifutils.GetResultFileLocations(result)
-	ids = append(ids, sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result))
+	ids := []string{sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result)}
+	for _, location := range sarifutils.GetResultFileLocations(result) {
+		ids = append(ids, strings.ReplaceAll(location, string(filepath.Separator), "/"))
+	}
 	ids = append(ids, sarifutils.GetResultLocationSnippets(result)...)
 	// Calculate the hash value and set the fingerprint to the result
 	hashValue, err := Md5Hash(ids...)
