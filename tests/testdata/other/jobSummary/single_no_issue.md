@@ -1,3 +1,0 @@
-```
-✅ No issues were found
-```

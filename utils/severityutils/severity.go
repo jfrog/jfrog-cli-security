@@ -1,6 +1,7 @@
 package severityutils
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/gookit/color"
@@ -29,6 +30,25 @@ const (
 	Low      Severity = "Low"
 	Unknown  Severity = "Unknown"
 )
+
+func GetSeverityIcon(severity Severity) string {
+	return getSeverityEmojiIcon(severity)
+}
+
+func getSeverityEmojiIcon(severity Severity) string {
+	switch severity {
+	case Critical:
+		return "❗️"
+	case High:
+		return "🔴"
+	case Medium:
+		return "🟠"
+	case Low:
+		return "🟡"
+	default:
+		return "⚪️"
+	}
+}
 
 type Severity string
 
