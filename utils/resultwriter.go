@@ -31,6 +31,7 @@ const (
 	BaseDocumentationURL           = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	CurrentWorkflowNameEnvVar      = "GITHUB_WORKFLOW"
 	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
+	CurrentWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
 
 	MissingCveScore = "0"
 	maxPossibleCve  = 10.0
@@ -653,6 +654,23 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 			return location
 		}
 	}
+	if workspace := os.Getenv(CurrentWorkflowWorkspaceEnvVar); workspace != "" {
+		if exists, err := fileutils.IsFileExists(filepath.Join(workspace, "Dockerfile"), false); err == nil && exists {
+			return filepath.Join(workspace, "Dockerfile")
+		}
+	}
+	return ""
+}
+
+func getGithubWorkflowsDirIfExists() string {
+	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err == nil && exists {
+		return GithubBaseWorkflowDir
+	}
+	if workspace := os.Getenv(CurrentWorkflowWorkspaceEnvVar); workspace != "" {
+		if exists, err := fileutils.IsDirExists(filepath.Join(workspace, GithubBaseWorkflowDir), false); err == nil && exists {
+			return filepath.Join(workspace, GithubBaseWorkflowDir)
+		}
+	}
 	return ""
 }
 
@@ -661,7 +679,8 @@ func getWorkflowFileLocationIfExists() (location string) {
 	if workflowName == "" {
 		return
 	}
-	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err != nil || !exists {
+	workflowsDir := getGithubWorkflowsDirIfExists()
+	if workflowsDir == "" {
 		return
 	}
 	currentWd, err := os.Getwd()
@@ -670,7 +689,7 @@ func getWorkflowFileLocationIfExists() (location string) {
 		return
 	}
 	// Check if exists in the .github/workflows directory as file name or in the content, return the file path or empty string
-	if files, err := fileutils.ListFiles(GithubBaseWorkflowDir, false); err == nil && len(files) > 0 {
+	if files, err := fileutils.ListFiles(workflowsDir, false); err == nil && len(files) > 0 {
 		for _, file := range files {
 			if strings.Contains(file, workflowName) {
 				log.Debug(fmt.Sprintf("Found workflow file %s at %s, replacing the location", workflowName, file))

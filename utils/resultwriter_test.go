@@ -680,7 +680,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", "jfrogFingerprintHash", "9522c1d915eef55b4a0dc9e160bf5dc7",
+					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
 					),
 				),
@@ -700,7 +700,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", "jfrogFingerprintHash", "eda26ae830c578197aeda65a82d7f093",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "eda26ae830c578197aeda65a82d7f093",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
 						),
@@ -721,7 +721,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(dockerfileDir,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", "jfrogFingerprintHash", "8cbd7268a4d20f2358ba2667ebd18956",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "8cbd7268a4d20f2358ba2667ebd18956",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation("Dockerfile")),
 						),
@@ -750,7 +750,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 					},
 					Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))},
 					Results: []*sarif.Result{
-						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", "jfrogFingerprintHash", "dee156c9fd75a4237102dc8fb29277a2",
+						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
 							sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
 						),
 					},
@@ -768,7 +768,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithFingerprint("", "", "jfrogFingerprintHash", "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
+					sarifutils.CreateDummyResultWithFingerprint("", "", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
 				),
 			},
 		},
