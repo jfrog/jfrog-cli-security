@@ -3,6 +3,7 @@ package utils
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -440,4 +441,155 @@ func TestJSONMarshall(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, string(printedString))
 		})
 	}
+}
+
+func TestGetSummary(t *testing.T) {
+	dummyExtendedScanResults := &ExtendedScanResults{
+		ApplicabilityScanResults: []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-2")).WithInvocations([]*sarif.Invocation{
+				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
+			}),
+		},
+		SecretsScanResults: []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target1/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
+			}),
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target2/file", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target2")),
+			}),
+		},
+		SastScanResults: []*sarif.Run{
+			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("target1/file2", 0, 0, 0, 0, "snippet"))).WithInvocations([]*sarif.Invocation{
+				sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target1")),
+			}),
+		},
+	}
+
+	expectedVulnerabilities := &formats.ScanResultSummary{
+		ScaResults: &formats.ScaScanResultSummary{
+			ScanIds:      []string{TestScaScanId},
+			MoreInfoUrls: []string{TestMoreInfoUrl},
+			Security: formats.ResultSummary{
+				"Critical": map[string]int{jasutils.ApplicabilityUndetermined.String(): 1},
+				"High":     map[string]int{jasutils.NotApplicable.String(): 1},
+			},
+		},
+		SecretsResults: &formats.ResultSummary{"Low": map[string]int{jasutils.NotScanned.String(): 2}},
+		SastResults:    &formats.ResultSummary{"Low": map[string]int{jasutils.NotScanned.String(): 1}},
+	}
+	expectedViolations := &formats.ScanViolationsSummary{
+		Watches:   []string{"test-watch-name", "test-watch-name2"},
+		FailBuild: true,
+		ScanResultSummary: formats.ScanResultSummary{
+			ScaResults: &formats.ScaScanResultSummary{
+				ScanIds:      []string{TestScaScanId},
+				MoreInfoUrls: []string{TestMoreInfoUrl},
+				Security: formats.ResultSummary{
+					"Critical": map[string]int{jasutils.ApplicabilityUndetermined.String(): 1},
+					"High":     map[string]int{jasutils.NotApplicable.String(): 1},
+				},
+				License: formats.ResultSummary{"High": map[string]int{jasutils.NotScanned.String(): 1}},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                   string
+		results                *Results
+		includeVulnerabilities bool
+		includeViolations      bool
+		expected               formats.ResultsSummary
+	}{
+		{
+			name:                   "Vulnerabilities only",
+			includeVulnerabilities: true,
+			results: &Results{
+				ScaResults: []*ScaScanResult{{
+					Target:      "target1",
+					XrayResults: getDummyScaTestResults(true, true),
+				}},
+				ExtendedScanResults: dummyExtendedScanResults,
+			},
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{{
+					Target:          "target1",
+					Vulnerabilities: expectedVulnerabilities,
+				}},
+			},
+		},
+		{
+			name:              "Violations only",
+			includeViolations: true,
+			results: &Results{
+				ScaResults: []*ScaScanResult{{
+					Target:      "target1",
+					XrayResults: getDummyScaTestResults(true, true),
+				}},
+				ExtendedScanResults: dummyExtendedScanResults,
+			},
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{{
+					Target:     "target1",
+					Violations: expectedViolations,
+				}},
+			},
+		},
+		{
+			name:                   "Vulnerabilities and Violations",
+			includeVulnerabilities: true,
+			includeViolations:      true,
+			results: &Results{
+				ScaResults: []*ScaScanResult{{
+					Target:      "target1",
+					XrayResults: getDummyScaTestResults(true, true),
+				}},
+				ExtendedScanResults: dummyExtendedScanResults,
+			},
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{{
+					Target:          "target1",
+					Violations:      expectedViolations,
+					Vulnerabilities: expectedVulnerabilities,
+				}},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			summary := ToSummary(testCase.results, testCase.includeVulnerabilities, testCase.includeViolations)
+			for _, scan := range summary.Scans {
+				if scan.Vulnerabilities != nil {
+					sort.Strings(scan.Vulnerabilities.ScaResults.ScanIds)
+					sort.Strings(scan.Vulnerabilities.ScaResults.MoreInfoUrls)
+				}
+				if scan.Violations != nil {
+					sort.Strings(scan.Violations.Watches)
+					sort.Strings(scan.Violations.ScanResultSummary.ScaResults.ScanIds)
+					sort.Strings(scan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls)
+				}
+			}
+			assert.Equal(t, testCase.expected, summary)
+		})
+	}
+}
+
+func getDummyScaTestResults(vulnerability, violation bool) (responses []services.ScanResponse) {
+	response := services.ScanResponse{}
+	if vulnerability {
+		response.Vulnerabilities = []services.Vulnerability{
+			{IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+	}
+	if violation {
+		response.Violations = []services.Violation{
+			{ViolationType: ViolationTypeSecurity.String(), WatchName: "test-watch-name", IssueId: "XRAY-1", Severity: "Critical", Cves: []services.Cve{{Id: "CVE-1"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: ViolationTypeSecurity.String(), FailBuild: true, WatchName: "test-watch-name", IssueId: "XRAY-2", Severity: "High", Cves: []services.Cve{{Id: "CVE-2"}}, Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+			{ViolationType: ViolationTypeLicense.String(), WatchName: "test-watch-name2", IssueId: "MIT", Severity: "High", LicenseKey: "MIT", Components: map[string]services.Component{"issueId_direct_dependency": {}}},
+		}
+	}
+	response.ScanId = TestScaScanId
+	response.XrayDataUrl = TestMoreInfoUrl
+	responses = append(responses, response)
+	return
 }

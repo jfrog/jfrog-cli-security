@@ -857,7 +857,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]*CurationReport
-		expected formats.SummaryResults
+		expected formats.ResultsSummary
 	}{
 		{
 			name: "results for one result",
@@ -882,17 +882,17 @@ func Test_convertResultsToSummary(t *testing.T) {
 					totalNumberOfPackages: 5,
 				},
 			},
-			expected: formats.SummaryResults{
-				Scans: []formats.ScanSummaryResult{
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							Blocked: formats.TwoLevelSummaryCount{
-								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
-								},
-							},
-							Approved: 4,
+							PackageCount: 5,
+							Blocked: []formats.BlockedPackages{{
+								Policy:    "policy1",
+								Condition: "cond1",
+								Packages:  map[string]int{"test1:1.0.0": 1},
+							}},
 						},
 					},
 				},
@@ -950,25 +950,27 @@ func Test_convertResultsToSummary(t *testing.T) {
 							},
 						},
 					},
-					totalNumberOfPackages: 5,
+					totalNumberOfPackages: 6,
 				},
 			},
-			expected: formats.SummaryResults{
-				Scans: []formats.ScanSummaryResult{
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							Blocked: formats.TwoLevelSummaryCount{
-								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
+							PackageCount: 6,
+							Blocked: []formats.BlockedPackages{
+								{
+									Policy:    "policy1",
+									Condition: "cond1",
+									Packages:  map[string]int{"test1:1.0.0": 1},
 								},
-								formatPolicyAndCond("policy2", "cond2"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
-									getPackageId("test2", "2.0.0"): 1,
-									getPackageId("test3", "3.0.0"): 1,
+								{
+									Policy:    "policy2",
+									Condition: "cond2",
+									Packages:  map[string]int{"test1:1.0.0": 1, "test2:2.0.0": 1, "test3:3.0.0": 1},
 								},
 							},
-							Approved: 2,
 						},
 					},
 				},
@@ -977,8 +979,7 @@ func Test_convertResultsToSummary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := convertResultsToSummary(tt.input)
-			assert.Equal(t, tt.expected, results)
+			assert.ElementsMatch(t, tt.expected.Scans, convertResultsToSummary(tt.input).Scans)
 		})
 	}
 }
