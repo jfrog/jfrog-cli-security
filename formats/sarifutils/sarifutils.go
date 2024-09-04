@@ -1,12 +1,10 @@
 package sarifutils
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -19,12 +17,42 @@ func NewReport() (*sarif.Report, error) {
 	return report, nil
 }
 
-func ConvertSarifReportToString(report *sarif.Report) (sarifStr string, err error) {
-	out, err := json.Marshal(report)
-	if err != nil {
-		return "", errorutils.CheckError(err)
+func CombineReports(reports ...*sarif.Report) (combined *sarif.Report, err error) {
+	if combined, err = NewReport(); err != nil {
+		return
 	}
-	return utils.IndentJson(out), nil
+	for _, report := range reports {
+		for _, run := range report.Runs {
+			combined.AddRun(run)
+		}
+	}
+	return
+}
+
+func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
+	return &sarif.PhysicalLocation{
+		ArtifactLocation: &sarif.ArtifactLocation{
+			URI: &physicalPath,
+		},
+	}
+}
+
+func NewPhysicalLocationWithRegion(physicalPath string, startRow, endRow, startCol, endCol int) *sarif.PhysicalLocation {
+	location := NewPhysicalLocation(physicalPath)
+	location.Region = &sarif.Region{
+		StartLine:   &startRow,
+		EndLine:     &endRow,
+		StartColumn: &startCol,
+		EndColumn:   &endCol,
+	}
+	return location
+}
+
+func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
+	return &sarif.LogicalLocation{
+		Name: &name,
+		Kind: &kind,
+	}
 }
 
 func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
@@ -79,6 +107,19 @@ func isSameLocation(location *sarif.Location, other *sarif.Location) bool {
 	return GetLocationId(location) == GetLocationId(other)
 }
 
+func GetLogicalLocation(kind string, location *sarif.Location) *sarif.LogicalLocation {
+	if location == nil {
+		return nil
+	}
+	// Search for a logical location that has the same kind as the location
+	for _, logicalLocation := range location.LogicalLocations {
+		if logicalLocation.Kind != nil && *logicalLocation.Kind == kind {
+			return logicalLocation
+		}
+	}
+	return nil
+}
+
 func GetLocationId(location *sarif.Location) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
 		GetLocationFileName(location),
@@ -88,6 +129,55 @@ func GetLocationId(location *sarif.Location) string {
 		GetLocationEndLine(location),
 		GetLocationEndColumn(location),
 	)
+}
+
+func SetRunToolName(toolName string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	run.Tool.Driver.Name = toolName
+}
+
+func SetRunToolFullDescriptionText(txt string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMultiformatMessageString(txt)
+		return
+	}
+	run.Tool.Driver.FullDescription.Text = &txt
+}
+
+func SetRunToolFullDescriptionMarkdown(markdown string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMarkdownMultiformatMessageString(markdown)
+	}
+	run.Tool.Driver.FullDescription.Markdown = &markdown
+}
+
+func GetRunToolFullDescriptionText(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Text != nil {
+		return *run.Tool.Driver.FullDescription.Text
+	}
+	return ""
+}
+
+func GetRunToolFullDescriptionMarkdown(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Markdown != nil {
+		return *run.Tool.Driver.FullDescription.Markdown
+	}
+	return ""
+}
+
+func GetRunToolName(run *sarif.Run) string {
+	if run.Tool.Driver != nil {
+		return run.Tool.Driver.Name
+	}
+	return ""
 }
 
 func GetResultsLocationCount(runs ...*sarif.Run) (count int) {
@@ -110,7 +200,10 @@ func GetRunsByWorkingDirectory(workingDirectory string, runs ...*sarif.Run) (fil
 		}
 	}
 	return
+}
 
+func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
+	result.Message.Markdown = &markdown
 }
 
 func GetResultMsgText(result *sarif.Result) string {
@@ -125,6 +218,34 @@ func GetResultLevel(result *sarif.Result) string {
 		return *result.Level
 	}
 	return ""
+}
+
+func GetResultRuleId(result *sarif.Result) string {
+	if result.RuleID != nil {
+		return *result.RuleID
+	}
+	return ""
+}
+
+func IsFingerprintsExists(result *sarif.Result) bool {
+	return len(result.Fingerprints) > 0
+}
+
+func SetResultFingerprint(algorithm, value string, result *sarif.Result) {
+	if result.Fingerprints == nil {
+		result.Fingerprints = make(map[string]interface{})
+	}
+	result.Fingerprints[algorithm] = value
+}
+
+func GetResultLocationSnippets(result *sarif.Result) []string {
+	var snippets []string
+	for _, location := range result.Locations {
+		if snippet := GetLocationSnippet(location); snippet != "" {
+			snippets = append(snippets, snippet)
+		}
+	}
+	return snippets
 }
 
 func GetLocationSnippet(location *sarif.Location) string {
@@ -146,6 +267,31 @@ func GetLocationFileName(location *sarif.Location) string {
 		return *location.PhysicalLocation.ArtifactLocation.URI
 	}
 	return ""
+}
+
+func GetResultFileLocations(result *sarif.Result) []string {
+	var locations []string
+	for _, location := range result.Locations {
+		locations = append(locations, GetLocationFileName(location))
+	}
+	return locations
+}
+
+func ConvertRunsPathsToRelative(runs ...*sarif.Run) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			for _, location := range result.Locations {
+				SetLocationFileName(location, GetRelativeLocationFileName(location, run.Invocations))
+			}
+			for _, flows := range result.CodeFlows {
+				for _, flow := range flows.ThreadFlows {
+					for _, location := range flow.Locations {
+						SetLocationFileName(location.Location, GetRelativeLocationFileName(location.Location, run.Invocations))
+					}
+				}
+			}
+		}
+	}
 }
 
 func GetRelativeLocationFileName(location *sarif.Location, invocations []*sarif.Invocation) string {
@@ -227,9 +373,24 @@ func IsResultKindNotPass(result *sarif.Result) bool {
 	return !(result.Kind != nil && *result.Kind == "pass")
 }
 
-func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
+func GetRuleFullDescriptionText(rule *sarif.ReportingDescriptor) string {
 	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
+	}
+	return ""
+}
+
+func SetRuleShortDescriptionText(value string, rule *sarif.ReportingDescriptor) {
+	if rule.ShortDescription == nil {
+		rule.ShortDescription = sarif.NewMultiformatMessageString(value)
+		return
+	}
+	rule.ShortDescription.Text = &value
+}
+
+func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {
+	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+		return *rule.ShortDescription.Text
 	}
 	return ""
 }

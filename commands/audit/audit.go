@@ -140,7 +140,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
-		SetScanType(services.Dependency).
 		SetSubScansPreformed(auditCmd.ScansToPerform()).
 		PrintScanResults(); err != nil {
 		return
@@ -170,7 +169,7 @@ func (auditCmd *AuditCommand) HasViolationContext() bool {
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	// Initialize Results struct
-	results = utils.NewAuditResults()
+	results = utils.NewAuditResults(utils.SourceCode)
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return

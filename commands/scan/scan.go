@@ -194,7 +194,10 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(scanResults *utils.Results) error {
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
+		if err = utils.RecordSarifOutput(scanResults); err != nil {
+			return
+		}
 		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(
 			scanResults,
 			scanCmd.serverDetails,
@@ -204,7 +207,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recordResFunc func(scanResults *utils.Results) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -220,7 +223,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		return err
 	}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := utils.NewAuditResults(cmdType)
 	scanResults.XrayVersion = xrayVersion
 	if scanCmd.analyticsMetricsService != nil {
 		scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
@@ -323,13 +326,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(scanResults.IsMultipleProject()).
-		SetScanType(services.Binary).
 		PrintScanResults(); err != nil {
 		return
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if err = recordResFunc(scanResults); err != nil {
