@@ -338,7 +338,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 		return
 	}
 	// Create the markdown content
-	markdown += "\n\n#### Curation Audit\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|"
+	markdown += "\n\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|"
 	for i := range curationData {
 		for _, summary := range curationData[i].Scans {
 			status := getStatusIcon(false)
@@ -348,7 +348,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 			markdown += fmt.Sprintf("\n| %s | %s | %s |", status, summary.Target, PreFormat.Format(getCurationDetailsString(summary)))
 		}
 	}
-	markdown = DetailsOpenWithSummary.Format("🔒 Security Summary", markdown)
+	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 Curation Audit", markdown)
 	return
 }
 
