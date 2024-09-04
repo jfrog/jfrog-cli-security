@@ -149,7 +149,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	}}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := utils.NewAuditResults(utils.Build)
 	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = []*utils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
@@ -160,7 +160,6 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
-		SetScanType(services.Binary).
 		SetExtraMessages(nil)
 
 	if bsc.outputFormat != outputFormat.Table {

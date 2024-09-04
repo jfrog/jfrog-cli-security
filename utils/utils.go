@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -38,12 +40,46 @@ func (v ViolationIssueType) String() string {
 
 type SubScanType string
 
+const (
+	SourceCode  CommandType = "source_code"
+	Binary      CommandType = "binary"
+	DockerImage CommandType = "docker_image"
+	Build       CommandType = "build"
+	Curation    CommandType = "curation"
+	SBOM        CommandType = "SBOM"
+)
+
+type CommandType string
+
 func (s SubScanType) String() string {
 	return string(s)
 }
 
+func (s CommandType) IsTargetBinary() bool {
+	return s == Binary || s == DockerImage
+}
+
 func GetAllSupportedScans() []SubScanType {
 	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
+}
+
+func Md5Hash(values ...string) (string, error) {
+	return toHash(crypto.MD5, values...)
+}
+
+func Sha1Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA1, values...)
+}
+
+func toHash(hash crypto.Hash, values ...string) (string, error) {
+	h := hash.New()
+	for _, ob := range values {
+		_, err := fmt.Fprint(h, ob)
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // map[string]string to []string (key=value format)
