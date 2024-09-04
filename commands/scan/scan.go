@@ -161,6 +161,10 @@ func (scanCmd *ScanCommand) SetAnalyticsMetricsService(analyticsMetricsService *
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) hasViolationContext() bool {
+	return len(scanCmd.watches) > 0 || scanCmd.projectKey != ""
+}
+
 func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 	var indexerResults xrayUtils.BinaryGraphNode
 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
@@ -195,13 +199,9 @@ func (scanCmd *ScanCommand) Run() (err error) {
 			scanResults,
 			scanCmd.serverDetails,
 			scanCmd.includeVulnerabilities,
-			hasViolationContext(scanCmd.watches, scanCmd.projectKey),
+			scanCmd.hasViolationContext(),
 		))
 	})
-}
-
-func hasViolationContext(watches []string, projectKey string) bool {
-	return len(watches) > 0 || projectKey != ""
 }
 
 func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *utils.Results) error) (err error) {
@@ -318,6 +318,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 
 	if err = utils.NewResultsWriter(scanResults).
 		SetOutputFormat(scanCmd.outputFormat).
+		SetHasViolationContext(scanCmd.hasViolationContext()).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
@@ -451,7 +452,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
-					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, &depsList, scanCmd.serverDetails, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans())
+					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, &depsList, scanCmd.serverDetails, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans(), nil)
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})

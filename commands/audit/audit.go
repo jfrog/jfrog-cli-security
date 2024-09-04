@@ -134,6 +134,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 	if err = utils.NewResultsWriter(auditResults).
 		SetIsMultipleRootProject(auditResults.IsMultipleProject()).
+		SetHasViolationContext(auditCmd.HasViolationContext()).
 		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 		SetIncludeLicenses(auditCmd.IncludeLicenses).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -158,6 +159,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 func (auditCmd *AuditCommand) CommandName() string {
 	return "generic_audit"
+}
+
+func (auditCmd *AuditCommand) HasViolationContext() bool {
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
 }
 
 // Runs an audit scan based on the provided auditParams.
@@ -252,7 +257,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
-	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform()); err != nil {
+	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return
