@@ -54,9 +54,9 @@ type ResultsWriter struct {
 	simpleJsonError []formats.SimpleJsonError
 	// Format  The output format.
 	format format.OutputFormat
-	// IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
+	// IncludeVulnerabilities  If true, include all vulnerabilities as part of the output.
 	includeVulnerabilities bool
-	// 
+	// If true, include violations as part of the output.
 	hasViolationContext bool
 	// IncludeLicenses  If true, also include license violations as part of the output.
 	includeLicenses bool
@@ -79,11 +79,6 @@ func GetScaScanFileName(r *Results) string {
 		return r.ScaResults[0].Target
 	}
 	return ""
-}
-
-func (rw *ResultsWriter) SetHasViolationContext(hasViolationContext bool) *ResultsWriter {
-	rw.hasViolationContext = hasViolationContext
-	return rw
 }
 
 func (rw *ResultsWriter) SetHasViolationContext(hasViolationContext bool) *ResultsWriter {
@@ -162,14 +157,14 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 	}
 	log.Output()
-	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, ScaScan, rw.results.ResultType) {
 		if rw.hasViolationContext {
-			if err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType); err != nil {
+			if err = PrintViolationsTable(violations, rw.results, rw.isMultipleRoots, rw.printExtended); err != nil {
 				return
 			}
 		}
 		if rw.includeVulnerabilities {
-			if err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.scanType); err != nil {
+			if err = PrintVulnerabilitiesTable(vulnerabilities, rw.results, rw.isMultipleRoots, rw.printExtended, rw.results.ResultType); err != nil {
 				return
 			}
 		}
