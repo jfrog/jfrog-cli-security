@@ -692,13 +692,11 @@ func getWorkflowFileLocationIfExists() (location string) {
 	if files, err := fileutils.ListFiles(workflowsDir, false); err == nil && len(files) > 0 {
 		for _, file := range files {
 			if strings.Contains(file, workflowName) {
-				log.Debug(fmt.Sprintf("Found workflow file %s at %s, replacing the location", workflowName, file))
 				return strings.TrimPrefix(file, currentWd)
 			}
 		}
 		for _, file := range files {
 			if content, err := fileutils.ReadFile(file); err == nil && strings.Contains(string(content), workflowName) {
-				log.Debug(fmt.Sprintf("Found workflow name %s in %s, replacing the location", workflowName, file))
 				return strings.TrimPrefix(file, currentWd)
 			}
 		}
