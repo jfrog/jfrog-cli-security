@@ -113,7 +113,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			scanResults,
 			dsc.ScanCommand.serverDetails,
 			dsc.ScanCommand.includeVulnerabilities,
-			hasViolationContext(dsc.ScanCommand.watches, dsc.ScanCommand.projectKey),
+			dsc.ScanCommand.hasViolationContext(),
 			dsc.imageTag,
 		))
 	})

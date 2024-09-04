@@ -134,6 +134,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 	if err = utils.NewResultsWriter(auditResults).
 		SetIsMultipleRootProject(auditResults.IsMultipleProject()).
+		SetHasViolationContext(auditCmd.HasViolationContext()).
 		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 		SetIncludeLicenses(auditCmd.IncludeLicenses).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -157,6 +158,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 func (auditCmd *AuditCommand) CommandName() string {
 	return "generic_audit"
+}
+
+func (auditCmd *AuditCommand) HasViolationContext() bool {
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
 }
 
 // Runs an audit scan based on the provided auditParams.
