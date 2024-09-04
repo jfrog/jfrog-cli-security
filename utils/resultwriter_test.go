@@ -245,7 +245,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -253,7 +253,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -261,7 +261,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-2",
 			IssueId: "XRAY-2",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -291,7 +291,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -299,7 +299,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -308,7 +308,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 		{
 			LicenseKey: "license-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 				ImpactedDependencyName: "component-B",
 			},
 		},

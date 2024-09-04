@@ -3,7 +3,9 @@ package xsc
 import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xsc"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -21,5 +23,30 @@ func ReportError(serverDetails *config.ServerDetails, errorToReport error, sourc
 		Source:    source,
 		Message:   errorToReport.Error(),
 	}
-	return SendXscLogMessageIfEnabled(errorLog, xscManager)
+	return sendXscLogMessageIfEnabled(errorLog, xscManager)
+}
+
+func sendXscLogMessageIfEnabled(errorLog *services.ExternalErrorLog, xscManager *xsc.XscServicesManager) error {
+	if !IsReportLogErrorEventPossible(xscManager) {
+		return nil
+	}
+	return xscManager.SendXscLogErrorRequest(errorLog)
+}
+
+// Determines if reporting the error is feasible.
+func IsReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
+	xscVersion, err := xscManager.GetVersion()
+	if err != nil {
+		log.Debug(fmt.Sprintf("failed to check availability of Xsc service:%s\nReporting to JFrog analytics is skipped...", err.Error()))
+		return false
+	}
+	if xscVersion == "" {
+		log.Debug("Xsc service is not available. Reporting to JFrog analytics is skipped...")
+		return false
+	}
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, minXscVersionForErrorReport); err != nil {
+		log.Debug(err.Error())
+		return false
+	}
+	return true
 }
