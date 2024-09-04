@@ -21,27 +21,34 @@ func CombineReports(reports ...*sarif.Report) (combined *sarif.Report, err error
 	if combined, err = NewReport(); err != nil {
 		return
 	}
-	runByTools := map[string]*sarif.Run{}
+	// TODO: maybe just add runs?
 	for _, report := range reports {
 		for _, run := range report.Runs {
-			toolName := GetRunToolName(run)
-			if _, ok := runByTools[toolName]; !ok {
-				runByTools[toolName] = run
-				continue
-			}
-			for _, rule := range GetRunRules(run) {
-				actualRule := runByTools[toolName].AddRule(rule.ID)
-				for _, result := range GetRuleResults(run, rule.ID) {
-					// Update result ruleId to the actual rule ID in the combined report and add the result to the combined report
-					result.RuleID = &actualRule.ID
-					runByTools[toolName].AddResult(result)
-				}
-			}
+			combined.AddRun(run)
 		}
 	}
-	for _, run := range runByTools {
-		combined.AddRun(run)
-	}
+
+	// runByTools := map[string]*sarif.Run{}
+	// for _, report := range reports {
+	// 	for _, run := range report.Runs {
+	// 		toolName := GetRunToolName(run)
+	// 		if _, ok := runByTools[toolName]; !ok {
+	// 			runByTools[toolName] = run
+	// 			continue
+	// 		}
+	// 		for _, rule := range GetRunRules(run) {
+	// 			actualRule := runByTools[toolName].AddRule(rule.ID)
+	// 			for _, result := range GetRuleResults(run, rule.ID) {
+	// 				// Update result ruleId to the actual rule ID in the combined report and add the result to the combined report
+	// 				result.RuleID = &actualRule.ID
+	// 				runByTools[toolName].AddResult(result)
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// for _, run := range runByTools {
+	// 	combined.AddRun(run)
+	// }
 	return
 }
 
