@@ -2,6 +2,7 @@ package audit
 
 import (
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -13,13 +14,8 @@ import (
 	"testing"
 )
 
-const minXrayVersionForJas = utils.EntitlementsMinVersion
-
-// This test checks correct utilization of a Config Profile in Audit scans.
-// Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
-// Currently, the only supported scanners are Secrets and Sast, therefore if a config profile is utilized - all other scanners are disabled.
+// Note: Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
 func TestAuditWithConfigProfile(t *testing.T) {
-	// Create test cases: only secrets, only sast, both
 	testcases := []struct {
 		name                  string
 		configProfile         services.ConfigProfile
@@ -96,12 +92,12 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := utils.XrayServer(t, minXrayVersionForJas)
+			mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
 			defer mockServer.Close()
 
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
-				SetOutputFormat("table").
+				SetOutputFormat(format.Table).
 				SetUseJas(true)
 
 			configProfile := testcase.configProfile
@@ -124,11 +120,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 			assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
 
-			/* TODO needed?
-			securityTestUtils.CreateJfrogHomeConfig(t, true)
-			defer securityTestUtils.CleanTestsHomeEnv()
-			*/
-
 			baseWd, err := os.Getwd()
 			assert.NoError(t, err)
 			chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
@@ -137,6 +128,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			auditResults, err := RunAudit(auditParams)
 			assert.NoError(t, err)
 
+			// Currently, the only supported scanners are Secrets and Sast, therefore if a config profile is utilized - all other scanners are disabled.
 			if testcase.expectedSastIssues > 0 {
 				assert.NotNil(t, auditResults.ExtendedScanResults.SastScanResults)
 				assert.Equal(t, testcase.expectedSastIssues, len(auditResults.ExtendedScanResults.SastScanResults[0].Results))

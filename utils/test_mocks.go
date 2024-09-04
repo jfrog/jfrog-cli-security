@@ -17,6 +17,7 @@ const (
 	TestScaScanId         = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
 	TestMoreInfoUrl       = "https://www.jfrog.com"
 	TestConfigProfileName = "default-profile"
+	versionApiUrl         = "/%s/api/v1/system/version"
 )
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
@@ -43,7 +44,7 @@ func CreateXrayRestsMockServer(testHandler restsTestHandler) (*httptest.Server, 
 
 func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == "/xsc/api/v1/system/version" {
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xsc") {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
 			if !assert.NoError(t, err) {
 				return
@@ -77,7 +78,7 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 
 func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == "/xray/api/v1/system/version" {
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xray") {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, xrayVersion)))
 			if !assert.NoError(t, err) {
 				return
@@ -95,7 +96,7 @@ func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.Ser
 		if r.RequestURI == "/xray/api/v1/scan/graph" {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(`{"scan_id" : "657692d5-87d1-463f-6654-5a9529d23339"}`))
+				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
 				if !assert.NoError(t, err) {
 					return
 				}
