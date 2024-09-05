@@ -37,6 +37,17 @@ func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
 	}
 }
 
+func NewPhysicalLocationWithRegion(physicalPath string, startRow, endRow, startCol, endCol int) *sarif.PhysicalLocation {
+	location := NewPhysicalLocation(physicalPath)
+	location.Region = &sarif.Region{
+		StartLine:   &startRow,
+		EndLine:     &endRow,
+		StartColumn: &startCol,
+		EndColumn:   &endCol,
+	}
+	return location
+}
+
 func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
 	return &sarif.LogicalLocation{
 		Name: &name,
@@ -109,10 +120,6 @@ func GetLogicalLocation(kind string, location *sarif.Location) *sarif.LogicalLoc
 	return nil
 }
 
-func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
-	return GetRuleProperty("undetermined_reason", rule)
-}
-
 func GetLocationId(location *sarif.Location) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
 		GetLocationFileName(location),
@@ -129,6 +136,41 @@ func SetRunToolName(toolName string, run *sarif.Run) {
 		run.Tool.Driver = &sarif.ToolComponent{}
 	}
 	run.Tool.Driver.Name = toolName
+}
+
+func SetRunToolFullDescriptionText(txt string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMultiformatMessageString(txt)
+		return
+	}
+	run.Tool.Driver.FullDescription.Text = &txt
+}
+
+func SetRunToolFullDescriptionMarkdown(markdown string, run *sarif.Run) {
+	if run.Tool.Driver == nil {
+		run.Tool.Driver = &sarif.ToolComponent{}
+	}
+	if run.Tool.Driver.FullDescription == nil {
+		run.Tool.Driver.FullDescription = sarif.NewMarkdownMultiformatMessageString(markdown)
+	}
+	run.Tool.Driver.FullDescription.Markdown = &markdown
+}
+
+func GetRunToolFullDescriptionText(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Text != nil {
+		return *run.Tool.Driver.FullDescription.Text
+	}
+	return ""
+}
+
+func GetRunToolFullDescriptionMarkdown(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Markdown != nil {
+		return *run.Tool.Driver.FullDescription.Markdown
+	}
+	return ""
 }
 
 func GetRunToolName(run *sarif.Run) string {
