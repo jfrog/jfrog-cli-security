@@ -134,12 +134,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 	if err = utils.NewResultsWriter(auditResults).
 		SetIsMultipleRootProject(auditResults.IsMultipleProject()).
+		SetHasViolationContext(auditCmd.HasViolationContext()).
 		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 		SetIncludeLicenses(auditCmd.IncludeLicenses).
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
-		SetScanType(services.Dependency).
 		SetSubScansPreformed(auditCmd.ScansToPerform()).
 		PrintScanResults(); err != nil {
 		return
@@ -160,12 +160,16 @@ func (auditCmd *AuditCommand) CommandName() string {
 	return "generic_audit"
 }
 
+func (auditCmd *AuditCommand) HasViolationContext() bool {
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
+}
+
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	// Initialize Results struct
-	results = utils.NewAuditResults()
+	results = utils.NewAuditResults(utils.SourceCode)
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		return
@@ -252,7 +256,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
-	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform()); err != nil {
+	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return

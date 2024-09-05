@@ -10,6 +10,7 @@ import (
 )
 
 type Results struct {
+	ResultType  CommandType
 	ScaResults  []*ScaScanResult
 	XrayVersion string
 	ScansErr    error
@@ -19,8 +20,8 @@ type Results struct {
 	MultiScanId string
 }
 
-func NewAuditResults() *Results {
-	return &Results{ExtendedScanResults: &ExtendedScanResults{}}
+func NewAuditResults(resultType CommandType) *Results {
+	return &Results{ResultType: resultType, ExtendedScanResults: &ExtendedScanResults{}}
 }
 
 func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
@@ -92,6 +93,7 @@ func (r *Results) CountScanResultsFindings(includeVulnerabilities, includeViolat
 type ScaScanResult struct {
 	// Could be working directory (audit), file path (binary scan) or build name+number (build scan)
 	Target                string                  `json:"Target"`
+	Name                  string                  `json:"Name,omitempty"`
 	Technology            techutils.Technology    `json:"Technology,omitempty"`
 	XrayResults           []services.ScanResponse `json:"XrayResults,omitempty"`
 	Descriptors           []string                `json:"Descriptors,omitempty"`

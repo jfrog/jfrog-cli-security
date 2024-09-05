@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,6 +12,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -242,7 +245,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -250,7 +253,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -258,7 +261,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-2",
 			IssueId: "XRAY-2",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -288,7 +291,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-A",
 			},
 		},
@@ -296,7 +299,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 			Summary: "summary-1",
 			IssueId: "XRAY-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "High"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -305,7 +308,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 		{
 			LicenseKey: "license-1",
 			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-				SeverityDetails:        formats.SeverityDetails{Severity: "Low"},
+				SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 				ImpactedDependencyName: "component-B",
 			},
 		},
@@ -391,7 +394,7 @@ func TestConvertXrayScanToSimpleJson(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			results := NewAuditResults()
+			results := NewAuditResults(SourceCode)
 			scaScanResult := ScaScanResult{XrayResults: []services.ScanResponse{tc.result}}
 			results.ScaResults = append(results.ScaResults, &scaScanResult)
 			output, err := ConvertXrayScanToSimpleJson(results, false, tc.includeLicenses, true, tc.allowedLicenses)
@@ -436,7 +439,7 @@ func TestJSONMarshall(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			printedString, err := JSONMarshal(tc.resultString)
+			printedString, err := JSONMarshalNotEscaped(tc.resultString)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, string(printedString))
 		})
@@ -569,6 +572,273 @@ func TestGetSummary(t *testing.T) {
 				}
 			}
 			assert.Equal(t, testCase.expected, summary)
+		})
+	}
+}
+
+func TestGetLayerContentFromComponentId(t *testing.T) {
+	testCases := []struct {
+		name              string
+		path              string
+		expectedAlgorithm string
+		expectedLayerHash string
+	}{
+		{
+			name:              "Valid path",
+			path:              "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+			expectedAlgorithm: "sha256",
+			expectedLayerHash: "cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e",
+		},
+		{
+			name: "Invalid path - not hex",
+			path: "sha256__NOT_HEX.tar",
+		},
+		{
+			name: "Invalid path - no algorithm",
+			path: "_cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+		},
+		{
+			name: "Invalid path - no suffix",
+			path: "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			algorithm, layerHash := getLayerContentFromComponentId(tc.path)
+			assert.Equal(t, tc.expectedAlgorithm, algorithm)
+			assert.Equal(t, tc.expectedLayerHash, layerHash)
+		})
+	}
+}
+
+func preparePatchTestEnv(t *testing.T) (string, string, func()) {
+	currentWd, err := os.Getwd()
+	assert.NoError(t, err)
+	wd, cleanUpTempDir := tests.CreateTempDirWithCallbackAndAssert(t)
+	cleanUpWd := clientTests.ChangeDirWithCallback(t, currentWd, wd)
+	dockerfileDir := filepath.Join(wd, "DockerfileDir")
+	err = fileutils.CreateDirIfNotExist(dockerfileDir)
+	// Prepare env content
+	assert.NoError(t, err)
+	createDummyDockerfile(t, dockerfileDir)
+	createDummyGithubWorkflow(t, dockerfileDir)
+	createDummyGithubWorkflow(t, wd)
+	return wd, dockerfileDir, func() {
+		cleanUpWd()
+		cleanUpTempDir()
+	}
+}
+
+func createDummyGithubWorkflow(t *testing.T, baseDir string) {
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(baseDir, GithubBaseWorkflowDir)))
+	assert.NoError(t, os.WriteFile(filepath.Join(baseDir, GithubBaseWorkflowDir, "workflowFile.yml"), []byte("workflow name"), 0644))
+}
+
+func createDummyDockerfile(t *testing.T, baseDir string) {
+	assert.NoError(t, os.WriteFile(filepath.Join(baseDir, "Dockerfile"), []byte("Dockerfile data"), 0644))
+}
+
+func TestPatchRunsToPassIngestionRules(t *testing.T) {
+	wd, dockerfileDir, cleanUp := preparePatchTestEnv(t)
+	defer cleanUp()
+
+	testCases := []struct {
+		name            string
+		cmdResult       *Results
+		subScan         SubScanType
+		withEnvVars     bool
+		withDockerfile  bool
+		input           []*sarif.Run
+		expectedResults []*sarif.Run
+	}{
+		{
+			name:            "No runs",
+			cmdResult:       &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:         SecretsScan,
+			input:           []*sarif.Run{},
+			expectedResults: []*sarif.Run{},
+		},
+		{
+			name:      "Build scan - SCA",
+			cmdResult: &Results{ResultType: Build, ScaResults: []*ScaScanResult{{Name: "buildName (buildNumber)"}}},
+			subScan:   ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
+			},
+		},
+		{
+			name:      "Docker image scan - SCA",
+			cmdResult: &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:   ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg"))).
+					WithInvocations([]*sarif.Invocation{
+						sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+					},
+					),
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable",
+					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
+					),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+				}),
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
+					),
+				),
+			},
+		},
+		{
+			name:        "Docker image scan - with env vars",
+			cmdResult:   &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:     ScaScan,
+			withEnvVars: true,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
+					// No location, should be removed in the output
+					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "eda26ae830c578197aeda65a82d7f093",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
+							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
+						),
+					),
+				),
+			},
+		},
+		{
+			name:           "Docker image scan - with Dockerfile in wd",
+			cmdResult:      &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:        ScaScan,
+			withEnvVars:    true,
+			withDockerfile: true,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(dockerfileDir,
+					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(dockerfileDir,
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "8cbd7268a4d20f2358ba2667ebd18956",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
+							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation("Dockerfile")),
+						),
+					),
+				),
+			},
+		},
+		{
+			name:      "Docker image scan - Secrets",
+			cmdResult: &Results{ResultType: DockerImage, ScaResults: []*ScaScanResult{{Name: "dockerImage:imageVersion"}}},
+			subScan:   SecretsScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunNameWithResults("some tool name",
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "unpacked", "filesystem", "blobs", "sha1", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"))),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+				}),
+			},
+			expectedResults: []*sarif.Run{
+				{
+					Tool: sarif.Tool{
+						Driver: sarifutils.CreateDummyDriver(patchedBinarySecretScannerToolName, "", &sarif.ReportingDescriptor{
+							ID:               "rule",
+							ShortDescription: sarif.NewMultiformatMessageString("[Secret in Binary found] "),
+						}),
+					},
+					Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))},
+					Results: []*sarif.Result{
+						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
+							sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
+						),
+					},
+				},
+			},
+		},
+		{
+			name:      "Binary scan - SCA",
+			cmdResult: &Results{ResultType: Binary, ScaResults: []*ScaScanResult{{Target: filepath.Join(wd, "dir", "binary")}}},
+			subScan:   ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "binary"))),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultWithFingerprint("", "", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
+				),
+			},
+		},
+		{
+			name:      "Audit scan - SCA",
+			cmdResult: &Results{ResultType: SourceCode, ScaResults: []*ScaScanResult{{Target: wd}}},
+			subScan:   ScaScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(filepath.Join(wd, "Package-Descriptor")),
+					// No location, should be removed in the output
+					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath("Package-Descriptor"),
+				),
+			},
+		},
+		{
+			name:      "Audit scan - Secrets",
+			cmdResult: &Results{ResultType: SourceCode, ScaResults: []*ScaScanResult{{Target: wd}}},
+			subScan:   SecretsScan,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+					// No location, should be removed in the output
+					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
+				),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.withEnvVars {
+				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflow name")
+				defer cleanFileEnv()
+				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "123")
+				defer cleanRunNumEnv()
+			} else {
+				// Since the the env are provided by the
+				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "")
+				defer cleanFileEnv()
+				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "")
+				defer cleanRunNumEnv()
+			}
+			if tc.withDockerfile {
+				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
+				defer revertWd()
+			}
+			patchRunsToPassIngestionRules(tc.subScan, tc.cmdResult, tc.input...)
+			assert.ElementsMatch(t, tc.expectedResults, tc.input)
 		})
 	}
 }

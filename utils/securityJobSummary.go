@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,18 +15,16 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/resources"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
 const (
-	Build    SecuritySummarySection = "Build-info Scans"
-	Binary   SecuritySummarySection = "Artifact Scans"
-	Modules  SecuritySummarySection = "Source Code Scans"
-	Docker   SecuritySummarySection = "Docker Image Scans"
-	Curation SecuritySummarySection = "Curation Audit"
-
 	PreFormat              HtmlTag = "<pre>%s</pre>"
 	ImgTag                 HtmlTag = "<img alt=\"%s\" src=%s>"
 	CenterContent          HtmlTag = "<div style=\"display: flex; align-items: center; text-align: center\">%s</div>"
@@ -33,21 +32,17 @@ const (
 	Link                   HtmlTag = "<a href=\"%s\">%s</a>"
 	NewLine                HtmlTag = "<br>%s"
 	DetailsWithSummary     HtmlTag = "<details><summary>%s</summary>%s</details>"
-	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s</details>"
-	RedColor               HtmlTag = "<span style=\"color:red\">%s</span>"
-	OrangeColor            HtmlTag = "<span style=\"color:orange\">%s</span>"
-	GreenColor             HtmlTag = "<span style=\"color:green\">%s</span>"
+	DetailsOpenWithSummary HtmlTag = "<details open><summary><h3>%s</h3></summary>%s\n</details>"
 	TabTag                 HtmlTag = "&Tab;%s"
 
-	ApplicableStatusCount    SeverityStatus = "%d Applicable"
-	NotApplicableStatusCount SeverityStatus = "%d Not Applicable"
+	ApplicableStatusCount    SeverityDisplayStatus = "%d Applicable"
+	NotApplicableStatusCount SeverityDisplayStatus = "%d Not Applicable"
 
 	maxWatchesInLine = 4
 )
 
-type SecuritySummarySection string
 type HtmlTag string
-type SeverityStatus string
+type SeverityDisplayStatus string
 
 func (c HtmlTag) Format(args ...any) string {
 	return fmt.Sprintf(string(c), args...)
@@ -57,7 +52,7 @@ func (c HtmlTag) FormatInt(value int) string {
 	return fmt.Sprintf(string(c), fmt.Sprintf("%d", value))
 }
 
-func (s SeverityStatus) Format(count int) string {
+func (s SeverityDisplayStatus) Format(count int) string {
 	return fmt.Sprintf(string(s), count)
 }
 
@@ -71,38 +66,38 @@ func getStatusIcon(failed bool) string {
 
 type SecurityJobSummary struct{}
 
-func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
-	summary.ResultType = Curation
-	summary.Summary = cmdResult
-	return
-}
-
-func newResultSummary(cmdResults *Results, section SecuritySummarySection, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
-	summary.ResultType = section
+func newResultSummary(cmdResults *Results, cmdType CommandType, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
+	summary.ResultType = cmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
-	summary.Summary = ToSummary(cmdResults, vulnerabilitiesReqested, violationsReqested)
+	summary.Summary = ToSummary(cmdResults, vulnerabilitiesRequested, violationsRequested)
 	return
 }
 
-func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesReqested, violationsReqested)
+func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, violationsRequested)
 	summary.Args.BuildName = buildName
 	summary.Args.BuildNumbers = []string{buildNumber}
 	return
 }
 
-func NewDockerScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool, dockerImage string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, Docker, serverDetails, vulnerabilitiesReqested, violationsReqested)
+func NewDockerScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, dockerImage string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, DockerImage, serverDetails, vulnerabilitiesRequested, violationsRequested)
 	summary.Args.DockerImage = dockerImage
 	return
 }
 
-func NewBinaryScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
-	return newResultSummary(cmdResults, Binary, serverDetails, vulnerabilitiesReqested, violationsReqested)
+func NewBinaryScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
+	return newResultSummary(cmdResults, Binary, serverDetails, vulnerabilitiesRequested, violationsRequested)
 }
 
-func NewAuditScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesReqested, violationsReqested bool) (summary ScanCommandResultSummary) {
-	return newResultSummary(cmdResults, Modules, serverDetails, vulnerabilitiesReqested, violationsReqested)
+func NewAuditScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
+	return newResultSummary(cmdResults, SourceCode, serverDetails, vulnerabilitiesRequested, violationsRequested)
+}
+
+func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
+	summary.ResultType = Curation
+	summary.Summary = cmdResult
+	return
 }
 
 type ResultSummaryArgs struct {
@@ -133,13 +128,18 @@ func (rsa ResultSummaryArgs) ToArgs(index commandsummary.Index) (args []string) 
 		args = append(args, rsa.BuildName)
 		args = append(args, rsa.BuildNumbers...)
 	} else if index == commandsummary.DockerScan {
-		args = append(args, rsa.DockerImage)
+		image := rsa.DockerImage
+		// if user did not provide image tag, add latest
+		if !strings.Contains(image, ":") {
+			image += ":latest"
+		}
+		args = append(args, image)
 	}
 	return
 }
 
 type ScanCommandResultSummary struct {
-	ResultType SecuritySummarySection `json:"resultType"`
+	ResultType CommandType            `json:"resultType"`
 	Args       *ResultSummaryArgs     `json:"args,omitempty"`
 	Summary    formats.ResultsSummary `json:"summary"`
 }
@@ -149,12 +149,16 @@ func NewSecurityJobSummary() (js *commandsummary.CommandSummary, err error) {
 	return commandsummary.New(&SecurityJobSummary{}, "security")
 }
 
-// Record the security command outputs
-func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) {
+func getRecordManager() (manager *commandsummary.CommandSummary, err error) {
 	if !commandsummary.ShouldRecordSummary() {
 		return
 	}
-	manager, err := NewSecurityJobSummary()
+	return NewSecurityJobSummary()
+}
+
+// Record the security command outputs
+func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) {
+	manager, err := getRecordManager()
 	if err != nil || manager == nil {
 		return
 	}
@@ -163,10 +167,62 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 		return
 	}
 	updateSummaryNamesToRelativePath(&content.Summary, wd)
-	if index := getDataIndexFromSection(content.ResultType); index != "" {
+	if index := getDataIndexFromCommandType(content.ResultType); index != "" {
 		return recordIndexData(manager, content, index)
 	}
 	return manager.Record(content)
+}
+
+func RecordSarifOutput(cmdResults *Results) (err error) {
+	manager, err := getRecordManager()
+	if err != nil || manager == nil {
+		return
+	}
+	extended := true
+	if !extended && !commandsummary.StaticMarkdownConfig.IsExtendedSummary() {
+		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
+		return
+	}
+	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil)
+	if err != nil {
+		return err
+	}
+	out, err := JSONMarshalNotEscaped(sarifReport)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	return manager.RecordWithIndex(out, commandsummary.SarifReport)
+}
+
+func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
+	if len(dataFilePaths) == 0 {
+		return
+	}
+	// Load the content of the files
+	reports := []*sarif.Report{}
+	for _, dataFilePath := range dataFilePaths {
+		if report, e := loadSarifReport(dataFilePath); e != nil {
+			err = errors.Join(err, e)
+		} else {
+			reports = append(reports, report)
+		}
+	}
+	if err != nil {
+		return
+	}
+	combined, err := sarifutils.CombineReports(reports...)
+	if err != nil {
+		return
+	}
+	return JSONMarshalNotEscaped(combined)
+}
+
+func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
+	fileData, err := os.ReadFile(dataFilePath)
+	if err != nil {
+		return
+	}
+	return sarif.FromBytes(fileData)
 }
 
 func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string) {
@@ -184,15 +240,15 @@ func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string
 	}
 }
 
-func getDataIndexFromSection(section SecuritySummarySection) commandsummary.Index {
-	switch section {
+func getDataIndexFromCommandType(cmdType CommandType) commandsummary.Index {
+	switch cmdType {
 	case Build:
 		return commandsummary.BuildScan
 	case Binary:
 		return commandsummary.BinariesScan
-	case Modules:
+	case SourceCode:
 		return commandsummary.BinariesScan
-	case Docker:
+	case DockerImage:
 		return commandsummary.DockerScan
 	}
 	// No index for the section
@@ -213,11 +269,11 @@ func recordIndexData(manager *commandsummary.CommandSummary, content ScanCommand
 	return
 }
 
-func newScanCommandResultSummary(resultType SecuritySummarySection, args *ResultSummaryArgs, scans ...formats.ScanSummary) ScanCommandResultSummary {
+func newScanCommandResultSummary(resultType CommandType, args *ResultSummaryArgs, scans ...formats.ScanSummary) ScanCommandResultSummary {
 	return ScanCommandResultSummary{ResultType: resultType, Args: args, Summary: formats.ResultsSummary{Scans: scans}}
 }
 
-func loadContent(dataFiles []string, filterSections ...SecuritySummarySection) ([]formats.ResultsSummary, ResultSummaryArgs, error) {
+func loadContent(dataFiles []string, filterSections ...CommandType) ([]formats.ResultsSummary, ResultSummaryArgs, error) {
 	data := []formats.ResultsSummary{}
 	args := ResultSummaryArgs{}
 	for _, dataFilePath := range dataFiles {
@@ -282,7 +338,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 		return
 	}
 	// Create the markdown content
-	markdown += fmt.Sprintf("\n\n#### %s\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|", Curation)
+	markdown += "\n\n| Audit Summary | Project name | Audit Details |\n|--------|--------|---------|"
 	for i := range curationData {
 		for _, summary := range curationData[i].Scans {
 			status := getStatusIcon(false)
@@ -292,7 +348,7 @@ func GenerateSecuritySectionMarkdown(curationData []formats.ResultsSummary) (mar
 			markdown += fmt.Sprintf("\n| %s | %s | %s |", status, summary.Target, PreFormat.Format(getCurationDetailsString(summary)))
 		}
 	}
-	markdown = DetailsOpenWithSummary.Format("🔒 Security Summary", markdown)
+	markdown = "\n" + DetailsOpenWithSummary.Format("🔒 Curation Audit", markdown)
 	return
 }
 
@@ -327,7 +383,7 @@ func getCurationDetailsString(summary formats.ScanSummary) (content string) {
 	var blocked []blockedPackageByType
 	// Sort the blocked packages by name
 	for _, blockTypeValue := range summary.CuratedPackages.Blocked {
-		blocked = append(blocked, toBlockedPackgeByType(blockTypeValue))
+		blocked = append(blocked, toBlockedPackageByType(blockTypeValue))
 	}
 	sort.Slice(blocked, func(i, j int) bool {
 		return blocked[i].BlockedType > blocked[j].BlockedType
@@ -342,7 +398,7 @@ func getCurationDetailsString(summary formats.ScanSummary) (content string) {
 	return
 }
 
-func toBlockedPackgeByType(blockTypeValue formats.BlockedPackages) blockedPackageByType {
+func toBlockedPackageByType(blockTypeValue formats.BlockedPackages) blockedPackageByType {
 	return blockedPackageByType{BlockedType: formatPolicyAndCond(blockTypeValue.Policy, blockTypeValue.Condition), BlockedSummary: blockTypeValue.Packages}
 }
 
@@ -563,8 +619,8 @@ func getSeverityStatusesCountString(statusCounts map[string]int) string {
 	return generateSeverityStatusesCountString(getSeverityDisplayStatuses(statusCounts))
 }
 
-func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[SeverityStatus]int) {
-	displayData = map[SeverityStatus]int{}
+func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[SeverityDisplayStatus]int) {
+	displayData = map[SeverityDisplayStatus]int{}
 	for status, count := range statusCounts {
 		switch status {
 		case jasutils.Applicability.String():
@@ -576,7 +632,7 @@ func getSeverityDisplayStatuses(statusCounts map[string]int) (displayData map[Se
 	return displayData
 }
 
-func generateSeverityStatusesCountString(displayData map[SeverityStatus]int) string {
+func generateSeverityStatusesCountString(displayData map[SeverityDisplayStatus]int) string {
 	if len(displayData) == 0 {
 		return ""
 	}

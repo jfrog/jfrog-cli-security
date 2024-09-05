@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
@@ -19,6 +20,7 @@ type AuditParams struct {
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
+	configProfile               *clientservices.ConfigProfile
 }
 
 func NewAuditParams() *AuditParams {
@@ -89,6 +91,11 @@ func (params *AuditParams) SetThreads(threads int) *AuditParams {
 
 func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.CommonGraphScanParams) *AuditParams {
 	params.commonGraphScanParams = commonParams
+	return params
+}
+
+func (params *AuditParams) SetConfigProfile(configProfile *clientservices.ConfigProfile) *AuditParams {
+	params.configProfile = configProfile
 	return params
 }
 
