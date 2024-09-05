@@ -96,17 +96,24 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(func(scanResults *utils.Results) (err error) {
+	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *utils.Results) (err error) {
 		if scanResults == nil {
 			return
 		}
+		if scanResults.ScaResults != nil {
+			for _, result := range scanResults.ScaResults {
+				result.Name = dsc.imageTag
+			}
+		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
-
+		if err = utils.RecordSarifOutput(scanResults); err != nil {
+			return
+		}
 		return utils.RecordSecurityCommandSummary(utils.NewDockerScanSummary(
 			scanResults,
 			dsc.ScanCommand.serverDetails,
 			dsc.ScanCommand.includeVulnerabilities,
-			hasViolationContext(dsc.ScanCommand.watches, dsc.ScanCommand.projectKey),
+			dsc.ScanCommand.hasViolationContext(),
 			dsc.imageTag,
 		))
 	})

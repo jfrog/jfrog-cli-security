@@ -27,7 +27,7 @@ func TestPrintViolationsTable(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := PrintViolationsTable(test.violations, NewAuditResults(), false, true, services.Binary)
+		err := PrintViolationsTable(test.violations, NewAuditResults(Binary), false, true)
 		assert.NoError(t, err)
 		if CheckIfFailBuild([]services.ScanResponse{{Violations: test.violations}}) {
 			err = NewFailBuildError()
