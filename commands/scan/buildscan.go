@@ -149,17 +149,17 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	}}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := utils.NewAuditResults(utils.Build)
 	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = []*utils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
 	resultsPrinter := utils.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetHasViolationContext(bsc.hasViolationContext()).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
-		SetScanType(services.Binary).
 		SetExtraMessages(nil)
 
 	if bsc.outputFormat != outputFormat.Table {
@@ -187,7 +187,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		scanResults,
 		bsc.serverDetails,
 		bsc.includeVulnerabilities,
-		bsc.buildConfiguration.GetProject() != "",
+		bsc.hasViolationContext(),
 		params.BuildName, params.BuildNumber,
 	))
 	return
@@ -195,6 +195,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
+}
+
+func (bsc *BuildScanCommand) hasViolationContext() bool {
+	return bsc.buildConfiguration.GetProject() != ""
 }
 
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured

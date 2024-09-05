@@ -39,7 +39,7 @@ func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	scanner := &jas.JasScanner{}
 	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", scanResults.GetScaScannedTechnologies()...))
 	assert.NoError(t, err)
-	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan, utils.GetAllSupportedScans())
+	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan, utils.GetAllSupportedScans(), nil)
 	assert.NoError(t, err)
 }
 
