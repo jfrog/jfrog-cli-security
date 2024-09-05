@@ -37,17 +37,6 @@ func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
 	}
 }
 
-func NewPhysicalLocationWithRegion(physicalPath string, startRow, endRow, startCol, endCol int) *sarif.PhysicalLocation {
-	location := NewPhysicalLocation(physicalPath)
-	location.Region = &sarif.Region{
-		StartLine:   &startRow,
-		EndLine:     &endRow,
-		StartColumn: &startCol,
-		EndColumn:   &endCol,
-	}
-	return location
-}
-
 func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
 	return &sarif.LogicalLocation{
 		Name: &name,
