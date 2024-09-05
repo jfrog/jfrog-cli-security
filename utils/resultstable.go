@@ -937,7 +937,7 @@ func getCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			status := getApplicabilityStatusFromRule(rule)
-			applicability.UndeterminedReason = jasutils.GetRuleUndeterminedReason(rule)
+			applicability.UndeterminedReason = sarifutils.GetRuleUndeterminedReason(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}

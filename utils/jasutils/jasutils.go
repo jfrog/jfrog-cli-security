@@ -1,8 +1,6 @@
 package jasutils
 
 import (
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 	"strings"
 
 	"github.com/gookit/color"
@@ -89,8 +87,4 @@ func ConvertApplicableToScore(applicability string) int {
 		return level
 	}
 	return -1
-}
-
-func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
-	return sarifutils.GetRuleProperty("undetermined_reason", rule)
 }

@@ -109,6 +109,10 @@ func GetLogicalLocation(kind string, location *sarif.Location) *sarif.LogicalLoc
 	return nil
 }
 
+func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
+	return GetRuleProperty("undetermined_reason", rule)
+}
+
 func GetLocationId(location *sarif.Location) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
 		GetLocationFileName(location),
