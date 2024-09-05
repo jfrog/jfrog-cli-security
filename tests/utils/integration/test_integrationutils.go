@@ -23,7 +23,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	"github.com/jfrog/jfrog-client-go/artifactory/services/utils"
 	rtutils "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
 	"github.com/jfrog/jfrog-client-go/http/httpclient"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
@@ -251,7 +250,7 @@ func DeleteRepos(repos map[*string]string) {
 func CreateRepos(repos map[*string]string) {
 	for repoName, configFile := range repos {
 		if !isRepoExist(*repoName) {
-			repoConfig := utils.GetTestResourcesPath() + "artifactory-repo-configs/" + configFile
+			repoConfig := configTests.GetTestResourcesPath() + "artifactory-repo-configs/" + configFile
 			repoConfig, err := commonTests.ReplaceTemplateVariables(repoConfig, "", configTests.GetSubstitutionMap())
 			if err != nil {
 				log.Error(err)
