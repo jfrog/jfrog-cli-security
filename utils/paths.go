@@ -1,10 +1,12 @@
 package utils
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 const (
@@ -64,4 +66,12 @@ func GetCurationPipCacheFolder() (string, error) {
 		return "", err
 	}
 	return filepath.Join(curationFolder, "pip"), nil
+}
+
+func GetCurationNugetCacheFolder() (string, error) {
+	curationFolder, err := GetCurationCacheFolder()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(curationFolder, "nuget"), nil
 }

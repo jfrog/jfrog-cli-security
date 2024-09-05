@@ -9,27 +9,30 @@ import (
 	"path/filepath"
 	"strings"
 
-	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
-	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
-	"github.com/jfrog/build-info-go/entities"
-	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/exp/maps"
+
+	bidotnet "github.com/jfrog/build-info-go/build/utils/dotnet"
+	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
+	"github.com/jfrog/build-info-go/entities"
+	biutils "github.com/jfrog/build-info-go/utils"
+
+	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const (
 	nugetPackageTypeIdentifier         = "nuget://"
 	csprojFileSuffix                   = ".csproj"
-	packageReferenceSyntax             = "PackageReference"
+	packageReferenceSyntax             = "PackageReference Include"
 	packagesConfigFileName             = "packages.config"
 	installCommandName                 = "restore"
 	dotnetToolType                     = "dotnet"
@@ -37,6 +40,8 @@ const (
 	globalPackagesNotFoundErrorMessage = "could not find global packages path at:"
 )
 
+// BuildDependencyTree generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
+// Additionally, re-loads the project's Solution so the dependencies sources will be identified
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -50,9 +55,25 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return
 	}
 
+	// Creating a temporary copy of the project in order to run 'install' command without effecting the original directory + creating the jfrog config for artifactory resolution
+	tmpWd, err := fileutils.CreateTempDir()
+	if err != nil {
+		err = fmt.Errorf("failed to create a temporary dir: %w", err)
+		return
+	}
+	defer func() {
+		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
+	}()
+
+	err = biutils.CopyDir(wd, tmpWd, true, nil)
+	if err != nil {
+		err = fmt.Errorf("failed copying project to temp dir: %w", err)
+		return
+	}
+
 	if isInstallRequired(params, sol) {
 		log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-		sol, err = runDotnetRestoreAndLoadSolution(params, wd, exclusionPattern)
+		sol, err = runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern)
 		if err != nil {
 			return
 		}
@@ -72,32 +93,14 @@ func isInstallRequired(params utils.AuditParams, sol solution.Solution) bool {
 	// Additionally, if dependency sources were not identified during the construction of the Solution struct, the project will necessitate an 'install'
 	solDependencySourcesExists := len(sol.GetDependenciesSources()) > 0
 	solProjectsExists := len(sol.GetProjects()) > 0
-	return len(params.InstallCommandArgs()) > 0 || !solDependencySourcesExists || !solProjectsExists
+	return len(params.InstallCommandArgs()) > 0 || !solDependencySourcesExists || !solProjectsExists || params.IsCurationCmd()
 }
 
-// Generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
-// Additionally, re-loads the project's Solution so the dependencies sources will be identified
-func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd, exclusionPattern string) (sol solution.Solution, err error) {
-	// Creating a temporary copy of the project in order to run 'install' command without effecting the original directory + creating the jfrog config for artifactory resolution
-	tmpWd, err := fileutils.CreateTempDir()
-	if err != nil {
-		err = fmt.Errorf("failed to create a temporary dir: %w", err)
-		return
-	}
-	defer func() {
-		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
-	}()
-
-	err = biutils.CopyDir(originalWd, tmpWd, true, nil)
-	if err != nil {
-		err = fmt.Errorf("failed copying project to temp dir: %w", err)
-		return
-	}
-
+func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionPattern string) (sol solution.Solution, err error) {
 	toolName := params.InstallCommandName()
 	if toolName == "" {
 		// Determine if the project is a NuGet or .NET project
-		toolName, err = getProjectToolName(originalWd)
+		toolName, err = getProjectToolName(tmpWd)
 		if err != nil {
 			err = fmt.Errorf("failed while checking for the porject's tool type: %s", err.Error())
 			return
@@ -112,6 +115,11 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, originalWd, exclu
 	if depsRepo != "" {
 		var serverDetails *config.ServerDetails
 		serverDetails, err = params.ServerDetails()
+
+		// Use the pass-through URL if the project is being restored as part of Curation Audit
+		if params.IsCurationCmd() {
+			serverDetails.ArtifactoryUrl += "api/curation/audit"
+		}
 		if err != nil {
 			err = fmt.Errorf("failed to get server details: %s", err.Error())
 			return
@@ -195,6 +203,42 @@ func getProjectConfigurationFilesPaths(wd string) (projectConfigFilesPaths []str
 	return
 }
 
+func getEnvVariablesForCurationAudit() ([]string, error) {
+	curationCache, err := utils.GetCurationNugetCacheFolder()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Curation cache folders to avoid polluting the default cache
+	if err := os.MkdirAll(filepath.Join(curationCache, "packages"), os.ModePerm); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(curationCache, "cache"), os.ModePerm); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(curationCache, "scratch"), os.ModePerm); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(curationCache, "cache"), os.ModePerm); err != nil {
+		return nil, err
+	}
+
+	// Configure NuGet to use the Curation cache folders
+	if err := os.Setenv("NUGET_PACKAGES", filepath.Join(curationCache, "packages")); err != nil {
+		return nil, err
+	}
+	if err := os.Setenv("NUGET_SCRATCH", filepath.Join(curationCache, "scratch")); err != nil {
+		return nil, err
+	}
+	if err := os.Setenv("NUGET_PLUGINS_CACHE", filepath.Join(curationCache, "plugins")); err != nil {
+		return nil, err
+	}
+	if err := os.Setenv("NUGET_HTTP_CACHE", filepath.Join(curationCache, "cache")); err != nil {
+		return nil, err
+	}
+	return os.Environ(), nil
+}
+
 func runDotnetRestore(wd string, params utils.AuditParams, toolType bidotnet.ToolchainType, commandExtraArgs []string) (err error) {
 	var completeCommandArgs []string
 	if len(params.InstallCommandArgs()) > 0 {
@@ -209,6 +253,18 @@ func runDotnetRestore(wd string, params utils.AuditParams, toolType bidotnet.Too
 	completeCommandArgs = append(completeCommandArgs, commandExtraArgs...)
 	command := exec.Command(completeCommandArgs[0], completeCommandArgs[1:]...)
 	command.Dir = wd
+	if params.IsCurationCmd() {
+		command.Env, err = getEnvVariablesForCurationAudit()
+		if err != nil {
+			return err
+		}
+
+		// Specify a custom output directory to force NuGet to rebuild all the dependencies
+		if toolType.String() == nugetToolType {
+			command.Args = append(command.Args, "-OutputDirectory", "cur_output")
+		}
+	}
+	log.Info(command.String())
 	output, err := command.CombinedOutput()
 	if err != nil {
 		err = errorutils.CheckErrorf("'dotnet restore' command failed: %s - %s", err.Error(), output)
