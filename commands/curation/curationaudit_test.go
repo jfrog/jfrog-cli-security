@@ -1,9 +1,9 @@
 package curation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,17 +17,20 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/formats"
+
 	"github.com/jfrog/gofrog/datastructures"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
@@ -459,7 +462,7 @@ func TestDoCurationAudit(t *testing.T) {
 			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			results := map[string]*CurationReport{}
 			if tt.requestToError == nil {
-				assert.NoError(t, curationCmd.doCurateAudit(results))
+				require.NoError(t, curationCmd.doCurateAudit(results))
 			} else {
 				gotError := curationCmd.doCurateAudit(results)
 				assert.Error(t, gotError)
@@ -750,6 +753,42 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Cause: executor timeout after 2 attempts with 0 milliseconds wait intervals",
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
+		{
+			name:       "dotnet tree",
+			tech:       techutils.Dotnet,
+			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "dotnet", "dotnet-curation"),
+			serveResources: map[string]string{
+				"curated-nuget": filepath.Join("resources", "feed.json"),
+				"index.json":    filepath.Join("resources", "index.json"),
+				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
+			},
+			requestToFail: map[string]bool{
+				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"dotnet-curation": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "Newtonsoft.Json",
+						ParentVersion:     "13.0.3",
+						BlockedPackageUrl: "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+						PackageName:       "Newtonsoft.Json",
+						PackageVersion:    "13.0.3",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "direct",
+						PkgType:           "nuget",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+					totalNumberOfPackages: 1,
+				},
+			},
+		},
 	}
 	return tests
 }
@@ -775,6 +814,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
+					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
 					w.Header().Add("content-type", "text/html")
 					_, err = w.Write(f)
 					require.NoError(t, err)
@@ -849,6 +889,51 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
 			assert.Equal(t, tt.compName, gotName)
 			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
+}
+
+func Test_getNugetNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		id          string
+		artiUrl     string
+		repo        string
+		wantUrls    []string
+		wantName    string
+		wantVersion string
+	}{
+		{
+			name:        "Basic case",
+			id:          "nuget://Newtonsoft.Json:13.0.1.1",
+			artiUrl:     "http://test/artifactory",
+			repo:        "test",
+			wantUrls:    []string{"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/newtonsoft.json/13.0.1.1"},
+			wantName:    "Newtonsoft.Json",
+			wantVersion: "13.0.1.1",
+		},
+		{
+			name:    "Case with alternative versions",
+			id:      "nuget://Example.Package:1.0.0",
+			artiUrl: "http://test/artifactory",
+			repo:    "test",
+			wantUrls: []string{
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0.0.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1",
+			},
+			wantName:    "Example.Package",
+			wantVersion: "1.0.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotUrls, gotName, gotVersion := getNugetNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantUrls, gotUrls)
+			assert.Equal(t, tt.wantName, gotName)
+			assert.Equal(t, tt.wantVersion, gotVersion)
 		})
 	}
 }
