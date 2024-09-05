@@ -197,7 +197,10 @@ func ScanCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 && !c.IsFlagSet(flags.SpecFlag) {
 		return pluginsCommon.PrintHelpAndReturnError("providing either a <source pattern> argument or the 'spec' option is mandatory", c)
 	} else if len(c.Arguments) > 1 {
-		log.Warn(utils.GetCliTooManyArgsErrorMessage(len(c.Arguments), c.CommandName))
+		// If a non-existing flag was provided AFTER the provided source_pattern - it will be captured as another argument. Since 'scan' command
+		// Expects only a single arguments, we use this check to verify all provided flags are valid.
+		// If a non exiting flag was provided BEFORE the source_pattern, the CLI will return an error before reaching this point.
+		return pluginsCommon.PrintHelpAndReturnError(utils.GetCliTooManyArgsErrorMessage(len(c.Arguments)), c)
 	}
 
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
