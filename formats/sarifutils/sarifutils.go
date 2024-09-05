@@ -127,41 +127,6 @@ func SetRunToolName(toolName string, run *sarif.Run) {
 	run.Tool.Driver.Name = toolName
 }
 
-func SetRunToolFullDescriptionText(txt string, run *sarif.Run) {
-	if run.Tool.Driver == nil {
-		run.Tool.Driver = &sarif.ToolComponent{}
-	}
-	if run.Tool.Driver.FullDescription == nil {
-		run.Tool.Driver.FullDescription = sarif.NewMultiformatMessageString(txt)
-		return
-	}
-	run.Tool.Driver.FullDescription.Text = &txt
-}
-
-func SetRunToolFullDescriptionMarkdown(markdown string, run *sarif.Run) {
-	if run.Tool.Driver == nil {
-		run.Tool.Driver = &sarif.ToolComponent{}
-	}
-	if run.Tool.Driver.FullDescription == nil {
-		run.Tool.Driver.FullDescription = sarif.NewMarkdownMultiformatMessageString(markdown)
-	}
-	run.Tool.Driver.FullDescription.Markdown = &markdown
-}
-
-func GetRunToolFullDescriptionText(run *sarif.Run) string {
-	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Text != nil {
-		return *run.Tool.Driver.FullDescription.Text
-	}
-	return ""
-}
-
-func GetRunToolFullDescriptionMarkdown(run *sarif.Run) string {
-	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Markdown != nil {
-		return *run.Tool.Driver.FullDescription.Markdown
-	}
-	return ""
-}
-
 func GetRunToolName(run *sarif.Run) string {
 	if run.Tool.Driver != nil {
 		return run.Tool.Driver.Name
