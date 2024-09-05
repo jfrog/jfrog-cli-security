@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
@@ -755,23 +756,27 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 	return
 }
 
+func toNugetDownloadUrl(artifactoryUrl, repo, compName, compVersion string) string {
+	return fmt.Sprintf("%s/api/nuget/v3/%s/registration-semver2/Download/%s/%s",
+		strings.TrimSuffix(artifactoryUrl, "/"),
+		repo,
+		strings.ToLower(compName),
+		compVersion,
+	)
+}
+
 // input- id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33
 // input - repo: libs-release
 // output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
 func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
-	id = strings.TrimPrefix(id, "nuget://")
-	allParts := strings.Split(id, ":")
-	if len(allParts) != 2 {
-		return
-	}
-	name = allParts[0]
-	version = allParts[1]
+	name, version, _ = utils.SplitComponentId(id)
 
-	downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/api/nuget/v3/"+repo+"/registration-semver2/Download/"+strings.ToLower(name)+"/"+version)
-	for _, ver := range dependencies.CreateAlternativeVersionForms(version) {
-		downloadUrls = append(downloadUrls, strings.TrimSuffix(artiUrl, "/")+"/api/nuget/v3/"+repo+"/registration-semver2/Download/"+strings.ToLower(name)+"/"+ver)
+	downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, version))
+	for _, versionVariant := range dependencies.CreateAlternativeVersionForms(version) {
+		downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, versionVariant))
 	}
-	return downloadUrls, allParts[0], allParts[1]
+
+	return downloadUrls, name, version
 }
 
 // input - id: go://github.com/kennygrant/sanitize:v1.2.4
