@@ -981,7 +981,14 @@ func Test_convertResultsToSummary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.ElementsMatch(t, tt.expected.Scans, convertResultsToSummary(tt.input).Scans)
+			summary := convertResultsToSummary(tt.input)
+			// Sort Blocked base on count (low first) to make the test deterministic
+			for _, scan := range summary.Scans {
+				sort.Slice(scan.CuratedPackages.Blocked, func(i, j int) bool {
+					return len(scan.CuratedPackages.Blocked[i].Packages) < len(scan.CuratedPackages.Blocked[j].Packages)
+				})
+			}
+			assert.Equal(t, tt.expected, summary)
 		})
 	}
 }

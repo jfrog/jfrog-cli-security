@@ -39,7 +39,7 @@ var (
 
 func TestSaveLoadData(t *testing.T) {
 	testDockerScanSummary := ScanCommandResultSummary{
-		ResultType: Docker,
+		ResultType: DockerImage,
 		Args: &ResultSummaryArgs{
 			BaseJfrogUrl: testPlatformUrl,
 			DockerImage:  "dockerImage:version",
@@ -133,7 +133,7 @@ func TestSaveLoadData(t *testing.T) {
 	testCases := []struct {
 		name            string
 		content         []ScanCommandResultSummary
-		filterSections  []SecuritySummarySection
+		filterSections  []CommandType
 		expectedArgs    ResultSummaryArgs
 		expectedContent []formats.ResultsSummary
 	}{
@@ -156,7 +156,7 @@ func TestSaveLoadData(t *testing.T) {
 		},
 		{
 			name:            "Multiple scans with filter",
-			filterSections:  []SecuritySummarySection{Curation},
+			filterSections:  []CommandType{Curation},
 			content:         []ScanCommandResultSummary{testDockerScanSummary, testBinaryScanSummary, testBuildScanSummary, testCurationSummary},
 			expectedContent: []formats.ResultsSummary{testCurationSummary.Summary},
 		},
@@ -169,7 +169,7 @@ func TestSaveLoadData(t *testing.T) {
 			// Save the data
 			for i := range testCase.content {
 				updateSummaryNamesToRelativePath(&testCase.content[i].Summary, tempDir)
-				data, err := JSONMarshal(&testCase.content[i])
+				data, err := JSONMarshalNotEscaped(&testCase.content[i])
 				assert.NoError(t, err)
 				dataFilePath := filepath.Join(tempDir, fmt.Sprintf("data_%s_%d.json", testCase.name, i))
 				assert.NoError(t, os.WriteFile(dataFilePath, data, 0644))
