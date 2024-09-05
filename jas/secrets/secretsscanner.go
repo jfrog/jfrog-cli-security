@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"github.com/jfrog/jfrog-cli-security/jas/external_files"
 	"path/filepath"
 	"strings"
 
@@ -113,10 +112,6 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
-	external_files.SwapAnalyzerManager()
-	external_files.SwapScanners("ca_scanner", "applicability_scanner")
-	external_files.SwapScanners("secrets_scanner", "secrets_scanner")
-	external_files.SwapScanners("jas_scanner", "jas_scanner")
 	return s.scanner.AnalyzerManager.Exec(s.configFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails, s.scanner.EnvVars)
 }
 
