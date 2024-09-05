@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto"
+	"encoding/hex"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -11,11 +13,12 @@ import (
 )
 
 const (
-	NodeModulesPattern = "**/*node_modules*/**"
-	JfMsiEnvVariable   = "JF_MSI"
+	NodeModulesPattern     = "**/*node_modules*/**"
+	JfMsiEnvVariable       = "JF_MSI"
 
 	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL           = "https://jfrog.com/xray/"
+	EntitlementsMinVersion = "3.66.5"
 )
 
 var (
@@ -31,12 +34,37 @@ const (
 	IacScan                SubScanType = "iac"
 	SastScan               SubScanType = "sast"
 	SecretsScan            SubScanType = "secrets"
+
+	ViolationTypeSecurity        ViolationIssueType = "security"
+	ViolationTypeLicense         ViolationIssueType = "license"
+	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
+
+type ViolationIssueType string
+
+func (v ViolationIssueType) String() string {
+	return string(v)
+}
 
 type SubScanType string
 
+const (
+	SourceCode  CommandType = "source_code"
+	Binary      CommandType = "binary"
+	DockerImage CommandType = "docker_image"
+	Build       CommandType = "build"
+	Curation    CommandType = "curation"
+	SBOM        CommandType = "SBOM"
+)
+
+type CommandType string
+
 func (s SubScanType) String() string {
 	return string(s)
+}
+
+func (s CommandType) IsTargetBinary() bool {
+	return s == Binary || s == DockerImage
 }
 
 func GetAllSupportedScans() []SubScanType {
@@ -109,6 +137,25 @@ func NewInt64Ptr(v int64) *int64 {
 
 func NewFloat64Ptr(v float64) *float64 {
 	return &v
+}
+
+func Md5Hash(values ...string) (string, error) {
+	return toHash(crypto.MD5, values...)
+}
+
+func Sha1Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA1, values...)
+}
+
+func toHash(hash crypto.Hash, values ...string) (string, error) {
+	h := hash.New()
+	for _, ob := range values {
+		_, err := fmt.Fprint(h, ob)
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // map[string]string to []string (key=value format)

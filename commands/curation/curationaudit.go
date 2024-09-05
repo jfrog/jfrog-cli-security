@@ -13,17 +13,21 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	config "github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -34,7 +38,26 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
+
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
+	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+
+	"github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const (
@@ -60,6 +83,7 @@ const (
 
 	MinArtiPassThroughSupport = "7.82.0"
 	MinArtiGolangSupport      = "7.87.0"
+	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassTHroughSupport = "3.92.0"
 )
 
@@ -68,18 +92,21 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Pip, utils.CurationSupportFlag, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
 	techutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Maven, utils.CurationSupportFlag, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Maven, MinArtiPassThroughSupport)
 	},
 	techutils.Go: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Go, utils.CurationSupportFlag, MinArtiGolangSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Go, MinArtiGolangSupport)
+	},
+	techutils.Nuget: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, envName string, minArtiVersion string) (bool, error) {
-	if flag, err := clientutils.GetBoolEnvValue(envName, false); flag {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
+	if flag, err := clientutils.GetBoolEnvValue(utils.CurationSupportFlag, false); flag {
 		return true, nil
 	} else if err != nil {
 		log.Error(err)
@@ -242,48 +269,52 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-
-	err = errors.Join(err, output.RecordSecurityCommandOutput(output.ScanCommandSummaryResult{Results: convertResultsToSummary(results), Section: output.Curation}))
+	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
 
-func convertResultsToSummary(results map[string]*CurationReport) formats.SummaryResults {
-	summaryResults := formats.SummaryResults{}
+func convertResultsToSummary(results map[string]*CurationReport) formats.ResultsSummary {
+	summaryResults := formats.ResultsSummary{}
 	for projectPath, packagesStatus := range results {
-		blocked := convertBlocked(packagesStatus.packagesStatus)
-		approved := packagesStatus.totalNumberOfPackages - blocked.GetCountOfKeys(false)
-
-		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummaryResult{Target: projectPath,
+		summaryResults.Scans = append(summaryResults.Scans, formats.ScanSummary{Target: projectPath,
 			CuratedPackages: &formats.CuratedPackages{
-				Blocked:  blocked,
-				Approved: approved,
-			}})
+				PackageCount: packagesStatus.totalNumberOfPackages,
+				Blocked:      getBlocked(packagesStatus.packagesStatus),
+			},
+		})
 	}
 	return summaryResults
 }
 
-func convertBlocked(pkgStatus []*PackageStatus) formats.TwoLevelSummaryCount {
-	blocked := formats.TwoLevelSummaryCount{}
+func getBlocked(pkgStatus []*PackageStatus) []formats.BlockedPackages {
+	blockedMap := map[string]formats.BlockedPackages{}
 	for _, pkg := range pkgStatus {
 		for _, policy := range pkg.Policy {
-			polAndCond := formatPolicyAndCond(policy.Policy, policy.Condition)
-			if _, ok := blocked[polAndCond]; !ok {
-				blocked[polAndCond] = formats.SummaryCount{}
+			polAndCondKey := getPolicyAndConditionId(policy.Policy, policy.Condition)
+			if _, ok := blockedMap[polAndCondKey]; !ok {
+				blockedMap[polAndCondKey] = formats.BlockedPackages{
+					Policy:    policy.Policy,
+					Condition: policy.Condition,
+					Packages:  make(map[string]int),
+				}
 			}
 			uniqId := getPackageId(pkg.PackageName, pkg.PackageVersion)
-			blocked[polAndCond][uniqId]++
+			if _, ok := blockedMap[polAndCondKey].Packages[uniqId]; !ok {
+				blockedMap[polAndCondKey].Packages[uniqId] = 0
+			}
+			blockedMap[polAndCondKey].Packages[uniqId]++
 		}
 	}
-	return blocked
-}
-
-func formatPolicyAndCond(policy, cond string) string {
-	return fmt.Sprintf("Policy: %s, Condition: %s", policy, cond)
+	return maps.Values(blockedMap)
 }
 
 // The unique identifier of a package includes the package name with its version
 func getPackageId(packageName, packageVersion string) string {
 	return fmt.Sprintf("%s:%s", packageName, packageVersion)
+}
+
+func getPolicyAndConditionId(policy, condition string) string {
+	return fmt.Sprintf("%s:%s", policy, condition)
 }
 
 func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport) error {
@@ -315,16 +346,24 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 }
 
 func (ca *CurationAuditCommand) getRtManagerAndAuth(tech techutils.Technology) (rtManager artifactory.ArtifactoryServicesManager, serverDetails *config.ServerDetails, err error) {
+	serverDetails, err = ca.GetAuth(tech)
+	if err != nil {
+		return
+	}
+	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if ca.PackageManagerConfig == nil {
 		if err = ca.SetRepo(tech); err != nil {
 			return
 		}
 	}
 	serverDetails, err = ca.PackageManagerConfig.ServerDetails()
-	if err != nil {
-		return
-	}
-	rtManager, err = rtUtils.CreateServiceManager(serverDetails, 2, 0, false)
 	if err != nil {
 		return
 	}
@@ -499,8 +538,8 @@ func (ca *CurationAuditCommand) getRepoParams(projectType project.ProjectType) (
 		return nil, err
 	}
 	if !exists {
-		return nil, errorutils.CheckErrorf("no config file was found! Before running the " + projectType.String() + " command on a " +
-			"project for the first time, the project should be configured using the 'jf " + projectType.String() + "c' command")
+		return nil, errorutils.CheckErrorf("no config file was found! Before running the %s command on a "+
+			"project for the first time, the project should be configured using the 'jf %s c' command", projectType.String(), projectType.String())
 	}
 	vConfig, err := project.ReadConfigFile(configFilePath, project.YAML)
 	if err != nil {
@@ -598,6 +637,10 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 				return err
 			}
 		}
+		// Due to CreateAlternativeVersionForms, it's expected that for NuGet some of the URLs will be missing
+		if resp.StatusCode == http.StatusNotFound && nc.tech == techutils.Nuget {
+			continue
+		}
 		if resp != nil && resp.StatusCode >= 400 && resp.StatusCode != http.StatusForbidden {
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
@@ -609,6 +652,12 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			if pkStatus != nil {
 				p.Store(pkStatus.BlockedPackageUrl, pkStatus)
 			}
+		}
+		if nc.tech == techutils.Nuget {
+			// DotNet can have multiple URLs only due to CreateAlternativeVersionForms.
+			// Once the matching version was found, we can stop iterating.
+			// See CreateAlternativeVersionForms for more details.
+			return nil
 		}
 	}
 	return nil
@@ -699,6 +748,9 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return
 	case techutils.Go:
 		return getGoNameScopeAndVersion(node.Id, artiUrl, repo)
+	case techutils.Nuget:
+		downloadUrls, name, version = getNugetNameScopeAndVersion(node.Id, artiUrl, repo)
+		return
 	}
 	return
 }
@@ -718,6 +770,29 @@ func getPythonNameVersion(id string, downloadUrlsMap map[string]string) (downloa
 		version = allParts[1]
 	}
 	return
+}
+
+func toNugetDownloadUrl(artifactoryUrl, repo, compName, compVersion string) string {
+	return fmt.Sprintf("%s/api/nuget/v3/%s/registration-semver2/Download/%s/%s",
+		strings.TrimSuffix(artifactoryUrl, "/"),
+		repo,
+		strings.ToLower(compName),
+		compVersion,
+	)
+}
+
+// input- id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33
+// input - repo: libs-release
+// output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
+func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
+	name, version, _ = utils.SplitComponentId(id)
+
+	downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, version))
+	for _, versionVariant := range dependencies.CreateAlternativeVersionForms(version) {
+		downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, versionVariant))
+	}
+
+	return downloadUrls, name, version
 }
 
 // input - id: go://github.com/kennygrant/sanitize:v1.2.4
@@ -800,8 +875,21 @@ func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputForma
 		case string(outFormat.Json):
 			format = outFormat.Json
 		default:
-			err = errorutils.CheckErrorf("only the following output formats are supported: " + coreutils.ListToText(CurationOutputFormats))
+			err = errorutils.CheckErrorf("only the following output formats are supported: %s", coreutils.ListToText(CurationOutputFormats))
 		}
 	}
 	return
+}
+
+func IsEntitledForCuration(xrayManager *xrayClient.XrayServicesManager) (entitled bool, err error) {
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return
+	}
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); err != nil {
+		log.Debug(err)
+		return
+	}
+	return xrayManager.IsEntitled("curation")
+
 }

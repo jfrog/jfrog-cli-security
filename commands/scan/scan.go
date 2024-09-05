@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -56,20 +57,21 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath            string
-	indexerTempDir         string
-	outputFormat           format.OutputFormat
-	projectKey             string
-	minSeverityFilter      severityutils.Severity
-	watches                []string
-	includeVulnerabilities bool
-	includeLicenses        bool
-	fail                   bool
-	printExtendedTable     bool
-	bypassArchiveLimits    bool
-	fixableOnly            bool
-	progress               ioUtils.ProgressMgr
-	commandSupportsJAS     bool
+	indexerPath             string
+	indexerTempDir          string
+	outputFormat            format.OutputFormat
+	projectKey              string
+	minSeverityFilter       severityutils.Severity
+	watches                 []string
+	includeVulnerabilities  bool
+	includeLicenses         bool
+	fail                    bool
+	printExtendedTable      bool
+	bypassArchiveLimits     bool
+	fixableOnly             bool
+	progress                ioUtils.ProgressMgr
+	commandSupportsJAS      bool
+	analyticsMetricsService *xsc.AnalyticsMetricsService
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -150,6 +152,15 @@ func (scanCmd *ScanCommand) SetBypassArchiveLimits(bypassArchiveLimits bool) *Sc
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *ScanCommand {
+	scanCmd.analyticsMetricsService = analyticsMetricsService
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) hasViolationContext() bool {
+	return len(scanCmd.watches) > 0 || scanCmd.projectKey != ""
+}
+
 func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 	var indexerResults xrayUtils.BinaryGraphNode
 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
@@ -179,12 +190,20 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(func(cmdResults *results.SecurityCommandResults) error {
-		return output.RecordSecurityCommandResultOutput(output.Binary, cmdResults)
+	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
+		if err = utils.RecordSarifOutput(scanResults); err != nil {
+			return
+		}
+		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(
+			scanResults,
+			scanCmd.serverDetails,
+			scanCmd.includeVulnerabilities,
+			scanCmd.hasViolationContext(),
+		))
 	})
 }
 
-func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *results.SecurityCommandResults) error) (err error) {
+func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recordResFunc func(scanResults *results.SecurityCommandResults) error) (err error) {
 	defer func() {
 		if err != nil {
 			var e *exec.ExitError
@@ -204,7 +223,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 		return err
 	}
 
-	cmdResults := results.NewCommandResults(xrayVersion, entitledForJas && scanCmd.commandSupportsJAS)
+	cmdResults := results.NewCommandResults(cmdTypexrayVersion, entitledForJas && scanCmd.commandSupportsJAS)
+	if scanCmd.analyticsMetricsService != nil {
+		scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+	}
 
 	errGroup := new(errgroup.Group)
 	if cmdResults.EntitledForJas {
@@ -282,11 +304,11 @@ func (scanCmd *ScanCommand) RunAndRecordResults(recordResFunc func(scanResults *
 
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
+		SetHasViolationContext(scanCmd.hasViolationContext()).
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
-		SetIsMultipleRootProject(true).
-		SetScanType(services.Binary).
+		SetIsMultipleRootProject(scanResults.IsMultipleProject()).
 		PrintScanResults(); err != nil {
 		return
 	}
@@ -370,6 +392,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
 				}
+				params.MultiScanId, params.XscVersion = xsc.GetXscMsiAndVersion(scanCmd.analyticsMetricsService)
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}

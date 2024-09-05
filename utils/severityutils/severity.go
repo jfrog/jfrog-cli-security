@@ -1,6 +1,7 @@
 package severityutils
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/gookit/color"
@@ -29,6 +30,25 @@ const (
 	Low      Severity = "Low"
 	Unknown  Severity = "Unknown"
 )
+
+func GetSeverityIcon(severity Severity) string {
+	return getSeverityEmojiIcon(severity)
+}
+
+func getSeverityEmojiIcon(severity Severity) string {
+	switch severity {
+	case Critical:
+		return "❗️"
+	case High:
+		return "🔴"
+	case Medium:
+		return "🟠"
+	case Low:
+		return "🟡"
+	default:
+		return "⚪️"
+	}
+}
 
 type Severity string
 
@@ -192,7 +212,7 @@ func ParseSeverity(severity string, sarifSeverity bool) (parsed Severity, err er
 
 func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus jasutils.ApplicabilityStatus) (details *SeverityDetails, err error) {
 	if applicabilityStatus == jasutils.NotScanned {
-		err = errorutils.CheckErrorf("only the following severities are supported: " + coreutils.ListToText(supportedApplicabilityStatuses()))
+		err = errorutils.CheckErrorf("only the following severities are supported: %s", coreutils.ListToText(supportedApplicabilityStatuses()))
 		return
 	}
 	parsed, err := ParseSeverity(severity, sarifSeverity)
@@ -206,6 +226,10 @@ func ParseForDetails(severity string, sarifSeverity bool, applicabilityStatus ja
 // -- Getters functions (With default values) --
 
 func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus, pretty bool) formats.SeverityDetails {
+	if applicabilityStatus == jasutils.NotScanned {
+		// Pass 'NotCovered' as default value to get priority, since 'NotScanned' returns 0 priority for all severities
+		applicabilityStatus = jasutils.NotCovered
+	}
 	return GetSeverityDetails(severity, applicabilityStatus).ToDetails(severity, pretty)
 }
 

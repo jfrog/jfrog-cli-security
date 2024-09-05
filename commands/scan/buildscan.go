@@ -154,11 +154,11 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetHasViolationContext(bsc.hasViolationContext()).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
-		SetScanType(services.Binary).
 		SetExtraMessages(nil)
 
 	if bsc.outputFormat != outputFormat.Table {
@@ -182,12 +182,22 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 			}
 		}
 	}
-	err = output.RecordSecurityCommandResultOutput(output.Build, cmdResults)
+	err = utils.RecordSecurityCommandSummary(utils.NewBuildScanSummary(
+		scanResults,
+		bsc.serverDetails,
+		bsc.includeVulnerabilities,
+		bsc.hasViolationContext(),
+		params.BuildName, params.BuildNumber,
+	))
 	return
 }
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
+}
+
+func (bsc *BuildScanCommand) hasViolationContext() bool {
+	return bsc.buildConfiguration.GetProject() != ""
 }
 
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured

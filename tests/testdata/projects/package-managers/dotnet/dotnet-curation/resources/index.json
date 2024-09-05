@@ -1,0 +1,125 @@
+{
+  "count": 2,
+  "items": [
+    {
+      "count": 1,
+      "lower": "13.0.3",
+      "upper": "13.0.3",
+      "items": [
+      ]
+    },
+    {
+      "count": 1,
+      "lower": "13.0.3",
+      "upper": "13.0.3",
+      "items": [
+        {
+          "catalogEntry": {
+            "authors": "James Newton-King",
+            "description": "Json.NET is a popular high-performance JSON framework for .NET",
+            "iconUrl": "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/13.0.3/icon",
+            "language": "",
+            "licenseUrl": "https://www.nuget.org/packages/Newtonsoft.Json/13.0.3/license",
+            "listed": true,
+            "packageContent": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+            "projectUrl": "https://www.newtonsoft.com/json",
+            "requireLicenseAcceptance": false,
+            "summary": "",
+            "tags": [
+              "json"
+            ],
+            "title": "Json.NET",
+            "version": "13.0.3",
+            "dependencyGroups": [
+              {
+                "targetFramework": ".NETFramework2.0"
+              },
+              {
+                "targetFramework": ".NETFramework3.5"
+              },
+              {
+                "targetFramework": ".NETFramework4.0"
+              },
+              {
+                "targetFramework": ".NETFramework4.5"
+              },
+              {
+                "dependencies": [
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/microsoft.csharp/index.json",
+                    "id": "Microsoft.CSharp"
+                  },
+                  {
+                    "range": "[1.6.1, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/netstandard.library/index.json",
+                    "id": "NETStandard.Library"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.componentmodel.typeconverter/index.json",
+                    "id": "System.ComponentModel.TypeConverter"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.runtime.serialization.primitives/index.json",
+                    "id": "System.Runtime.Serialization.Primitives"
+                  }
+                ],
+                "targetFramework": ".NETStandard1.0"
+              },
+              {
+                "dependencies": [
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/microsoft.csharp/index.json",
+                    "id": "Microsoft.CSharp"
+                  },
+                  {
+                    "range": "[1.6.1, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/netstandard.library/index.json",
+                    "id": "NETStandard.Library"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.componentmodel.typeconverter/index.json",
+                    "id": "System.ComponentModel.TypeConverter"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.runtime.serialization.formatters/index.json",
+                    "id": "System.Runtime.Serialization.Formatters"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.runtime.serialization.primitives/index.json",
+                    "id": "System.Runtime.Serialization.Primitives"
+                  },
+                  {
+                    "range": "[4.3.0, )",
+                    "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/system.xml.xmldocument/index.json",
+                    "id": "System.Xml.XmlDocument"
+                  }
+                ],
+                "targetFramework": ".NETStandard1.3"
+              },
+              {
+                "targetFramework": "net6.0"
+              },
+              {
+                "targetFramework": ".NETStandard2.0"
+              }
+            ],
+            "id": "Newtonsoft.Json"
+          },
+          "packageContent": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+          "registration": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/newtonsoft.json/index.json",
+          "@id": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/newtonsoft.json/13.0.3.json"
+        }
+      ],
+      "parent": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/newtonsoft.json/index.json",
+      "@id": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/newtonsoft.json/index.json"
+    }
+  ],
+  "@id": "http://127.0.0.1:80/artifactory/api/curation/audit/api/nuget/v3/curated-nuget/registration-semver2/newtonsoft.json/index.json"
+}

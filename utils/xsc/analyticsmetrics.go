@@ -170,7 +170,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	}
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     summary.GetTotalIssueCount(),
+		TotalFindings:     auditResults.CountScanResultsFindings(true, true),
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{

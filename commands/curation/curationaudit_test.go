@@ -1,6 +1,7 @@
 package curation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -17,17 +18,20 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/formats"
+
 	"github.com/jfrog/gofrog/datastructures"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
@@ -459,7 +463,7 @@ func TestDoCurationAudit(t *testing.T) {
 			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 			results := map[string]*CurationReport{}
 			if tt.requestToError == nil {
-				assert.NoError(t, curationCmd.doCurateAudit(results))
+				require.NoError(t, curationCmd.doCurateAudit(results))
 			} else {
 				gotError := curationCmd.doCurateAudit(results)
 				assert.Error(t, gotError)
@@ -750,6 +754,42 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"Cause: executor timeout after 2 attempts with 0 milliseconds wait intervals",
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
+		{
+			name:       "dotnet tree",
+			tech:       techutils.Dotnet,
+			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "dotnet", "dotnet-curation"),
+			serveResources: map[string]string{
+				"curated-nuget": filepath.Join("resources", "feed.json"),
+				"index.json":    filepath.Join("resources", "index.json"),
+				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
+			},
+			requestToFail: map[string]bool{
+				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"dotnet-curation": {packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentName:        "Newtonsoft.Json",
+						ParentVersion:     "13.0.3",
+						BlockedPackageUrl: "/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3",
+						PackageName:       "Newtonsoft.Json",
+						PackageVersion:    "13.0.3",
+						BlockingReason:    "Policy violations",
+						DepRelation:       "direct",
+						PkgType:           "nuget",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+					totalNumberOfPackages: 1,
+				},
+			},
+		},
 	}
 	return tests
 }
@@ -775,6 +815,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
+					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
 					w.Header().Add("content-type", "text/html")
 					_, err = w.Write(f)
 					require.NoError(t, err)
@@ -853,11 +894,56 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func Test_getNugetNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		id          string
+		artiUrl     string
+		repo        string
+		wantUrls    []string
+		wantName    string
+		wantVersion string
+	}{
+		{
+			name:        "Basic case",
+			id:          "nuget://Newtonsoft.Json:13.0.1.1",
+			artiUrl:     "http://test/artifactory",
+			repo:        "test",
+			wantUrls:    []string{"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/newtonsoft.json/13.0.1.1"},
+			wantName:    "Newtonsoft.Json",
+			wantVersion: "13.0.1.1",
+		},
+		{
+			name:    "Case with alternative versions",
+			id:      "nuget://Example.Package:1.0.0",
+			artiUrl: "http://test/artifactory",
+			repo:    "test",
+			wantUrls: []string{
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0.0.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1.0",
+				"http://test/artifactory/api/nuget/v3/test/registration-semver2/Download/example.package/1",
+			},
+			wantName:    "Example.Package",
+			wantVersion: "1.0.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotUrls, gotName, gotVersion := getNugetNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantUrls, gotUrls)
+			assert.Equal(t, tt.wantName, gotName)
+			assert.Equal(t, tt.wantVersion, gotVersion)
+		})
+	}
+}
+
 func Test_convertResultsToSummary(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]*CurationReport
-		expected formats.SummaryResults
+		expected formats.ResultsSummary
 	}{
 		{
 			name: "results for one result",
@@ -882,17 +968,17 @@ func Test_convertResultsToSummary(t *testing.T) {
 					totalNumberOfPackages: 5,
 				},
 			},
-			expected: formats.SummaryResults{
-				Scans: []formats.ScanSummaryResult{
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							Blocked: formats.TwoLevelSummaryCount{
-								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
-								},
-							},
-							Approved: 4,
+							PackageCount: 5,
+							Blocked: []formats.BlockedPackages{{
+								Policy:    "policy1",
+								Condition: "cond1",
+								Packages:  map[string]int{"test1:1.0.0": 1},
+							}},
 						},
 					},
 				},
@@ -950,25 +1036,27 @@ func Test_convertResultsToSummary(t *testing.T) {
 							},
 						},
 					},
-					totalNumberOfPackages: 5,
+					totalNumberOfPackages: 6,
 				},
 			},
-			expected: formats.SummaryResults{
-				Scans: []formats.ScanSummaryResult{
+			expected: formats.ResultsSummary{
+				Scans: []formats.ScanSummary{
 					{
 						Target: "project1",
 						CuratedPackages: &formats.CuratedPackages{
-							Blocked: formats.TwoLevelSummaryCount{
-								formatPolicyAndCond("policy1", "cond1"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
+							PackageCount: 6,
+							Blocked: []formats.BlockedPackages{
+								{
+									Policy:    "policy1",
+									Condition: "cond1",
+									Packages:  map[string]int{"test1:1.0.0": 1},
 								},
-								formatPolicyAndCond("policy2", "cond2"): formats.SummaryCount{
-									getPackageId("test1", "1.0.0"): 1,
-									getPackageId("test2", "2.0.0"): 1,
-									getPackageId("test3", "3.0.0"): 1,
+								{
+									Policy:    "policy2",
+									Condition: "cond2",
+									Packages:  map[string]int{"test1:1.0.0": 1, "test2:2.0.0": 1, "test3:3.0.0": 1},
 								},
 							},
-							Approved: 2,
 						},
 					},
 				},
@@ -977,8 +1065,14 @@ func Test_convertResultsToSummary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := convertResultsToSummary(tt.input)
-			assert.Equal(t, tt.expected, results)
+			summary := convertResultsToSummary(tt.input)
+			// Sort Blocked base on count (low first) to make the test deterministic
+			for _, scan := range summary.Scans {
+				sort.Slice(scan.CuratedPackages.Blocked, func(i, j int) bool {
+					return len(scan.CuratedPackages.Blocked[i].Packages) < len(scan.CuratedPackages.Blocked[j].Packages)
+				})
+			}
+			assert.Equal(t, tt.expected, summary)
 		})
 	}
 }

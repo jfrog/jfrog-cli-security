@@ -21,6 +21,7 @@ func GetJfrogCliSecurityApp() components.App {
 	app.Subcommands = append(app.Subcommands, components.Namespace{
 		Name:        "git",
 		Description: "Git commands.",
+		Hidden:      true,
 		Commands:    getGitNameSpaceCommands(),
 		Category:    "Command Namespaces",
 	})

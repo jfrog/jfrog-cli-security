@@ -3,7 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -24,7 +23,6 @@ import (
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -98,24 +96,10 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 		Watches:  auditCmd.watches,
 		ScanType: services.Dependency,
 	}
-	if auditCmd.projectKey == "" {
-		commonParams.ProjectKey = os.Getenv(coreutils.Project)
-	} else {
-		commonParams.ProjectKey = auditCmd.projectKey
-	}
+	commonParams.ProjectKey = auditCmd.projectKey
 	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
-	commonParams.MultiScanId = auditCmd.analyticsMetricsService.GetMsi()
-	if commonParams.MultiScanId != "" {
-		xscManager := auditCmd.analyticsMetricsService.XscManager()
-		if xscManager != nil {
-			version, err := xscManager.GetVersion()
-			if err != nil {
-				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-			}
-			commonParams.XscVersion = version
-		}
-	}
+	commonParams.MultiScanId, commonParams.XscVersion = xsc.GetXscMsiAndVersion(auditCmd.analyticsMetricsService)
 	return commonParams
 }
 
@@ -154,12 +138,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
 	}
 	if err = output.NewResultsWriter(auditResults).
+		SetHasViolationContext(auditCmd.HasViolationContext()).
 		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
 		SetIncludeLicenses(auditCmd.IncludeLicenses).
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
-		SetScanType(services.Dependency).
 		SetSubScansPreformed(auditCmd.ScansToPerform()).
 		PrintScanResults(); err != nil {
 		return
@@ -178,6 +162,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 func (auditCmd *AuditCommand) CommandName() string {
 	return "generic_audit"
+}
+
+func (auditCmd *AuditCommand) HasViolationContext() bool {
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
 }
 
 // Runs an audit scan based on the provided auditParams.
@@ -280,7 +268,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 			scan.AddError(fmt.Errorf("can't find module for path %s", scan.Target))
 			continue
 		}
-		if err = runner.AddJasScannersTasks(auditParallelRunner, *module, scan, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParams.ScansToPerform()); err != nil {
+		if err = runner.AddJasScannersTasks(auditParallelRunner, *module, scan, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
 			return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 	}

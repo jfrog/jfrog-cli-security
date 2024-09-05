@@ -3,6 +3,7 @@ package scan
 import (
 	"bytes"
 	"fmt"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,6 +81,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 	}
 
 	// Perform scan on image.tar
+	dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
 		Target(dsc.targetRepoPath).
@@ -95,16 +97,26 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(func(cmdResults *results.SecurityCommandResults) (err error) {
-		if cmdResults == nil || len(cmdResults.Targets) == 0 {
+	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *utils.Results) (err error) {
+		if scanResults == nil {
 			return
 		}
-		for i := range cmdResults.Targets {
-			// Set the image tag as the target for the scan results (will show `image.tar` as target if not set)
-			cmdResults.Targets[i].Name = dsc.imageTag
-			// scanResults.Scans[i].Target = dsc.imageTag
+		if scanResults.ScaResults != nil {
+			for _, result := range scanResults.ScaResults {
+				result.Name = dsc.imageTag
+			}
 		}
-		return output.RecordSecurityCommandResultOutput(output.Binary, cmdResults)
+		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
+		if err = utils.RecordSarifOutput(scanResults); err != nil {
+			return
+		}
+		return utils.RecordSecurityCommandSummary(utils.NewDockerScanSummary(
+			scanResults,
+			dsc.ScanCommand.serverDetails,
+			dsc.ScanCommand.includeVulnerabilities,
+			dsc.ScanCommand.hasViolationContext(),
+			dsc.imageTag,
+		))
 	})
 }
 

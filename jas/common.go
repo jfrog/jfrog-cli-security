@@ -117,6 +117,9 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Jas reports has only one invocation
 		// Set the actual working directory to the invocation, not the analyzerManager directory
 		// Also used to calculate relative paths if needed with it
+		if len(sarifRun.Invocations) == 0 {
+			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
+		}
 		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
@@ -288,7 +291,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technolo
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, EntitlementsMinVersion); e != nil {
+	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
 		log.Debug(e)
 		return
 	}
