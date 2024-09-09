@@ -356,6 +356,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 					formats.SourceCodeRow{
 						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						Finding:         sarifutils.GetResultMsgText(secretResult),
+						Fingerprint:     sarifutils.GetResultFingerprint(secretResult),
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
 							StartLine:   sarifutils.GetLocationStartLine(location),
@@ -410,6 +411,7 @@ func prepareIacs(iacs []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 					formats.SourceCodeRow{
 						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						Finding:            sarifutils.GetResultMsgText(iacResult),
+						Fingerprint:        sarifutils.GetResultFingerprint(iacResult),
 						ScannerDescription: scannerDescription,
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, iacRun.Invocations),
