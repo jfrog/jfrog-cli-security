@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -62,16 +63,14 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 			cleanUp := clientTests.SetEnvWithCallbackAndAssert(t, coreUtils.SummaryOutputDirPathEnv, tempDir)
 			defer cleanUp()
 
-			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled)))
+			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), true, true))
 			assert.Equal(t, testCase.isJasEntitled, hasFilesInDir(t, filepath.Join(tempDir, commandsummary.OutputDirName, "security", string(commandsummary.SarifReport))))
 		})
 	}
 }
 
-func createDummyJasResult(entitled bool) *Results {
-	return &Results{
-		ExtendedScanResults: &ExtendedScanResults{EntitledForJas: entitled},
-	}
+func createDummyJasResult(entitled bool) *results.SecurityCommandResults {
+	return &results.SecurityCommandResults{EntitledForJas: entitled}
 }
 
 func hasFilesInDir(t *testing.T, dir string) bool {

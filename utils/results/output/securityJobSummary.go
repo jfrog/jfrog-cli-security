@@ -190,7 +190,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulner
 	if err != nil || manager == nil {
 		return
 	}
-	if cmdResults.ExtendedScanResults == nil || !cmdResults.ExtendedScanResults.EntitledForJas {
+	if !cmdResults.EntitledForJas {
 		// If no JAS no GHAS
 		return
 	}
