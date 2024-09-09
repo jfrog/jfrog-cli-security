@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 	"os"
@@ -455,6 +456,11 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
+	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
+	if err != nil {
+		return nil, err
+	}
+
 	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
@@ -465,7 +471,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
+		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
+		SetScansResultsOutputDir(scansOutputDir)
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -627,6 +634,21 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 	return curationAuditCommand, nil
+}
+
+func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
+	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
+	if scansOutputDir == "" {
+		return "", nil
+	}
+	exists, err := fileutils.IsDirExists(scansOutputDir, false)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", errors.New(fmt.Sprintf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir))
+	}
+	return scansOutputDir, nil
 }
 
 func DockerScanMockCommand() components.Command {
