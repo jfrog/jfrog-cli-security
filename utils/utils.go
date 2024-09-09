@@ -130,7 +130,7 @@ func splitEnvVar(envVar string) (key, value string) {
 // This functionallity is being used for Jas scanners and SCA scanner
 func DumpScanResultsToFileIfNeeded(results interface{}, scanResultsOutputDir string, scanType string) (err error) {
 	// TODO this function should be in utils/results/results.go after the refactor, since it is a common code for Jas and SCA scanners
-	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and put all its results in this dir, for every Target
+	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and convert results to Sarif before writing them to file
 	if scanResultsOutputDir == "" || reflect.ValueOf(results).IsNil() {
 		return
 	}

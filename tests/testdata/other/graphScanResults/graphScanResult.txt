@@ -1,0 +1,534 @@
+{
+  "scan_id" : "a6453052-5024-4534-7326-f15c697162eb",
+  "component_id" : "root",
+  "status" : "completed",
+  "package_type" : "generic",
+  "top_vuln_severity" : "Critical",
+  "progress_percentage" : 100,
+  "vulnerabilities" : [ {
+    "severity" : "Low",
+    "summary" : "When installing a package from a Mercurial VCS URL  (ie \"pip install \nhg+...\") with pip prior to v23.3, the specified Mercurial revision could\n be used to inject arbitrary configuration options to the \"hg clone\" \ncall (ie \"--config\"). Controlling the Mercurial configuration can modify\n how and which repository is installed. This vulnerability does not \naffect users who aren't installing from Mercurial.",
+    "issue_id" : "XRAY-534517",
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : { },
+    "cves" : [ {
+      "cve" : "CVE-2023-5752",
+      "cwe" : [ "CWE-77" ],
+      "cvss_v3_score" : "3.3",
+      "cvss_v3_vector" : "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N"
+    } ],
+    "components" : {
+      "pypi://pip:21.2.3" : {
+        "package_name" : "pip",
+        "package_version" : "21.2.3",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[23.3]" ],
+        "infected_versions" : [ "(,23.3)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pip:21.2.3"
+        } ] ]
+      }
+    },
+    "references" : [ "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/YBSB3SUPQ3VIFYUMHPO3MEQI4BJAXKCZ/", "https://mail.python.org/archives/list/security-announce@python.org/thread/F4PL35U6X4VVHZ5ILJU3PWUWN7H7LZXL", "https://github.com/pypa/pip/pull/12306", "https://github.com/pypa/pip/commit/389cb799d0da9a840749fcd14878928467ed49b4", "https://nvd.nist.gov/vuln/detail/CVE-2023-5752", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/KFC2SPFG5FLCZBYY2K3T5MFW2D22NG6E/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/FXUVMJM25PUAZRQZBF54OFVKTY3MINPW/", "https://github.com/pypa/advisory-database/tree/main/vulns/pip/PYSEC-2023-228.yaml", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/KFC2SPFG5FLCZBYY2K3T5MFW2D22NG6E", "https://mail.python.org/archives/list/security-announce@python.org/thread/F4PL35U6X4VVHZ5ILJU3PWUWN7H7LZXL/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/65UKKF5LBHEFDCUSPBHUN4IHYX7SRMHH/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/622OZXWG72ISQPLM5Y57YCVIMWHD4C3U/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/65UKKF5LBHEFDCUSPBHUN4IHYX7SRMHH", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/FXUVMJM25PUAZRQZBF54OFVKTY3MINPW", "https://github.com/advisories/GHSA-mq26-g339-26xf", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/622OZXWG72ISQPLM5Y57YCVIMWHD4C3U", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/YBSB3SUPQ3VIFYUMHPO3MEQI4BJAXKCZ" ]
+  }, {
+    "severity" : "High",
+    "summary" : "An issue was discovered in pip (all versions) because it installs the version with the highest version number, even if the user had intended to obtain a private package from a private index. This only affects use of the --extra-index-url option, and exploitation requires that the package does not already exist in the public index (and thus the attacker can put the package there with an arbitrary version number). NOTE: it has been reported that this is intended functionality and the user is responsible for using --extra-index-url securely",
+    "issue_id" : "XRAY-97724",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "2023-01-08T19:31:00Z",
+    "extended_information" : {
+      "short_description" : "pip could download private packages from a public PyPI repository leading to code execution.",
+      "full_description" : "This CVE refers to the possibility of a \"dependency confusion\" attack when using `pip` with the `--extra-index-url` flag. This vulnerability has been disputed by the maintainers of pip as the described behavior is intended (although potentially insecure) and as such there are no plans to fix it. \n\nIf pip is executed with the `--extra-index-url` when using a private PyPI repository, an attacker could cause pip to download a private package (for example one named `private_package`) by adding a package with the same name (`private_package`) in the public PyPI repository. This would lead to remote code execution as pip will download the public package that could contain malicious code. This dependency confusion attack was [demonstrated in 2021 by Alex Birsan](https://medium.com/@alex.birsan/dependency-confusion-4a5d60fec610).",
+      "jfrog_research_severity" : "Medium",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The issue has been disputed by the vendor",
+        "description" : "Pip maintainers, and others such as [RHEL](https://access.redhat.com/security/cve/cve-2018-20225) do not consider this a vulnerability as it is the intended behaviour",
+        "is_positive" : true
+      }, {
+        "name" : "The issue results in a severe impact (such as remote code execution)",
+        "description" : "A malicious package can contain arbitrary code, which is by definition a severe code execution impact"
+      }, {
+        "name" : "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+        "description" : "Exploitation requires the pip client to use the `--extra-index-url` flag. The attacker must research and find the names of the \"private packages\" being installed by the victim, and then publish packages with the same name (but containing a malicious payload) to PyPI.",
+        "is_positive" : true
+      } ],
+      "remediation" : "##### Deployment mitigations\n\nDo not use the `--extra-index-url` flag with pip and consider using version pinning for deployments."
+    },
+    "cves" : [ {
+      "cve" : "CVE-2018-20225",
+      "cwe" : [ "CWE-20" ],
+      "cvss_v2_score" : "6.8",
+      "cvss_v2_vector" : "CVSS:2.0/AV:N/AC:M/Au:N/C:P/I:P/A:P",
+      "cvss_v3_score" : "7.8",
+      "cvss_v3_vector" : "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://pip:21.2.3" : {
+        "package_name" : "pip",
+        "package_version" : "21.2.3",
+        "package_type" : "pypi",
+        "infected_versions" : [ "(,)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pip:21.2.3"
+        } ] ]
+      }
+    },
+    "references" : [ "https://pip.pypa.io/en/stable/news/", "https://lists.apache.org/thread.html/rb1adce798445facd032870d644eb39c4baaf9c4a7dd5477d12bb6ab2%40%3Cgithub.arrow.apache.org%3E", "https://cowlicks.website/posts/arbitrary-code-execution-from-pips-extra-index-url.html", "https://bugzilla.redhat.com/show_bug.cgi?id=1835736", "https://nvd.nist.gov/vuln/detail/CVE-2018-20225" ]
+  }, {
+    "severity" : "Critical",
+    "summary" : "A vulnerability was discovered in the PyYAML library in versions before 5.3.1, where it is susceptible to arbitrary code execution when it processes untrusted YAML files through the full_load method or with the FullLoader loader. Applications that use the library to process untrusted input may be vulnerable to this flaw. An attacker could use this flaw to execute arbitrary code on the system by abusing the python/object/new constructor.",
+    "issue_id" : "XRAY-95701",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "2022-09-05T11:37:00Z",
+    "extended_information" : {
+      "short_description" : "Insufficient input validation in the PyYAML library allows unauthenticated network attackers to perform code execution when parsing a crafted YAML file.",
+      "full_description" : "The [PyYAML](https://pypi.org/project/PyYAML/) library is a popular Python YAML parser.\n\nAttackers can trigger the exploit by supplying a crafted YAML file to the `full_load` method or a `load` method that uses `Loader=FullLoader` (which is the default). A public [Exploit (PoC)](https://gist.github.com/adamczi/23a3b6d4bb7b2be35e79b0667d6682e1) exists which demonstrates remote code execution, making this vulnerability likely to be exploited in practice.\n\nThe library implementation has a [prototype pollution](https://shieldfy.io/security-wiki/prototype-pollution/introduction-to-prototype-pollution/) issue in the `construct_python_object_apply()` function in the `lib/yaml/constructor.py` module, used by the `full_load()` method and the `FullLoader` loader. This allows an attacker to create a property for an object created from the loaded file. The constructor does not check the attribute for conflicts; for example, it is possible to create an `extend` attribute when an `extend` method already exists in an object. This can be exploited to replace the `extend` method with the insecure `yaml.unsafe_load()` function, which is later invoked by `construct_python_object_apply()` and executes a malicious YAML payload. \n\nThe [official solution]() provides a blacklist of properties and attributes that cannot be redefined, such as the `extend` method and all special methods (`__set__`, `__setitem__`, etc.). In addition, the `README` file is updated with a request to use the `safe_load()` function and `SafeLoader` loader for all untrusted input. It is still possible to use the `UnsafeLoader`, and the fix does not completely solve the problem, as shown by the later CVE-2020-14343.\n\nThe vulnerability was discovered by [Riccardo Schirone](https://github.com/ret2libc).",
+      "jfrog_research_severity" : "Critical",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The issue can be exploited by attackers over the network"
+      }, {
+        "name" : "The issue results in a severe impact (such as remote code execution)"
+      }, {
+        "name" : "The prerequisites for exploiting the issue are either extremely common or nonexistent (always exploitable)"
+      }, {
+        "name" : "The issue has an exploit published"
+      } ],
+      "remediation" : "##### Development mitigations\n\n* Use `yaml.safe_load()` or the `SafeLoader` loader for all inputs."
+    },
+    "cves" : [ {
+      "cve" : "CVE-2020-1747",
+      "cwe" : [ "CWE-20" ],
+      "cvss_v2_score" : "10.0",
+      "cvss_v2_vector" : "CVSS:2.0/AV:N/AC:L/Au:N/C:C/I:C/A:C",
+      "cvss_v3_score" : "9.8",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[5.3.1]" ],
+        "infected_versions" : [ "(,5.3.1)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    },
+    "references" : [ "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/MMQXSZXNJT6ERABJZAAICI3DQSQLCP3D/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/MMQXSZXNJT6ERABJZAAICI3DQSQLCP3D/", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/ZBJA3SGNJKCAYPSHOHWY3KBCWNM5NYK2/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/MMQXSZXNJT6ERABJZAAICI3DQSQLCP3D", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/K5HEPD7LEVDPCITY5IMDYWXUMX37VFMY", "https://github.com/advisories/GHSA-6757-jp84-gxfx", "https://github.com/yaml/pyyaml/commit/5080ba513377b6355a0502104846ee804656f1e0", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/K5HEPD7LEVDPCITY5IMDYWXUMX37VFMY/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/7PPAS6C4SZRDQLR7C22A5U3QOLXY33JX/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/WORRFHPQVAFKKXXWLSSW6XKUYLWM6CSH", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/ZBJA3SGNJKCAYPSHOHWY3KBCWNM5NYK2/", "https://bugzilla.redhat.com/show_bug.cgi?id=CVE-2020-1747", "http://lists.opensuse.org/opensuse-security-announce/2020-05/msg00017.html", "https://nvd.nist.gov/vuln/detail/CVE-2020-1747", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/K5HEPD7LEVDPCITY5IMDYWXUMX37VFMY/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/ZBJA3SGNJKCAYPSHOHWY3KBCWNM5NYK2", "https://github.com/yaml/pyyaml", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/7PPAS6C4SZRDQLR7C22A5U3QOLXY33JX/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/7PPAS6C4SZRDQLR7C22A5U3QOLXY33JX", "https://github.com/yaml/pyyaml/pull/386", "http://lists.opensuse.org/opensuse-security-announce/2020-04/msg00017.html", "https://www.oracle.com/security-alerts/cpujul2022.html", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/WORRFHPQVAFKKXXWLSSW6XKUYLWM6CSH/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/WORRFHPQVAFKKXXWLSSW6XKUYLWM6CSH/" ]
+  }, {
+    "severity" : "Critical",
+    "summary" : "A vulnerability was discovered in the PyYAML library in versions before 5.4, where it is susceptible to arbitrary code execution when it processes untrusted YAML files through the full_load method or with the FullLoader loader. Applications that use the library to process untrusted input may be vulnerable to this flaw. This flaw allows an attacker to execute arbitrary code on the system by abusing the python/object/new constructor. This flaw is due to an incomplete fix for CVE-2020-1747.",
+    "issue_id" : "XRAY-140308",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "2023-05-30T08:53:00Z",
+    "extended_information" : {
+      "short_description" : "An improper input validation in PyYAML when parsing untrusted YAML files can be used by an attacker to get remote code execution.",
+      "full_description" : "[PyYAML](https://github.com/yaml/pyyaml) is a python library used to parse YAML files.\n\nAn attacker can exploit this vulnerability for a remote code execution, when the library is used for parsing untrusted YAML files. No public exploit is available, but exploiting it for achieving remote code execution is considered trivial.\n\nAn attacker can exploit this vulnerability and execute code by adding a call to `eval` or `exec` in the `python/object/new` constructor on the crafted YAML file that gets parsed. For example -\n```yaml\n!!python/object/new:tuple \n- !!python/object/new:map \n  - !!python/name:eval\n  - [ print(\"RCE EXPLOIT!\") ]\n```\n\nThe vulnerability is applicable when the library's function `yaml.load()` is used with an attacker-supplied input, which by default loads a YAML file with the `FullLoader` class. This class calls the vulnerable  `full_load()` function which can cause code execution when the YAML is deserialized. For example - \n```python\nimport yaml\nfile_content = request.files['file'].read()\nprint('Loading yaml file...')\nyaml.load(file_content)\n```",
+      "jfrog_research_severity" : "Critical",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The issue results in a severe impact (such as remote code execution)",
+        "description" : "Python code injection"
+      }, {
+        "name" : "The issue is trivial to exploit and does not require a published writeup or PoC",
+        "description" : "Even without a public exploit, exploitation is trivial as shown in the extended description"
+      }, {
+        "name" : "The prerequisites for exploiting the issue are either extremely common or nonexistent (always exploitable)",
+        "description" : "It is likely that a program that uses PyYAML would pass remote input to `yaml.load()` since this is the main API of the PyYAML package"
+      }, {
+        "name" : "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+        "description" : "The attacker has to find a remote input that propagates into the `yaml.load` API",
+        "is_positive" : true
+      } ],
+      "remediation" : "##### Development mitigations\n\nPerform any of the following -\n1. Replace any call to `yaml.load` or `yaml.full_load` with a call to `yaml.safe_load()`\n2. Replace any usage of the `Loader` or `FullLoader` class with the `SafeLoader` class"
+    },
+    "cves" : [ {
+      "cve" : "CVE-2020-14343",
+      "cwe" : [ "CWE-20" ],
+      "cvss_v2_score" : "10.0",
+      "cvss_v2_vector" : "CVSS:2.0/AV:N/AC:L/Au:N/C:C/I:C/A:C",
+      "cvss_v3_score" : "9.8",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[5.4]" ],
+        "infected_versions" : [ "(,5.4)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    },
+    "references" : [ "https://github.com/yaml/pyyaml/issues/420", "https://www.oracle.com/security-alerts/cpujul2022.html", "https://github.com/yaml/pyyaml/issues/420#issuecomment-663673966", "https://www.oracle.com/security-alerts/cpuapr2022.html", "https://github.com/SeldonIO/seldon-core/issues/2252", "https://bugzilla.redhat.com/show_bug.cgi?id=1860466", "https://pypi.org/project/PyYAML/", "https://github.com/yaml/pyyaml/commit/a001f2782501ad2d24986959f0239a354675f9dc", "https://nvd.nist.gov/vuln/detail/CVE-2020-14343", "https://github.com/advisories/GHSA-8q59-q68h-6hv4", "https://github.com/yaml/pyyaml" ]
+  }, {
+    "severity" : "Low",
+    "summary" : "kuku",
+    "issue_id" : "CustomIssue_c7CBoSVCFHTcAm2e",
+    "provider" : "Custom",
+    "edited" : "2024-03-07T07:02:49Z",
+    "extended_information" : { },
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "infected_versions" : [ "[5.2]" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    }
+  }, {
+    "severity" : "Low",
+    "summary" : "asdsad",
+    "issue_id" : "CustomIssue_ig6lvislh7EPKJ72",
+    "provider" : "Custom",
+    "edited" : "2024-04-02T12:40:14Z",
+    "extended_information" : { },
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "infected_versions" : [ "[5.2]" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    }
+  }, {
+    "severity" : "Low",
+    "summary" : "szf",
+    "issue_id" : "CustomIssue_LX0LOklTg4TD7TNL",
+    "provider" : "Custom",
+    "edited" : "2024-04-15T10:16:31Z",
+    "extended_information" : { },
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "infected_versions" : [ "[5.2]" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    }
+  }, {
+    "severity" : "Low",
+    "summary" : "test",
+    "issue_id" : "CustomIssue_K8UZUisc4ho1wuOA",
+    "provider" : "Custom",
+    "edited" : "2024-04-15T11:05:12Z",
+    "extended_information" : { },
+    "components" : {
+      "pypi://pyyaml:5.2" : {
+        "package_name" : "pyyaml",
+        "package_version" : "5.2",
+        "package_type" : "pypi",
+        "infected_versions" : [ "[5.2]" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://pyyaml:5.2"
+        } ] ]
+      }
+    }
+  }, {
+    "severity" : "Medium",
+    "summary" : "Python Packaging Authority (PyPA) setuptools before 65.5.1 allows remote attackers to cause a denial of service via HTML in a crafted package or custom PackageIndex page. There is a Regular Expression Denial of Service (ReDoS) in package_index.py.",
+    "issue_id" : "XRAY-412522",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "2023-02-15T12:36:00Z",
+    "extended_information" : {
+      "short_description" : "An inefficient regular expression in setuptools PackageIndex leads to denial of service when processing an attacker-controlled Python package.",
+      "full_description" : "[Setuptools](https://github.com/pypa/setuptools/) is a package for managing Python packages and dependencies, including tools for building and distributing packages, as well as for discovering and managing 3rd party packages available on PyPI.\n\nThe `find_external_links` function in the `setuptools.package_index` module is used to find external links that are associated with a package available on the Python Package Index (PyPI). These external links are typically URLs to the package's homepage, documentation, source code repository, and other resources that are related to the package.\n\nThe most common scenario of triggering this issue is when running pip with the `--editable` flag. This will cause the vulnerable `find_external_links` function to be invoked\n\nExample of manual usage of `find_external_links` -\n```\nfrom setuptools.package_index import PackageIndex\nimport requests\n\n# Specify the URL of the package page on PyPI\nurl = 'https://pypi.org/project/requests'\n\n# Use the requests library to retrieve the HTML content of the package page\nresponse = requests.get(url)\n\n# Create an instance of the PackageIndex class\nindex = PackageIndex()\n\n# Use the find_external_links function to find external links for the package\nlinks = index.find_external_links(url, response.text)\n\n# Print the name and URL of each external link\nfor link_name, link_url in links:\n    print(f'{link_name}: {link_url}')\n```\nThis example will find and print all external links for a package.\n\nTo find a specific url, i.e. the tag containing the `rel=` property, the `find_external_links` function uses a Regular Expression (regex). The regex is too not efficient which can lead to ReDoS on specific user inputs.\nAs a result, a user fetching malicious HTML from a package in PyPI or a custom PackageIndex page may be attacked.",
+      "jfrog_research_severity" : "Low",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The issue cannot result in a severe impact (such as remote code execution)",
+        "description" : "In cases where an attacker can already modify (or fully control) a package, then the attacker can change the package's code and immediately achieve arbitrary code execution. Since exploitation of this vulnerability has virtually the same prerequisites and only achieves DoS, this issue has a very low security impact",
+        "is_positive" : true
+      }, {
+        "name" : "Exploiting the issue requires the user to interact with the vulnerable software",
+        "description" : "In most cases, exploiting the vulnerability will require user interaction (ex. running pip)",
+        "is_positive" : true
+      }, {
+        "name" : "The prerequisites for exploiting the issue are extremely unlikely",
+        "description" : "The attackers must be able to change package's content to add its malicious crafted `rel` property.\nMoreover, any reviewer of the package's code will probably detect this and it will probably be caught by the lint and failed the usual lint process.\nAlso, the system installing the Python packages must use the `--editable` pip flag to trigger this vulnerability.",
+        "is_positive" : true
+      }, {
+        "name" : "The issue is trivial to exploit and does not require a published writeup or PoC",
+        "description" : "Exploiting this vulnerability is easy, as it only depends on the number of spaces between the `rel` property and the `=` symbol and between the `=` symbol to the property's value."
+      } ]
+    },
+    "cves" : [ {
+      "cve" : "CVE-2022-40897",
+      "cwe" : [ "CWE-1333" ],
+      "cvss_v3_score" : "5.9",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+    } ],
+    "components" : {
+      "pypi://setuptools:57.4.0" : {
+        "package_name" : "setuptools",
+        "package_version" : "57.4.0",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[65.5.1]" ],
+        "infected_versions" : [ "(,65.5.1)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://setuptools:57.4.0"
+        } ] ]
+      }
+    },
+    "references" : [ "https://security.netapp.com/advisory/ntap-20240621-0006", "https://pyup.io/vulnerabilities/CVE-2022-40897/52495", "https://setuptools.pypa.io/en/latest", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/ADES3NLOE5QJKBLGNZNI2RGVOSQXA37R", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/ADES3NLOE5QJKBLGNZNI2RGVOSQXA37R", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/YNA2BAH2ACBZ4TVJZKFLCR7L23BG5C3H", "https://security.netapp.com/advisory/ntap-20240621-0006/", "https://github.com/pypa/setuptools/issues/3659", "https://pyup.io/posts/pyup-discovers-redos-vulnerabilities-in-top-python-packages/", "https://github.com/pypa/setuptools/blob/fe8a98e696241487ba6ac9f91faa38ade939ec5d/setuptools/package_index.py#L200", "https://pyup.io/vulnerabilities/CVE-2022-40897/52495/", "https://security.netapp.com/advisory/ntap-20230214-0001/", "https://nvd.nist.gov/vuln/detail/CVE-2022-40897", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/YNA2BAH2ACBZ4TVJZKFLCR7L23BG5C3H", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/ADES3NLOE5QJKBLGNZNI2RGVOSQXA37R/", "https://github.com/advisories/GHSA-r9hx-vwmv-q579", "https://github.com/pypa/setuptools/compare/v65.5.0...v65.5.1", "https://security.netapp.com/advisory/ntap-20230214-0001", "https://pyup.io/posts/pyup-discovers-redos-vulnerabilities-in-top-python-packages", "https://github.com/pypa/setuptools/commit/43a9c9bfa6aa626ec2a22540bea28d2ca77964be", "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/YNA2BAH2ACBZ4TVJZKFLCR7L23BG5C3H/" ]
+  }, {
+    "severity" : "High",
+    "summary" : "A vulnerability in the package_index module of pypa/setuptools versions up to 69.1.1 allows for remote code execution via its download functions. These functions, which are used to download packages from URLs provided by users or retrieved from package index servers, are susceptible to code injection. If these functions are exposed to user-controlled inputs, such as package URLs, they can execute arbitrary commands on the system. The issue is fixed in version 70.0.",
+    "issue_id" : "XRAY-611082",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : {
+      "short_description" : "Insufficient input validation in Python's Setuptools may lead to remote code execution by providing a crafted package URL.",
+      "full_description" : "[Setuptools](https://github.com/pypa/setuptools) is a library that lets developers easily build and distribute Python packages.\n\nA vulnerability has been discovered in the function `_download_vcs()` in Setuptools. This function is responsible for downloading packages from a VCS (a Version Control System - `git` or `hg`). It is used, for example, by `PackageIndex.download()`. It has been found that `_download_vcs()` is prone to command injection, because it executes the VCS commands using `os.system()` like this:\n\n`os.system(f\"{vcs} clone --quiet {url} {filename}\")`\n\nThe `url` variable is provided as an input to the function, and defines the URL from which the package should be downloaded. Thus, an attacker who controls this URL can escape the `{vcs}` command and inject his own shell commands.\n\nThis vulnerability is only applicable if an attacker controls a URL that is provided as a package to download. This URL can be provided in several ways: through `setup.py`, through the CLI (`python setup.py easy_install <URL>`), through Python functions such as `PackageIndex.download()`, or through a custom package index server (which is configured in `setup.cfg`).",
+      "jfrog_research_severity" : "Medium",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The prerequisites for exploiting the issue are extremely unlikely",
+        "description" : "The attacker must be able to control a URL that is provided as a package to download or convince the victim to download the malicious package.\nAnother scenario would be an attacker that compromises a package index server, in which case the a package content can already be modified to execute code without needing this vulnerability.",
+        "is_positive" : true
+      }, {
+        "name" : "The issue results in a severe impact (such as remote code execution)",
+        "description" : "The impact of this vulnerability is RCE and full system compromise."
+      }, {
+        "name" : "Exploiting the issue requires the user to interact with the vulnerable software",
+        "description" : "In most cases, exploiting the vulnerability will require user interaction (ex. running pip).",
+        "is_positive" : true
+      } ]
+    },
+    "cves" : [ {
+      "cve" : "CVE-2024-6345",
+      "cwe" : [ "CWE-94" ],
+      "cvss_v3_score" : "8.8",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://setuptools:57.4.0" : {
+        "package_name" : "setuptools",
+        "package_version" : "57.4.0",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[70.0.0]" ],
+        "infected_versions" : [ "(,70.0.0)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://setuptools:57.4.0"
+        } ] ]
+      }
+    },
+    "references" : [ "https://github.com/advisories/GHSA-cx63-2mw6-8hw5", "https://github.com/pypa/setuptools/pull/4332", "https://huntr.com/bounties/d6362117-ad57-4e83-951f-b8141c6e7ca5", "https://nvd.nist.gov/vuln/detail/CVE-2024-6345", "https://github.com/pypa/setuptools/commit/88807c7062788254f654ea8c03427adc859321f0" ]
+  }, {
+    "severity" : "High",
+    "summary" : "Werkzeug is a comprehensive WSGI web application library. If an upload of a file that starts with CR or LF and then is followed by megabytes of data without these characters: all of these bytes are appended chunk by chunk into internal bytearray and lookup for boundary is performed on growing buffer. This allows an attacker to cause a denial of service by sending crafted multipart data to an endpoint that will parse it. The amount of CPU time required can block worker processes from handling legitimate requests. This vulnerability has been patched in version 3.0.1.",
+    "issue_id" : "XRAY-534473",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : {
+      "short_description" : "A design problem in Werkzeug may lead to denial of service when parsing multipart form data.",
+      "jfrog_research_severity" : "High",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "The issue is trivial to exploit and does not require a published writeup or PoC",
+        "description" : "Even though a public exploit is not available, a simple big file (e.g. 50MB in size) that contains CR/LF bytes at the start and then is padded with zeroes would trigger the issue.\nThis file pattern is commonly observed in malware samples and memory dumps."
+      }, {
+        "name" : "The impact of exploiting the issue depends on the context of surrounding software. A severe impact such as RCE is not guaranteed.",
+        "description" : "The vulnerability may lead to denial of service when the attacker is flooding the server with malicious file uploads.",
+        "is_positive" : true
+      }, {
+        "name" : "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+        "description" : "An attacker must have access to a multipart form receiving files propagating into the `formparser.parse_form_data()` function.",
+        "is_positive" : true
+      }, {
+        "name" : "The issue results in a severe impact (such as remote code execution)",
+        "description" : "Denial of Service."
+      }, {
+        "name" : "The issue can be exploited by attackers over the network"
+      } ]
+    },
+    "cves" : [ {
+      "cve" : "CVE-2023-46136",
+      "cwe" : [ "CWE-787", "CWE-400" ],
+      "cvss_v3_score" : "7.5",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+    } ],
+    "components" : {
+      "pypi://werkzeug:1.0.1" : {
+        "package_name" : "werkzeug",
+        "package_version" : "1.0.1",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[2.3.8]", "[3.0.1]" ],
+        "infected_versions" : [ "(,2.3.8)", "[3.0.0,3.0.1)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://werkzeug:1.0.1"
+        } ] ]
+      }
+    },
+    "references" : [ "https://github.com/advisories/GHSA-hrfv-mqp8-q5rw", "https://github.com/pallets/werkzeug/commit/f2300208d5e2a5076cbbb4c2aad71096fd040ef9", "https://nvd.nist.gov/vuln/detail/CVE-2023-46136", "https://github.com/pallets/werkzeug/security/advisories/GHSA-hrfv-mqp8-q5rw", "https://github.com/pypa/advisory-database/tree/main/vulns/werkzeug/PYSEC-2023-221.yaml", "https://github.com/pallets/werkzeug/commit/f3c803b3ade485a45f12b6d6617595350c0f03e2", "https://security.netapp.com/advisory/ntap-20231124-0008/", "https://github.com/pallets/werkzeug/commit/b1916c0c083e0be1c9d887ee2f3d696922bfc5c1" ]
+  }, {
+    "severity" : "High",
+    "summary" : "Werkzeug is a comprehensive WSGI web application library. Prior to version 2.2.3, Werkzeug's multipart form data parser will parse an unlimited number of parts, including file parts. Parts can be a small amount of bytes, but each requires CPU time to parse and may use more memory as Python data. If a request can be made to an endpoint that accesses `request.data`, `request.form`, `request.files`, or `request.get_data(parse_form_data=False)`, it can cause unexpectedly high resource usage. This allows an attacker to cause a denial of service by sending crafted multipart data to an endpoint that will parse it. The amount of CPU time required can block worker processes from handling legitimate requests. The amount of RAM required can trigger an out of memory kill of the process. Unlimited file parts can use up memory and file handles. If many concurrent requests are sent continuously, this can exhaust or kill all available workers. Version 2.2.3 contains a patch for this issue.",
+    "issue_id" : "XRAY-418118",
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : { },
+    "cves" : [ {
+      "cve" : "CVE-2023-25577",
+      "cwe" : [ "CWE-770", "CWE-400" ],
+      "cvss_v3_score" : "7.5",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+    } ],
+    "components" : {
+      "pypi://werkzeug:1.0.1" : {
+        "package_name" : "werkzeug",
+        "package_version" : "1.0.1",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[2.2.3]" ],
+        "infected_versions" : [ "(,2.2.3)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://werkzeug:1.0.1"
+        } ] ]
+      }
+    },
+    "references" : [ "https://github.com/pallets/werkzeug/commit/517cac5a804e8c4dc4ed038bb20dacd038e7a9f1", "https://github.com/pallets/werkzeug/security/advisories/GHSA-xg9f-g7g7-2323", "https://security.netapp.com/advisory/ntap-20230818-0003", "https://security.netapp.com/advisory/ntap-20230818-0003/", "https://nvd.nist.gov/vuln/detail/CVE-2023-25577", "https://github.com/pallets/werkzeug/releases/tag/2.2.3", "https://github.com/pallets/werkzeug", "https://www.debian.org/security/2023/dsa-5470" ]
+  }, {
+    "severity" : "High",
+    "summary" : "Werkzeug is a comprehensive WSGI web application library. The debugger in affected versions of Werkzeug can allow an attacker to execute code on a developer's machine under some circumstances. This requires the attacker to get the developer to interact with a domain and subdomain they control, and enter the debugger PIN, but if they are successful it allows access to the debugger even if it is only running on localhost. This also requires the attacker to guess a URL in the developer's application that will trigger the debugger. This vulnerability is fixed in 3.0.3.",
+    "issue_id" : "XRAY-600537",
+    "is_high_profile" : true,
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : {
+      "short_description" : "A design problem in Werkzeug may lead to remote code execution when interacting with an attacker-controlled domain.",
+      "jfrog_research_severity" : "Low",
+      "jfrog_research_severity_reasons" : [ {
+        "name" : "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+        "description" : "An attacker must have access to the debugger PIN code.",
+        "is_positive" : true
+      }, {
+        "name" : "Exploiting the issue requires the user to interact with the vulnerable software",
+        "description" : "This vulnerability requires the attacker to get the developer to interact with a domain and subdomain they control, and enter the debugger PIN.",
+        "is_positive" : true
+      }, {
+        "name" : "The prerequisites for exploiting the issue are extremely unlikely",
+        "description" : "The prerequisites for exploiting the issue are unlikely because it involves a user interacting with a domain and subdomain that has access to the Debugger PIN. Additionally, the attacker must find a way of triggering the debugger in the application.",
+        "is_positive" : true
+      } ],
+      "remediation" : "##### Development mitigations\n\n**Do not use debugger in production**:\n\n```python\napp.run(debug=False)\n```"
+    },
+    "cves" : [ {
+      "cve" : "CVE-2024-34069",
+      "cwe" : [ "CWE-352" ],
+      "cvss_v3_score" : "7.5",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://werkzeug:1.0.1" : {
+        "package_name" : "werkzeug",
+        "package_version" : "1.0.1",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[3.0.3]" ],
+        "infected_versions" : [ "(,3.0.3)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://werkzeug:1.0.1"
+        } ] ]
+      }
+    },
+    "references" : [ "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/H4SH32AM3CTPMAAEOIDAN7VU565LO4IR", "https://nvd.nist.gov/vuln/detail/CVE-2024-34069", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/HFERFN7PINV4MOGMGA3DPIXJPDCYOEJZ", "https://security.netapp.com/advisory/ntap-20240614-0004/", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/HFERFN7PINV4MOGMGA3DPIXJPDCYOEJZ/", "https://github.com/pallets/werkzeug/security/advisories/GHSA-2g68-c3qc-8985", "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/H4SH32AM3CTPMAAEOIDAN7VU565LO4IR/", "https://security.netapp.com/advisory/ntap-20240614-0004", "https://github.com/pallets/werkzeug/commit/3386395b24c7371db11a5b8eaac0c91da5362692", "https://github.com/advisories/GHSA-2g68-c3qc-8985" ]
+  }, {
+    "severity" : "Critical",
+    "summary" : "Improper parsing of HTTP requests in Pallets Werkzeug v2.1.0 and below allows attackers to perform HTTP Request Smuggling using a crafted HTTP request with multiple requests included inside the body. NOTE: the vendor's position is that this behavior can only occur in unsupported configurations involving development mode and an HTTP server from outside the Werkzeug project",
+    "issue_id" : "XRAY-211172",
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : { },
+    "cves" : [ {
+      "cve" : "CVE-2022-29361",
+      "cwe" : [ "CWE-444" ],
+      "cvss_v2_score" : "7.5",
+      "cvss_v2_vector" : "CVSS:2.0/AV:N/AC:L/Au:N/C:P/I:P/A:P",
+      "cvss_v3_score" : "9.8",
+      "cvss_v3_vector" : "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+    } ],
+    "components" : {
+      "pypi://werkzeug:1.0.1" : {
+        "package_name" : "werkzeug",
+        "package_version" : "1.0.1",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[2.1.1]" ],
+        "infected_versions" : [ "(,2.1.1)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://werkzeug:1.0.1"
+        } ] ]
+      }
+    },
+    "references" : [ "https://github.com/pallets/werkzeug/commit/9a3a981d70d2e9ec3344b5192f86fcaf3210cd85", "https://nvd.nist.gov/vuln/detail/CVE-2022-29361", "https://github.com/pallets/werkzeug/issues/2420" ]
+  }, {
+    "severity" : "Low",
+    "summary" : "Werkzeug is a comprehensive WSGI web application library. Browsers may allow \"nameless\" cookies that look like `=value` instead of `key=value`. A vulnerable browser may allow a compromised application on an adjacent subdomain to exploit this to set a cookie like `=__Host-test=bad` for another subdomain. Werkzeug prior to 2.2.3 will parse the cookie `=__Host-test=bad` as __Host-test=bad`. If a Werkzeug application is running next to a vulnerable or malicious subdomain which sets such a cookie using a vulnerable browser, the Werkzeug application will see the bad cookie value but the valid cookie key. The issue is fixed in Werkzeug 2.2.3.",
+    "issue_id" : "XRAY-418119",
+    "provider" : "JFrog",
+    "edited" : "0001-01-01T00:00:00Z",
+    "extended_information" : { },
+    "cves" : [ {
+      "cve" : "CVE-2023-23934",
+      "cwe" : [ "CWE-20" ],
+      "cvss_v3_score" : "3.5",
+      "cvss_v3_vector" : "CVSS:3.1/AV:A/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N"
+    } ],
+    "components" : {
+      "pypi://werkzeug:1.0.1" : {
+        "package_name" : "werkzeug",
+        "package_version" : "1.0.1",
+        "package_type" : "pypi",
+        "fixed_versions" : [ "[2.2.3]" ],
+        "infected_versions" : [ "(,2.2.3)" ],
+        "impact_paths" : [ [ {
+          "component_id" : "root"
+        }, {
+          "component_id" : "pypi://werkzeug:1.0.1"
+        } ] ]
+      }
+    },
+    "references" : [ "https://security.netapp.com/advisory/ntap-20230818-0003", "https://github.com/pallets/werkzeug/releases/tag/2.2.3", "https://github.com/pallets/werkzeug", "https://github.com/pallets/werkzeug/commit/cf275f42acad1b5950c50ffe8ef58fe62cdce028", "https://security.netapp.com/advisory/ntap-20230818-0003/", "https://nvd.nist.gov/vuln/detail/CVE-2023-23934", "https://www.debian.org/security/2023/dsa-5470", "https://github.com/pallets/werkzeug/security/advisories/GHSA-px8h-6qxv-m22q" ]
+  } ]
+}

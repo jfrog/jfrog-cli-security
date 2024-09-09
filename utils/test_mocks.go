@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -93,10 +94,21 @@ func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.Ser
 				}
 			}
 		}
-		if r.RequestURI == "/xray/api/v1/scan/graph" {
+		if strings.HasPrefix(r.RequestURI, "/xray/api/v1/scan/graph") { //"/xray/api/v1/scan/graph"
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
+			if r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				content, err := os.ReadFile("../../tests/testdata/other/graphScanResults/graphScanResult.txt")
+				if !assert.NoError(t, err) {
+					return
+				}
+				_, err = w.Write(content)
 				if !assert.NoError(t, err) {
 					return
 				}
