@@ -229,7 +229,7 @@ var flagsMap = map[string]components.Flag{
 		components.WithBoolDefaultValue(true),
 	),
 	WorkingDirs: components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
-	OutputDir:   components.NewStringFlag(OutputDir, "Some description"),
+	OutputDir:   components.NewStringFlag(OutputDir, "Some description", components.SetHiddenStrFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
