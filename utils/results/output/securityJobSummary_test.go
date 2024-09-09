@@ -8,11 +8,14 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
+	coreUtils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,6 +39,51 @@ var (
 		SecretsResults: &formats.ResultSummary{"Medium": map[string]int{formats.NoStatus: 3}},
 	}
 )
+
+func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
+	testCases := []struct {
+		name          string
+		isJasEntitled bool
+	}{
+		{
+			name:          "JAS entitled",
+			isJasEntitled: true,
+		},
+		{
+			name:          "JAS not entitled",
+			isJasEntitled: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			tempDir, cleanUpDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+			defer cleanUpDir()
+			cleanUp := clientTests.SetEnvWithCallbackAndAssert(t, coreUtils.SummaryOutputDirPathEnv, tempDir)
+			defer cleanUp()
+
+			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled)))
+			assert.Equal(t, testCase.isJasEntitled, hasFilesInDir(t, filepath.Join(tempDir, commandsummary.OutputDirName, "security", string(commandsummary.SarifReport))))
+		})
+	}
+}
+
+func createDummyJasResult(entitled bool) *Results {
+	return &Results{
+		ExtendedScanResults: &ExtendedScanResults{EntitledForJas: entitled},
+	}
+}
+
+func hasFilesInDir(t *testing.T, dir string) bool {
+	exists, err := fileutils.IsDirExists(dir, false)
+	assert.NoError(t, err)
+	if !exists {
+		return false
+	}
+	files, err := os.ReadDir(dir)
+	assert.NoError(t, err)
+	return len(files) > 0
+}
 
 func TestSaveLoadData(t *testing.T) {
 	testDockerScanSummary := ScanCommandResultSummary{
