@@ -2,6 +2,7 @@ package sarifutils
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"strings"
 
@@ -418,4 +419,11 @@ func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count in
 		}
 	}
 	return
+}
+
+func GetResultFingerprint(result *sarif.Result) string {
+	if result.Fingerprints != nil {
+		return result.Fingerprints[jasutils.SastFingerprintKey].(string)
+	}
+	return ""
 }

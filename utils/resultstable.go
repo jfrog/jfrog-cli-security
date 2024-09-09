@@ -466,6 +466,7 @@ func prepareSast(sasts []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						ScannerDescription: scannerDescription,
 						Finding:            sarifutils.GetResultMsgText(sastResult),
+						Fingerprint:        sarifutils.GetResultFingerprint(sastResult),
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, sastRun.Invocations),
 							StartLine:   sarifutils.GetLocationStartLine(location),
