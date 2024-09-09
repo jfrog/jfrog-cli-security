@@ -1,6 +1,7 @@
 package simplejsonparser
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -10,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -233,7 +235,6 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			sortVulnerabilityOrViolationRows(tc.rows)
-
 			for i, row := range tc.rows {
 				assert.Equal(t, tc.expectedOrder[i], row.ImpactedDependencyName)
 			}
@@ -266,28 +267,28 @@ func TestGetOperationalRiskReadableData(t *testing.T) {
 
 func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 	testCases := []struct {
-		name             string
-		input            []services.Vulnerability
-		target           string
-		entitledForJas   bool
-		applicablityRuns []*sarif.Run
-		expectedOutput   []formats.VulnerabilityOrViolationRow
+		name              string
+		input             []services.Vulnerability
+		target            results.ScanTarget
+		entitledForJas    bool
+		applicabilityRuns []*sarif.Run
+		expectedOutput    []formats.VulnerabilityOrViolationRow
 	}{
 		{
 			name:   "No vulnerabilities",
-			target: "target",
+			target: results.ScanTarget{Target: "target"},
 		},
 		{
 			name:   "Vulnerabilities not entitled for JAS",
 			input:  testScaScanVulnerabilities,
-			target: "target",
+			target: results.ScanTarget{Target: "target"},
 			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -302,7 +303,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -317,7 +318,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId: "XRAY-2",
 					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -332,9 +333,9 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 		{
 			name:           "Vulnerabilities with Jas",
 			input:          testScaScanVulnerabilities,
-			target:         "target",
+			target:         results.ScanTarget{Target: "target"},
 			entitledForJas: true,
-			applicablityRuns: []*sarif.Run{
+			applicabilityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
 					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
 				).WithInvocations([]*sarif.Invocation{
@@ -410,7 +411,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := PrepareSimpleJsonVulnerabilities(tc.target, tc.input, false, tc.entitledForJas, tc.applicablityRuns...)
+			out, err := PrepareSimpleJsonVulnerabilities(tc.target, services.ScanResponse{Vulnerabilities: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})
@@ -421,28 +422,28 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 	testCases := []struct {
 		name                          string
 		input                         []services.Violation
-		target                        string
+		target                        results.ScanTarget
 		entitledForJas                bool
-		applicablityRuns              []*sarif.Run
+		applicabilityRuns             []*sarif.Run
 		expectedSecurityOutput        []formats.VulnerabilityOrViolationRow
 		expectedLicenseOutput         []formats.LicenseRow
 		expectedOperationalRiskOutput []formats.OperationalRiskViolationRow
 	}{
 		{
 			name:   "No violations",
-			target: "target",
+			target: results.ScanTarget{Target: "target"},
 		},
 		{
 			name:   "Violations not entitled for JAS",
 			input:  testScaScanViolation,
-			target: "target",
+			target: results.ScanTarget{Target: "target"},
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -457,7 +458,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 17},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -472,7 +473,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId: "XRAY-2",
 					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -487,7 +488,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					LicenseKey: "license-1",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
 						ImpactedDependencyName: "component-B",
 						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
@@ -497,9 +498,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 		{
 			name:           "Violations with applicability",
 			input:          testScaScanViolation,
-			target:         "target",
+			target:         results.ScanTarget{Target: "target"},
 			entitledForJas: true,
-			applicablityRuns: []*sarif.Run{
+			applicabilityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
 					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
 				).WithInvocations([]*sarif.Invocation{
@@ -589,7 +590,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, tc.input, false, tc.entitledForJas, tc.applicablityRuns...)
+			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, services.ScanResponse{Violations: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedSecurityOutput, securityOutput)
 			assert.ElementsMatch(t, tc.expectedLicenseOutput, licenseOutput)
@@ -600,9 +601,101 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 }
 
 func TestPrepareSimpleJsonLicenses(t *testing.T) {
-
+	testCases := []struct {
+		name           string
+		target         results.ScanTarget
+		licenses       []services.License
+		expectedOutput []formats.LicenseRow
+	}{
+		{
+			name:   "No licenses",
+			target: results.ScanTarget{Target: "target"},
+		},
+		{
+			name:   "Licenses",
+			target: results.ScanTarget{Target: "target"},
+			licenses: []services.License{
+				{
+					Key:  "license-1",
+					Name: "license-1-name",
+					Components: map[string]services.Component{
+						"component-B": {
+							ImpactPaths: [][]services.ImpactPathNode{{
+								{ComponentId: "root"},
+								{ComponentId: "component-B"},
+							}},
+						},
+					},
+				},
+			},
+			expectedOutput: []formats.LicenseRow{
+				{
+					LicenseKey: "license-1",
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						ImpactedDependencyName: "component-B",
+						// Direct
+						Components: []formats.ComponentRow{{
+							Name:     "component-B",
+							Location: &formats.Location{File: "target"},
+						}},
+					},
+					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := PrepareSimpleJsonLicenses(tc.target, tc.licenses)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedOutput, out)
+		})
+	}
 }
 
 func TestPrepareSimpleJsonJasIssues(t *testing.T) {
-
+	issues := []*sarif.Run{
+		// Secret detection
+		sarifutils.CreateRunWithDummyResultsInWd("target",
+			sarifutils.CreateResultWithOneLocation(filepath.Join("target", "file"), 1, 2, 3, 4, "secret-snippet", "secret-rule-id", "note"),
+		),
+	}
+	testCases := []struct {
+		name           string
+		target         results.ScanTarget
+		entitledForJas bool
+		jasIssues      []*sarif.Run
+		expectedOutput []formats.SourceCodeRow
+	}{
+		{
+			name:           "No JAS issues",
+			entitledForJas: true,
+			target:         results.ScanTarget{Target: filepath.Join("root", "target")},
+		},
+		{
+			name:           "JAS issues - not entitled",
+			target:         results.ScanTarget{Target: "target"},
+			jasIssues:      issues,
+			expectedOutput: []formats.SourceCodeRow{},
+		},
+		{
+			name:           "JAS issues",
+			entitledForJas: true,
+			target:         results.ScanTarget{Target: "target"},
+			jasIssues:      issues,
+			expectedOutput: []formats.SourceCodeRow{
+				{
+					Location:        formats.Location{File: "file", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "secret-snippet"},
+					SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := PrepareSimpleJsonJasIssues(tc.target, tc.entitledForJas, false, tc.jasIssues...)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tc.expectedOutput, out)
+		})
+	}
 }

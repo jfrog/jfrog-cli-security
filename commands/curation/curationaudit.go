@@ -27,7 +27,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -42,22 +41,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
-
-	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
-	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-core/v2/common/project"
-
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const (
@@ -269,7 +252,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.NewCurationSummary(convertResultsToSummary(results))))
+	err = errors.Join(err, output.RecordSecurityCommandSummary(output.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
 
@@ -785,7 +768,7 @@ func toNugetDownloadUrl(artifactoryUrl, repo, compName, compVersion string) stri
 // input - repo: libs-release
 // output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
 func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
-	name, version, _ = utils.SplitComponentId(id)
+	name, version, _ = techutils.SplitComponentId(id)
 
 	downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, version))
 	for _, versionVariant := range dependencies.CreateAlternativeVersionForms(version) {

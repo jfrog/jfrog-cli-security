@@ -190,17 +190,19 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 }
 
 func (scanCmd *ScanCommand) Run() (err error) {
-	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
-			return
-		}
-		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(
-			scanResults,
-			scanCmd.serverDetails,
-			scanCmd.includeVulnerabilities,
-			scanCmd.hasViolationContext(),
-		))
-	})
+	return scanCmd.RunAndRecordResults(utils.Binary, scanCmd.recordResults)
+}
+
+func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
+	hasViolationContext := scanCmd.hasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
+		return
+	}
+	var summary output.ScanCommandResultSummary
+	if summary, err = output.NewBinaryScanSummary(scanResults, scanCmd.serverDetails, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
+		return
+	}
+	return output.RecordSecurityCommandSummary(summary)
 }
 
 func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recordResFunc func(scanResults *results.SecurityCommandResults) error) (err error) {
@@ -223,9 +225,9 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		return err
 	}
 
-	cmdResults := results.NewCommandResults(cmdTypexrayVersion, entitledForJas && scanCmd.commandSupportsJAS)
+	cmdResults := results.NewCommandResults(cmdType, xrayVersion, entitledForJas && scanCmd.commandSupportsJAS)
 	if scanCmd.analyticsMetricsService != nil {
-		scanResults.MultiScanId = scanCmd.analyticsMetricsService.GetMsi()
+		cmdResults.SetMultiScanId(scanCmd.analyticsMetricsService.GetMsi())
 	}
 
 	errGroup := new(errgroup.Group)
@@ -308,7 +310,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
 		SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
-		SetIsMultipleRootProject(scanResults.IsMultipleProject()).
+		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {
 		return
 	}
@@ -427,7 +429,18 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return err
 				}
-				err = runner.AddJasScannersTasks(jasFileProducerConsumer, module, targetResults, directDepsListFromVulnerabilities(*graphScanResults), scanCmd.serverDetails, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, utils.GetAllSupportedScans())
+				jasParams := runner.JasRunnerParams{
+					Runner:             jasFileProducerConsumer,
+					ServerDetails:      scanCmd.serverDetails,
+					Scanner:            scanner,
+					Module:             module,
+					ScansToPreform:     utils.GetAllSupportedScans(),
+					SecretsScanType:    secrets.SecretsScannerDockerScanType,
+					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
+					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
+					ScanResults:        targetResults,
+				}
+				err = runner.AddJasScannersTasks(jasParams)
 				if err != nil {
 					log.Error(fmt.Sprintf("%s jas scanning failed with error: %s", clientutils.GetLogMsgPrefix(scanThreadId, false), err.Error()))
 					targetResults.AddError(err)

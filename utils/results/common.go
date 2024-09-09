@@ -1,12 +1,15 @@
 package results
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -28,8 +31,8 @@ const (
 )
 
 var (
-	ConvertorResetErr   = fmt.Errorf("Reset must be called before parsing new scan results metadata")
-	ConvertorNewScanErr = fmt.Errorf("ParseNewScanResultsMetadata must be called before starting to parse issues")
+	ErrConvertorReset   = fmt.Errorf("reset must be called before parsing new scan results metadata")
+	ErrConvertorNewScan = fmt.Errorf("ParseNewTargetResults must be called before starting to parse issues")
 )
 
 func NewFailBuildError() error {
@@ -48,12 +51,13 @@ func CheckIfFailBuild(results []services.ScanResponse) bool {
 	return false
 }
 
-type PrepareScaVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type PrepareScaViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type PrepareLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type PrepareJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
+type ParseScaVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScaViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
-func PrepareJasIssues(target string, runs []*sarif.Run, entitledForJas bool, handler PrepareJasFunc) error {
+// PrepareJasIssues allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
+func PrepareJasIssues(target ScanTarget, runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -84,12 +88,13 @@ func PrepareJasIssues(target string, runs []*sarif.Run, entitledForJas bool, han
 	return nil
 }
 
-func PrepareScaVulnerabilities(target string, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, handler PrepareScaVulnerabilityFunc) error {
+// PrepareScaVulnerabilities allows to iterate over the provided vulnerabilities and call the provided handler for each vulnerability to process it.
+func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target, vulnerability.Components)
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -111,68 +116,88 @@ func PrepareScaVulnerabilities(target string, vulnerabilities []services.Vulnera
 	return nil
 }
 
-func PrepareScaViolations(target string, violations []services.Violation, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler PrepareScaViolationFunc, licenseHandler PrepareScaViolationFunc, operationalRiskHandler PrepareScaViolationFunc) error {
+// PrepareScaViolations allows to iterate over the provided violations and call the provided handler for each violation to process it.
+func PrepareScaViolations(target ScanTarget, violations []services.Violation, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
+		return
+	}
+	watchesSet := datastructures.MakeSet[string]()
 	for _, violation := range violations {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target, violation.Components)
-		if err != nil {
-			return err
+		// Handle duplicates and general attributes
+		watchesSet.Add(violation.WatchName)
+		failBuild = failBuild || violation.FailBuild
+		// Prepare violation information
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
 		}
 		cves, applicabilityStatus := ConvertCvesWithApplicability(violation.Cves, entitledForJas, applicabilityRuns, violation.Components)
-		severity, err := severityutils.ParseSeverity(violation.Severity, false)
-		if err != nil {
-			return err
+		severity, e := severityutils.ParseSeverity(violation.Severity, false)
+		if e != nil {
+			err = errors.Join(err, e)
+			continue
 		}
+		// Parse the violation according to its type
 		switch violation.ViolationType {
-		case formats.ViolationTypeSecurity.String():
+		case utils.ViolationTypeSecurity.String():
 			if securityHandler == nil {
+				// No handler was provided for security violations
 				continue
 			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if err := securityHandler(
+				if e := securityHandler(
 					violation, cves, applicabilityStatus, severity,
 					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
 					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); err != nil {
-					return err
+				); e != nil {
+					err = errors.Join(err, e)
+					continue
 				}
 			}
-		case formats.ViolationTypeLicense.String():
+		case utils.ViolationTypeLicense.String():
 			if licenseHandler == nil {
+				// No handler was provided for license violations
 				continue
 			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if err := licenseHandler(
+				if e := licenseHandler(
 					violation, cves, applicabilityStatus, severity,
 					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
 					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); err != nil {
-					return err
+				); e != nil {
+					err = errors.Join(err, e)
+					continue
 				}
 			}
-		case formats.ViolationTypeOperationalRisk.String():
+		case utils.ViolationTypeOperationalRisk.String():
 			if operationalRiskHandler == nil {
+				// No handler was provided for operational risk violations
 				continue
 			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if err := operationalRiskHandler(
+				if e := operationalRiskHandler(
 					violation, cves, applicabilityStatus, severity,
 					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
 					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); err != nil {
-					return err
+				); e != nil {
+					err = errors.Join(err, e)
+					continue
 				}
 			}
 		}
 	}
-	return nil
+	watches = watchesSet.ToSlice()
+	return
 }
 
-func PrepareLicenses(target string, licenses []services.License, handler PrepareLicensesFunc) error {
+// PrepareLicenses allows to iterate over the provided licenses and call the provided handler for each license to process it.
+func PrepareLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
 	}
 	for _, license := range licenses {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target, license.Components)
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
 		if err != nil {
 			return err
 		}
@@ -323,7 +348,7 @@ func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) 
 				Components:    license.Components,
 				IssueId:       customLicenseViolationId,
 				WatchName:     fmt.Sprintf("jfrog_%s", customLicenseViolationId),
-				ViolationType: formats.ViolationTypeLicense.String(),
+				ViolationType: utils.ViolationTypeLicense.String(),
 			})
 		}
 	}

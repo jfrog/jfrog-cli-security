@@ -3,9 +3,10 @@ package tableparser
 import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
@@ -35,34 +36,34 @@ func (tc *CmdResultsTableConverter) Get() *formats.ResultsTables {
 	}
 }
 
-func (tc *CmdResultsTableConverter) Reset(multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) (err error) {
-	return tc.simpleJsonConvertor.Reset(multiScanId, xrayVersion, entitledForJas, multipleTargets)
+func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) (err error) {
+	return tc.simpleJsonConvertor.Reset(cmdType, multiScanId, xrayVersion, entitledForJas, multipleTargets)
 }
 
-func (tc *CmdResultsTableConverter) ParseNewTargetResults(target string, errors ...error) (err error) {
+func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target string, tech techutils.Technology, violations []services.Violation, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, tech, violations, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseViolations(target, scaResponse, applicabilityRuns...)
 }
 
-func (tc *CmdResultsTableConverter) ParseVulnerabilities(target string, tech techutils.Technology, vulnerabilities []services.Vulnerability, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseVulnerabilities(target, tech, vulnerabilities, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseVulnerabilities(target, scaResponse, applicabilityRuns...)
 }
 
-func (tc *CmdResultsTableConverter) ParseLicenses(target string, tech techutils.Technology, licenses []services.License) (err error) {
-	return tc.simpleJsonConvertor.ParseLicenses(target, tech, licenses)
+func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {
+	return tc.simpleJsonConvertor.ParseLicenses(target, licenses)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(target string, secrets ...*sarif.Run) (err error) {
+func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) (err error) {
 	return tc.simpleJsonConvertor.ParseSecrets(target, secrets...)
 }
 
-func (tc *CmdResultsTableConverter) ParseIacs(target string, iacs ...*sarif.Run) (err error) {
+func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) (err error) {
 	return tc.simpleJsonConvertor.ParseIacs(target, iacs...)
 }
 
-func (tc *CmdResultsTableConverter) ParseSast(target string, sast ...*sarif.Run) (err error) {
+func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
 	return tc.simpleJsonConvertor.ParseSast(target, sast...)
 }

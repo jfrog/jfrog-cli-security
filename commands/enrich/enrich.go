@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -155,7 +156,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	log.Info("JFrog Xray version is:", xrayVersion)
 
-	scanResults := results.NewCommandResults(xrayVersion, false)
+	scanResults := results.NewCommandResults(utils.SBOM, xrayVersion, false)
 
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)

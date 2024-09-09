@@ -1,13 +1,27 @@
 package audit
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+
+	biutils "github.com/jfrog/build-info-go/utils"
+
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 func TestDetectScansToPreform(t *testing.T) {
@@ -154,7 +168,7 @@ func TestDetectScansToPreform(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			results := results.NewCommandResults("", true)
+			results := results.NewCommandResults(utils.SourceCode, "", true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				for i := range results.Targets {
@@ -172,21 +186,6 @@ func TestDetectScansToPreform(t *testing.T) {
 
 	cleanUp()
 }
-package audit
-
-import (
-	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
-	"github.com/jfrog/jfrog-client-go/xsc/services"
-	"github.com/stretchr/testify/assert"
-	"os"
-	"path/filepath"
-	"testing"
-)
 
 // Note: Currently, if a config profile is provided, the scan will use the profile's settings, IGNORING jfrog-apps-config if exists.
 func TestAuditWithConfigProfile(t *testing.T) {
@@ -266,7 +265,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
+			mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
 			defer mockServer.Close()
 
 			auditBasicParams := (&utils.AuditBasicParams{}).
@@ -287,7 +286,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 					XscVersion:             services.ConfigProfileMinXscVersion,
 					MultiScanId:            "random-msi",
 				})
-			auditParams.SetIsRecursiveScan(true)
 
 			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 			defer createTempDirCallback()
@@ -299,27 +297,15 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
 			defer chdirCallback()
 
+			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults, err := RunAudit(auditParams)
 			assert.NoError(t, err)
 
 			// Currently, the only supported scanners are Secrets and Sast, therefore if a config profile is utilized - all other scanners are disabled.
-			if testcase.expectedSastIssues > 0 {
-				assert.NotNil(t, auditResults.ExtendedScanResults.SastScanResults)
-				assert.Equal(t, testcase.expectedSastIssues, len(auditResults.ExtendedScanResults.SastScanResults[0].Results))
-			} else {
-				assert.Nil(t, auditResults.ExtendedScanResults.SastScanResults)
-			}
-
-			if testcase.expectedSecretsIssues > 0 {
-				assert.NotNil(t, auditResults.ExtendedScanResults.SecretsScanResults)
-				assert.Equal(t, testcase.expectedSecretsIssues, len(auditResults.ExtendedScanResults.SecretsScanResults[0].Results))
-			} else {
-				assert.Nil(t, auditResults.ExtendedScanResults.SecretsScanResults)
-			}
-
-			assert.Nil(t, auditResults.ScaResults)
-			assert.Nil(t, auditResults.ExtendedScanResults.ApplicabilityScanResults)
-			assert.Nil(t, auditResults.ExtendedScanResults.IacScanResults)
+			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
+			assert.NoError(t, err)
+			// Validate Sast and Secrets have the expected number of issues and that Iac and Sca did not run
+			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{Actual: summary, ExactResultsMatch: true, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues})
 		})
 	}
 }

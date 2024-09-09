@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,11 +25,11 @@ func VerifyJsonResults(t *testing.T, content string, params ValidationParams) {
 // Actual (and optional Expected) content should be a slice of services.ScanResponse in the validation params
 func ValidateCommandJsonOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.([]services.ScanResponse)
-	if assert.True(t, ok) {
+	if assert.True(t, ok, "Actual content is not a slice of services.ScanResponse") {
 		ValidateScanResponseIssuesCount(t, params, results...)
 		if params.Expected != nil {
 			expectedResults, ok := params.Expected.([]services.ScanResponse)
-			if assert.True(t, ok) {
+			if assert.True(t, ok, "Expected content is not a slice of services.ScanResponse") {
 				ValidateScanResponses(t, params.ExactResultsMatch, expectedResults, results)
 			}
 		}
@@ -47,11 +47,11 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 		licenses = append(licenses, result.Licenses...)
 		for _, violation := range result.Violations {
 			switch violation.ViolationType {
-			case formats.ViolationTypeSecurity.String():
+			case utils.ViolationTypeSecurity.String():
 				securityViolations = append(securityViolations, violation)
-			case formats.ViolationTypeLicense.String():
+			case utils.ViolationTypeLicense.String():
 				licenseViolations = append(licenseViolations, violation)
-			case formats.ViolationTypeOperationalRisk.String():
+			case utils.ViolationTypeOperationalRisk.String():
 				operationalViolations = append(operationalViolations, violation)
 			}
 		}

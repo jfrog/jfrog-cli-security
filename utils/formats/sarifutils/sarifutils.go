@@ -211,12 +211,6 @@ func GetRunsByToolName(report *sarif.Report, toolName string) (filteredRuns []*s
 	return
 }
 
-func GetResultRuleId(result *sarif.Result) string {
-	if result.RuleID == nil {
-		return ""
-	}
-	return *result.RuleID}
-
 func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
 	result.Message.Markdown = &markdown
 }
@@ -238,6 +232,18 @@ func GetResultLevel(result *sarif.Result) string {
 func GetResultRuleId(result *sarif.Result) string {
 	if result.RuleID != nil {
 		return *result.RuleID
+	}
+	return ""
+}
+
+func GetResultProperty(key string, result *sarif.Result) string {
+	if result.Properties == nil {
+		return ""
+	}
+	if _, exists := result.Properties[key]; exists {
+		if _, ok := result.Properties[key].(string); ok {
+			return result.Properties[key].(string)
+		}
 	}
 	return ""
 }
@@ -429,6 +435,13 @@ func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
 func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
 	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
 		return *rule.ShortDescription.Text
+	}
+	return ""
+}
+
+func GetRuleFullDescriptionText(rule *sarif.ReportingDescriptor) string {
+	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
+		return *rule.FullDescription.Text
 	}
 	return ""
 }

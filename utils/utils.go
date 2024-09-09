@@ -1,23 +1,25 @@
 package utils
 
 import (
+	"bytes"
 	"crypto"
 	"encoding/hex"
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
 const (
-	NodeModulesPattern     = "**/*node_modules*/**"
-	JfMsiEnvVariable       = "JF_MSI"
+	NodeModulesPattern = "**/*node_modules*/**"
+	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	JasInfoURL           = "https://jfrog.com/xray/"
+	BaseDocumentationURL   = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	JasInfoURL             = "https://jfrog.com/xray/"
 	EntitlementsMinVersion = "3.66.5"
 )
 
@@ -71,20 +73,27 @@ func GetAllSupportedScans() []SubScanType {
 	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
 }
 
-// UniqueUnion returns a new slice of strings that contains elements from both input slices without duplicates
-func UniqueUnion[T comparable](arr []T, others ...T) []T {
-	uniqueSet := datastructures.MakeSet[T]()
-	var result []T
-	for _, str := range arr {
-		uniqueSet.Add(str)
-		result = append(result, str)
-	}
-	for _, str := range others {
-		if exist := uniqueSet.Exists(str); !exist {
-			result = append(result, str)
+func IsCI() bool {
+	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
+}
+
+// UniqueIntersection returns a new slice of strings that contains elements from both input slices without duplicates
+func UniqueIntersection[T comparable](arr []T, others ...T) []T {
+	uniqueSet := datastructures.MakeSetFromElements(arr...)
+	uniqueIntersection := datastructures.MakeSet[T]()
+	for _, other := range others {
+		if exist := uniqueSet.Exists(other); exist {
+			uniqueIntersection.Add(other)
 		}
 	}
-	return result
+	return uniqueIntersection.ToSlice()
+}
+
+// UniqueUnion returns a new slice of strings that contains elements from the input slice and the elements provided without duplicates
+func UniqueUnion[T comparable](arr []T, elements ...T) []T {
+	uniqueSet := datastructures.MakeSetFromElements(arr...)
+	uniqueSet.AddElements(elements...)
+	return uniqueSet.ToSlice()
 }
 
 func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {

@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -36,14 +35,25 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
-	targetResults := results.NewCommandResults("", true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
+	targetResults := results.NewCommandResults(utils.SourceCode, "", true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
 
 	scanner := &jas.JasScanner{}
 	jasScanner, err := jas.CreateJasScanner(scanner, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	assert.NoError(t, err)
 
 	targetResults.NewScaScanResults(jas.FakeBasicXrayResults[0])
-	err = AddJasScannersTasks(securityParallelRunnerForTest, jfrogappsconfig.Module{}, targetResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, nil, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, utils.GetAllSupportedScans(), nil)
+	testParams := JasRunnerParams{
+		Runner:      securityParallelRunnerForTest,
+		Scanner:     jasScanner,
+		ScanResults: targetResults,
+
+		ScansToPreform:     utils.GetAllSupportedScans(),
+		ApplicableScanType: applicability.ApplicabilityScannerType,
+		SecretsScanType:    secrets.SecretsScannerType,
+
+		DirectDependencies: &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"},
+	}
+	err = AddJasScannersTasks(testParams)
 	assert.NoError(t, err)
 }
 

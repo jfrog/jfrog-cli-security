@@ -18,8 +18,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/formats"
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"

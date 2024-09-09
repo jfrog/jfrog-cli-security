@@ -14,8 +14,10 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/resources"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
@@ -67,36 +69,44 @@ func getStatusIcon(failed bool) string {
 
 type SecurityJobSummary struct{}
 
-func newResultSummary(cmdResults *Results, cmdType CommandType, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
-	summary.ResultType = cmdType
+func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary, err error) {
+	summary.ResultType = cmdResults.CmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
-	summary.Summary = ToSummary(cmdResults, vulnerabilitiesRequested, violationsRequested)
+	summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		IncludeVulnerabilities: vulnerabilitiesRequested,
+		HasViolationContext:    violationsRequested,
+		Pretty:                 true,
+	}).ConvertToSummary(cmdResults)
 	return
 }
 
-func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewBuildScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary, err error) {
+	if summary, err = newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, violationsRequested); err != nil {
+		return
+	}
 	summary.Args.BuildName = buildName
 	summary.Args.BuildNumbers = []string{buildNumber}
 	return
 }
 
-func NewDockerScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, dockerImage string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, DockerImage, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewDockerScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, dockerImage string) (summary ScanCommandResultSummary, err error) {
+	if summary, err = newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, violationsRequested); err != nil {
+		return
+	}
 	summary.Args.DockerImage = dockerImage
 	return
 }
 
-func NewBinaryScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
-	return newResultSummary(cmdResults, Binary, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewBinaryScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary, err error) {
+	return newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, violationsRequested)
 }
 
-func NewAuditScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary) {
-	return newResultSummary(cmdResults, SourceCode, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewAuditScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool) (summary ScanCommandResultSummary, err error) {
+	return newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, violationsRequested)
 }
 
 func NewCurationSummary(cmdResult formats.ResultsSummary) (summary ScanCommandResultSummary) {
-	summary.ResultType = Curation
+	summary.ResultType = utils.Curation
 	summary.Summary = cmdResult
 	return
 }
@@ -140,14 +150,14 @@ func (rsa ResultSummaryArgs) ToArgs(index commandsummary.Index) (args []string) 
 }
 
 type ScanCommandResultSummary struct {
-	ResultType CommandType            `json:"resultType"`
+	ResultType utils.CommandType      `json:"resultType"`
 	Args       *ResultSummaryArgs     `json:"args,omitempty"`
 	Summary    formats.ResultsSummary `json:"summary"`
 }
 
 // Manage the job summary for security commands
-func SecurityCommandsJobSummary() (js *commandsummary.CommandSummary, err error) {
-	return commandsummary.New(&SecurityCommandsSummary{}, "security")
+func NewSecurityJobSummary() (js *commandsummary.CommandSummary, err error) {
+	return commandsummary.New(&SecurityJobSummary{}, "security")
 }
 
 func getRecordManager() (manager *commandsummary.CommandSummary, err error) {
@@ -174,7 +184,8 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	return manager.Record(content)
 }
 
-func RecordSarifOutput(cmdResults *Results) (err error) {
+func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulnerabilities, hasViolationContext bool) (err error) {
+	// Verify if we should record the results
 	manager, err := getRecordManager()
 	if err != nil || manager == nil {
 		return
@@ -184,11 +195,17 @@ func RecordSarifOutput(cmdResults *Results) (err error) {
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
-	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil)
+	// Convert the results to SARIF format
+	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		IncludeVulnerabilities: includeVulnerabilities,
+		HasViolationContext:    hasViolationContext,
+		Pretty:                 true,
+	}).ConvertToSarif(cmdResults)
 	if err != nil {
 		return err
 	}
-	out, err := JSONMarshalNotEscaped(sarifReport)
+	// Record the SARIF report
+	out, err := utils.GetAsJsonBytes(sarifReport, false, false)
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
@@ -215,7 +232,7 @@ func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
 	if err != nil {
 		return
 	}
-	return JSONMarshalNotEscaped(combined)
+	return utils.GetAsJsonBytes(combined, false, false)
 }
 
 func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
@@ -241,15 +258,15 @@ func updateSummaryNamesToRelativePath(summary *formats.ResultsSummary, wd string
 	}
 }
 
-func getDataIndexFromCommandType(cmdType CommandType) commandsummary.Index {
+func getDataIndexFromCommandType(cmdType utils.CommandType) commandsummary.Index {
 	switch cmdType {
-	case Build:
+	case utils.Build:
 		return commandsummary.BuildScan
-	case Binary:
+	case utils.Binary:
 		return commandsummary.BinariesScan
-	case SourceCode:
+	case utils.SourceCode:
 		return commandsummary.BinariesScan
-	case DockerImage:
+	case utils.DockerImage:
 		return commandsummary.DockerScan
 	}
 	// No index for the section
@@ -270,11 +287,11 @@ func recordIndexData(manager *commandsummary.CommandSummary, content ScanCommand
 	return
 }
 
-func newScanCommandResultSummary(resultType CommandType, args *ResultSummaryArgs, scans ...formats.ScanSummary) ScanCommandResultSummary {
+func newScanCommandResultSummary(resultType utils.CommandType, args *ResultSummaryArgs, scans ...formats.ScanSummary) ScanCommandResultSummary {
 	return ScanCommandResultSummary{ResultType: resultType, Args: args, Summary: formats.ResultsSummary{Scans: scans}}
 }
 
-func loadContent(dataFiles []string, filterSections ...CommandType) ([]formats.ResultsSummary, ResultSummaryArgs, error) {
+func loadContent(dataFiles []string, filterSections ...utils.CommandType) ([]formats.ResultsSummary, ResultSummaryArgs, error) {
 	data := []formats.ResultsSummary{}
 	args := ResultSummaryArgs{}
 	for _, dataFilePath := range dataFiles {
@@ -327,7 +344,7 @@ func (js *SecurityJobSummary) GetNonScannedResult() (generator EmptyMarkdownGene
 
 // Generate the Security section (Curation)
 func (js *SecurityJobSummary) GenerateMarkdownFromFiles(dataFilePaths []string) (markdown string, err error) {
-	curationData, _, err := loadContent(dataFilePaths, Curation)
+	curationData, _, err := loadContent(dataFilePaths, utils.Curation)
 	if err != nil {
 		return
 	}

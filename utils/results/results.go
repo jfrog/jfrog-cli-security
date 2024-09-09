@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -15,8 +16,9 @@ import (
 // SecurityCommandResults is a struct that holds the results of a security scan/audit command.
 type SecurityCommandResults struct {
 	// General fields describing the command metadata
-	XrayVersion    string `json:"xray_version"`
-	EntitledForJas bool   `json:"jas_entitled"`
+	XrayVersion    string            `json:"xray_version"`
+	EntitledForJas bool              `json:"jas_entitled"`
+	CmdType        utils.CommandType `json:"command_type"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
@@ -50,7 +52,7 @@ type ScaScanResults struct {
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
-	XrayResults []services.ScanResponse `json:"xray_scan"`
+	XrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
 }
 
 type JasScansResults struct {
@@ -60,8 +62,8 @@ type JasScansResults struct {
 	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
 }
 
-func NewCommandResults(xrayVersion string, entitledForJas bool) *SecurityCommandResults {
-	return &SecurityCommandResults{XrayVersion: xrayVersion, EntitledForJas: entitledForJas, targetsMutex: sync.Mutex{}}
+func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas bool) *SecurityCommandResults {
+	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, targetsMutex: sync.Mutex{}}
 }
 
 func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {
@@ -158,6 +160,32 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	r.Targets = append(r.Targets, targetResults)
 	r.targetsMutex.Unlock()
 	return targetResults
+}
+
+func (st ScanTarget) Copy(newTarget string) ScanTarget {
+	return ScanTarget{Target: newTarget, Name: st.Name, Technology: st.Technology}
+}
+
+func (sr *TargetResults) GetWatches() []string {
+	watches := datastructures.MakeSet[string]()
+	for _, xrayResults := range sr.GetScaScansXrayResults() {
+		for _, violation := range xrayResults.Violations {
+			if violation.WatchName != "" {
+				watches.Add(violation.WatchName)
+			}
+		}
+	}
+	return watches.ToSlice()
+}
+
+func (sr *TargetResults) GetScanIds() []string {
+	scanIds := datastructures.MakeSet[string]()
+	for _, xrayResults := range sr.GetScaScansXrayResults() {
+		if xrayResults.ScanId != "" {
+			scanIds.Add(xrayResults.ScanId)
+		}
+	}
+	return scanIds.ToSlice()
 }
 
 func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanResponse) {

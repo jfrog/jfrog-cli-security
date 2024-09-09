@@ -9,6 +9,17 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
+const (
+	ErrCountFormat = "Expected%s %d %s in %s, but got %d %s."
+)
+
+func GetValidationCountErrMsg(what, where string, exactMatch bool, expectedCount, actualCount int) string {
+	if exactMatch {
+		return fmt.Sprintf(ErrCountFormat, "", expectedCount, what, where, actualCount, what)
+	}
+	return fmt.Sprintf(ErrCountFormat, " at least", expectedCount, what, where, actualCount, what)
+}
+
 type ValidationParams struct {
 	// The actual content to verify.
 	Actual interface{}

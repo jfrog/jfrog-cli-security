@@ -15,18 +15,19 @@ import (
 func VerifySimpleJsonResults(t *testing.T, content string, params ValidationParams) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "Failed to unmarshal content to formats.SimpleJsonResults")
 	params.Actual = results
 	ValidateCommandSimpleJsonOutput(t, params)
 }
 
+// ValidateCommandSimpleJsonOutput validates SimpleJsonResults results. params.Actual (and params.Expected if provided) should be of type formats.SimpleJsonResults
 func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(formats.SimpleJsonResults)
-	if assert.True(t, ok) {
+	if assert.True(t, ok, "Actual content is not of type formats.SimpleJsonResults") {
 		ValidateSimpleJsonIssuesCount(t, params, results)
 		if params.Expected != nil {
 			expectedResults, ok := params.Expected.(formats.SimpleJsonResults)
-			if assert.True(t, ok) {
+			if assert.True(t, ok, "Expected content is not of type formats.SimpleJsonResults") {
 				ValidateSimpleJsonResults(t, params.ExactResultsMatch, expectedResults, results)
 			}
 		}

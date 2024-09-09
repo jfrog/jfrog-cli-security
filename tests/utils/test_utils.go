@@ -275,12 +275,12 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	return results
 }
 
-func ReadSummaryResults(t *testing.T, path string) formats.SummaryResults {
+func ReadSummaryResults(t *testing.T, path string) formats.ResultsSummary {
 	content, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	var results formats.SummaryResults
+	var results formats.ResultsSummary
 	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.SummaryResults{}
+		return formats.ResultsSummary{}
 	}
 	// replace paths separators
 	for _, targetResults := range results.Scans {
@@ -290,7 +290,7 @@ func ReadSummaryResults(t *testing.T, path string) formats.SummaryResults {
 }
 
 func getJasConvertedPath(pathToConvert string) string {
-	return fmt.Sprintf("file://%s", filepath.FromSlash(strings.TrimPrefix(pathToConvert, "file://")))
+	return filepath.FromSlash(strings.TrimPrefix(pathToConvert, "file://"))
 }
 
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {

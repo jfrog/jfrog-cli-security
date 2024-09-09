@@ -164,13 +164,20 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	if auditResults.GetErrors() != nil {
 		eventStatus = xscservices.Failed
 	}
-	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{}).ConvertToSummary(auditResults)
+	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to convert audit results to summary. %s", err.Error()))
 	}
+	totalFindings := 0
+	if summary.HasViolations() {
+		totalFindings = summary.GetTotalViolations()
+	} else {
+		totalFindings = summary.GetTotalVulnerabilities()
+	}
+	// return summary.GetTotalVulnerabilities()
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     auditResults.CountScanResultsFindings(true, true),
+		TotalFindings:     totalFindings,
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{

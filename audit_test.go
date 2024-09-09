@@ -546,7 +546,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 
 		Vulnerabilities: 8,
 		Applicable:      3,
-		Undetermined: 	 1,
+		Undetermined:    1,
 		NotCovered:      1,
 		NotApplicable:   2,
 	})
@@ -561,7 +561,7 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 
 		Vulnerabilities: 8,
 		Applicable:      3,
-		Undetermined: 	 1,
+		Undetermined:    1,
 		NotCovered:      1,
 		NotApplicable:   2,
 	})
@@ -574,7 +574,7 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 
 		Vulnerabilities: 8,
 		Applicable:      3,
-		Undetermined: 	 1,
+		Undetermined:    1,
 		NotCovered:      1,
 		NotApplicable:   2,
 	})

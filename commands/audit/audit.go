@@ -23,6 +23,7 @@ import (
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -268,7 +269,20 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 			scan.AddError(fmt.Errorf("can't find module for path %s", scan.Target))
 			continue
 		}
-		if err = runner.AddJasScannersTasks(auditParallelRunner, *module, scan, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
+		params := runner.JasRunnerParams{
+			Runner:                      auditParallelRunner,
+			ServerDetails:               serverDetails,
+			Scanner:                     scanner,
+			Module:                      *module,
+			ConfigProfile:               auditParams.configProfile,
+			ScansToPreform:              auditParams.ScansToPerform(),
+			SecretsScanType:             secrets.SecretsScannerType,
+			DirectDependencies:          auditParams.DirectDependencies(),
+			ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
+			ApplicableScanType:          applicability.ApplicabilityScannerType,
+			ScanResults:                 scan,
+		}
+		if err = runner.AddJasScannersTasks(params); err != nil {
 			return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 	}
@@ -276,13 +290,13 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 }
 
 func initCmdResults(entitledForJas bool, params *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	cmdResults = results.NewCommandResults(params.xrayVersion, entitledForJas).SetMultiScanId(params.commonGraphScanParams.MultiScanId)
+	cmdResults = results.NewCommandResults(utils.SourceCode, params.xrayVersion, entitledForJas).SetMultiScanId(params.commonGraphScanParams.MultiScanId)
 	detectScanTargets(cmdResults, params)
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults)
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Preforming %d scans:\n%s", len(cmdResults.Targets), scanInfo))
+	log.Info(fmt.Sprintf("Preforming scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
 	return
 }
 

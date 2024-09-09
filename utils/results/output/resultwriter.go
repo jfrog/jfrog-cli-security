@@ -1,6 +1,7 @@
 package output
 
 import (
+	"fmt"
 	"os"
 	"slices"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
 type ResultsWriter struct {
@@ -25,6 +26,8 @@ type ResultsWriter struct {
 	format format.OutputFormat
 	// IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
 	includeVulnerabilities bool
+	// If true, will print violation results.
+	hasViolationContext bool
 	// IncludeLicenses  If true, also include license violations as part of the output.
 	includeLicenses bool
 	// IsMultipleRoots  multipleRoots is set to true, in case the given results array contains (or may contain) results of several projects (like in binary scan).
@@ -60,6 +63,11 @@ func (rw *ResultsWriter) SetScanType(scanType services.ScanType) *ResultsWriter 
 
 func (rw *ResultsWriter) SetSubScansPreformed(subScansPreformed []utils.SubScanType) *ResultsWriter {
 	rw.subScansPreformed = subScansPreformed
+	return rw
+}
+
+func (rw *ResultsWriter) SetHasViolationContext(hasViolationContext bool) *ResultsWriter {
+	rw.hasViolationContext = hasViolationContext
 	return rw
 }
 
@@ -110,7 +118,7 @@ func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanT
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
-	if rw.commandResults.GetErrors() != nil && !rw.commandResults.HasInformation() {
+	if rw.commandResults.GetErrors() != nil {
 		// Don't print if there are no results and only errors.
 		return nil
 	}
@@ -118,17 +126,22 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Table:
 		return rw.printTables()
 	case format.SimpleJson:
+		// Helper for Debugging purposes, print the raw results to the log
+		if err := rw.printOrSaveRawResults(false); err != nil {
+			return err
+		}
 		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
 		if err != nil {
 			return err
 		}
 		return PrintJson(simpleJson)
 	case format.Json:
-		if rw.printExtended {
-			return PrintJson(rw.commandResults)
-		}
 		return PrintJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
+		// Helper for Debugging purposes, print the raw results to the log
+		if err := rw.printOrSaveRawResults(false); err != nil {
+			return err
+		}
 		return rw.printSarif()
 	}
 	return nil
@@ -136,11 +149,11 @@ func (rw *ResultsWriter) PrintScanResults() error {
 
 func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.CommandResultsConvertor {
 	return conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
-		IsMultipleRoots:              rw.isMultipleRoots,
-		IncludeLicenses:              rw.includeLicenses,
-		IncludeVulnerabilities:       rw.includeVulnerabilities,
-		Pretty:                       pretty,
-		AllowResultsWithoutLocations: true,
+		IsMultipleRoots:        rw.isMultipleRoots,
+		IncludeLicenses:        rw.includeLicenses,
+		IncludeVulnerabilities: rw.includeVulnerabilities,
+		HasViolationContext:    rw.hasViolationContext,
+		Pretty:                 pretty,
 	})
 }
 
@@ -149,7 +162,7 @@ func (rw *ResultsWriter) printSarif() error {
 	if err != nil {
 		return err
 	}
-	sarifFile, err := sarifutils.ConvertSarifReportToString(sarifContent)
+	sarifFile, err := WriteSarifResultsAsString(sarifContent, false)
 	if err != nil {
 		return err
 	}
@@ -166,29 +179,52 @@ func PrintJson(output interface{}) (err error) {
 	return nil
 }
 
+// If "CI" env var is true, print raw JSON of the results. Otherwise, save it as a file and print a link to it.
+// If printMsg is true, print it to the console. Otherwise, print the message to the log.
+func (rw *ResultsWriter) printOrSaveRawResults(printMsg bool) (err error) {
+	if !rw.commandResults.HasInformation() {
+		log.Debug("No information to print")
+		return
+	}
+	if printMsg && !utils.IsCI() {
+		// Save the results to a file and print a link to it.
+		var resultsPath string
+		if resultsPath, err = writeJsonResults(rw.commandResults); err != nil {
+			return
+		}
+		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
+		return
+	}
+	// Print the raw results to console.
+	var msg string
+	if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
+		return
+	}
+	log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
+	return
+}
+
 func (rw *ResultsWriter) printTables() (err error) {
 	tableContent, err := rw.createResultsConvertor(isPrettyOutputSupported()).ConvertToTable(rw.commandResults)
 	if err != nil {
 		return
 	}
 	printMessages(rw.messages)
-	if rw.commandResults.HasInformation() {
-		var resultsPath string
-		if resultsPath, err = writeJsonResults(rw.commandResults); err != nil {
-			return
-		}
-		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
+	if err = rw.printOrSaveRawResults(true); err != nil {
+		return
 	}
 	log.Output()
 
 	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.scanType) {
-		if rw.includeVulnerabilities {
-			err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended)
-		} else {
-			err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended)
+		if rw.hasViolationContext {
+			if err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended); err != nil {
+				return
+			}
 		}
-		if err != nil {
-			return
+		if rw.includeVulnerabilities {
+			if err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+				return
+			}
 		}
 		if rw.includeLicenses {
 			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.scanType); err != nil {
@@ -314,4 +350,8 @@ func writeJsonResults(results *results.SecurityCommandResults) (resultsPath stri
 	}
 	resultsPath = out.Name()
 	return
+}
+
+func WriteSarifResultsAsString(report *sarif.Report, escape bool) (sarifStr string, err error) {
+	return utils.GetAsJsonString(report, escape, true)
 }

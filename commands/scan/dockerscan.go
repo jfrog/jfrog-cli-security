@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -97,27 +98,28 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			err = errorutils.CheckError(e)
 		}
 	}()
-	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *utils.Results) (err error) {
+	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *results.SecurityCommandResults) (err error) {
 		if scanResults == nil {
 			return
 		}
-		if scanResults.ScaResults != nil {
-			for _, result := range scanResults.ScaResults {
-				result.Name = dsc.imageTag
-			}
+		for _, scan := range scanResults.Targets {
+			scan.Name = dsc.imageTag
 		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
-			return
-		}
-		return utils.RecordSecurityCommandSummary(utils.NewDockerScanSummary(
-			scanResults,
-			dsc.ScanCommand.serverDetails,
-			dsc.ScanCommand.includeVulnerabilities,
-			dsc.ScanCommand.hasViolationContext(),
-			dsc.imageTag,
-		))
+		return dsc.recordResults(scanResults)
 	})
+}
+
+func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
+	hasViolationContext := dsc.ScanCommand.hasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
+		return
+	}
+	var summary output.ScanCommandResultSummary
+	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
+		return
+	}
+	return output.RecordSecurityCommandSummary(summary)
 }
 
 // When indexing RPM files inside the docker container, the indexer-app needs to connect to the Xray Server.

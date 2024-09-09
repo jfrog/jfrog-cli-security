@@ -13,11 +13,18 @@ import (
 )
 
 const (
-	TestMsi               = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
-	TestScaScanId         = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
-	TestMoreInfoUrl       = "https://www.jfrog.com"
+	TestMsi       = "27e175b8-e525-11ee-842b-7aa2c69b8f1f"
+	TestScaScanId = "3d90ec4b-cf33-4846-6831-4bf9576f2235"
+
+	// TestMoreInfoUrl       = "https://www.jfrog.com"
+	TestPlatformUrl = "https://test-platform-url.jfrog.io/"
+	TestMoreInfoUrl = "https://test-more-info-url.jfrog.io/"
+
 	TestConfigProfileName = "default-profile"
-	versionApiUrl         = "/%s/api/v1/system/version"
+)
+
+var (
+	versionApiUrl = "/%s/api/v1/system/version"
 )
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)

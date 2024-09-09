@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
 	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -112,7 +113,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 		return err
 	}
 	// If failBuild flag is true and also got fail build response from Xray
-	if bsc.failBuild && isFailBuildResponse {
+	if bsc.failBuild && bsc.hasViolationContext() && isFailBuildResponse {
 		return results.NewFailBuildError()
 	}
 	return
@@ -144,7 +145,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(xrayVersion, false)
+	cmdResults := results.NewCommandResults(utils.Build, xrayVersion, false)
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
 	scanResults.NewScaScanResults(services.ScanResponse{
 		Violations:      buildScanResults.Violations,
@@ -158,8 +159,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
-		SetPrintExtendedTable(bsc.printExtendedTable).
-		SetExtraMessages(nil)
+		SetPrintExtendedTable(bsc.printExtendedTable)
 
 	if bsc.outputFormat != outputFormat.Table {
 		// Print the violations and/or vulnerabilities as part of one JSON.
@@ -170,26 +170,28 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		// Print two different tables for violations and vulnerabilities (if needed)
 
 		// If "No Xray Fail build policy...." error received, no need to print violations
-		if !noFailBuildPolicy {
-			if err = resultsPrinter.PrintScanResults(); err != nil {
-				return false, err
-			}
-		}
-		if bsc.includeVulnerabilities {
-			resultsPrinter.SetIncludeVulnerabilities(true)
+		if bsc.hasViolationContext() && !noFailBuildPolicy {
 			if err = resultsPrinter.PrintScanResults(); err != nil {
 				return false, err
 			}
 		}
 	}
-	err = utils.RecordSecurityCommandSummary(utils.NewBuildScanSummary(
-		scanResults,
+	err = bsc.recordResults(cmdResults, params)
+	return
+}
+
+func (bsc *BuildScanCommand) recordResults(cmdResults *results.SecurityCommandResults, params services.XrayBuildParams) (err error) {
+	var summary output.ScanCommandResultSummary
+	if summary, err = output.NewBuildScanSummary(
+		cmdResults,
 		bsc.serverDetails,
 		bsc.includeVulnerabilities,
 		bsc.hasViolationContext(),
 		params.BuildName, params.BuildNumber,
-	))
-	return
+	); err != nil {
+		return
+	}
+	return output.RecordSecurityCommandSummary(summary)
 }
 
 func (bsc *BuildScanCommand) CommandName() string {

@@ -12,7 +12,7 @@ import (
 // Content should be a Json string of formats.SummaryResults and will be unmarshal.
 // Value is set as the Actual content in the validation params
 func VerifySummaryResults(t *testing.T, content string, params ValidationParams) {
-	var results formats.SummaryResults
+	var results formats.ResultsSummary
 	err := json.Unmarshal([]byte(content), &results)
 	assert.NoError(t, err)
 	params.Actual = results
@@ -20,20 +20,29 @@ func VerifySummaryResults(t *testing.T, content string, params ValidationParams)
 }
 
 func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {
-	results, ok := params.Actual.(formats.SummaryResults)
-	if assert.True(t, ok) {
+	results, ok := params.Actual.(formats.ResultsSummary)
+	if assert.True(t, ok, "Actual content is not a formats.ResultsSummary") {
 		ValidateSummaryIssuesCount(t, params, results)
 	}
 }
 
-func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results formats.SummaryResults) {
+func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results formats.ResultsSummary) {
 	var vulnerabilities, securityViolations, licenseViolations, opRiskViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, sast, iac, secrets int
+
+	vulnerabilities = results.GetTotalVulnerabilities()
+
+	securityViolations = results.GetTotalViolations(formats.ScaSecurityResult)
+	licenseViolations = results.GetTotalViolations(formats.ScaLicenseResult)
+	opRiskViolations = results.GetTotalViolations(formats.ScaOperationalResult)
+	// Jas Results only available as vulnerabilities
+	sast = results.GetTotalVulnerabilities(formats.SastResult)
+	secrets = results.GetTotalVulnerabilities(formats.SecretsResult)
+	iac = results.GetTotalVulnerabilities(formats.IacResult)
+	// Get applicability status counts
 	for _, scan := range results.Scans {
-		// Vulnerabilities
 		if scan.Vulnerabilities != nil {
-			if scan.Vulnerabilities.ScaScanResults != nil {
-				vulnerabilities += scan.Vulnerabilities.ScaScanResults.SummaryCount.GetTotal()
-				for _, counts := range scan.Vulnerabilities.ScaScanResults.SummaryCount {
+			if scan.Vulnerabilities.ScaResults != nil {
+				for _, counts := range scan.Vulnerabilities.ScaResults.Security {
 					for status, count := range counts {
 						switch status {
 						case jasutils.Applicable.String():
@@ -48,23 +57,12 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 					}
 				}
 			}
-			if scan.Vulnerabilities.SastScanResults != nil {
-				sast += scan.Vulnerabilities.SastScanResults.GetTotal()
-			}
-			if scan.Vulnerabilities.SecretsScanResults != nil {
-				secrets += scan.Vulnerabilities.SecretsScanResults.GetTotal()
-			}
-			if scan.Vulnerabilities.IacScanResults != nil {
-				iac += scan.Vulnerabilities.IacScanResults.GetTotal()
-			}
 		}
-		// Violations
-		securityViolations += scan.Violations[formats.ViolationTypeSecurity.String()].GetTotal()
-		licenseViolations += scan.Violations[formats.ViolationTypeLicense.String()].GetTotal()
-		opRiskViolations += scan.Violations[formats.ViolationTypeOperationalRisk.String()].GetTotal()
 	}
-
+	// validate the counts
 	if params.ExactResultsMatch {
+		assert.Equal(t, params.Vulnerabilities, vulnerabilities, "Expected %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
+
 		assert.Equal(t, params.Sast, sast, "Expected %d sast in scan responses, but got %d sast.", params.Sast, sast)
 		assert.Equal(t, params.Secrets, secrets, "Expected %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
 		assert.Equal(t, params.Iac, iac, "Expected %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
@@ -79,6 +77,8 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 		assert.Equal(t, params.OperationalViolations, opRiskViolations, "Expected %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, opRiskViolations)
 		return
 	}
+	assert.GreaterOrEqual(t, vulnerabilities, params.Vulnerabilities, "Expected at least %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
+
 	assert.GreaterOrEqual(t, sast, params.Sast, "Expected at least %d sast in scan responses, but got %d sast.", params.Sast, sast)
 	assert.GreaterOrEqual(t, secrets, params.Secrets, "Expected at least %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
 	assert.GreaterOrEqual(t, iac, params.Iac, "Expected at least %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
