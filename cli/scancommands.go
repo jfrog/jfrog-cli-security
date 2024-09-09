@@ -646,7 +646,7 @@ func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, err
 		return "", err
 	}
 	if !exists {
-		return "", errors.New(fmt.Sprintf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir))
+		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
 	}
 	return scansOutputDir, nil
 }
