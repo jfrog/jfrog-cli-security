@@ -179,6 +179,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	assert.NoError(t, err)
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
+	assert.NoError(t, err)
 	assert.Len(t, filesList, 5)
 
 	var fileNamesWithoutSuffix []string
