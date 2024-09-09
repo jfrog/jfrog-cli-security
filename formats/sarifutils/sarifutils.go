@@ -423,7 +423,9 @@ func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count in
 
 func GetResultFingerprint(result *sarif.Result) string {
 	if result.Fingerprints != nil {
-		return result.Fingerprints[jasutils.SastFingerprintKey].(string)
+		if value, ok := result.Fingerprints[jasutils.SastFingerprintKey].(string); ok {
+			return value
+		}
 	}
 	return ""
 }
