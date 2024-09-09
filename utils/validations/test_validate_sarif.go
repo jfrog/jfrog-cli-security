@@ -40,8 +40,11 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sa
 	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
 
 	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.IacToolName)...)
+	vulnerabilities += iac
 	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SecretsToolName)...)
+	vulnerabilities += secrets
 	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SastToolName)...)
+	vulnerabilities += sast
 
 	scaRuns := sarifutils.GetRunsByToolName(results, sarifparser.ScaScannerToolName)
 	for _, run := range scaRuns {
