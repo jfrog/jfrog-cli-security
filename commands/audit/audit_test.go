@@ -120,14 +120,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				})
 			auditParams.SetIsRecursiveScan(true)
 
-			/*
-				baseWd, err := os.Getwd()
-				assert.NoError(t, err)
-				chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
-				defer chdirCallback()
-
-			*/
-
 			auditResults, err := RunAudit(auditParams)
 			assert.NoError(t, err)
 
