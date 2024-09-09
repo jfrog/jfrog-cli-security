@@ -241,8 +241,8 @@ func GetResultProperty(key string, result *sarif.Result) string {
 		return ""
 	}
 	if _, exists := result.Properties[key]; exists {
-		if _, ok := result.Properties[key].(string); ok {
-			return result.Properties[key].(string)
+		if value, ok := result.Properties[key].(string); ok {
+			return value
 		}
 	}
 	return ""

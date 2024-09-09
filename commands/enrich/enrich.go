@@ -196,7 +196,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		return err
 	}
 	if scanResults.GetErrors() != nil {
-		return errorutils.CheckErrorf(scanResults.GetErrors().Error())
+		return errorutils.CheckError(scanResults.GetErrors())
 	}
 	log.Info("Enrich process completed successfully.")
 	return nil

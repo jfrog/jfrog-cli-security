@@ -118,7 +118,7 @@ func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanT
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
-	if rw.commandResults.GetErrors() != nil {
+	if rw.commandResults.GetErrors() != nil && !rw.commandResults.HasInformation() {
 		// Don't print if there are no results and only errors.
 		return nil
 	}

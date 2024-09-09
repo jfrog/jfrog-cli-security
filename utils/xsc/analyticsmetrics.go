@@ -168,7 +168,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to convert audit results to summary. %s", err.Error()))
 	}
-	totalFindings := 0
+	var totalFindings int
 	if summary.HasViolations() {
 		totalFindings = summary.GetTotalViolations()
 	} else {
