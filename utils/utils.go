@@ -3,8 +3,14 @@ package utils
 import (
 	"crypto"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
+	"time"
 )
 
 const (
@@ -118,4 +124,31 @@ func splitEnvVar(envVar string) (key, value string) {
 		return split[0], ""
 	}
 	return split[0], strings.Join(split[1:], "=")
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path, a new directory with a new file containing the scan results
+// This functionallity is being used for Jas scanners and SCA scanner
+func DumpScanResultsToFileIfNeeded(results interface{}, scanResultsOutputDir string, scanType string) (err error) {
+	// TODO this function should be in utils/results/results.go after the refactor, since it is a common code for Jas and SCA scanners
+	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and put all its results in this dir, for every Target
+	if scanResultsOutputDir == "" || reflect.ValueOf(results).IsNil() {
+		return
+	}
+	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file...", scanType))
+
+	fileContent, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+
+	var curTimeHash string
+	if curTimeHash, err = Md5Hash(time.Now().String()); err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+
+	resultsFileName := strings.ToLower(scanType) + "_results_" + curTimeHash + ".json"
+	if err = os.WriteFile(filepath.Join(scanResultsOutputDir, resultsFileName), fileContent, 0644); err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return
 }
