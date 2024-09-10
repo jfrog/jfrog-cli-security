@@ -181,7 +181,6 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		scanResults,
 		bsc.serverDetails,
 		bsc.includeVulnerabilities,
-		true,
 		params.BuildName, params.BuildNumber,
 	))
 	return
