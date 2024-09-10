@@ -181,7 +181,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		scanResults,
 		bsc.serverDetails,
 		bsc.includeVulnerabilities,
-		bsc.hasViolationContext(),
+		true,
 		params.BuildName, params.BuildNumber,
 	))
 	return
@@ -189,10 +189,6 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
-}
-
-func (bsc *BuildScanCommand) hasViolationContext() bool {
-	return bsc.buildConfiguration.GetProject() != ""
 }
 
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured
