@@ -1,7 +1,6 @@
 package validations
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -9,16 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Content should be a Json string of formats.SummaryResults and will be unmarshal.
-// Value is set as the Actual content in the validation params
-func VerifySummaryResults(t *testing.T, content string, params ValidationParams) {
-	var results formats.ResultsSummary
-	err := json.Unmarshal([]byte(content), &results)
-	assert.NoError(t, err)
-	params.Actual = results
-	ValidateCommandSummaryOutput(t, params)
-}
-
+// Validate summary results according to the expected values and issue counts in the validation params.
+// Content/Expected should be a formats.ResultsSummary in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(formats.ResultsSummary)
 	if assert.True(t, ok, "Actual content is not a formats.ResultsSummary") {

@@ -136,7 +136,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	}
 	var messages []string
 	if !auditResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink("https://jfrog.com/xray/")}
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	if err = output.NewResultsWriter(auditResults).
 		SetHasViolationContext(auditCmd.HasViolationContext()).
@@ -320,7 +320,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 				continue
 			}
 			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
+				// Requested technology (from params) descriptors/indicators were not found, scan only requested directory for this technology.
 				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {

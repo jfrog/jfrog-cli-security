@@ -1,7 +1,6 @@
 package validations
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -13,16 +12,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Content should be a Json string of sarif.Report and will be unmarshal.
-// Value is set as the Actual content in the validation params
-func VerifySarifResults(t *testing.T, content string, params ValidationParams) {
-	var results sarif.Report
-	err := json.Unmarshal([]byte(content), &results)
-	assert.NoError(t, err)
-	params.Actual = results
-	ValidateCommandSarifOutput(t, params)
-}
+const (
+	SastToolName    = "USAF"
+	IacToolName     = "JFrog Terraform scanner"
+	SecretsToolName = "JFrog Secrets scanner"
+)
 
+// Validate sarif report according to the expected values and issue counts in the validation params.
+// Value/Actual content should be a *sarif.Report in the validation params
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes.
+// For Integration tests with JFrog API, ExactResultsMatch should be set to false.
 func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(*sarif.Report)
 	if assert.True(t, ok, "Actual content is not a *sarif.Report") {
@@ -30,20 +29,24 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 		if params.Expected != nil {
 			expectedResults, ok := params.Expected.(*sarif.Report)
 			if assert.True(t, ok, "Expected content is not a *sarif.Report") {
-				ValidateSarifResults(t, params.ExactResultsMatch, expectedResults, results)
+				ValidateSarifReport(t, params.ExactResultsMatch, expectedResults, results)
 			}
 		}
 	}
 }
 
+// Validate sarif report according to the expected counts in the validation params.
+// Actual content should be a *sarif.Report in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sarif.Report) {
 	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
 
-	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.IacToolName)...)
+	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, IacToolName)...)
 	vulnerabilities += iac
-	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SecretsToolName)...)
+	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, SecretsToolName)...)
 	vulnerabilities += secrets
-	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, sarifparser.SastToolName)...)
+	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, SastToolName)...)
 	vulnerabilities += sast
 
 	scaRuns := sarifutils.GetRunsByToolName(results, sarifparser.ScaScannerToolName)
@@ -113,8 +116,8 @@ func isSecurityIssue(result *sarif.Result) bool {
 	return false
 }
 
-func ValidateSarifResults(t *testing.T, exactMatch bool, expected, actual *sarif.Report) {
-	validateContent(t, exactMatch, StringValidation{Expected: expected.Version, Actual: actual.Version, Msg: "Sarif version mismatch"})
+func ValidateSarifReport(t *testing.T, exactMatch bool, expected, actual *sarif.Report) {
+	ValidateContent(t, exactMatch, StringValidation{Expected: expected.Version, Actual: actual.Version, Msg: "Sarif version mismatch"})
 	for _, run := range expected.Runs {
 		// expect Invocation
 		if !assert.Len(t, run.Invocations, 1, "Expected exactly one invocation for run with tool name %s", run.Tool.Driver.Name) {
@@ -139,7 +142,7 @@ func getRunByInvocationTargetAndToolName(target, toolName string, content []*sar
 }
 
 func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run) {
-	validateContent(t, exactMatch,
+	ValidateContent(t, exactMatch,
 		PointerValidation[string]{Expected: expected.Tool.Driver.InformationURI, Actual: actual.Tool.Driver.InformationURI, Msg: fmt.Sprintf("Run tool information URI mismatch for tool %s", expected.Tool.Driver.Name)},
 		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", expected.Tool.Driver.Name)},
 	)
@@ -163,7 +166,7 @@ func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run
 }
 
 func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.ReportingDescriptor) {
-	validateContent(t, exactMatch,
+	ValidateContent(t, exactMatch,
 		StringValidation{Expected: sarifutils.GetRuleFullDescription(expected), Actual: sarifutils.GetRuleFullDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description mismatch for rule %s", toolName, expected.ID)},
 		StringValidation{Expected: sarifutils.GetRuleFullDescriptionMarkdown(expected), Actual: sarifutils.GetRuleFullDescriptionMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description markdown mismatch for rule %s", toolName, expected.ID)},
 		StringValidation{Expected: sarifutils.GetRuleShortDescription(expected), Actual: sarifutils.GetRuleShortDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule short description mismatch for rule %s", toolName, expected.ID)},
@@ -201,7 +204,7 @@ func hasSameLocations(expected, actual *sarif.Result) bool {
 }
 
 func validateSarifResult(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.Result) {
-	validateContent(t, exactMatch,
+	ValidateContent(t, exactMatch,
 		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, sarifutils.GetResultRuleId(expected))},
 	)
 	// validate properties
@@ -234,7 +237,7 @@ func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual map
 		if expectedStr, ok := expectedValue.(string); ok {
 			actualStr, ok := actualValue.(string)
 			if assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s is not a string for rule %s", toolName, key, ruleID)) {
-				validateContent(t, exactMatch, StringValidation{Expected: expectedStr, Actual: actualStr, Msg: fmt.Sprintf("Run tool %s: Rule property mismatch for rule %s", toolName, ruleID)})
+				ValidateContent(t, exactMatch, StringValidation{Expected: expectedStr, Actual: actualStr, Msg: fmt.Sprintf("Run tool %s: Rule property mismatch for rule %s", toolName, ruleID)})
 				continue
 			}
 			assert.Fail(t, fmt.Sprintf("Run tool %s: Expected property with key %s is a string for rule %s", toolName, key, ruleID))

@@ -37,7 +37,8 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func shouldPreformScaScan(cmdResults *results.SecurityCommandResults) bool {
+// We can only preform SCA scan if we identified at least one technology for a target.
+func hasAtLeastOneTech(cmdResults *results.SecurityCommandResults) bool {
 	if len(cmdResults.Targets) == 0 {
 		return false
 	}
@@ -68,7 +69,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if err != nil {
 		return
 	}
-	if !shouldPreformScaScan(cmdResults) {
+	if !hasAtLeastOneTech(cmdResults) {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 		return
 	}

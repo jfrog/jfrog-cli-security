@@ -31,17 +31,14 @@ type conversionFormat string
 
 func getAuditValidationParams() validations.ValidationParams {
 	return validations.ValidationParams{
-		ExactResultsMatch: true,
-
+		ExactResultsMatch:  true,
 		SecurityViolations: 11,
-
-		Vulnerabilities: 19,
-		Applicable:      1,
-		NotApplicable:   7,
-		NotCovered:      4,
-
-		Sast:    4,
-		Secrets: 3,
+		Vulnerabilities:    19,
+		Applicable:         1,
+		NotApplicable:      7,
+		NotCovered:         4,
+		Sast:               4,
+		Secrets:            3,
 	}
 }
 

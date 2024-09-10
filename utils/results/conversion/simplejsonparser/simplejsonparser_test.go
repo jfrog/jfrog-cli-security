@@ -693,7 +693,7 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := PrepareSimpleJsonJasIssues(tc.target, tc.entitledForJas, false, tc.jasIssues...)
+			out, err := PrepareSimpleJsonJasIssues(tc.entitledForJas, false, tc.jasIssues...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})

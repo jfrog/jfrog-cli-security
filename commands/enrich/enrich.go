@@ -178,11 +178,11 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		scanResults.Error = errors.Join(scanResults.Error, fileCollectingErr)
 	}
 
-	isxml, err := isXML(scanResults.Targets)
+	isXml, err := isXML(scanResults.Targets)
 	if err != nil {
 		return
 	}
-	if isxml {
+	if isXml {
 		if err = AppendVulnsToXML(scanResults); err != nil {
 			return
 		}

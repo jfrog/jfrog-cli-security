@@ -10,8 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Content should be a Json string of slice of formats.SimpleJsonResults and will be unmarshal.
-// Value is set as the Actual content in the validation params
+// Validate simple-json report results according to the expected values and issue counts in the validation params.
+// Content/Expected should be a formats.SimpleJsonResults in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func VerifySimpleJsonResults(t *testing.T, content string, params ValidationParams) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
@@ -20,7 +22,10 @@ func VerifySimpleJsonResults(t *testing.T, content string, params ValidationPara
 	ValidateCommandSimpleJsonOutput(t, params)
 }
 
-// ValidateCommandSimpleJsonOutput validates SimpleJsonResults results. params.Actual (and params.Expected if provided) should be of type formats.SimpleJsonResults
+// Validate simple-json report results according to the expected values and issue counts in the validation params.
+// Actual/Expected content should be a formats.SimpleJsonResults in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 	results, ok := params.Actual.(formats.SimpleJsonResults)
 	if assert.True(t, ok, "Actual content is not of type formats.SimpleJsonResults") {
@@ -34,6 +39,10 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 	}
 }
 
+// Validate simple-json report results according to the expected counts in the validation params.
+// Actual content should be a formats.SimpleJsonResults in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
 	var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
 	for _, vuln := range results.Vulnerabilities {
@@ -83,8 +92,8 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {
-	validateContent(t, exactMatch, StringValidation{Expected: expected.MultiScanId, Actual: actual.MultiScanId, Msg: "MultiScanId mismatch"})
-	validateContent(t, false, NumberValidation[int]{Expected: len(expected.Errors), Actual: len(actual.Errors), Msg: "Errors count mismatch"})
+	ValidateContent(t, exactMatch, StringValidation{Expected: expected.MultiScanId, Actual: actual.MultiScanId, Msg: "MultiScanId mismatch"})
+	ValidateContent(t, false, NumberValidation[int]{Expected: len(expected.Errors), Actual: len(actual.Errors), Msg: "Errors count mismatch"})
 	// Validate vulnerabilities
 	for _, expectedVulnerability := range expected.Vulnerabilities {
 		vulnerability := getVulnerabilityOrViolationByIssueId(expectedVulnerability.IssueId, actual.Vulnerabilities)
@@ -113,7 +122,7 @@ func getVulnerabilityOrViolationByIssueId(issueId string, content []formats.Vuln
 }
 
 func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected, actual formats.VulnerabilityOrViolationRow) {
-	validateContent(t, exactMatch,
+	ValidateContent(t, exactMatch,
 		StringValidation{Expected: expected.Summary, Actual: actual.Summary, Msg: fmt.Sprintf("IssueId %s: Summary mismatch", expected.IssueId)},
 		StringValidation{Expected: expected.Severity, Actual: actual.Severity, Msg: fmt.Sprintf("IssueId %s: Severity mismatch", expected.IssueId)},
 		StringValidation{Expected: expected.Applicable, Actual: actual.Applicable, Msg: fmt.Sprintf("IssueId %s: Applicable mismatch", expected.IssueId)},
@@ -127,7 +136,7 @@ func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected
 		ListValidation[string]{Expected: expected.FixedVersions, Actual: actual.FixedVersions, Msg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId)},
 	)
 	if ValidatePointersAndNotNil(t, exactMatch, PointerValidation[formats.JfrogResearchInformation]{Expected: expected.JfrogResearchInformation, Actual: actual.JfrogResearchInformation, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation mismatch", expected.IssueId)}) {
-		validateContent(t, exactMatch,
+		ValidateContent(t, exactMatch,
 			StringValidation{Expected: expected.JfrogResearchInformation.Summary, Actual: actual.JfrogResearchInformation.Summary, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Summary mismatch", expected.IssueId)},
 			StringValidation{Expected: expected.JfrogResearchInformation.Severity, Actual: actual.JfrogResearchInformation.Severity, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Severity mismatch", expected.IssueId)},
 			StringValidation{Expected: expected.JfrogResearchInformation.Remediation, Actual: actual.JfrogResearchInformation.Remediation, Msg: fmt.Sprintf("IssueId %s: JfrogResearchInformation.Remediation mismatch", expected.IssueId)},
@@ -157,11 +166,11 @@ func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expect
 }
 
 func validateComponentRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.ComponentRow) {
-	validateContent(t, exactMatch,
+	ValidateContent(t, exactMatch,
 		PointerValidation[formats.Location]{Expected: expected.Location, Actual: actual.Location, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location mismatch", issueId, expected.Name, expected.Version)},
 	)
 	if expected.Location != nil {
-		validateContent(t, exactMatch, StringValidation{Expected: expected.Location.File, Actual: actual.Location.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
+		ValidateContent(t, exactMatch, StringValidation{Expected: expected.Location.File, Actual: actual.Location.File, Msg: fmt.Sprintf("IssueId %s: Component %s:%s Location.File mismatch", issueId, expected.Name, expected.Version)})
 	}
 }
 
@@ -188,14 +197,14 @@ func validateCveRows(t *testing.T, issueId string, exactMatch bool, expected, ac
 }
 
 func validateCveRow(t *testing.T, issueId string, exactMatch bool, expected, actual formats.CveRow) {
-	if !validateContent(t, exactMatch,
+	if !ValidateContent(t, exactMatch,
 		StringValidation{Expected: expected.CvssV2, Actual: actual.CvssV2, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV2 mismatch", issueId, expected.Id)},
 		StringValidation{Expected: expected.CvssV3, Actual: actual.CvssV3, Msg: fmt.Sprintf("IssueId %s: Cve %s: CvssV3 mismatch", issueId, expected.Id)},
 	) {
 		return
 	}
 	if ValidatePointersAndNotNil(t, exactMatch, PointerValidation[formats.Applicability]{Expected: expected.Applicability, Actual: actual.Applicability, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability mismatch", issueId, expected.Id)}) {
-		validateContent(t, exactMatch,
+		ValidateContent(t, exactMatch,
 			StringValidation{Expected: expected.Applicability.Status, Actual: actual.Applicability.Status, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Status mismatch", issueId, expected.Id)},
 			StringValidation{Expected: expected.Applicability.ScannerDescription, Actual: actual.Applicability.ScannerDescription, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.ScannerDescription mismatch", issueId, expected.Id)},
 			ListValidation[formats.Evidence]{Expected: expected.Applicability.Evidence, Actual: actual.Applicability.Evidence, Msg: fmt.Sprintf("IssueId %s: Cve %s: Applicability.Evidence mismatch", issueId, expected.Id)},

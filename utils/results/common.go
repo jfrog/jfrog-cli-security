@@ -31,12 +31,12 @@ const (
 )
 
 var (
-	ErrConvertorReset   = fmt.Errorf("reset must be called before parsing new scan results metadata")
-	ErrConvertorNewScan = fmt.Errorf("ParseNewTargetResults must be called before starting to parse issues")
+	ErrResetConvertor    = fmt.Errorf("reset must be called before parsing new scan results metadata")
+	ErrNoTargetConvertor = fmt.Errorf("ParseNewTargetResults must be called before starting to parse issues")
 )
 
 func NewFailBuildError() error {
-	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the violations found are set to fail builds that include them"}
+	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
 }
 
 // In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
@@ -57,7 +57,7 @@ type ParseLicensesFunc func(license services.License, impactedPackagesName, impa
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
 // PrepareJasIssues allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func PrepareJasIssues(target ScanTarget, runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
+func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -88,8 +88,8 @@ func PrepareJasIssues(target ScanTarget, runs []*sarif.Run, entitledForJas bool,
 	return nil
 }
 
-// PrepareScaVulnerabilities allows to iterate over the provided vulnerabilities and call the provided handler for each vulnerability to process it.
-func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
+// PrepareScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
+func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -116,8 +116,8 @@ func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vul
 	return nil
 }
 
-// PrepareScaViolations allows to iterate over the provided violations and call the provided handler for each violation to process it.
-func PrepareScaViolations(target ScanTarget, violations []services.Violation, pretty, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+// PrepareScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+func PrepareScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -191,7 +191,7 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, pr
 	return
 }
 
-// PrepareLicenses allows to iterate over the provided licenses and call the provided handler for each license to process it.
+// PrepareLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
 func PrepareLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
@@ -355,7 +355,7 @@ func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) 
 	return
 }
 
-// appendUniqueImpactPathsForMultipleRoots appends the source impact path to the target impact path while avoiding duplicates.
+// AppendUniqueImpactPathsForMultipleRoots appends the source impact path to the target impact path while avoiding duplicates.
 // Specifically, it is designed for handling multiple root projects, such as Maven or Gradle, by comparing each pair of paths and identifying the path that is closest to the direct dependency.
 func AppendUniqueImpactPathsForMultipleRoots(target [][]services.ImpactPathNode, source [][]services.ImpactPathNode) [][]services.ImpactPathNode {
 	for targetPathIndex, targetPath := range target {
@@ -431,20 +431,6 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func SplitScaScanResults(results *SecurityCommandResults) ([]services.Violation, []services.Vulnerability, []services.License) {
-	var violations []services.Violation
-	var vulnerabilities []services.Vulnerability
-	var licenses []services.License
-	for _, scanTarget := range results.Targets {
-		for _, scaScan := range scanTarget.ScaResults.XrayResults {
-			violations = append(violations, scaScan.Violations...)
-			vulnerabilities = append(vulnerabilities, scaScan.Vulnerabilities...)
-			licenses = append(licenses, scaScan.Licenses...)
-		}
-	}
-	return violations, vulnerabilities, licenses
-}
-
 func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run, components map[string]services.Component) *formats.Applicability {
 	if len(applicabilityScanResults) == 0 {
 		return nil
@@ -467,22 +453,9 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		resultFound = true
 		// Add new evidences from locations
 		for _, location := range result.Locations {
-			fileName := sarifutils.GetRelativeLocationFileName(location, applicabilityRun.Invocations)
-			// TODO: maybe, move this logic to the convertor
-			if shouldDisqualifyEvidence(components, fileName) {
-				continue
+			if evidence := getEvidence(components, result, location, applicabilityRun.Invocations...); evidence != nil {
+				applicability.Evidence = append(applicability.Evidence, *evidence)
 			}
-			applicability.Evidence = append(applicability.Evidence, formats.Evidence{
-				Location: formats.Location{
-					File:        fileName,
-					StartLine:   sarifutils.GetLocationStartLine(location),
-					StartColumn: sarifutils.GetLocationStartColumn(location),
-					EndLine:     sarifutils.GetLocationEndLine(location),
-					EndColumn:   sarifutils.GetLocationEndColumn(location),
-					Snippet:     sarifutils.GetLocationSnippet(location),
-				},
-				Reason: sarifutils.GetResultMsgText(result),
-			})
 		}
 	}
 	switch {
@@ -498,26 +471,22 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	return &applicability
 }
 
-func GetApplicableCvesStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves ...services.Cve) jasutils.ApplicabilityStatus {
-	if !entitledForJas || len(applicabilityScanResults) == 0 {
-		return jasutils.NotScanned
+func getEvidence(components map[string]services.Component, result *sarif.Result, location *sarif.Location, invocations ...*sarif.Invocation) *formats.Evidence {
+	fileName := sarifutils.GetRelativeLocationFileName(location, invocations)
+	if shouldDisqualifyEvidence(components, fileName) {
+		return nil
 	}
-	if len(cves) == 0 {
-		return jasutils.NotCovered
+	return &formats.Evidence{
+		Location: formats.Location{
+			File:        fileName,
+			StartLine:   sarifutils.GetLocationStartLine(location),
+			StartColumn: sarifutils.GetLocationStartColumn(location),
+			EndLine:     sarifutils.GetLocationEndLine(location),
+			EndColumn:   sarifutils.GetLocationEndColumn(location),
+			Snippet:     sarifutils.GetLocationSnippet(location),
+		},
+		Reason: sarifutils.GetResultMsgText(result),
 	}
-	var applicableStatuses []jasutils.ApplicabilityStatus
-	for _, cve := range cves {
-		for _, applicabilityRun := range applicabilityScanResults {
-			if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cve.Id)); rule != nil {
-				status := getApplicabilityStatusFromRule(rule)
-				if status != "" {
-					applicableStatuses = append(applicableStatuses, status)
-				}
-			}
-		}
-	}
-	return getFinalApplicabilityStatus(applicableStatuses)
-
 }
 
 func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sarif.Run, cves []formats.CveRow) jasutils.ApplicabilityStatus {
@@ -586,22 +555,12 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 		if !strings.HasPrefix(key, techutils.Npm.GetPackageTypeId()) {
 			return
 		}
-		dependencyName := extractDependencyNameFromComponent(key, techutils.Npm.GetPackageTypeId())
+		dependencyName, _, _ := techutils.SplitComponentId(key)
 		// Check both Unix & Windows paths.
 		if strings.Contains(evidenceFilePath, nodeModules+"/"+dependencyName) || strings.Contains(evidenceFilePath, filepath.Join(nodeModules, dependencyName)) {
 			return true
 		}
 	}
-	return
-}
-
-func extractDependencyNameFromComponent(key string, techIdentifier string) (dependencyName string) {
-	packageAndVersion := strings.TrimPrefix(key, techIdentifier)
-	split := strings.Split(packageAndVersion, ":")
-	if len(split) < 2 {
-		return
-	}
-	dependencyName = split[0]
 	return
 }
 

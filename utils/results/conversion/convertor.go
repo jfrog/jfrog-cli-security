@@ -29,10 +29,9 @@ type ResultConvertParams struct {
 	IsMultipleRoots *bool
 	// Create local license violations if repo context was not provided and a license is not in this list
 	AllowedLicenses []string
-
 	// Output will contain only the unique violations determined by the GetUniqueKey function (SimpleJson only)
 	SimplifiedOutput bool
-	// Convert the results to a pretty format if supported (Table and Sarif)
+	// Convert the results to a pretty format if supported (Table and SimpleJson only)
 	Pretty bool
 }
 
@@ -40,8 +39,8 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 	return &CommandResultsConvertor{Params: params}
 }
 
-// Parse a stream of results and convert to the desired format
-type ResultsStreamFormatParser interface {
+// Parse a stream of results and convert them to the desired format T
+type ResultsStreamFormatParser[T interface{}] interface {
 	// Reset the convertor to start converting a new command results
 	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
@@ -54,61 +53,35 @@ type ResultsStreamFormatParser interface {
 	ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) error
 	ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) error
 	ParseSast(target results.ScanTarget, sast ...*sarif.Run) error
+	// When done parsing the stream results, get the converted content
+	Get() (T, error)
 }
 
 func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.SecurityCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
 	parser := simplejsonparser.NewCmdResultsSimpleJsonConverter(false, c.Params.SimplifiedOutput)
-	err = c.parseCommandResults(parser, cmdResults)
-	if err != nil {
-		return
-	}
-	content := parser.Get()
-	if content == nil {
-		simpleJsonResults = formats.SimpleJsonResults{}
-	} else {
-		simpleJsonResults = *content
-	}
-	return
+	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
-	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.Pretty, c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
-	err = c.parseCommandResults(parser, cmdResults)
-	if err != nil {
-		return
-	}
-	return parser.Get()
+	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
+	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
 func (c *CommandResultsConvertor) ConvertToTable(cmdResults *results.SecurityCommandResults) (tableResults formats.ResultsTables, err error) {
 	parser := tableparser.NewCmdResultsTableConverter(c.Params.Pretty)
-	err = c.parseCommandResults(parser, cmdResults)
-	if err != nil {
-		return
-	}
-	content := parser.Get()
-	if content == nil {
-		tableResults = formats.ResultsTables{}
-	} else {
-		tableResults = *content
-	}
-	return
+	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
 func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityCommandResults) (summaryResults formats.ResultsSummary, err error) {
 	parser := summaryparser.NewCmdResultsSummaryConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
-	err = c.parseCommandResults(parser, cmdResults)
-	if err != nil {
-		return
-	}
-	return *parser.Get(), nil
+	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
-func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormatParser, cmdResults *results.SecurityCommandResults) (err error) {
+func parseCommandResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdResults *results.SecurityCommandResults) (converted T, err error) {
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
-	if c.Params.IsMultipleRoots != nil {
-		multipleTargets = *c.Params.IsMultipleRoots
+	if params.IsMultipleRoots != nil {
+		multipleTargets = *params.IsMultipleRoots
 	}
 	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets); err != nil {
 		return
@@ -118,7 +91,7 @@ func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormat
 			return
 		}
 		if targetScansResults.ScaResults != nil {
-			if err = c.parseScaResults(parser, targetScansResults, jasEntitled); err != nil {
+			if err = parseScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
 				return
 			}
 		}
@@ -135,10 +108,10 @@ func (c *CommandResultsConvertor) parseCommandResults(parser ResultsStreamFormat
 			return
 		}
 	}
-	return
+	return parser.Get()
 }
 
-func (c *CommandResultsConvertor) parseScaResults(parser ResultsStreamFormatParser, targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
+func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
 	if targetScansResults.ScaResults == nil {
 		return
 	}
@@ -148,24 +121,24 @@ func (c *CommandResultsConvertor) parseScaResults(parser ResultsStreamFormatPars
 		if jasEntitled && targetScansResults.JasResults != nil {
 			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
 		}
-		if c.Params.IncludeVulnerabilities {
+		if params.IncludeVulnerabilities {
 			if err = parser.ParseVulnerabilities(actualTarget, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		}
-		if c.Params.HasViolationContext {
+		if params.HasViolationContext {
 			if err = parser.ParseViolations(actualTarget, scaResults, applicableRuns...); err != nil {
 				return
 			}
-		} else if len(scaResults.Violations) == 0 && len(c.Params.AllowedLicenses) > 0 {
+		} else if len(scaResults.Violations) == 0 && len(params.AllowedLicenses) > 0 {
 			// If no violations were found, check if there are licenses that are not allowed
-			if scaResults.Violations = results.GetViolatedLicenses(c.Params.AllowedLicenses, scaResults.Licenses); len(scaResults.Violations) > 0 {
+			if scaResults.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Licenses); len(scaResults.Violations) > 0 {
 				if err = parser.ParseViolations(actualTarget, scaResults); err != nil {
 					return
 				}
 			}
 		}
-		if c.Params.IncludeLicenses {
+		if params.IncludeLicenses {
 			if err = parser.ParseLicenses(actualTarget, scaResults.Licenses); err != nil {
 				return
 			}
@@ -178,7 +151,6 @@ func (c *CommandResultsConvertor) parseScaResults(parser ResultsStreamFormatPars
 func getScaScanTarget(scaResults *results.ScaScanResults, target string) string {
 	if scaResults == nil || len(scaResults.Descriptors) == 0 {
 		// If No Sca scan or no descriptors discovered, use the scan target (build-scan, binary-scan...)
-		// TODO: make sure works for build-scan since its not a file
 		return target
 	}
 	// Get the one that it's directory is the prefix of the target and the shortest

@@ -57,19 +57,20 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath             string
-	indexerTempDir          string
-	outputFormat            format.OutputFormat
-	projectKey              string
-	minSeverityFilter       severityutils.Severity
-	watches                 []string
-	includeVulnerabilities  bool
-	includeLicenses         bool
-	fail                    bool
-	printExtendedTable      bool
-	bypassArchiveLimits     bool
-	fixableOnly             bool
-	progress                ioUtils.ProgressMgr
+	indexerPath            string
+	indexerTempDir         string
+	outputFormat           format.OutputFormat
+	projectKey             string
+	minSeverityFilter      severityutils.Severity
+	watches                []string
+	includeVulnerabilities bool
+	includeLicenses        bool
+	fail                   bool
+	printExtendedTable     bool
+	bypassArchiveLimits    bool
+	fixableOnly            bool
+	progress               ioUtils.ProgressMgr
+	// JAS is only supported for Docker images.
 	commandSupportsJAS      bool
 	analyticsMetricsService *xsc.AnalyticsMetricsService
 }

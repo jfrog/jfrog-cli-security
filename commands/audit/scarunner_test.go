@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetDirectDependenciesList(t *testing.T) {
+func TestGetDirectDependenciesFromTree(t *testing.T) {
 	tests := []struct {
 		dependenciesTrees []*xrayUtils.GraphNode
 		expectedResult    []string

@@ -140,7 +140,7 @@ func ChangeWD(t *testing.T, newPath string) string {
 
 func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResults {
 	content, err := os.ReadFile(path)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var cmdResults *results.SecurityCommandResults
 	if !assert.NoError(t, json.Unmarshal(content, &cmdResults)) {
 		return &results.SecurityCommandResults{}
@@ -182,7 +182,7 @@ func convertSarifRunPathsForOS(runs ...*sarif.Run) {
 
 func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults {
 	content, err := os.ReadFile(path)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var results formats.SimpleJsonResults
 	if !assert.NoError(t, json.Unmarshal(content, &results)) {
 		return formats.SimpleJsonResults{}
@@ -265,7 +265,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 
 func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	content, err := os.ReadFile(path)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var results *sarif.Report
 	if !assert.NoError(t, json.Unmarshal(content, &results)) {
 		return &sarif.Report{}
@@ -277,7 +277,7 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 
 func ReadSummaryResults(t *testing.T, path string) formats.ResultsSummary {
 	content, err := os.ReadFile(path)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var results formats.ResultsSummary
 	if !assert.NoError(t, json.Unmarshal(content, &results)) {
 		return formats.ResultsSummary{}

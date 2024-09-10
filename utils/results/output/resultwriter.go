@@ -213,8 +213,6 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printOrSaveRawResults(true); err != nil {
 		return
 	}
-	log.Output()
-
 	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.scanType) {
 		if rw.hasViolationContext {
 			if err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended); err != nil {
@@ -252,6 +250,8 @@ func (rw *ResultsWriter) printTables() (err error) {
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
 func PrintVulnerabilitiesTable(tables formats.ResultsTables, scanType services.ScanType, techDetected, printExtended bool) error {
+	// Space before the tables
+	log.Output()
 	if scanType == services.Binary {
 		return coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable),
 			"Vulnerable Components",
@@ -270,6 +270,8 @@ func PrintVulnerabilitiesTable(tables formats.ResultsTables, scanType services.S
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
 func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanType, printExtended bool) (err error) {
+	// Space before the tables
+	log.Output()
 	if scanType == services.Binary {
 		err = coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable), "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
@@ -304,6 +306,8 @@ func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanTy
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
 func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, scanType services.ScanType) error {
+	// Space before the tables
+	log.Output()
 	if scanType == services.Binary {
 		return coreutils.PrintTable(formats.ConvertLicenseTableRowToScanTableRow(tables.LicensesTable), "Licenses", "No licenses were found", printExtended)
 	}
@@ -314,6 +318,7 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 	if !entitledForJas {
 		return nil
 	}
+	// Space before the tables
 	log.Output()
 	switch scanType {
 	case jasutils.Secrets:

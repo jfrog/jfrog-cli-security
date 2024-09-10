@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Validation on SCA content only (No JAS in this content), with the option to provide expected results.
-// Content should be a Json string of slice of []services.ScanResponse and will be unmarshal.
-// Value is set as the Actual content in the validation params
+// Validate SCA content only (No JAS in this content) according to the expected values and issue counts in the validation params.
+// Content/Expected should be a []services.ScanResponse in the validation params.
+// If Expected is provided, the validation will check if the Actual content matches the expected results.
+// If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func VerifyJsonResults(t *testing.T, content string, params ValidationParams) {
 	var results []services.ScanResponse
 	err := json.Unmarshal([]byte(content), &results)

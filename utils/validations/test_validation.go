@@ -20,6 +20,7 @@ func GetValidationCountErrMsg(what, where string, exactMatch bool, expectedCount
 	return fmt.Sprintf(ErrCountFormat, " at least", expectedCount, what, where, actualCount, what)
 }
 
+// ValidationParams holds validation/assertion parameters for tests.
 type ValidationParams struct {
 	// The actual content to verify.
 	Actual interface{}
@@ -27,8 +28,7 @@ type ValidationParams struct {
 	Expected interface{}
 	// If provided, the test will check exact values and not only the minimum values / existence.
 	ExactResultsMatch bool
-
-	// Expected counts of values to validate.
+	// Expected issues for each type to check if the content has the correct amount of issues.
 	Vulnerabilities       int
 	Licenses              int
 	SecurityViolations    int
@@ -43,11 +43,15 @@ type ValidationParams struct {
 	Secrets               int
 }
 
+// Validation allows to validate/assert a content with expected values.
+// Using the Validation interfaces implementations allows you to assert content for exact value or not exact match (changes base on the implementation).
 type Validation interface {
 	Validate(t *testing.T, exactMatch bool) bool
 	ErrMsgs(t *testing.T) []string
 }
 
+// Validate a string content.
+// Not ExactMatch: The actual content must not be empty if the expected content is not empty.
 type StringValidation struct {
 	Expected string
 	Actual   string
@@ -73,6 +77,8 @@ func (sv StringValidation) ErrMsgs(_ *testing.T) []string {
 	return []string{sv.Msg}
 }
 
+// NumberValidation validates the content of the given numbers.
+// Not ExactMatch: The actual content must not be zero if the expected content is not zero.
 type NumberValidation[T any] struct {
 	Expected T
 	Actual   T
@@ -98,6 +104,8 @@ func (nvp NumberValidation[T]) ErrMsgs(_ *testing.T) []string {
 	return []string{nvp.Msg}
 }
 
+// PointerValidation validates the content of the given pointers.
+// Not ExactMatch: The actual content must not be nil if the expected content is not nil.
 type PointerValidation[T any] struct {
 	Expected *T
 	Actual   *T
@@ -126,6 +134,8 @@ func (pvp PointerValidation[T]) ErrMsgs(t *testing.T) []string {
 	return jsonErrMsg(t, pvp.Expected, pvp.Actual, pvp.Msg)
 }
 
+// ListValidation validates the content of the given lists.
+// Not ExactMatch: The expected content must be subset of the actual content.
 type ListValidation[T any] struct {
 	Expected []T
 	Actual   []T
@@ -165,9 +175,12 @@ func errMsg(expected, actual string, msg string) []string {
 	return []string{msg, fmt.Sprintf("\n* Expected:\n'%s'\n\n* Actual:\n%s\n", expected, actual)}
 }
 
-func validateContent(t *testing.T, exactMatch bool, pairs ...Validation) bool {
-	for _, pair := range pairs {
-		if !pair.Validate(t, exactMatch) {
+// ValidateContent validates the content of the given Validations.
+// If exactMatch is true, the content must match exactly.
+// If at least one validation fails, the function returns false and stops validating the rest of the pairs.
+func ValidateContent(t *testing.T, exactMatch bool, validations ...Validation) bool {
+	for _, validation := range validations {
+		if !validation.Validate(t, exactMatch) {
 			return false
 		}
 	}

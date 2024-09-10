@@ -2,6 +2,7 @@ package results
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -28,15 +29,6 @@ type SecurityCommandResults struct {
 	Error error `json:"error,omitempty"`
 }
 
-type ScanTarget struct {
-	// Physical location of the target: Working directory (audit) / binary to scan (scan / docker scan)
-	Target string `json:"target,omitempty"`
-	// Logical name of the target (build name / module name / docker image name...)
-	Name string `json:"name,omitempty"`
-	// Optional field (not used only in build scan) to provide the technology of the target
-	Technology techutils.Technology `json:"technology,omitempty"`
-}
-
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
@@ -60,6 +52,30 @@ type JasScansResults struct {
 	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
 	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
 	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
+}
+
+type ScanTarget struct {
+	// Physical location of the target: Working directory (audit) / binary to scan (scan / docker scan)
+	Target string `json:"target,omitempty"`
+	// Logical name of the target (build name / module name / docker image name...)
+	Name string `json:"name,omitempty"`
+	// Optional field (not used only in build scan) to provide the technology of the target
+	Technology techutils.Technology `json:"technology,omitempty"`
+}
+
+func (st ScanTarget) Copy(newTarget string) ScanTarget {
+	return ScanTarget{Target: newTarget, Name: st.Name, Technology: st.Technology}
+}
+
+func (st ScanTarget) String() (str string) {
+	str = st.Target
+	if st.Name != "" {
+		str = st.Name
+	}
+	if st.Technology != "" {
+		str += fmt.Sprintf(" [%s]", st.Technology)
+	}
+	return
 }
 
 func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas bool) *SecurityCommandResults {
@@ -100,9 +116,7 @@ func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanTyp
 func (r *SecurityCommandResults) GetErrors() (err error) {
 	err = r.Error
 	for _, target := range r.Targets {
-		for _, targetErr := range target.Errors {
-			err = errors.Join(err, targetErr)
-		}
+		err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), target.GetErrors()))
 	}
 	return
 }
@@ -123,7 +137,7 @@ func (r *SecurityCommandResults) HasMultipleTargets() bool {
 	}
 	for _, scanTarget := range r.Targets {
 		// If there is more than one SCA scan target (i.e multiple files with dependencies information)
-		if scanTarget.ScaResults != nil && (len(scanTarget.ScaResults.XrayResults) > 0 || (scanTarget.ScaResults.IsMultipleRootProject != nil && *scanTarget.ScaResults.IsMultipleRootProject)) {
+		if scanTarget.ScaResults != nil && (len(scanTarget.ScaResults.XrayResults) > 1 || (scanTarget.ScaResults.IsMultipleRootProject != nil && *scanTarget.ScaResults.IsMultipleRootProject)) {
 			return true
 		}
 	}
@@ -162,8 +176,11 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	return targetResults
 }
 
-func (st ScanTarget) Copy(newTarget string) ScanTarget {
-	return ScanTarget{Target: newTarget, Name: st.Name, Technology: st.Technology}
+func (sr *TargetResults) GetErrors() (err error) {
+	for _, targetErr := range sr.Errors {
+		err = errors.Join(err, targetErr)
+	}
+	return
 }
 
 func (sr *TargetResults) GetWatches() []string {

@@ -23,21 +23,12 @@ import (
 )
 
 const (
-	FixedVersionSarifPropertyKey = "fixedVersion"
-	WatchSarifPropertyKey        = "watch"
-
-	SastToolName = "USAF"
-	IacToolName  = "JFrog Terraform scanner"
-	// #nosec G101 -- Not credentials.
-	SecretsToolName           = "JFrog Secrets scanner"
-	ContexualAnalysisToolName = "JFrog Applicability Scanner"
-
-	// TODO: remove above if not used
-
 	CurrentWorkflowNameEnvVar      = "GITHUB_WORKFLOW"
 	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
 	CurrentWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
 
+	FixedVersionSarifPropertyKey  = "fixedVersion"
+	WatchSarifPropertyKey         = "watch"
 	jfrogFingerprintAlgorithmName = "jfrogFingerprintHash"
 	MissingCveScore               = "0"
 	maxPossibleCve                = 10.0
@@ -54,8 +45,6 @@ var (
 )
 
 type CmdResultsSarifConverter struct {
-	// Pretty print the output text for Github Issues support
-	pretty bool
 	// Include vulnerabilities/violations in the output
 	includeVulnerabilities bool
 	hasViolationContext    bool
@@ -69,12 +58,11 @@ type CmdResultsSarifConverter struct {
 	currentCmdType utils.CommandType
 }
 
-func NewCmdResultsSarifConverter(pretty, includeVulnerabilities, hasViolationContext bool) *CmdResultsSarifConverter {
-	return &CmdResultsSarifConverter{pretty: pretty, includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext}
+func NewCmdResultsSarifConverter(includeVulnerabilities, hasViolationContext bool) *CmdResultsSarifConverter {
+	return &CmdResultsSarifConverter{includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext}
 }
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
-	// Return the current report
 	if sc.current == nil {
 		return sarifutils.NewReport()
 	}
@@ -101,7 +89,7 @@ func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVers
 
 func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	if sc.scaCurrentRun != nil {
 		// Flush the current run
@@ -128,10 +116,10 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 // validateBeforeParse checks if the parser is initialized to parse results (checks if Reset and at least one ParseNewTargetResults was called before)
 func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	if (sc.hasViolationContext || sc.includeVulnerabilities) && sc.scaCurrentRun == nil {
-		return results.ErrConvertorNewScan
+		return results.ErrNoTargetConvertor
 	}
 	return
 }
@@ -141,7 +129,7 @@ func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, s
 		return
 	}
 	// Parse violations
-	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, sc.scaCurrentRun, scanResponse.Violations, sc.pretty, sc.entitledForJas, applicabilityRuns...)
+	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, scanResponse.Violations, sc.entitledForJas, applicabilityRuns...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
@@ -153,7 +141,7 @@ func (sc *CmdResultsSarifConverter) ParseVulnerabilities(target results.ScanTarg
 	if err = sc.validateBeforeParse(); err != nil || sc.scaCurrentRun == nil {
 		return
 	}
-	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Vulnerabilities, sc.pretty, sc.entitledForJas, applicabilityRuns...)
+	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Vulnerabilities, sc.entitledForJas, applicabilityRuns...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
@@ -171,7 +159,7 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, secr
 		return
 	}
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, target, secrets...)...)
 	return
@@ -182,7 +170,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, iacs ..
 		return
 	}
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, target, iacs...)...)
 	return
@@ -193,7 +181,7 @@ func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, sast ..
 		return
 	}
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, target, sast...)...)
 	return
@@ -209,13 +197,12 @@ func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*
 	}
 }
 
-func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, run *sarif.Run, violations []services.Violation, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
+func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
 	_, _, err := results.PrepareScaViolations(
 		target,
 		violations,
-		pretty,
 		entitledForJas,
 		applicabilityRuns,
 		addSarifScaSecurityViolation(cmdType, &sarifResults, &rules),
@@ -226,13 +213,12 @@ func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTar
 	return sarifResults, rules, err
 }
 
-func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, vulnerabilities []services.Vulnerability, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
+func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
 	err := results.PrepareScaVulnerabilities(
 		target,
 		vulnerabilities,
-		pretty,
 		entitledForJas,
 		applicabilityRuns,
 		addSarifScaVulnerability(cmdType, &sarifResults, &rules),

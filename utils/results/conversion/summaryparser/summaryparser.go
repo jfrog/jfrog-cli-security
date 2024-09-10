@@ -24,15 +24,15 @@ func NewCmdResultsSummaryConverter(includeVulnerabilities, hasViolationContext b
 	return &CmdResultsSummaryConverter{includeVulnerabilities: includeVulnerabilities, includeViolations: hasViolationContext}
 }
 
-func (sc *CmdResultsSummaryConverter) Get() *formats.ResultsSummary {
+func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	if sc.current == nil {
-		return &formats.ResultsSummary{}
+		return formats.ResultsSummary{}, nil
 	}
 	// Flush the last scan
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
-		return &formats.ResultsSummary{}
+		return formats.ResultsSummary{}, err
 	}
-	return sc.current
+	return *sc.current, nil
 }
 
 func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool) (err error) {
@@ -43,7 +43,7 @@ func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, en
 
 func (sc *CmdResultsSummaryConverter) ParseNewTargetResults(target results.ScanTarget, _ ...error) (err error) {
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	if sc.currentScan != nil {
 		sc.current.Scans = append(sc.current.Scans, *sc.currentScan)
@@ -61,10 +61,10 @@ func (sc *CmdResultsSummaryConverter) ParseNewTargetResults(target results.ScanT
 // validateBeforeParse checks if the parser is initialized to parse results (checks if Reset and at least one ParseNewTargetResults was called before)
 func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	if sc.current == nil {
-		return results.ErrConvertorReset
+		return results.ErrResetConvertor
 	}
 	if sc.currentScan == nil {
-		return results.ErrConvertorNewScan
+		return results.ErrNoTargetConvertor
 	}
 	return
 }
@@ -88,7 +88,6 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget,
 	watches, failBuild, err := results.PrepareScaViolations(
 		target,
 		scaResponse.Violations,
-		false,
 		sc.entitledForJas,
 		applicabilityRuns,
 		sc.getScaSecurityViolationHandler(parsed),
@@ -176,7 +175,6 @@ func (sc *CmdResultsSummaryConverter) ParseVulnerabilities(target results.ScanTa
 	err = results.PrepareScaVulnerabilities(
 		target,
 		scaResponse.Vulnerabilities,
-		false,
 		sc.entitledForJas,
 		applicabilityRuns,
 		sc.getScaVulnerabilityHandler(parsed),
@@ -228,7 +226,7 @@ func (sc *CmdResultsSummaryConverter) ParseLicenses(target results.ScanTarget, l
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, secrets ...*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -239,10 +237,10 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(target results.ScanTarget, se
 	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(target, secrets, sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
+	return results.PrepareJasIssues(secrets, sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, iacs ...*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -253,10 +251,10 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(target results.ScanTarget, iacs 
 	if sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(target, iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC))
+	return results.PrepareJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, sast ...*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -267,7 +265,7 @@ func (sc *CmdResultsSummaryConverter) ParseSast(target results.ScanTarget, sast 
 	if sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(target, sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast))
+	return results.PrepareJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast))
 }
 
 func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType) results.ParseJasFunc {

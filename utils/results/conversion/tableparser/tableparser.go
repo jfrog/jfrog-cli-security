@@ -21,19 +21,19 @@ func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
 	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true)}
 }
 
-func (tc *CmdResultsTableConverter) Get() *formats.ResultsTables {
-	simpleJsonFormat := tc.simpleJsonConvertor.Get()
-	if simpleJsonFormat == nil {
-		return &formats.ResultsTables{}
+func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
+	simpleJsonFormat, err := tc.simpleJsonConvertor.Get()
+	if err != nil {
+		return formats.ResultsTables{}, err
 	}
-	return &formats.ResultsTables{
+	return formats.ResultsTables{
 		SecurityVulnerabilitiesTable:   formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.Vulnerabilities),
 		LicenseViolationsTable:         formats.ConvertToLicenseViolationTableRow(simpleJsonFormat.LicensesViolations),
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
 		SecretsTable:                   formats.ConvertToSecretsTableRow(simpleJsonFormat.Secrets),
 		IacTable:                       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Iacs),
 		SastTable:                      formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Sast),
-	}
+	}, nil
 }
 
 func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool) (err error) {
