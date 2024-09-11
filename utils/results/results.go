@@ -116,7 +116,9 @@ func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanTyp
 func (r *SecurityCommandResults) GetErrors() (err error) {
 	err = r.Error
 	for _, target := range r.Targets {
-		err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), target.GetErrors()))
+		if targetErr := target.GetErrors(); targetErr != nil {
+			err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr))
+		}
 	}
 	return
 }
@@ -223,7 +225,6 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	}
 	for _, scaResult := range sr.ScaResults.XrayResults {
 		for _, vulnerability := range scaResult.Vulnerabilities {
-			// if tech, ok := techutils.Technology(vulnerability.Technology); ok {
 			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
 				technologiesSet.Add(tech)
 			}

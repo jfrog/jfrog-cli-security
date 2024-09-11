@@ -466,7 +466,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	case len(applicability.Evidence) == 0:
 		applicability.Status = string(jasutils.NotApplicable)
 	default:
-		applicability.Status = string(jasutils.Applicable)
+		applicability.Status = string(jasutils.NotCovered)
 	}
 	return &applicability
 }

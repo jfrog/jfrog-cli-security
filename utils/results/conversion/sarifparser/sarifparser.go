@@ -51,6 +51,7 @@ type CmdResultsSarifConverter struct {
 	// Current stream parse cache information
 	current       *sarif.Report
 	scaCurrentRun *sarif.Run
+	currentTarget results.ScanTarget
 	parsedScaKeys *datastructures.Set[string]
 	// General information on the current command results
 	entitledForJas bool
@@ -93,11 +94,12 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 	}
 	if sc.scaCurrentRun != nil {
 		// Flush the current run
-		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, target, sc.scaCurrentRun)...)
+		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, sc.currentTarget, sc.scaCurrentRun)...)
 	}
+	sc.currentTarget = target
 	if sc.hasViolationContext || sc.includeVulnerabilities {
 		// Create Sca Run if requested to parse all vulnerabilities/violations to it
-		sc.scaCurrentRun = sc.createScaRun(target, len(errors))
+		sc.scaCurrentRun = sc.createScaRun(sc.currentTarget, len(errors))
 		sc.parsedScaKeys = datastructures.MakeSet[string]()
 	}
 	return
@@ -499,7 +501,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 			}
 			sarifutils.SetResultMsgMarkdown(markdown, result)
 			// For Binary scans, override the physical location if applicable (after data already used for markdown)
-			convertBinaryPhysicalLocations(commandType, run, result)
+			result = convertBinaryPhysicalLocations(commandType, run, result)
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
 				if err := calculateResultFingerprints(commandType, run, result); err != nil {
@@ -512,7 +514,7 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 	return patched
 }
 
-func convertBinaryPhysicalLocations(commandType utils.CommandType, run *sarif.Run, result *sarif.Result) {
+func convertBinaryPhysicalLocations(commandType utils.CommandType, run *sarif.Run, result *sarif.Result) *sarif.Result {
 	if patchedLocation := getPatchedBinaryLocation(commandType, run); patchedLocation != "" {
 		for _, location := range result.Locations {
 			// Patch the location - Reset the uri and region

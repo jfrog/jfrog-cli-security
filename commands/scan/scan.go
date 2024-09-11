@@ -305,6 +305,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
 	}
 
+	if err = recordResFunc(cmdResults); err != nil {
+		return err
+	}
+
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetHasViolationContext(scanCmd.hasViolationContext()).
@@ -314,10 +318,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {
 		return
-	}
-
-	if err = recordResFunc(cmdResults); err != nil {
-		return err
 	}
 
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.

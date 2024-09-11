@@ -6,6 +6,7 @@ package formats
 
 type ResultsTables struct {
 	SecurityVulnerabilitiesTable   []vulnerabilityTableRow
+	SecurityViolationsTable        []vulnerabilityTableRow
 	LicensesTable                  []licenseTableRow
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow

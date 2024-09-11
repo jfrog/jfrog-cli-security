@@ -273,7 +273,7 @@ func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanTy
 	// Space before the tables
 	log.Output()
 	if scanType == services.Binary {
-		err = coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable), "Security Violations", "No security violations were found", printExtended)
+		err = coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityViolationsTable), "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanTy
 			return coreutils.PrintTable(formats.ConvertOperationalRiskTableRowToScanTableRow(tables.OperationalRiskViolationsTable), "Operational Risk Violations", "No operational risk violations were found", printExtended)
 		}
 	} else {
-		err = coreutils.PrintTable(tables.SecurityVulnerabilitiesTable, "Security Violations", "No security violations were found", printExtended)
+		err = coreutils.PrintTable(tables.SecurityViolationsTable, "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
 			return err
 		}

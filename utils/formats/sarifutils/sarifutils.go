@@ -65,6 +65,51 @@ func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
 	return
 }
 
+func CopyResult(result *sarif.Result) *sarif.Result {
+	copied := &sarif.Result{
+		RuleID: 	   result.RuleID,
+		RuleIndex:     result.RuleIndex,
+		Kind: 		result.Kind,
+		Fingerprints: result.Fingerprints,
+		CodeFlows:    result.CodeFlows,
+		Level:          result.Level,
+		Message:        result.Message,
+		PropertyBag:   result.PropertyBag,
+	}
+	for _, location := range result.Locations {
+		copied.Locations = append(copied.Locations, CopyLocation(location))
+	}
+	return copied
+}
+
+func CopyLocation(location *sarif.Location) *sarif.Location {
+	copied := &sarif.Location{
+		PhysicalLocation: &sarif.PhysicalLocation{
+			ArtifactLocation: &sarif.ArtifactLocation{
+				URI: location.PhysicalLocation.ArtifactLocation.URI,
+			},
+			Region: &sarif.Region{
+				StartLine:   location.PhysicalLocation.Region.StartLine,
+				StartColumn: location.PhysicalLocation.Region.StartColumn,
+				EndLine:     location.PhysicalLocation.Region.EndLine,
+				EndColumn:   location.PhysicalLocation.Region.EndColumn,
+				Snippet:     location.PhysicalLocation.Region.Snippet,
+			},
+		},
+	}
+	copied.Properties = location.Properties
+	for _, logicalLocation := range location.LogicalLocations {
+		copied.LogicalLocations = append(copied.LogicalLocations, &sarif.LogicalLocation{
+			Name: logicalLocation.Name,
+			FullyQualifiedName: logicalLocation.FullyQualifiedName,
+			DecoratedName: logicalLocation.DecoratedName,
+			Kind: logicalLocation.Kind,
+			PropertyBag: logicalLocation.PropertyBag,
+		})
+	}
+	return copied
+}
+
 func AggregateMultipleRunsIntoSingle(runs []*sarif.Run, destination *sarif.Run) {
 	if len(runs) == 0 {
 		return
