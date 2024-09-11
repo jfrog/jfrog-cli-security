@@ -400,13 +400,19 @@ func isExclude(path string, techData TechData) bool {
 func mapWorkingDirectoriesToTechnologies(workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, requestedTechs []Technology, requestedDescriptors map[Technology][]string) (technologiesDetected map[Technology]map[string][]string, err error) {
 	// Get the relevant technologies to check
 	technologies := requestedTechs
+	var techProvidedByUser bool
 	if len(technologies) == 0 {
 		technologies = GetAllTechnologiesList()
+	} else {
+		// If the project's technology was provided by the user, and isn't detected by us, we want to enable capturing the technology by its descriptor as well as by its indicators.
+		// In case we execute our auto-detection we want to avoid that since it may lead to collisions between package managers with the same descriptor (like Npm and Yarn)
+		techProvidedByUser = true
+		log.Debug(fmt.Sprintf("An install command was provided, so the technology will be identified based on the given command. Detected technologies: %s", technologies))
 	}
 	technologiesDetected = make(map[Technology]map[string][]string)
 	// Map working directories to technologies
 	for _, tech := range technologies {
-		if techWorkingDirs, e := getTechInformationFromWorkingDir(tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, requestedDescriptors); e != nil {
+		if techWorkingDirs, e := getTechInformationFromWorkingDir(tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, requestedDescriptors, techProvidedByUser); e != nil {
 			err = errors.Join(err, fmt.Errorf("failed to get information from working directory for %s", tech))
 		} else if len(techWorkingDirs) > 0 {
 			// Found indicators of the technology, add to detected.
@@ -423,11 +429,12 @@ func mapWorkingDirectoriesToTechnologies(workingDirectoryToIndicators map[string
 	return
 }
 
-func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, requestedDescriptors map[Technology][]string) (techWorkingDirs map[string][]string, err error) {
+func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, requestedDescriptors map[Technology][]string, techProvidedByUser bool) (techWorkingDirs map[string][]string, err error) {
 	techWorkingDirs = make(map[string][]string)
 	for wd, indicators := range workingDirectoryToIndicators {
 		descriptorsAtWd := []string{}
 		foundIndicator := false
+		foundDescriptor := false
 		if isTechExcludedInWorkingDir(tech, wd, excludedTechAtWorkingDir) {
 			// Exclude this technology from this working directory
 			continue
@@ -436,6 +443,7 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 		for _, path := range indicators {
 			if tech.isDescriptor(path) || isRequestedDescriptor(path, requestedDescriptors[tech]) {
 				descriptorsAtWd = append(descriptorsAtWd, path)
+				foundDescriptor = true
 			}
 			if indicator, e := tech.isIndicator(path); e != nil {
 				err = errors.Join(err, fmt.Errorf("failed to check if %s is an indicator of %s: %w", path, tech, e))
@@ -444,8 +452,9 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 				foundIndicator = true
 			}
 		}
-		if foundIndicator {
-			// Found indicators of the technology in the current working directory, add to detected.
+		if foundIndicator || (foundDescriptor && techProvidedByUser) {
+			// If indicators of the technology were found in the current working directory, add to detected.
+			// If descriptors were found for a specific tech that was provided by the user, we add the descriptor to detected.
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
