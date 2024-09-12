@@ -791,9 +791,6 @@ func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubSca
 	if tokenValidation := GetResultPropertyTokenValidation(result); tokenValidation != "" {
 		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
 	}
-	if metadata := GetResultPropertyMetadata(result); metadata != "" {
-		content += fmt.Sprintf("\nMetadata %s", metadata)
-	}
 	return
 }
 

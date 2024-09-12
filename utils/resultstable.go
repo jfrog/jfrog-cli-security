@@ -398,7 +398,7 @@ func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool, tokenV
 		log.Output()
 		err := coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
 			"✨ No secrets were found ✨", false)
-		if err == nil && entitledForSecretsScan && tokenValidationEnabled {
+		if err == nil && tokenValidationEnabled {
 			log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 		}
 		return err
