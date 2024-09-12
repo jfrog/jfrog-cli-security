@@ -159,6 +159,7 @@ func (vs *ScmType) GetOptionalScmTypeTokenEnvVars() string {
 }
 
 func (cc *CountContributorsCommand) Run() error {
+	log.Info("The CLI outputs may include an estimation of the contributing developers based on the input provided by the user. They may be based on third-party resources and databases and JFrog does not guarantee that the CLI outputs are accurate and/or complete. The CLI outputs are not legal advice and you are solely responsible for your use of it. CLI outputs are provided “as is” and any representation or warranty of or concerning any third-party technology is strictly between the user and the third-party owner or distributor of the third-party technology.")
 	if cc.Progress != nil {
 		cc.Progress.SetHeadlineMsg("Calculating Git contributors information")
 	}
