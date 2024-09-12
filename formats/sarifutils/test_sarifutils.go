@@ -1,6 +1,8 @@
 package sarifutils
 
-import "github.com/owenrumney/go-sarif/v2/sarif"
+import (
+	"github.com/owenrumney/go-sarif/v2/sarif"
+)
 
 func CreateRunWithDummyResultsInWd(wd string, results ...*sarif.Result) *sarif.Run {
 	return createRunWithDummyResults("", results...).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))})
