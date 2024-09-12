@@ -415,6 +415,17 @@ func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {
 	return ""
 }
 
+func GetRuleProperty(key string, rule *sarif.ReportingDescriptor) string {
+	if rule != nil && rule.Properties != nil && rule.Properties[key] != nil {
+		prop, ok := rule.Properties[key].(string)
+		if !ok {
+			return ""
+		}
+		return prop
+	}
+	return ""
+}
+
 func GetRunRules(run *sarif.Run) []*sarif.ReportingDescriptor {
 	if run != nil && run.Tool.Driver != nil {
 		return run.Tool.Driver.Rules
