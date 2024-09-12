@@ -48,7 +48,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
@@ -62,7 +62,7 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1, 0)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
@@ -103,7 +103,7 @@ func TestDockerScanWithProgressBar(t *testing.T) {
 	TestDockerScan(t)
 }
 
-func TestDockerScanWithTokenvalidation(t *testing.T) {
+func TestDockerScanWithTokenValidation(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	testCli, cleanup := initNativeDockerWithXrayTest(t)
 	defer cleanup()
@@ -163,7 +163,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		if assert.NotEmpty(t, output) {
 			securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
 			if validateSecrets {
-				securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 0, 0, minInactives)
+				securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, minInactives)
 			}
 		}
 		// Run docker scan on image with watch
