@@ -35,14 +35,19 @@ func createRunWithDummyResults(toolName string, results ...*sarif.Result) *sarif
 	return run
 }
 
-func CreateRunWithDummyResultAndRuleProperties(property, value string, result *sarif.Result) *sarif.Run {
+func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+	if len(properties) != len(values) {
+		return nil
+	}
 	run := sarif.NewRunWithInformationURI("", "")
 	if result.RuleID != nil {
 		run.AddRule(*result.RuleID)
 	}
 	run.AddResult(result)
-	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties)
-	run.Tool.Driver.Rules[0].Properties[property] = value
+	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties, len(properties))
+	for index := range properties {
+		run.Tool.Driver.Rules[0].Properties[properties[index]] = values[index]
+	}
 	return run
 }
 
