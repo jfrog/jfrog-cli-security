@@ -68,6 +68,7 @@ type SourceCodeRow struct {
 	SeverityDetails
 	Location
 	Finding            string       `json:"finding,omitempty"`
+	Fingerprint        string       `json:"fingerprint,omitempty"`
 	TokenValidation    string       `json:"tokenValidation,omitempty"`
 	TokenInfo          string       `json:"metadata,omitempty"`
 	ScannerDescription string       `json:"scannerDescription,omitempty"`

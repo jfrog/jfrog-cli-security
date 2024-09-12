@@ -55,25 +55,18 @@ func VerifyJsonScanResults(t *testing.T, content string, minViolations, minVulne
 	}
 }
 
-func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, minVulnerabilities, minLicenses, minInactives int) {
+func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, minVulnerabilities, minLicenses int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
 		assert.GreaterOrEqual(t, len(results.SecurityViolations), minViolations)
 		assert.GreaterOrEqual(t, len(results.Vulnerabilities), minVulnerabilities)
 		assert.GreaterOrEqual(t, len(results.Licenses), minLicenses)
-		countInactives := 0
-		for _, result := range results.Secrets {
-			if result.TokenValidation == "Inactive" {
-				countInactives += 1
-			}
-		}
-		assert.GreaterOrEqual(t, countInactives, minInactives)
 	}
 }
 
 func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets,
-	minApplicable, minUndetermined, minNotCovered, minNotApplicable int) {
+	minApplicable, minUndetermined, minNotCovered, minNotApplicable, minInactives int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
@@ -93,6 +86,13 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 				undeterminedResults++
 			}
 		}
+		countInactives := 0
+		for _, result := range results.Secrets {
+			if result.TokenValidation == "Inactive" {
+				countInactives += 1
+			}
+		}
+		assert.GreaterOrEqual(t, countInactives, minInactives)
 		assert.GreaterOrEqual(t, applicableResults, minApplicable, "Found less applicableResults then expected")
 		assert.GreaterOrEqual(t, undeterminedResults, minUndetermined, "Found less undeterminedResults then expected")
 		assert.GreaterOrEqual(t, notCoveredResults, minNotCovered, "Found less notCoveredResults then expected")

@@ -26,10 +26,10 @@ const (
 	IacScan                      SubScanType        = "iac"
 	SastScan                     SubScanType        = "sast"
 	SecretsScan                  SubScanType        = "secrets"
+	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
 	ViolationTypeSecurity        ViolationIssueType = "security"
 	ViolationTypeLicense         ViolationIssueType = "license"
 	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
 )
 
 type ViolationIssueType string

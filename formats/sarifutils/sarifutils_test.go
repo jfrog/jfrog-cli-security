@@ -1,6 +1,7 @@
 package sarifutils
 
 import (
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"testing"
 
@@ -613,5 +614,32 @@ func TestGetInvocationWorkingDirectory(t *testing.T) {
 
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetInvocationWorkingDirectory(test.invocation))
+	}
+}
+
+func TestGetResultFingerprint(t *testing.T) {
+	tests := []struct {
+		name           string
+		result         *sarif.Result
+		expectedOutput string
+	}{
+		{
+			name:           "No results",
+			result:         &sarif.Result{},
+			expectedOutput: "",
+		},
+		{
+			name:           "Empty fingerprint field in the result",
+			result:         CreateResultWithLocations("msg", "rule", "level"),
+			expectedOutput: "",
+		},
+		{
+			name:           "Results with fingerprint field",
+			result:         CreateDummyResultWithFingerprint("some_markdown", "masg", jasutils.SastFingerprintKey, "sast_fingerprint"),
+			expectedOutput: "sast_fingerprint",
+		},
+	}
+	for _, test := range tests {
+		assert.Equal(t, test.expectedOutput, GetResultFingerprint(test.result))
 	}
 }
