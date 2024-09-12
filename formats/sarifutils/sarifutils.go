@@ -99,14 +99,6 @@ func GetResultProperty(key string, result *sarif.Result) string {
 	return ""
 }
 
-func GetResultPropertyTokenValidation(result *sarif.Result) string {
-	return GetResultProperty("tokenValidation", result)
-}
-
-func GetResultPropertyMetadata(result *sarif.Result) string {
-	return GetResultProperty("metadata", result)
-}
-
 func GetLocationRelatedCodeFlowsFromResult(location *sarif.Location, result *sarif.Result) (codeFlows []*sarif.CodeFlow) {
 	for _, codeFlow := range result.CodeFlows {
 		for _, stackTrace := range codeFlow.ThreadFlows {

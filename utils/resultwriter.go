@@ -175,11 +175,8 @@ func (rw *ResultsWriter) printScanResultsTables() (err error) {
 		}
 	}
 	if shouldPrintTable(rw.subScansPreformed, SecretsScan, rw.results.ResultType) {
-		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas); err != nil {
+		if err = PrintSecretsTable(rw.results.ExtendedScanResults.SecretsScanResults, rw.results.ExtendedScanResults.EntitledForJas, rw.results.ExtendedScanResults.SecretValidation); err != nil {
 			return
-		}
-		if rw.results.ExtendedScanResults.SecretValidation && rw.results.ExtendedScanResults.EntitledForJas {
-			log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 		}
 	}
 	if shouldPrintTable(rw.subScansPreformed, IacScan, rw.results.ResultType) {
@@ -791,10 +788,10 @@ func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubSca
 	if snippet := sarifutils.GetLocationSnippet(location); snippet != "" {
 		content += fmt.Sprintf("\nEvidence: %s", snippet)
 	}
-	if tokenValidation := sarifutils.GetResultPropertyTokenValidation(result); tokenValidation != "" {
+	if tokenValidation := GetResultPropertyTokenValidation(result); tokenValidation != "" {
 		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
 	}
-	if metadata := sarifutils.GetResultPropertyMetadata(result); metadata != "" {
+	if metadata := GetResultPropertyMetadata(result); metadata != "" {
 		content += fmt.Sprintf("\nMetadata %s", metadata)
 	}
 	return
