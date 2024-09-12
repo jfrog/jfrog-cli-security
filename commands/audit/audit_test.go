@@ -147,7 +147,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	// TODO this test needs to be improved to verify the files content after we use the Sarif convertor and write Sarif content into the files
 	mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
 	defer mockServer.Close()
 

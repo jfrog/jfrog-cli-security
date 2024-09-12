@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -15,6 +16,7 @@ import (
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
 
@@ -112,7 +114,7 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-		err = utils.DumpScanResultsToFileIfNeeded(results, scansOutputDir, jasutils.Secrets.String())
+		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Secrets)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -130,7 +132,7 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
-		err = utils.DumpScanResultsToFileIfNeeded(results, scansOutputDir, jasutils.IaC.String())
+		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.IaC)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -148,7 +150,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
-		err = utils.DumpScanResultsToFileIfNeeded(results, scansOutputDir, jasutils.Sast.String())
+		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Sast)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -168,8 +170,20 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		scanResults.ExtendedScanResults.ApplicabilityScanResults = append(scanResults.ExtendedScanResults.ApplicabilityScanResults, results...)
-		err = utils.DumpScanResultsToFileIfNeeded(results, scansOutputDir, jasutils.Applicability.String())
+		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Applicability)
 		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
+func dumpSarifRunToFileIfNeeded(results []*sarif.Run, scanResultsOutputDir string, scanType jasutils.JasScanType) (err error) {
+	if scanResultsOutputDir == "" || results == nil {
+		return
+	}
+	fileContent, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }

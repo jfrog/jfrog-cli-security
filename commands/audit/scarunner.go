@@ -152,7 +152,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
-		err = utils.DumpScanResultsToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, "Sca")
+		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, "Sca")
 		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -383,4 +383,16 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*Depen
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return &treeResult, nil
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
+func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResultsOutputDir string, scanType string) (err error) {
+	if scanResultsOutputDir == "" || results == nil {
+		return
+	}
+	fileContent, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType)
 }
