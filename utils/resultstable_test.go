@@ -1183,7 +1183,7 @@ func TestPrepareSecrets(t *testing.T) {
 			if tc.isTokenValidationRun {
 				assert.Equal(t, "Active", rows[0].Applicability.Status)
 				assert.Equal(t, "Inactive", rows[1].Applicability.Status)
-				assert.Equal(t, (*formats.Applicability)(nil), rows[2].Applicability)
+				assert.Nil(t, rows[2].Applicability)
 			}
 		})
 	}
