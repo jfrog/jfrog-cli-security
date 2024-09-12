@@ -149,8 +149,8 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow
 			file:            rows[i].File,
 			lineColumn:      strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
 			secret:          rows[i].Snippet,
-			tokenValidation: jasutils.TokenValidationStatus(rows[i].TokenValidation).ToString(),
-			tokenInfo:       jasutils.TokenValidationStatus(rows[i].TokenInfo).String(),
+			tokenValidation: jasutils.TokenValidationStatus(rows[i].Applicability.Status).ToString(),
+			tokenInfo:       jasutils.TokenValidationStatus(rows[i].Applicability.ScannerDescription).String(),
 		})
 
 	}

@@ -1102,12 +1102,12 @@ func TestPrepareSecrets(t *testing.T) {
 			name:                 "Prepare Secret run - with results and tokens validation",
 			isTokenValidationRun: true,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("secret finding", "rule2", "note", sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet"))),
+				sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("secret finding", "rule2", "note", sarifutils.CreateLocation("file://file", 1, 2, 3, 4, "some-secret-snippet"))),
 				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithProperties("other secret finding", "rule2", "note", map[string]string{"tokenValidation": "Inactive", "metadata": ""}, sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet")),
+					sarifutils.CreateResultWithProperties("other secret finding", "rule2", "note", map[string]string{"tokenValidation": "Inactive", "metadata": ""}, sarifutils.CreateLocation("file://file", 1, 2, 3, 4, "some-secret-snippet")),
 				),
 				sarifutils.CreateRunWithDummyResults(
-					sarifutils.CreateResultWithProperties("another secret finding", "rule2", "note", map[string]string{"tokenValidation": "Active", "metadata": "testmetadata"}, sarifutils.CreateLocation("file://wd/file", 1, 2, 3, 4, "some-secret-snippet")),
+					sarifutils.CreateResultWithProperties("another secret finding", "rule2", "note", map[string]string{"tokenValidation": "Active", "metadata": "testmetadata"}, sarifutils.CreateLocation("file://file", 1, 2, 3, 4, "some-secret-snippet")),
 				),
 			},
 			expectedOutput: []formats.SourceCodeRow{
@@ -1116,11 +1116,10 @@ func TestPrepareSecrets(t *testing.T) {
 						Severity:         "Low",
 						SeverityNumValue: 11,
 					},
-					TokenValidation: "",
-					TokenInfo:       "",
-					Finding:         "secret finding",
+					Applicability: &formats.Applicability{Status: "", ScannerDescription: ""},
+					Finding:       "secret finding",
 					Location: formats.Location{
-						File:        "wd/file",
+						File:        "file",
 						StartLine:   1,
 						StartColumn: 2,
 						EndLine:     3,
@@ -1133,11 +1132,10 @@ func TestPrepareSecrets(t *testing.T) {
 						Severity:         "Low",
 						SeverityNumValue: 11,
 					},
-					TokenValidation: "Inactive",
-					TokenInfo:       "",
-					Finding:         "other secret finding",
+					Applicability: &formats.Applicability{Status: "Inactive", ScannerDescription: ""},
+					Finding:       "other secret finding",
 					Location: formats.Location{
-						File:        "wd/file",
+						File:        "file",
 						StartLine:   1,
 						StartColumn: 2,
 						EndLine:     3,
@@ -1150,11 +1148,10 @@ func TestPrepareSecrets(t *testing.T) {
 						Severity:         "Low",
 						SeverityNumValue: 11,
 					},
-					TokenValidation: "Active",
-					TokenInfo:       "testmetadata",
-					Finding:         "another secret finding",
+					Applicability: &formats.Applicability{Status: "Active", ScannerDescription: "testmetadata"},
+					Finding:       "another secret finding",
 					Location: formats.Location{
-						File:        "wd/file",
+						File:        "file",
 						StartLine:   1,
 						StartColumn: 2,
 						EndLine:     3,
@@ -1171,9 +1168,9 @@ func TestPrepareSecrets(t *testing.T) {
 			rows := prepareSecrets(tc.input, false)
 			assert.ElementsMatch(t, tc.expectedOutput, rows)
 			if tc.isTokenValidationRun {
-				assert.Equal(t, "Active", rows[0].TokenValidation)
-				assert.Equal(t, "Inactive", rows[1].TokenValidation)
-				assert.Equal(t, "", rows[2].TokenValidation)
+				assert.Equal(t, "Active", rows[0].Applicability.Status)
+				assert.Equal(t, "Inactive", rows[1].Applicability.Status)
+				assert.Equal(t, (*formats.Applicability)(nil), rows[2].Applicability)
 			}
 		})
 	}

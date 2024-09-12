@@ -352,6 +352,13 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
+				var applicability *formats.Applicability
+				status := sarifutils.GetResultPropertyTokenValidation(secretResult)
+				statusDescription := sarifutils.GetResultPropertyMetadata(secretResult)
+				if status != "" || statusDescription != "" {
+					applicability = &formats.Applicability{Status: status,
+						ScannerDescription: statusDescription}
+				}
 				secretsRows = append(secretsRows,
 					formats.SourceCodeRow{
 						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
@@ -365,8 +372,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 							EndColumn:   sarifutils.GetLocationEndColumn(location),
 							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
-						TokenValidation: sarifutils.GetResultPropertyTokenValidation(secretResult),
-						TokenInfo:       sarifutils.GetResultPropertyMetadata(secretResult),
+						Applicability: applicability,
 					},
 				)
 			}
@@ -377,7 +383,10 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 		if secretsRows[i].SeverityNumValue != secretsRows[j].SeverityNumValue {
 			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
 		}
-		return jasutils.TokenValidationOrder[secretsRows[i].TokenValidation] < jasutils.TokenValidationOrder[secretsRows[j].TokenValidation]
+		if secretsRows[i].Applicability != nil && secretsRows[j].Applicability != nil {
+			return jasutils.TokenValidationOrder[secretsRows[i].Applicability.Status] < jasutils.TokenValidationOrder[secretsRows[j].Applicability.Status]
+		}
+		return true
 	})
 
 	return secretsRows

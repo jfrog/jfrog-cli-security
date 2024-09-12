@@ -750,7 +750,7 @@ func getBaseBinaryDescriptionMarkdown(subScanType SubScanType, cmdResults *Resul
 	if len(result.Locations) > 0 {
 		location = result.Locations[0]
 	}
-	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, location)
+	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, location, result)
 }
 
 func getDockerImageTag(cmdResults *Results) string {
@@ -769,7 +769,7 @@ func getDockerImageTag(cmdResults *Results) string {
 // * Layer: <HASH>
 // * Filepath: <PATH>
 // * Evidence: <Snippet>
-func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, location *sarif.Location) (content string) {
+func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, location *sarif.Location, result *sarif.Result) (content string) {
 	if location == nil {
 		return ""
 	}
@@ -790,6 +790,12 @@ func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubSca
 	}
 	if snippet := sarifutils.GetLocationSnippet(location); snippet != "" {
 		content += fmt.Sprintf("\nEvidence: %s", snippet)
+	}
+	if tokenValidation := sarifutils.GetResultPropertyTokenValidation(result); tokenValidation != "" {
+		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
+	}
+	if metadata := sarifutils.GetResultPropertyMetadata(result); metadata != "" {
+		content += fmt.Sprintf("\nMetadata %s", metadata)
 	}
 	return
 }

@@ -88,7 +88,7 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 		}
 		countInactives := 0
 		for _, result := range results.Secrets {
-			if result.TokenValidation == "Inactive" {
+			if result.Applicability.Status == "Inactive" {
 				countInactives += 1
 			}
 		}
