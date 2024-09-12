@@ -1116,7 +1116,7 @@ func TestPrepareSecrets(t *testing.T) {
 						Severity:         "Low",
 						SeverityNumValue: 11,
 					},
-					Applicability: &formats.Applicability{Status: "", ScannerDescription: ""},
+					Applicability: nil,
 					Finding:       "secret finding",
 					Location: formats.Location{
 						File:        "file",
