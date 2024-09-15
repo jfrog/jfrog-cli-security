@@ -325,10 +325,8 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
-					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg"))).
-					WithInvocations([]*sarif.Invocation{
-						sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
-					}),
+					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
+					[]string{"applicability"}, []string{"applicable"}).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))}),
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
 					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
 				),
@@ -338,9 +336,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
 					),
-					[]string{"applicability"}, []string{"applicable"}).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
-				}),
+					[]string{"applicability"}, []string{"applicable"}).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))}),
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
 					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
