@@ -464,9 +464,9 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name:           "new scan statuses - applicable wins all statuses",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "applicable", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve3")),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve3"), []string{"applicability"}, []string{"not_covered"}),
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
 			expectedResult: jasutils.Applicable,
@@ -480,8 +480,8 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name:           "new scan statuses - not covered wins not applicable",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_testCve2")),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: jasutils.NotCovered,
@@ -494,14 +494,26 @@ func TestGetApplicableCveValue(t *testing.T) {
 			name:           "new scan statuses - undetermined wins not covered",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "not_covered", sarifutils.CreateDummyPassingResult("applic_testCve1")),
-				sarifutils.CreateRunWithDummyResultAndRuleProperties("applicability", "undetermined", sarifutils.CreateDummyPassingResult("applic_testCve2")),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"undetermined"}),
 			},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: jasutils.ApplicabilityUndetermined,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.ApplicabilityUndetermined)}},
+			},
+		},
+		{
+			name:           "undetermined with undetermined reason",
+			entitledForJas: true,
+			applicabilityScanResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability", "undetermined_reason"}, []string{"undetermined", "however"}),
+			},
+			cves:           []services.Cve{{Id: "testCve2"}},
+			expectedResult: jasutils.ApplicabilityUndetermined,
+			expectedCves: []formats.CveRow{
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String(), UndeterminedReason: "however"}},
 			},
 		},
 		{

@@ -306,6 +306,7 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 				SeverityDetails:    severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
 				Finding:            sarifutils.GetResultMsgText(result),
 				ScannerDescription: scannerDescription,
+				Fingerprint:        sarifutils.GetResultFingerprint(result),
 				Location: formats.Location{
 					File:        sarifutils.GetRelativeLocationFileName(location, run.Invocations),
 					StartLine:   sarifutils.GetLocationStartLine(location),
