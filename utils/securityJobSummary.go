@@ -73,8 +73,8 @@ func newResultSummary(cmdResults *Results, cmdType CommandType, serverDetails *c
 	return
 }
 
-func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, true)
 	summary.Args.BuildName = buildName
 	summary.Args.BuildNumbers = []string{buildNumber}
 	return
