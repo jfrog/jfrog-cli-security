@@ -296,6 +296,39 @@ func TestGetExistingRootDir(t *testing.T) {
 	}
 }
 
+func TestHasCompletePathPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		root     string
+		wd       string
+		expected bool
+	}{
+		{
+			name:     "no prefix",
+			root:     "dir1/dir2",
+			wd:       "some/other/project",
+			expected: false,
+		},
+		{
+			name:     "prefix but not a path prefix",
+			root:     "dir1/dir2",
+			wd:       "dir",
+			expected: false,
+		},
+		{
+			name:     "path prefix",
+			root:     "dir1/dir2",
+			wd:       "dir1",
+			expected: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, hasCompletePathPrefix(test.root, test.wd))
+		})
+	}
+}
+
 func TestCleanSubDirectories(t *testing.T) {
 	tests := []struct {
 		name                    string
