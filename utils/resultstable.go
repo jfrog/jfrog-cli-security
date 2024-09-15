@@ -940,6 +940,7 @@ func getCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			status := getApplicabilityStatusFromRule(rule)
+			applicability.UndeterminedReason = GetRuleUndeterminedReason(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
@@ -1026,6 +1027,10 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 	}
 	dependencyName = split[0]
 	return
+}
+
+func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
+	return sarifutils.GetRuleProperty("undetermined_reason", rule)
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
