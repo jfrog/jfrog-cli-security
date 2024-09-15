@@ -524,11 +524,27 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			requestedDescriptors: make(map[Technology][]string),
 			techProvidedByUser:   true,
 			expected: map[string][]string{
-				"dir4": {filepath.Join("dir4", "package.json")},
-				"dir3": {filepath.Join("dir3", "package.json")},
 				"dir":  {filepath.Join("dir", "package.json")},
+				"dir3": {filepath.Join("dir3", "package.json")},
+				"dir4": {filepath.Join("dir4", "package.json")},
 			},
 		},
+		// pnpm
+		{
+			name:                 "pnpmTestWithProvidedTechFromUser",
+			tech:                 Pnpm,
+			requestedDescriptors: make(map[Technology][]string),
+			techProvidedByUser:   true,
+			expected: map[string][]string{
+				filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")},
+				"dir":                        {filepath.Join("dir", "package.json")},
+				"dir4":                       {filepath.Join("dir4", "package.json")},
+			},
+		},
+		// nuget
+		// dotnet
+		// pip
+		// poetry
 	}
 
 	for _, test := range tests {
