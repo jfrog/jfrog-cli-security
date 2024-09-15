@@ -72,6 +72,7 @@ type ScanCommand struct {
 	progress               ioUtils.ProgressMgr
 	// JAS is only supported for Docker images.
 	commandSupportsJAS      bool
+	targetNameOverride      string
 	analyticsMetricsService *xsc.AnalyticsMetricsService
 }
 
@@ -87,6 +88,11 @@ func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 
 func (scanCmd *ScanCommand) SetRunJasScans(run bool) *ScanCommand {
 	scanCmd.commandSupportsJAS = run
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetTargetNameOverride(targetName string) *ScanCommand {
+	scanCmd.targetNameOverride = targetName
 	return scanCmd
 }
 
@@ -305,10 +311,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		err = errors.New("failed while trying to get Analyzer Manager: " + err.Error())
 	}
 
-	if err = recordResFunc(cmdResults); err != nil {
-		return err
-	}
-
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
 		SetHasViolationContext(scanCmd.hasViolationContext()).
@@ -318,6 +320,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {
 		return
+	}
+
+	if err = recordResFunc(cmdResults); err != nil {
+		return err
 	}
 
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
@@ -361,12 +367,19 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 	}()
 }
 
+func (scanCmd *ScanCommand) getBinaryTargetName(binaryPath string) string {
+	if scanCmd.targetNameOverride != "" {
+		return scanCmd.targetNameOverride
+	}
+	return filepath.Base(binaryPath)
+}
+
 func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults *results.SecurityCommandResults, indexedFileProducer parallel.Runner, jasFileProducerConsumer *utils.SecurityParallelRunner) FileContext {
 	return func(filePath string) parallel.TaskFunc {
 		return func(threadId int) (err error) {
 			logMsgPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 			// Create a scan target for the file.
-			targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: filepath.Base(filePath)})
+			targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: scanCmd.getBinaryTargetName(filePath)})
 			log.Info(logMsgPrefix+"Indexing file:", targetResults.Target)
 			if scanCmd.progress != nil {
 				scanCmd.progress.SetHeadlineMsg("Indexing file: " + targetResults.Name + " 🗄")

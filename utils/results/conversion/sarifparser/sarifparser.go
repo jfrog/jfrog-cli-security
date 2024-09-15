@@ -418,15 +418,21 @@ func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.
 	// Since we run in temp directories files should be relative
 	// Patch by converting the file paths to relative paths according to the invocations
 	convertPaths(cmdType, subScanType, runs...)
+	patchedRuns := []*sarif.Run{}
+	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
+		patched := sarifutils.CopyRunMetadata(run)
 		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the tool name in case of binary scan
-			sarifutils.SetRunToolName(binarySecretScannerToolName, run)
+			sarifutils.SetRunToolName(binarySecretScannerToolName, patched)
 		}
-		run.Tool.Driver.Rules = patchRules(cmdType, subScanType, run.Tool.Driver.Rules...)
-		run.Results = patchResults(cmdType, subScanType, target, run, run.Results...)
+		if patched.Tool.Driver != nil {
+			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, run.Tool.Driver.Rules...)
+		}
+		patched.Results = patchResults(cmdType, subScanType, target, run, run.Results...)
+		patchedRuns = append(patchedRuns, patched)
 	}
-	return runs
+	return patchedRuns
 }
 
 func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, runs ...*sarif.Run) {
@@ -448,37 +454,42 @@ func convertPaths(commandType utils.CommandType, subScanType utils.SubScanType, 
 func patchDockerSecretLocations(result *sarif.Result) {
 	for _, location := range result.Locations {
 		algorithm, layerHash, relativePath := getLayerContentFromPath(sarifutils.GetLocationFileName(location))
-		if layerHash != "" {
-			// Set Logical location kind "layer" with the layer hash
-			logicalLocation := sarifutils.NewLogicalLocation(layerHash, "layer")
-			if algorithm != "" {
-				logicalLocation.Properties = sarif.Properties(map[string]interface{}{"algorithm": algorithm})
-			}
-			location.LogicalLocations = append(location.LogicalLocations, logicalLocation)
+		if algorithm == "" || layerHash == "" || relativePath == "" {
+			continue
 		}
-		if relativePath != "" {
-			sarifutils.SetLocationFileName(location, relativePath)
-		}
+		// Set Logical location kind "layer" with the layer hash
+		logicalLocation := sarifutils.NewLogicalLocation(layerHash, "layer")
+		logicalLocation.Properties = sarif.Properties(map[string]interface{}{"algorithm": algorithm})
+		location.LogicalLocations = append(location.LogicalLocations, logicalLocation)
+		sarifutils.SetLocationFileName(location, relativePath)
 	}
 }
 
 func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, rules ...*sarif.ReportingDescriptor) (patched []*sarif.ReportingDescriptor) {
 	patched = []*sarif.ReportingDescriptor{}
 	for _, rule := range rules {
-		// Github code scanning ingestion rules rejects rules without help content.
-		// Patch by transferring the full description to the help field.
-		if rule.Help == nil && rule.FullDescription != nil {
-			rule.Help = rule.FullDescription
-		}
-		// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
+		cloned := sarif.NewRule(rule.ID)
 		if rule.Name != nil && rule.ID == *rule.Name {
-			rule.Name = nil
+			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
+			cloned.Name = rule.Name
 		}
+		cloned.ShortDescription = rule.ShortDescription
 		if commandType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the rule name in case of binary scan
-			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
+			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), cloned)
 		}
-		patched = append(patched, rule)
+		cloned.FullDescription = rule.FullDescription
+		cloned.Help = rule.Help
+		if cloned.Help == nil {
+			// Github code scanning ingestion rules rejects rules without help content.
+			// Patch by transferring the full description to the help field.
+			cloned.Help = rule.FullDescription
+		}
+		cloned.HelpURI = rule.HelpURI
+		cloned.Properties = rule.Properties
+		cloned.MessageStrings = rule.MessageStrings
+
+		patched = append(patched, cloned)
 	}
 	return
 }
@@ -514,12 +525,17 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 	return patched
 }
 
+// This method may need to replace the physical location if applicable, to avoid override on the existing object we will return a new object if changed
 func convertBinaryPhysicalLocations(commandType utils.CommandType, run *sarif.Run, result *sarif.Result) *sarif.Result {
 	if patchedLocation := getPatchedBinaryLocation(commandType, run); patchedLocation != "" {
-		for _, location := range result.Locations {
+		patched := sarifutils.CopyResult(result)
+		for _, location := range patched.Locations {
 			// Patch the location - Reset the uri and region
 			location.PhysicalLocation = sarifutils.NewPhysicalLocation(patchedLocation)
 		}
+		return patched
+	} else {
+		return result
 	}
 }
 
@@ -659,7 +675,7 @@ func getBinaryLocationMarkdownString(commandType utils.CommandType, subScanType 
 	if locationFilePath := sarifutils.GetLocationFileName(location); locationFilePath != "" {
 		content += fmt.Sprintf("\nFilepath: %s", locationFilePath)
 	}
-	if snippet := sarifutils.GetLocationSnippet(location); snippet != "" {
+	if snippet := sarifutils.GetLocationSnippetText(location); snippet != "" {
 		content += fmt.Sprintf("\nEvidence: %s", snippet)
 	}
 	return

@@ -42,8 +42,24 @@ func getAuditValidationParams() validations.ValidationParams {
 	}
 }
 
+// For Summary we count unique CVE finding (issueId), for SARIF and SimpleJson we count all findings (pair of issueId+impactedComponent)
+// We have in the result 2 CVE with 2 impacted components each
+func getDockerScanValidationParams(unique bool) validations.ValidationParams {
+	params := validations.ValidationParams{
+		ExactResultsMatch: true,
+		Vulnerabilities:   11,
+		Applicable:        3,
+		NotApplicable:     3,
+		NotCovered:        1,
+		Undetermined:      1,
+		Secrets:           3,
+	}
+	return params
+}
+
 func TestConvertResults(t *testing.T) {
 	auditInputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "audit", "audit_results.json"))
+	dockerScanInputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "dockerscan", "docker_results.json"))
 
 	testCases := []struct {
 		contentFormat       conversionFormat
@@ -65,11 +81,34 @@ func TestConvertResults(t *testing.T) {
 			inputResults:        auditInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_summary.json"),
 		},
+		{
+			contentFormat:       SimpleJson,
+			inputResults:        dockerScanInputResults,
+			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_simple_json.json"),
+		},
+		{
+			contentFormat:       Sarif,
+			inputResults:        dockerScanInputResults,
+			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_sarif.json"),
+		},
+		{
+			contentFormat:       Summary,
+			inputResults:        dockerScanInputResults,
+			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_summary.json"),
+		},
 	}
 
 	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("Convert to %s", testCase.contentFormat), func(t *testing.T) {
-			validationParams := getAuditValidationParams()
+		t.Run(fmt.Sprintf("%s convert to %s", testCase.inputResults.CmdType, testCase.contentFormat), func(t *testing.T) {
+			var validationParams validations.ValidationParams
+			switch testCase.inputResults.CmdType {
+			case utils.SourceCode:
+				validationParams = getAuditValidationParams()
+			case utils.DockerImage:
+				validationParams = getDockerScanValidationParams(testCase.contentFormat == Summary)
+			default:
+				t.Fatalf("Unsupported command type: %s", testCase.inputResults.CmdType)
+			}
 			pretty := false
 			if testCase.contentFormat == Sarif {
 				pretty = true

@@ -408,14 +408,14 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			expectedResults: []*sarif.Run{
 				{
 					Tool: sarif.Tool{
-						Driver: sarifutils.CreateDummyDriver(binarySecretScannerToolName, "", &sarif.ReportingDescriptor{
+						Driver: sarifutils.CreateDummyDriver(binarySecretScannerToolName, &sarif.ReportingDescriptor{
 							ID:               "rule",
 							ShortDescription: sarif.NewMultiformatMessageString("[Secret in Binary found] "),
 						}),
 					},
 					Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))},
 					Results: []*sarif.Result{
-						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
+						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "93d660ebfd39b1220c42c0beb6e4e863",
 							sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
 						),
 					},
@@ -493,8 +493,8 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchRunsToPassIngestionRules(tc.cmdType, tc.subScan, tc.target, tc.input...)
-			assert.ElementsMatch(t, tc.expectedResults, tc.input)
+			patchedRuns := patchRunsToPassIngestionRules(tc.cmdType, tc.subScan, tc.target, tc.input...)
+			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}
 }

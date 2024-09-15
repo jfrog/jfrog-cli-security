@@ -63,12 +63,12 @@
                 {
                     "executionSuccessful": true,
                     "arguments": [
-                        "/Users/assafa/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
+                        "/users/user/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
                         "scan",
                         "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1693492973-1963413933/results.sarif"
                     ],
                     "workingDirectory": {
-                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast"
+                        "uri": "file:///Users/user/testdata/xray/jas/sast"
                     }
                 }
             ],
@@ -87,7 +87,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/__init__.py"
+                                    "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/__init__.py"
                                 },
                                 "region": {
                                     "endColumn": 39,
@@ -117,7 +117,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/__init__.py"
+                                    "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/__init__.py"
                                 },
                                 "region": {
                                     "endColumn": 39,
@@ -151,7 +151,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -174,7 +174,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 35,
@@ -197,7 +197,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 44,
@@ -220,7 +220,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 16,
@@ -243,7 +243,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 10,
@@ -266,7 +266,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 10,
@@ -295,7 +295,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                    "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                 },
                                 "region": {
                                     "endColumn": 10,
@@ -329,7 +329,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -352,7 +352,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 35,
@@ -375,7 +375,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 44,
@@ -398,7 +398,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 16,
@@ -421,7 +421,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 63,
@@ -444,7 +444,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 70,
@@ -467,7 +467,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 76,
@@ -490,7 +490,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 16,
@@ -513,7 +513,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 62,
@@ -536,7 +536,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                                        "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 62,
@@ -565,7 +565,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/flask_webgoat/ui.py"
+                                    "uri": "file:///Users/user/testdata/xray/jas/sast/flask_webgoat/ui.py"
                                 },
                                 "region": {
                                     "endColumn": 62,
@@ -594,7 +594,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/cli-projects/jfrog-cli/testdata/xray/jas/sast/run.py"
+                                    "uri": "file:///Users/user/testdata/xray/jas/sast/run.py"
                                 },
                                 "region": {
                                     "endColumn": 24,

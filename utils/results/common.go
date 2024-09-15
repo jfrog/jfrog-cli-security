@@ -244,7 +244,7 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
 			compName, compVersion, _ := techutils.SplitComponentId(componentId)
-			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(target)}
+			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target)}
 		}
 
 		// Convert the impact path
@@ -252,8 +252,9 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		for _, pathNode := range impactPath {
 			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentId(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
-				Name:    nodeCompName,
-				Version: nodeCompVersion,
+				Name:     nodeCompName,
+				Version:  nodeCompVersion,
+				Location: getComponentLocation(pathNode.FullPath),
 			})
 		}
 		impactPathsRows = append(impactPathsRows, compImpactPathRows)
@@ -265,11 +266,13 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 	return
 }
 
-func getComponentLocation(target string) *formats.Location {
-	if target == "" {
-		return nil
+func getComponentLocation(pathsByPriority ...string) *formats.Location {
+	for _, path := range pathsByPriority {
+		if path != "" {
+			return &formats.Location{File: path}
+		}
 	}
-	return &formats.Location{File: target}
+	return nil
 }
 
 func GetIssueIdentifier(cvesRow []formats.CveRow, issueId string, delimiter string) string {
@@ -466,7 +469,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	case len(applicability.Evidence) == 0:
 		applicability.Status = string(jasutils.NotApplicable)
 	default:
-		applicability.Status = string(jasutils.NotCovered)
+		applicability.Status = string(jasutils.Applicable)
 	}
 	return &applicability
 }
@@ -483,7 +486,7 @@ func getEvidence(components map[string]services.Component, result *sarif.Result,
 			StartColumn: sarifutils.GetLocationStartColumn(location),
 			EndLine:     sarifutils.GetLocationEndLine(location),
 			EndColumn:   sarifutils.GetLocationEndColumn(location),
-			Snippet:     sarifutils.GetLocationSnippet(location),
+			Snippet:     sarifutils.GetLocationSnippetText(location),
 		},
 		Reason: sarifutils.GetResultMsgText(result),
 	}

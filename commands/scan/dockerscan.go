@@ -87,7 +87,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		Pattern(imageTarPath).
 		Target(dsc.targetRepoPath).
 		BuildSpec()).SetThreads(1)
-	dsc.ScanCommand.SetRunJasScans(true)
+	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag).SetRunJasScans(true)
 	err = dsc.setCredentialEnvsForIndexerApp()
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -101,9 +101,6 @@ func (dsc *DockerScanCommand) Run() (err error) {
 	return dsc.ScanCommand.RunAndRecordResults(utils.DockerImage, func(scanResults *results.SecurityCommandResults) (err error) {
 		if scanResults == nil {
 			return
-		}
-		for _, scan := range scanResults.Targets {
-			scan.Name = dsc.imageTag
 		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 		return dsc.recordResults(scanResults)

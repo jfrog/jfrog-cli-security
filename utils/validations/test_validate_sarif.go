@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	SastToolName    = "USAF"
-	IacToolName     = "JFrog Terraform scanner"
+	SastToolName = "USAF"
+	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
 	SecretsToolName = "JFrog Secrets scanner"
 )

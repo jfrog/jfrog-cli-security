@@ -312,7 +312,7 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 					StartColumn: sarifutils.GetLocationStartColumn(location),
 					EndLine:     sarifutils.GetLocationEndLine(location),
 					EndColumn:   sarifutils.GetLocationEndColumn(location),
-					Snippet:     sarifutils.GetLocationSnippet(location),
+					Snippet:     sarifutils.GetLocationSnippetText(location),
 				},
 				CodeFlow: codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), run.Invocations, pretty),
 			},
@@ -337,7 +337,7 @@ func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invoca
 					StartColumn: sarifutils.GetLocationStartColumn(stackTraceEntry.Location),
 					EndLine:     sarifutils.GetLocationEndLine(stackTraceEntry.Location),
 					EndColumn:   sarifutils.GetLocationEndColumn(stackTraceEntry.Location),
-					Snippet:     sarifutils.GetLocationSnippet(stackTraceEntry.Location),
+					Snippet:     sarifutils.GetLocationSnippetText(stackTraceEntry.Location),
 				})
 			}
 			flowRows = append(flowRows, rowFlow)

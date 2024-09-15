@@ -1,77 +1,43 @@
 {
-    "resultType": "docker_image",
-    "args": {
-        "base_jfrog_url": "https://tokyoshiftleft.jfrog.io/",
-        "docker_image": "nginx:latest"
-    },
-    "summary": {
-        "scans": [
-            {
-                "target": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1725978503-2625964325/image.tar",
-                "name": "nginx:latest",
-                "vulnerabilities": {
-                    "sca": {
-                        "scan_ids": [
-                            "f1ca2a08-1d7b-4194-72be-7b84afc51fac"
-                        ],
-                        "security": {
-                            "Critical": {
-                                "Not Applicable": 4,
-                                "Not Covered": 3
-                            },
-                            "High": {
-                                "Applicable": 1,
-                                "Not Applicable": 19,
-                                "Not Covered": 5,
-                                "Undetermined": 2
-                            },
-                            "Low": {
-                                "Not Applicable": 5,
-                                "Not Covered": 47
-                            },
-                            "Medium": {
-                                "Not Applicable": 3,
-                                "Not Covered": 28
-                            },
-                            "Unknown": {
-                                "Applicable": 1,
-                                "Not Applicable": 5,
-                                "Not Covered": 21,
-                                "Undetermined": 1
-                            }
-                        }
-                    },
-                    "iac": {},
-                    "secrets": {},
-                    "sast": {}
-                },
-                "violations": {
-                    "watches": [
-                        "Security_watch_1"
-                    ],
-                    "sca": {
-                        "scan_ids": [
-                            "f1ca2a08-1d7b-4194-72be-7b84afc51fac"
-                        ],
-                        "security": {
-                            "Critical": {
-                                "Not Applicable": 4,
-                                "Not Covered": 3
-                            },
-                            "High": {
-                                "Applicable": 1,
-                                "Not Applicable": 19,
-                                "Not Covered": 5,
-                                "Undetermined": 2
-                            },
-                            "Medium": {
-                                "Not Applicable": 3,
-                                "Not Covered": 28
-                            }
-                        }
-                    }
-                }
+    "scans": [
+      {
+        "target": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar",
+        "name": "platform.jfrog.io/swamp-docker/swamp:latest",
+        "vulnerabilities": {
+          "sca": {
+            "scan_ids": [
+              "27da9106-88ea-416b-799b-bc7d15783473"
+            ],
+            "security": {
+              "Critical": {
+                "Not Applicable": 2,
+                "Not Covered": 1,
+                "Undetermined": 1
+              },
+              "Low": {
+                "Applicable": 1,
+                "Not Applicable": 1
+              },
+              "Unknown": {
+                "Applicable": 2
+              }
             }
-        ]
-    }
-}
+          },
+          "iac": {},
+          "secrets": {
+            "Medium": {
+              "": 3
+            }
+          },
+          "sast": {}
+        },
+        "violations": {
+          "sca": {
+            "scan_ids": [
+              "27da9106-88ea-416b-799b-bc7d15783473"
+            ]
+          }
+        }
+      }
+    ]
+  }

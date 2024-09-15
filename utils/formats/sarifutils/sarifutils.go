@@ -29,6 +29,68 @@ func CombineReports(reports ...*sarif.Report) (combined *sarif.Report, err error
 	return
 }
 
+func GetToolVersion(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.Version != nil {
+		return *run.Tool.Driver.Version
+	}
+	return ""
+}
+
+func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
+	if run == nil {
+		return
+	}
+	copied = sarif.NewRun(*sarif.NewTool(sarif.NewDriver(GetRunToolName(run)))).WithInvocations(run.Invocations)
+
+	if toolFullName := GetRunToolFullName(run); toolFullName != "" {
+		copied.Tool.Driver.FullName = &toolFullName
+	}
+	if toolVersion := GetToolVersion(run); toolVersion != "" {
+		copied.Tool.Driver.Version = &toolVersion
+	}
+	if fullDescription := GetRunToolFullDescription(run); fullDescription != "" {
+		SetRunToolFullDescriptionText(fullDescription, copied)
+	}
+	if fullDescriptionMarkdown := GetRunToolFullDescriptionMarkdown(run); fullDescriptionMarkdown != "" {
+		SetRunToolFullDescriptionMarkdown(fullDescriptionMarkdown, copied)
+	}
+	if language := getRunLanguage(run); language != "" {
+		copied.Language = &language
+	}
+	if informationURI := GetRunToolInformationURI(run); informationURI != "" {
+		copied.Tool.Driver.InformationURI = &informationURI
+	}
+	return
+}
+
+func GetRunToolFullName(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullName != nil {
+		return *run.Tool.Driver.FullName
+	}
+	return ""
+}
+
+func GetRunToolFullDescription(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Text != nil {
+		return *run.Tool.Driver.FullDescription.Text
+	}
+	return ""
+}
+
+func getRunLanguage(run *sarif.Run) string {
+	if run.Language != nil {
+		return *run.Language
+	}
+	return ""
+}
+
+func GetRunToolInformationURI(run *sarif.Run) string {
+	if run.Tool.Driver != nil && run.Tool.Driver.InformationURI != nil {
+		return *run.Tool.Driver.InformationURI
+	}
+	return ""
+}
+
 func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
 	return &sarif.PhysicalLocation{
 		ArtifactLocation: &sarif.ArtifactLocation{
@@ -67,14 +129,14 @@ func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
 
 func CopyResult(result *sarif.Result) *sarif.Result {
 	copied := &sarif.Result{
-		RuleID: 	   result.RuleID,
-		RuleIndex:     result.RuleIndex,
-		Kind: 		result.Kind,
+		RuleID:       result.RuleID,
+		RuleIndex:    result.RuleIndex,
+		Kind:         result.Kind,
 		Fingerprints: result.Fingerprints,
 		CodeFlows:    result.CodeFlows,
-		Level:          result.Level,
-		Message:        result.Message,
-		PropertyBag:   result.PropertyBag,
+		Level:        result.Level,
+		Message:      result.Message,
+		PropertyBag:  result.PropertyBag,
 	}
 	for _, location := range result.Locations {
 		copied.Locations = append(copied.Locations, CopyLocation(location))
@@ -82,29 +144,56 @@ func CopyResult(result *sarif.Result) *sarif.Result {
 	return copied
 }
 
+func copyStrAttribute(attr *string) *string {
+	if attr == nil {
+		return nil
+	}
+	copy := *attr
+	return &copy
+}
+
+func copyIntAttribute(attr *int) *int {
+	if attr == nil {
+		return nil
+	}
+	copy := *attr
+	return &copy
+}
+
 func CopyLocation(location *sarif.Location) *sarif.Location {
-	copied := &sarif.Location{
-		PhysicalLocation: &sarif.PhysicalLocation{
-			ArtifactLocation: &sarif.ArtifactLocation{
-				URI: location.PhysicalLocation.ArtifactLocation.URI,
-			},
-			Region: &sarif.Region{
-				StartLine:   location.PhysicalLocation.Region.StartLine,
-				StartColumn: location.PhysicalLocation.Region.StartColumn,
-				EndLine:     location.PhysicalLocation.Region.EndLine,
-				EndColumn:   location.PhysicalLocation.Region.EndColumn,
-				Snippet:     location.PhysicalLocation.Region.Snippet,
-			},
-		},
+	if location == nil {
+		return nil
+	}
+	copied := sarif.NewLocation()
+	if location.PhysicalLocation != nil {
+		copied.PhysicalLocation = &sarif.PhysicalLocation{}
+		if location.PhysicalLocation.ArtifactLocation != nil {
+			copied.PhysicalLocation.ArtifactLocation = &sarif.ArtifactLocation{
+				URI: copyStrAttribute(location.PhysicalLocation.ArtifactLocation.URI),
+			}
+		}
+		if location.PhysicalLocation.Region != nil {
+			copied.PhysicalLocation.Region = &sarif.Region{
+				StartLine:   copyIntAttribute(location.PhysicalLocation.Region.StartLine),
+				StartColumn: copyIntAttribute(location.PhysicalLocation.Region.StartColumn),
+				EndLine:     copyIntAttribute(location.PhysicalLocation.Region.EndLine),
+				EndColumn:   copyIntAttribute(location.PhysicalLocation.Region.EndColumn),
+			}
+			if location.PhysicalLocation.Region.Snippet != nil {
+				copied.PhysicalLocation.Region.Snippet = &sarif.ArtifactContent{
+					Text: copyStrAttribute(location.PhysicalLocation.Region.Snippet.Text),
+				}
+			}
+		}
 	}
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
 		copied.LogicalLocations = append(copied.LogicalLocations, &sarif.LogicalLocation{
-			Name: logicalLocation.Name,
+			Name:               logicalLocation.Name,
 			FullyQualifiedName: logicalLocation.FullyQualifiedName,
-			DecoratedName: logicalLocation.DecoratedName,
-			Kind: logicalLocation.Kind,
-			PropertyBag: logicalLocation.PropertyBag,
+			DecoratedName:      logicalLocation.DecoratedName,
+			Kind:               logicalLocation.Kind,
+			PropertyBag:        logicalLocation.PropertyBag,
 		})
 	}
 	return copied
@@ -168,7 +257,7 @@ func GetLogicalLocation(kind string, location *sarif.Location) *sarif.LogicalLoc
 func GetLocationId(location *sarif.Location) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%d:%d",
 		GetLocationFileName(location),
-		GetLocationSnippet(location),
+		GetLocationSnippetText(location),
 		GetLocationStartLine(location),
 		GetLocationStartColumn(location),
 		GetLocationEndLine(location),
@@ -181,6 +270,13 @@ func SetRunToolName(toolName string, run *sarif.Run) {
 		run.Tool.Driver = &sarif.ToolComponent{}
 	}
 	run.Tool.Driver.Name = toolName
+}
+
+func GetRunToolName(run *sarif.Run) string {
+	if run.Tool.Driver != nil {
+		return run.Tool.Driver.Name
+	}
+	return ""
 }
 
 func SetRunToolFullDescriptionText(txt string, run *sarif.Run) {
@@ -214,13 +310,6 @@ func GetRunToolFullDescriptionText(run *sarif.Run) string {
 func GetRunToolFullDescriptionMarkdown(run *sarif.Run) string {
 	if run.Tool.Driver != nil && run.Tool.Driver.FullDescription != nil && run.Tool.Driver.FullDescription.Markdown != nil {
 		return *run.Tool.Driver.FullDescription.Markdown
-	}
-	return ""
-}
-
-func GetRunToolName(run *sarif.Run) string {
-	if run.Tool.Driver != nil {
-		return run.Tool.Driver.Name
 	}
 	return ""
 }
@@ -307,19 +396,27 @@ func SetResultFingerprint(algorithm, value string, result *sarif.Result) {
 func GetResultLocationSnippets(result *sarif.Result) []string {
 	var snippets []string
 	for _, location := range result.Locations {
-		if snippet := GetLocationSnippet(location); snippet != "" {
+		if snippet := GetLocationSnippetText(location); snippet != "" {
 			snippets = append(snippets, snippet)
 		}
 	}
 	return snippets
 }
 
-func GetLocationSnippet(location *sarif.Location) string {
-	region := getLocationRegion(location)
-	if region != nil && region.Snippet != nil {
-		return *region.Snippet.Text
+func GetLocationSnippetText(location *sarif.Location) string {
+	snippetContent := GetLocationSnippet(location)
+	if snippetContent != nil && snippetContent.Text != nil {
+		return *snippetContent.Text
 	}
 	return ""
+}
+
+func GetLocationSnippet(location *sarif.Location) *sarif.ArtifactContent {
+	region := getLocationRegion(location)
+	if region != nil && region.Snippet != nil {
+		return region.Snippet
+	}
+	return nil
 }
 
 func SetLocationSnippet(location *sarif.Location, snippet string) {

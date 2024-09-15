@@ -116,7 +116,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
-		actualTarget := targetScansResults.ScanTarget.Copy(getScaScanTarget(targetScansResults.ScaResults, targetScansResults.Target))
+		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 		var applicableRuns []*sarif.Run
 		if jasEntitled && targetScansResults.JasResults != nil {
 			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
@@ -148,7 +148,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 }
 
 // Get the best match for the scan target in the sca results
-func getScaScanTarget(scaResults *results.ScaScanResults, target string) string {
+func getScaScanTarget(scaResults *results.ScaScanResults, target results.ScanTarget) results.ScanTarget {
 	if scaResults == nil || len(scaResults.Descriptors) == 0 {
 		// If No Sca scan or no descriptors discovered, use the scan target (build-scan, binary-scan...)
 		return target
@@ -157,12 +157,12 @@ func getScaScanTarget(scaResults *results.ScaScanResults, target string) string 
 	// This is for multi module projects where there are multiple sca results for the same target
 	var bestMatch string
 	for _, descriptor := range scaResults.Descriptors {
-		if strings.HasPrefix(descriptor, target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
+		if strings.HasPrefix(descriptor, target.Target) && (bestMatch == "" || len(descriptor) < len(bestMatch)) {
 			bestMatch = descriptor
 		}
 	}
 	if bestMatch != "" {
-		return bestMatch
+		return target.Copy(bestMatch)
 	}
 	return target
 }

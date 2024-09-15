@@ -12,11 +12,10 @@ func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 	return createRunWithDummyResults("", results...)
 }
 
-func CreateDummyDriver(toolName, infoURI string, rules ...*sarif.ReportingDescriptor) *sarif.ToolComponent {
+func CreateDummyDriver(toolName string, rules ...*sarif.ReportingDescriptor) *sarif.ToolComponent {
 	return &sarif.ToolComponent{
-		Name:           toolName,
-		InformationURI: &infoURI,
-		Rules:          rules,
+		Name:  toolName,
+		Rules: rules,
 	}
 }
 
@@ -25,7 +24,7 @@ func CreateRunNameWithResults(toolName string, results ...*sarif.Result) *sarif.
 }
 
 func createRunWithDummyResults(toolName string, results ...*sarif.Result) *sarif.Run {
-	run := sarif.NewRunWithInformationURI(toolName, "")
+	run := sarif.NewRun(*sarif.NewSimpleTool(toolName))
 	for _, result := range results {
 		if result.RuleID != nil {
 			run.AddRule(*result.RuleID)

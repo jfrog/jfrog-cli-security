@@ -15,7 +15,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -34,8 +33,6 @@ type ResultsWriter struct {
 	isMultipleRoots *bool
 	// PrintExtended, If true, show extended results.
 	printExtended bool
-	// The scanType (binary,dependency)
-	scanType services.ScanType
 	// For table format - show table only for the given subScansPreformed
 	subScansPreformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
@@ -53,11 +50,6 @@ func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 
 func (rw *ResultsWriter) SetIsMultipleRootProject(isMultipleRootProject bool) *ResultsWriter {
 	rw.isMultipleRoots = &isMultipleRootProject
-	return rw
-}
-
-func (rw *ResultsWriter) SetScanType(scanType services.ScanType) *ResultsWriter {
-	rw.scanType = scanType
 	return rw
 }
 
@@ -108,8 +100,8 @@ func isPrettyOutputSupported() bool {
 	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
-func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanType, scanType services.ScanType) bool {
-	if scanType == services.Binary && (subScan == utils.IacScan || subScan == utils.SastScan) {
+func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanType, cmdType utils.CommandType) bool {
+	if cmdType.IsTargetBinary() && (subScan == utils.IacScan || subScan == utils.SastScan) {
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
@@ -189,7 +181,7 @@ func (rw *ResultsWriter) printOrSaveRawResults(printMsg bool) (err error) {
 	if printMsg && !utils.IsCI() {
 		// Save the results to a file and print a link to it.
 		var resultsPath string
-		if resultsPath, err = writeJsonResults(rw.commandResults); err != nil {
+		if resultsPath, err = WriteJsonResults(rw.commandResults); err != nil {
 			return
 		}
 		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
@@ -213,34 +205,34 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printOrSaveRawResults(true); err != nil {
 		return
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.commandResults.CmdType) {
 		if rw.hasViolationContext {
-			if err = PrintViolationsTable(tableContent, rw.scanType, rw.printExtended); err != nil {
+			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 				return
 			}
 		}
 		if rw.includeVulnerabilities {
-			if err = PrintVulnerabilitiesTable(tableContent, rw.scanType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+			if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
 				return
 			}
 		}
 		if rw.includeLicenses {
-			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.scanType); err != nil {
+			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
 				return
 			}
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.SecretsScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, utils.SecretsScan, rw.commandResults.CmdType) {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Secrets); err != nil {
 			return
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.IacScan, rw.scanType) {
+	if shouldPrintTable(rw.subScansPreformed, utils.IacScan, rw.commandResults.CmdType) {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
 			return
 		}
 	}
-	if !shouldPrintTable(rw.subScansPreformed, utils.SastScan, rw.scanType) {
+	if !shouldPrintTable(rw.subScansPreformed, utils.SastScan, rw.commandResults.CmdType) {
 		return nil
 	}
 	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
@@ -249,10 +241,10 @@ func (rw *ResultsWriter) printTables() (err error) {
 // PrintVulnerabilitiesTable prints the vulnerabilities in a table.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintVulnerabilitiesTable(tables formats.ResultsTables, scanType services.ScanType, techDetected, printExtended bool) error {
+func PrintVulnerabilitiesTable(tables formats.ResultsTables, cmdType utils.CommandType, techDetected, printExtended bool) error {
 	// Space before the tables
 	log.Output()
-	if scanType == services.Binary {
+	if cmdType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityVulnerabilitiesTable),
 			"Vulnerable Components",
 			"✨ No vulnerable components were found ✨",
@@ -269,10 +261,10 @@ func PrintVulnerabilitiesTable(tables formats.ResultsTables, scanType services.S
 // PrintViolationsTable prints the violations in 4 tables: security violations, license compliance violations, operational risk violations and ignore rule URLs.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanType, printExtended bool) (err error) {
+func PrintViolationsTable(tables formats.ResultsTables, cmdType utils.CommandType, printExtended bool) (err error) {
 	// Space before the tables
 	log.Output()
-	if scanType == services.Binary {
+	if cmdType.IsTargetBinary() {
 		err = coreutils.PrintTable(formats.ConvertSecurityTableRowToScanTableRow(tables.SecurityViolationsTable), "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
 			return err
@@ -305,10 +297,10 @@ func PrintViolationsTable(tables formats.ResultsTables, scanType services.ScanTy
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, scanType services.ScanType) error {
+func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, cmdType utils.CommandType) error {
 	// Space before the tables
 	log.Output()
-	if scanType == services.Binary {
+	if cmdType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertLicenseTableRowToScanTableRow(tables.LicensesTable), "Licenses", "No licenses were found", printExtended)
 	}
 	return coreutils.PrintTable(tables.LicensesTable, "Licenses", "No licenses were found", printExtended)
@@ -334,7 +326,7 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 	return nil
 }
 
-func writeJsonResults(results *results.SecurityCommandResults) (resultsPath string, err error) {
+func WriteJsonResults(results *results.SecurityCommandResults) (resultsPath string, err error) {
 	out, err := fileutils.CreateTempFile()
 	if errorutils.CheckError(err) != nil {
 		return

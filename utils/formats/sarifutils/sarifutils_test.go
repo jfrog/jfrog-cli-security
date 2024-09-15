@@ -207,7 +207,7 @@ func TestGetResultMsgText(t *testing.T) {
 	}
 }
 
-func TestGetLocationSnippet(t *testing.T) {
+func TestGetLocationSnippetText(t *testing.T) {
 	tests := []struct {
 		location       *sarif.Location
 		expectedOutput string
@@ -223,7 +223,7 @@ func TestGetLocationSnippet(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetLocationSnippet(test.location))
+		assert.Equal(t, test.expectedOutput, GetLocationSnippetText(test.location))
 	}
 }
 
@@ -244,7 +244,7 @@ func TestSetLocationSnippet(t *testing.T) {
 
 	for _, test := range tests {
 		SetLocationSnippet(test.location, test.expectedOutput)
-		assert.Equal(t, test.expectedOutput, GetLocationSnippet(test.location))
+		assert.Equal(t, test.expectedOutput, GetLocationSnippetText(test.location))
 	}
 }
 
