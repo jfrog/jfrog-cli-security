@@ -155,7 +155,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
-		SetHasViolationContext(bsc.hasViolationContext()).
+		SetHasViolationContext(true).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
@@ -170,7 +170,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		// Print two different tables for violations and vulnerabilities (if needed)
 
 		// If "No Xray Fail build policy...." error received, no need to print violations
-		if bsc.hasViolationContext() && !noFailBuildPolicy {
+		if !noFailBuildPolicy {
 			if err = resultsPrinter.PrintScanResults(); err != nil {
 				return false, err
 			}
@@ -186,7 +186,6 @@ func (bsc *BuildScanCommand) recordResults(cmdResults *results.SecurityCommandRe
 		cmdResults,
 		bsc.serverDetails,
 		bsc.includeVulnerabilities,
-		bsc.hasViolationContext(),
 		params.BuildName, params.BuildNumber,
 	); err != nil {
 		return
@@ -196,10 +195,6 @@ func (bsc *BuildScanCommand) recordResults(cmdResults *results.SecurityCommandRe
 
 func (bsc *BuildScanCommand) CommandName() string {
 	return "xr_build_scan"
-}
-
-func (bsc *BuildScanCommand) hasViolationContext() bool {
-	return bsc.buildConfiguration.GetProject() != ""
 }
 
 // There are two cases. when serverDetails.Url is configured and when serverDetails.XrayUrl and serverDetails.ArtifactoryUrl are configured

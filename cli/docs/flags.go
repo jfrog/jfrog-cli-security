@@ -116,6 +116,7 @@ const (
 	ThirdPartyContextualAnalysis = "third-party-contextual-analysis"
 	RequirementsFile             = "requirements-file"
 	WorkingDirs                  = "working-dirs"
+	OutputDir                    = "output-dir"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -152,7 +153,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, OutputDir,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -228,6 +229,7 @@ var flagsMap = map[string]components.Flag{
 		components.WithBoolDefaultValue(true),
 	),
 	WorkingDirs: components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
+	OutputDir:   components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",

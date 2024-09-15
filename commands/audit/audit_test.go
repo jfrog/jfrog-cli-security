@@ -20,7 +20,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	scanservices "github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -268,6 +269,11 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
 			defer mockServer.Close()
 
+			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+			defer createTempDirCallback()
+			testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
+			assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
+
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat(format.Table).
@@ -275,27 +281,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			configProfile := testcase.configProfile
 			auditParams := NewAuditParams().
+				SetWorkingDirs([]string{tempDirPath}).
 				SetGraphBasicParams(auditBasicParams).
 				SetConfigProfile(&configProfile).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					RepoPath:               "",
-					ProjectKey:             "",
-					Watches:                nil,
-					ScanType:               "dependency",
+					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
 					XscVersion:             services.ConfigProfileMinXscVersion,
 					MultiScanId:            "random-msi",
 				})
-
-			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-			defer createTempDirCallback()
-			testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
-			assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
-
-			baseWd, err := os.Getwd()
-			assert.NoError(t, err)
-			chdirCallback := clientTests.ChangeDirWithCallback(t, baseWd, tempDirPath)
-			defer chdirCallback()
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults, err := RunAudit(auditParams)
@@ -308,4 +303,104 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{Actual: summary, ExactResultsMatch: true, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues})
 		})
 	}
+}
+
+// This test tests audit flow when providing --output-dir flag
+func TestAuditWithScansOutputDir(t *testing.T) {
+	mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
+	defer mockServer.Close()
+
+	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer removeOutputDirCallback()
+
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
+	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
+
+	auditBasicParams := (&utils.AuditBasicParams{}).
+		SetServerDetails(serverDetails).
+		SetOutputFormat(format.Table).
+		SetUseJas(true)
+
+	auditParams := NewAuditParams().
+		SetWorkingDirs([]string{tempDirPath}).
+		SetGraphBasicParams(auditBasicParams).
+		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
+			ScanType:               scanservices.Dependency,
+			IncludeVulnerabilities: true,
+			MultiScanId:            utils.TestScaScanId,
+		}).
+		SetScansResultsOutputDir(outputDirPath)
+	auditParams.SetIsRecursiveScan(true)
+
+	_, err := RunAudit(auditParams)
+	assert.NoError(t, err)
+
+	filesList, err := fileutils.ListFiles(outputDirPath, false)
+	assert.NoError(t, err)
+	assert.Len(t, filesList, 5)
+
+	var fileNamesWithoutSuffix []string
+	for _, fileName := range filesList {
+		// Removing <hash>.json suffix to so we can check by suffix all expected files exist
+		splitName := strings.Split(fileName, "_")
+		fileNamesWithoutSuffix = append(fileNamesWithoutSuffix, splitName[0])
+	}
+
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sca"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "iac"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sast"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "secrets"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "applicability"))
+}
+
+// This test tests audit flow when providing --output-dir flag
+func TestAuditWithScansOutputDir(t *testing.T) {
+	mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
+	defer mockServer.Close()
+
+	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer removeOutputDirCallback()
+
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
+	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
+
+	auditBasicParams := (&utils.AuditBasicParams{}).
+		SetServerDetails(serverDetails).
+		SetOutputFormat(format.Table).
+		SetUseJas(true)
+
+	auditParams := NewAuditParams().
+		SetWorkingDirs([]string{tempDirPath}).
+		SetGraphBasicParams(auditBasicParams).
+		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
+			ScanType:               scanservices.Dependency,
+			IncludeVulnerabilities: true,
+			MultiScanId:            utils.TestScaScanId,
+		}).
+		SetScansResultsOutputDir(outputDirPath)
+	auditParams.SetIsRecursiveScan(true)
+
+	_, err := RunAudit(auditParams)
+	assert.NoError(t, err)
+
+	filesList, err := fileutils.ListFiles(outputDirPath, false)
+	assert.NoError(t, err)
+	assert.Len(t, filesList, 5)
+
+	var fileNamesWithoutSuffix []string
+	for _, fileName := range filesList {
+		// Removing <hash>.json suffix to so we can check by suffix all expected files exist
+		splitName := strings.Split(fileName, "_")
+		fileNamesWithoutSuffix = append(fileNamesWithoutSuffix, splitName[0])
+	}
+
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sca"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "iac"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sast"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "secrets"))
+	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "applicability"))
 }

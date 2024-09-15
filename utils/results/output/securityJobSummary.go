@@ -80,8 +80,8 @@ func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails 
 	return
 }
 
-func NewBuildScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary, err error) {
-	if summary, err = newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, violationsRequested); err != nil {
+func NewBuildScanSummary(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, vulnerabilitiesRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary, err error) {
+	if summary, err = newResultSummary(cmdResults, serverDetails, vulnerabilitiesRequested, true); err != nil {
 		return
 	}
 	summary.Args.BuildName = buildName
