@@ -34,13 +34,17 @@ func createRunWithDummyResults(toolName string, results ...*sarif.Result) *sarif
 	return run
 }
 
-func CreateRunWithDummyResultAndRuleProperties(property, value string, results ...*sarif.Result) *sarif.Run {
-	run := CreateRunWithDummyResults(results...)
-	for _, result := range results {
-		if rule := GetRuleById(run, GetResultRuleId(result)); rule != nil {
-			rule.Properties = make(sarif.Properties)
-			rule.Properties[property] = value
-		}
+func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+	if len(properties) != len(values) {
+		return nil
+	}
+	run := CreateRunWithDummyResults(result)
+	rule := GetRuleById(run, GetResultRuleId(result))
+	if rule == nil {
+		return nil
+	}
+	for index := range properties {
+		rule.Properties[properties[index]] = values[index]
 	}
 	return run
 }

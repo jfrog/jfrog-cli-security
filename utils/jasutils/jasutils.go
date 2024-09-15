@@ -39,6 +39,8 @@ const (
 	NotScanned                ApplicabilityStatus = ""
 )
 
+const SastFingerprintKey = "precise_sink_and_sink_function"
+
 func (as ApplicabilityStatus) String() string {
 	return string(as)
 }
