@@ -536,6 +536,7 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			requestedDescriptors: map[Technology][]string{},
 			expected:             map[string][]string{"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
 		},
+		// todo paste here the code section from the bug
 	}
 
 	for _, test := range tests {
