@@ -213,12 +213,14 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 			// When tech is requested by user we detect technology by indicator as well as by descriptors, therefore we can relate descriptor files to tech even when indicator doesn't exist
 			name: "tech requested by user test",
 			workingDirectoryToIndicators: map[string][]string{
-				"dir3": {filepath.Join("dir3", "package.json")},
+				"dir3":     {filepath.Join("dir3", "package.json")},
+				projectDir: {filepath.Join(projectDir, "pyproject.toml")},
 			},
-			requestedTechs:       []Technology{Yarn},
+			requestedTechs:       []Technology{Yarn, Poetry},
 			requestedDescriptors: noRequestSpecialDescriptors,
 			expected: map[Technology]map[string][]string{
-				Yarn: {"dir3": {filepath.Join("dir3", "package.json")}},
+				Yarn:   {"dir3": {filepath.Join("dir3", "package.json")}},
+				Poetry: {projectDir: {filepath.Join(projectDir, "pyproject.toml")}},
 			},
 		},
 	}
@@ -517,8 +519,8 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			techProvidedByUser:   false,
 			expected:             map[string][]string{"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
 		},
+		// When tech is provided by the user we detect technology by indicator and descriptors and not just by indicator. Test cases are provided only for technologies that might experience conflicts.
 		{
-			// When tech is provided by the user we detect technology by indicator and descriptors and not just by indicator
 			name:                 "yarnTestWithProvidedTechFromUser",
 			tech:                 Yarn,
 			requestedDescriptors: make(map[Technology][]string),
@@ -529,7 +531,6 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 				"dir4": {filepath.Join("dir4", "package.json")},
 			},
 		},
-		// pnpm
 		{
 			name:                 "pnpmTestWithProvidedTechFromUser",
 			tech:                 Pnpm,
@@ -541,10 +542,6 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 				"dir4":                       {filepath.Join("dir4", "package.json")},
 			},
 		},
-		// nuget
-		// dotnet
-		// pip
-		// poetry
 	}
 
 	for _, test := range tests {
