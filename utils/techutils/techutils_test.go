@@ -277,6 +277,17 @@ func TestGetExistingRootDir(t *testing.T) {
 			},
 			expected: "directory",
 		},
+		{
+			// This test case checks that we capture the correct root when sub is a prefix to root, but not an actual path prefix
+			// Example: root = "dir1/dir2", sub = "dir" -> root indeed starts with 'dir' but 'dir' is not a path prefix to the root
+			name: "match root when root's letters start with sub's letters",
+			path: filepath.Join("dir3", "dir"),
+			workingDirectoryToIndicators: map[string][]string{
+				filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")},
+				"dir":                        {filepath.Join("dir", "package.json")},
+			},
+			expected: filepath.Join("dir3", "dir"),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

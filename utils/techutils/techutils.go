@@ -485,11 +485,22 @@ func getExistingRootDir(path string, workingDirectoryToIndicators map[string][]s
 	for wd := range workingDirectoryToIndicators {
 		parentWd := filepath.Dir(wd)
 		parentRoot := filepath.Dir(root)
-		if parentRoot != parentWd && strings.HasPrefix(root, wd) {
+		if parentRoot != parentWd && hasCompletePathPrefix(root, wd) {
 			root = wd
 		}
 	}
 	return
+}
+
+func hasCompletePathPrefix(root, wd string) bool {
+	if strings.HasPrefix(root, wd) {
+		amountOfSkippedChars := len(wd)
+		partialRoot := root[amountOfSkippedChars:]
+		if partialRoot == "" || partialRoot[0] == filepath.Separator {
+			return true
+		}
+	}
+	return false
 }
 
 // DetectedTechnologiesToSlice returns a string slice that includes all the names of the detected technologies.
