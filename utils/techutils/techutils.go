@@ -492,15 +492,17 @@ func getExistingRootDir(path string, workingDirectoryToIndicators map[string][]s
 	return
 }
 
+// This functions checks if wd is a PATH prefix for root. Examples:
+// root = dir1/dir2/dir3 | wd = dir1/dir --> false (wd is prefix to root, but is not actually a valid part of its path)
+// root = dir1/dir2/dir3 | wd = dir1/dir2 --> true
 func hasCompletePathPrefix(root, wd string) bool {
-	if strings.HasPrefix(root, wd) {
-		amountOfSkippedChars := len(wd)
-		partialRoot := root[amountOfSkippedChars:]
-		if partialRoot == "" || partialRoot[0] == filepath.Separator {
-			return true
-		}
+	if !strings.HasPrefix(root, wd) {
+		return false
 	}
-	return false
+	rootParts := strings.Split(root, string(filepath.Separator))
+	wdParts := strings.Split(wd, string(filepath.Separator))
+	idxToCheck := len(wdParts) - 1
+	return rootParts[idxToCheck] == wdParts[idxToCheck]
 }
 
 // DetectedTechnologiesToSlice returns a string slice that includes all the names of the detected technologies.
