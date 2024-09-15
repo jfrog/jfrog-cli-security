@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"testing"

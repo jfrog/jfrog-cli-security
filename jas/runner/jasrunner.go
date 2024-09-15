@@ -3,6 +3,8 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -38,9 +40,10 @@ type JasRunnerParams struct {
 	ApplicableScanType          applicability.ApplicabilityScanType
 
 	ScanResults *results.TargetResults
+	TargetOutputDir   string
 }
 
-func AddJasScannersTasks(params JasRunnerParams, scansOutputDir string) (err error) {
+func AddJasScannersTasks(params JasRunnerParams) (err error) {
 	if params.ServerDetails == nil || len(params.ServerDetails.Url) == 0 {
 		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
 		return
@@ -50,23 +53,23 @@ func AddJasScannersTasks(params JasRunnerParams, scansOutputDir string) (err err
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType)); err != nil {
+	if err = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType, params.TargetOutputDir)); err != nil {
 		return
 	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType)); err != nil {
+	if err = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); err != nil {
 		return
 	}
 	if !runAllScanners {
 		return
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module)); err != nil {
+	if err = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); err != nil {
 		return
 	}
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module))
+	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir))
 }
 
 func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (err error) {

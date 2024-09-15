@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"os"
 	"path/filepath"
