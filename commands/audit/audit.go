@@ -3,18 +3,16 @@ package audit
 import (
 	"errors"
 	"fmt"
-
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-
-	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -115,7 +113,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
-		SetThreads(auditCmd.Threads)
+		SetThreads(auditCmd.Threads).
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults, err := RunAudit(auditParams)
@@ -256,7 +255,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
-	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
+	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile, auditParams.scanResultsOutputDir); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return
