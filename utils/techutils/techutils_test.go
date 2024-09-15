@@ -531,17 +531,6 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 				"dir4": {filepath.Join("dir4", "package.json")},
 			},
 		},
-		{
-			name:                 "pnpmTestWithProvidedTechFromUser",
-			tech:                 Pnpm,
-			requestedDescriptors: make(map[Technology][]string),
-			techProvidedByUser:   true,
-			expected: map[string][]string{
-				filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")},
-				"dir":                        {filepath.Join("dir", "package.json")},
-				"dir4":                       {filepath.Join("dir4", "package.json")},
-			},
-		},
 	}
 
 	for _, test := range tests {

@@ -41,6 +41,8 @@ const (
 )
 const Pypi = "pypi"
 
+var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.String(), Pnpm.String(), Yarn.String(), Go.String(), Pip.String(), Pipenv.String(), Poetry.String(), Nuget.String(), Dotnet.String(), Docker.String(), Oci.String(), Conan.String()}
+
 type CodeLanguage string
 
 const (
