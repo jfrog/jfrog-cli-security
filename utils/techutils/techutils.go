@@ -407,7 +407,7 @@ func mapWorkingDirectoriesToTechnologies(workingDirectoryToIndicators map[string
 		// If the project's technology was provided by the user, and isn't detected by us, we want to enable capturing the technology by its descriptor as well as by its indicators.
 		// In case we execute our auto-detection we want to avoid that since it may lead to collisions between package managers with the same descriptor (like Npm and Yarn)
 		techProvidedByUser = true
-		log.Debug(fmt.Sprintf("An install command was provided, so the technology will be identified based on the given command. Detected technologies: %s", technologies))
+		log.Debug(fmt.Sprintf("Technologies were identified either from the command flags supplied by the user or inferred from the provided installation command. Detected technologies: %s.", technologies))
 	}
 	technologiesDetected = make(map[Technology]map[string][]string)
 	// Map working directories to technologies
