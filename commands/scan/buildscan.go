@@ -113,7 +113,7 @@ func (bsc *BuildScanCommand) Run() (err error) {
 		return err
 	}
 	// If failBuild flag is true and also got fail build response from Xray
-	if bsc.failBuild && bsc.hasViolationContext() && isFailBuildResponse {
+	if bsc.failBuild && isFailBuildResponse {
 		return results.NewFailBuildError()
 	}
 	return

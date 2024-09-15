@@ -280,8 +280,9 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 			ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 			ApplicableScanType:          applicability.ApplicabilityScannerType,
 			ScanResults:                 scan,
+			TargetOutputDir:             auditParams.scanResultsOutputDir,
 		}
-		if err = runner.AddJasScannersTasks(params, auditParams.scanResultsOutputDir); err != nil {
+		if err = runner.AddJasScannersTasks(params); err != nil {
 			return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 	}

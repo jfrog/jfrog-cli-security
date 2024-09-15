@@ -3,7 +3,6 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -39,8 +38,8 @@ type JasRunnerParams struct {
 	ThirdPartyApplicabilityScan bool
 	ApplicableScanType          applicability.ApplicabilityScanType
 
-	ScanResults *results.TargetResults
-	TargetOutputDir   string
+	ScanResults     *results.TargetResults
+	TargetOutputDir string
 }
 
 func AddJasScannersTasks(params JasRunnerParams) (err error) {
@@ -132,9 +131,9 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
+		defer securityParallelRunner.ResultsMu.Unlock()
 		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
 		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Secrets)
-		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -150,9 +149,9 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
+		defer securityParallelRunner.ResultsMu.Unlock()
 		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
 		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.IaC)
-		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -168,9 +167,9 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
+		defer securityParallelRunner.ResultsMu.Unlock()
 		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
 		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Sast)
-		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }
@@ -188,9 +187,9 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
+		defer securityParallelRunner.ResultsMu.Unlock()
 		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, results...)
 		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Applicability)
-		securityParallelRunner.ResultsMu.Unlock()
 		return
 	}
 }

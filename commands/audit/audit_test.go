@@ -3,6 +3,7 @@ package audit
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -306,7 +307,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
+	mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -328,57 +329,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 			ScanType:               scanservices.Dependency,
 			IncludeVulnerabilities: true,
-			MultiScanId:            utils.TestScaScanId,
-		}).
-		SetScansResultsOutputDir(outputDirPath)
-	auditParams.SetIsRecursiveScan(true)
-
-	_, err := RunAudit(auditParams)
-	assert.NoError(t, err)
-
-	filesList, err := fileutils.ListFiles(outputDirPath, false)
-	assert.NoError(t, err)
-	assert.Len(t, filesList, 5)
-
-	var fileNamesWithoutSuffix []string
-	for _, fileName := range filesList {
-		// Removing <hash>.json suffix to so we can check by suffix all expected files exist
-		splitName := strings.Split(fileName, "_")
-		fileNamesWithoutSuffix = append(fileNamesWithoutSuffix, splitName[0])
-	}
-
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sca"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "iac"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sast"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "secrets"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "applicability"))
-}
-
-// This test tests audit flow when providing --output-dir flag
-func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := utils.XrayServer(t, utils.EntitlementsMinVersion)
-	defer mockServer.Close()
-
-	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer removeOutputDirCallback()
-
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
-	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
-
-	auditBasicParams := (&utils.AuditBasicParams{}).
-		SetServerDetails(serverDetails).
-		SetOutputFormat(format.Table).
-		SetUseJas(true)
-
-	auditParams := NewAuditParams().
-		SetWorkingDirs([]string{tempDirPath}).
-		SetGraphBasicParams(auditBasicParams).
-		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-			ScanType:               scanservices.Dependency,
-			IncludeVulnerabilities: true,
-			MultiScanId:            utils.TestScaScanId,
+			MultiScanId:            validations.TestScaScanId,
 		}).
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
