@@ -337,15 +337,13 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 			entitledForJas: true,
 			applicabilityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
-					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
-				}),
+					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+					[]string{"applicability"}, []string{"not_applicable"},
+				).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target"))}),
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
-					"applicability", "applicable", sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
-				}),
+					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
+					[]string{"applicability"}, []string{"applicable"},
+				).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target"))}),
 			},
 			expectedOutput: []formats.VulnerabilityOrViolationRow{
 				{
@@ -502,15 +500,13 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 			entitledForJas: true,
 			applicabilityRuns: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
-					"applicability", "not_applicable", sarifutils.CreateDummyPassingResult("applic_CVE-1"),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
-				}),
+					sarifutils.CreateDummyPassingResult("applic_CVE-1"),
+					[]string{"applicability"}, []string{"not_applicable"},
+				).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target"))}),
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
-					"applicability", "applicable", sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
-				).WithInvocations([]*sarif.Invocation{
-					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target")),
-				}),
+					sarifutils.CreateResultWithLocations("applic_CVE-2", "applic_CVE-2", "note", sarifutils.CreateLocation("target/file", 0, 0, 0, 0, "snippet")),
+					[]string{"applicability"}, []string{"applicable"},
+				).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("target"))}),
 			},
 			expectedSecurityOutput: []formats.VulnerabilityOrViolationRow{
 				{
