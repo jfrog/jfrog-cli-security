@@ -318,19 +318,19 @@ func TestHasCompletePathPrefix(t *testing.T) {
 	}{
 		{
 			name:     "no prefix",
-			root:     "dir1/dir2",
-			wd:       "some/other/project",
+			root:     filepath.Join("dir1", "dir2"),
+			wd:       filepath.Join("some", "other", "project"),
 			expected: false,
 		},
 		{
 			name:     "prefix but not a path prefix",
-			root:     "dir1/dir2",
+			root:     filepath.Join("dir1", "dir2"),
 			wd:       "dir",
 			expected: false,
 		},
 		{
 			name:     "path prefix",
-			root:     "dir1/dir2",
+			root:     filepath.Join("dir1", "dir2"),
 			wd:       "dir1",
 			expected: true,
 		},
