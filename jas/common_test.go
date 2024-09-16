@@ -135,6 +135,40 @@ func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
 				jfTokenEnvVariable:       "token",
 			},
 		},
+		{
+			name: "Valid server details xray only",
+			serverDetails: &config.ServerDetails{
+				Url:         "",
+				XrayUrl:     "url/xray",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:     "",
+				jfPlatformXrayUrlEnvVariable: "url/xray",
+				jfUserEnvVariable:            "user",
+				jfPasswordEnvVariable:        "password",
+				jfTokenEnvVariable:           "token",
+			},
+		},
+		{
+			name: "Valid server details both url and xray",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				XrayUrl:     "url/xray",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:     "url",
+				jfPlatformXrayUrlEnvVariable: "url/xray",
+				jfUserEnvVariable:            "user",
+				jfPasswordEnvVariable:        "password",
+				jfTokenEnvVariable:           "token",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
