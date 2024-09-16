@@ -290,10 +290,54 @@ func TestGetExistingRootDir(t *testing.T) {
 			},
 			expected: "directory",
 		},
+		{
+			// This test case checks that we capture the correct root when sub is a prefix to root, but not an actual path prefix
+			// Example: root = "dir1/dir2", sub = "dir" -> root indeed starts with 'dir' but 'dir' is not a path prefix to the root
+			name: "match root when root's letters start with sub's letters",
+			path: filepath.Join("dir3", "dir"),
+			workingDirectoryToIndicators: map[string][]string{
+				filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")},
+				"dir":                        {filepath.Join("dir", "package.json")},
+			},
+			expected: filepath.Join("dir3", "dir"),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expected, getExistingRootDir(test.path, test.workingDirectoryToIndicators))
+		})
+	}
+}
+
+func TestHasCompletePathPrefix(t *testing.T) {
+	tests := []struct {
+		name     string
+		root     string
+		wd       string
+		expected bool
+	}{
+		{
+			name:     "no prefix",
+			root:     filepath.Join("dir1", "dir2"),
+			wd:       filepath.Join("some", "other", "project"),
+			expected: false,
+		},
+		{
+			name:     "prefix but not a path prefix",
+			root:     filepath.Join("dir1", "dir2"),
+			wd:       "dir",
+			expected: false,
+		},
+		{
+			name:     "path prefix",
+			root:     filepath.Join("dir1", "dir2"),
+			wd:       "dir1",
+			expected: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, hasCompletePathPrefix(test.root, test.wd))
 		})
 	}
 }
@@ -529,6 +573,17 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 				"dir":  {filepath.Join("dir", "package.json")},
 				"dir3": {filepath.Join("dir3", "package.json")},
 				"dir4": {filepath.Join("dir4", "package.json")},
+			},
+		},
+		{
+			name:                 "pnpmTestWithProvidedTechFromUser",
+			tech:                 Pnpm,
+			requestedDescriptors: make(map[Technology][]string),
+			techProvidedByUser:   true,
+			expected: map[string][]string{
+				filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")},
+				"dir":                        {filepath.Join("dir", "package.json")},
+				"dir4":                       {filepath.Join("dir4", "package.json")},
 			},
 		},
 	}
