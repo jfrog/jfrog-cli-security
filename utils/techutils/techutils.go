@@ -510,9 +510,14 @@ func hasCompletePathPrefix(root, wd string) bool {
 	if !strings.HasPrefix(root, wd) {
 		return false
 	}
+	log.Info(fmt.Sprintf("ERAN TEST - root path: %s", root))
+	log.Info(fmt.Sprintf("ERAN TEST - wd path: %s", root))
 	rootParts := strings.Split(root, string(filepath.Separator))
 	wdParts := strings.Split(wd, string(filepath.Separator))
+	log.Info(fmt.Sprintf("ERAN TEST - root slice: %s", rootParts))
+	log.Info(fmt.Sprintf("ERAN TEST - wd parts: %s", wdParts))
 	idxToCheck := len(wdParts) - 1
+	log.Info(fmt.Sprintf("ERAN TEST - idx to check: %d", idxToCheck))
 	return rootParts[idxToCheck] == wdParts[idxToCheck]
 }
 
