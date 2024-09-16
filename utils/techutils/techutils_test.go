@@ -152,8 +152,7 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 		excludedTechAtWorkingDir     map[string][]Technology
 		requestedTechs               []Technology
 		requestedDescriptors         map[Technology][]string
-
-		expected map[Technology]map[string][]string
+		expected                     map[Technology]map[string][]string
 	}{
 		{
 			name:                         "noTechTest",
@@ -208,6 +207,20 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 				},
 				Nuget:  {"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
 				Dotnet: {"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
+			},
+		},
+		{
+			// When tech is requested by user we detect technology by indicator as well as by descriptors, therefore we can relate descriptor files to tech even when indicator doesn't exist
+			name: "tech requested by user test",
+			workingDirectoryToIndicators: map[string][]string{
+				"dir3":     {filepath.Join("dir3", "package.json")},
+				projectDir: {filepath.Join(projectDir, "pyproject.toml")},
+			},
+			requestedTechs:       []Technology{Yarn, Poetry},
+			requestedDescriptors: noRequestSpecialDescriptors,
+			expected: map[Technology]map[string][]string{
+				Yarn:   {"dir3": {filepath.Join("dir3", "package.json")}},
+				Poetry: {projectDir: {filepath.Join(projectDir, "pyproject.toml")}},
 			},
 		},
 	}
@@ -385,6 +398,7 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 		"dir":                           {filepath.Join("dir", "package.json"), filepath.Join("dir", "package-lock.json"), filepath.Join("dir", "build.gradle.kts"), filepath.Join("dir", "project.sln"), filepath.Join("dir", "blabla.txt")},
 		"directory":                     {filepath.Join("directory", "npm-shrinkwrap.json")},
 		"dir3":                          {filepath.Join("dir3", "package.json"), filepath.Join("dir3", ".yarn")},
+		"dir4":                          {filepath.Join("dir4", "package.json")},
 		projectDir:                      {filepath.Join(projectDir, "pyproject.toml")},
 		filepath.Join("dir3", "dir"):    {filepath.Join("dir3", "dir", "package.json"), filepath.Join("dir3", "dir", "pnpm-lock.yaml")},
 		filepath.Join("dir", "dir2"):    {filepath.Join("dir", "dir2", "go.mod")},
@@ -403,12 +417,14 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 		name                 string
 		tech                 Technology
 		requestedDescriptors map[Technology][]string
+		techProvidedByUser   bool
 		expected             map[string][]string
 	}{
 		{
 			name:                 "mavenTest",
 			tech:                 Maven,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected: map[string][]string{
 				"folder": {
 					filepath.Join("folder", "pom.xml"),
@@ -421,8 +437,10 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			name:                 "npmTest",
 			tech:                 Npm,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected: map[string][]string{
 				"dir":       {filepath.Join("dir", "package.json")},
+				"dir4":      {filepath.Join("dir4", "package.json")},
 				"directory": {},
 			},
 		},
@@ -430,24 +448,28 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			name:                 "pnpmTest",
 			tech:                 Pnpm,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{filepath.Join("dir3", "dir"): {filepath.Join("dir3", "dir", "package.json")}},
 		},
 		{
 			name:                 "yarnTest",
 			tech:                 Yarn,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{"dir3": {filepath.Join("dir3", "package.json")}},
 		},
 		{
 			name:                 "golangTest",
 			tech:                 Go,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{filepath.Join("dir", "dir2"): {filepath.Join("dir", "dir2", "go.mod")}},
 		},
 		{
 			name:                 "pipTest",
 			tech:                 Pip,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected: map[string][]string{
 				filepath.Join("users_dir", "test", "package"):  {filepath.Join("users_dir", "test", "package", "setup.py")},
 				filepath.Join("users_dir", "test", "package2"): {filepath.Join("users_dir", "test", "package2", "requirements.txt")},
@@ -458,6 +480,7 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			name:                 "pipRequestedDescriptorTest",
 			tech:                 Pip,
 			requestedDescriptors: map[Technology][]string{Pip: {"blabla.txt"}},
+			techProvidedByUser:   false,
 			expected: map[string][]string{
 				"dir": {filepath.Join("dir", "blabla.txt")},
 				filepath.Join("users_dir", "test", "package"):  {filepath.Join("users_dir", "test", "package", "setup.py")},
@@ -469,12 +492,14 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			name:                 "pipenvTest",
 			tech:                 Pipenv,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{filepath.Join("users", "test", "package"): {filepath.Join("users", "test", "package", "Pipfile")}},
 		},
 		{
 			name:                 "gradleTest",
 			tech:                 Gradle,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected: map[string][]string{
 				filepath.Join("users", "test", "package"): {filepath.Join("users", "test", "package", "build.gradle")},
 				"dir": {filepath.Join("dir", "build.gradle.kts")},
@@ -484,19 +509,33 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 			name:                 "nugetTest",
 			tech:                 Nuget,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
 		},
 		{
 			name:                 "dotnetTest",
 			tech:                 Dotnet,
 			requestedDescriptors: map[Technology][]string{},
+			techProvidedByUser:   false,
 			expected:             map[string][]string{"dir": {filepath.Join("dir", "project.sln"), filepath.Join("dir", "sub1", "project.csproj")}},
+		},
+		// When tech is provided by the user we detect technology by indicator and descriptors and not just by indicator. Test cases are provided only for technologies that might experience conflicts.
+		{
+			name:                 "yarnTestWithProvidedTechFromUser",
+			tech:                 Yarn,
+			requestedDescriptors: make(map[Technology][]string),
+			techProvidedByUser:   true,
+			expected: map[string][]string{
+				"dir":  {filepath.Join("dir", "package.json")},
+				"dir3": {filepath.Join("dir3", "package.json")},
+				"dir4": {filepath.Join("dir4", "package.json")},
+			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			techInformation, err := getTechInformationFromWorkingDir(test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors)
+			techInformation, err := getTechInformationFromWorkingDir(test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors, test.techProvidedByUser)
 			assert.NoError(t, err)
 			expectedKeys := maps.Keys(test.expected)
 			actualKeys := maps.Keys(techInformation)

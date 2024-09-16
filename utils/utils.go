@@ -4,7 +4,11 @@ import (
 	"crypto"
 	"encoding/hex"
 	"fmt"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -118,4 +122,21 @@ func splitEnvVar(envVar string) (key, value string) {
 		return split[0], ""
 	}
 	return split[0], strings.Join(split[1:], "=")
+}
+
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
+	// TODO this function should be in utils/results/results.go after the refactor, since it is a common code for Jas and SCA scanners
+	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and convert results to Sarif before writing them to file
+	var curTimeHash string
+	if curTimeHash, err = Md5Hash(time.Now().String()); err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+
+	resultsFileName := strings.ToLower(scanType) + "_results_" + curTimeHash + ".json"
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, resultsFileName)
+	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
+	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return
 }
