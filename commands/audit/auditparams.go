@@ -21,6 +21,7 @@ type AuditParams struct {
 	thirdPartyApplicabilityScan bool
 	threads                     int
 	configProfile               *clientservices.ConfigProfile
+	scanResultsOutputDir        string
 }
 
 func NewAuditParams() *AuditParams {
@@ -96,6 +97,11 @@ func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.Comm
 
 func (params *AuditParams) SetConfigProfile(configProfile *clientservices.ConfigProfile) *AuditParams {
 	params.configProfile = configProfile
+	return params
+}
+
+func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditParams {
+	params.scanResultsOutputDir = outputDir
 	return params
 }
 
