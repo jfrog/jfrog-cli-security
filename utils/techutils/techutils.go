@@ -24,47 +24,50 @@ import (
 type Technology string
 
 const (
-	Maven  Technology = "maven"
-	Gradle Technology = "gradle"
-	Npm    Technology = "npm"
-	Pnpm   Technology = "pnpm"
-	Yarn   Technology = "yarn"
-	Go     Technology = "go"
-	Pip    Technology = "pip"
-	Pipenv Technology = "pipenv"
-	Poetry Technology = "poetry"
-	Nuget  Technology = "nuget"
-	Dotnet Technology = "dotnet"
-	Docker Technology = "docker"
-	Oci    Technology = "oci"
-	Conan  Technology = "conan"
+	Maven     Technology = "maven"
+	Gradle    Technology = "gradle"
+	Npm       Technology = "npm"
+	Pnpm      Technology = "pnpm"
+	Yarn      Technology = "yarn"
+	Go        Technology = "go"
+	Pip       Technology = "pip"
+	Pipenv    Technology = "pipenv"
+	Poetry    Technology = "poetry"
+	Nuget     Technology = "nuget"
+	Dotnet    Technology = "dotnet"
+	Docker    Technology = "docker"
+	Oci       Technology = "oci"
+	Conan     Technology = "conan"
+	Cocoapods Technology = "cocoapods"
 )
 const Pypi = "pypi"
 
 type CodeLanguage string
 
 const (
-	JavaScript CodeLanguage = "javascript"
-	Python     CodeLanguage = "python"
-	GoLang     CodeLanguage = "go"
-	Java       CodeLanguage = "java"
-	CSharp     CodeLanguage = "C#"
-	CPP        CodeLanguage = "C++"
+	JavaScript    CodeLanguage = "javascript"
+	Python        CodeLanguage = "python"
+	GoLang        CodeLanguage = "go"
+	Java          CodeLanguage = "java"
+	CSharp        CodeLanguage = "C#"
+	CPP           CodeLanguage = "C++"
+	CocoapodsLang CodeLanguage = "any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
 var TechToProjectType = map[Technology]project.ProjectType{
-	Maven:  project.Maven,
-	Gradle: project.Gradle,
-	Npm:    project.Npm,
-	Yarn:   project.Yarn,
-	Go:     project.Go,
-	Pip:    project.Pip,
-	Pipenv: project.Pipenv,
-	Poetry: project.Poetry,
-	Nuget:  project.Nuget,
-	Dotnet: project.Dotnet,
+	Maven:     project.Maven,
+	Gradle:    project.Gradle,
+	Npm:       project.Npm,
+	Yarn:      project.Yarn,
+	Go:        project.Go,
+	Pip:       project.Pip,
+	Pipenv:    project.Pipenv,
+	Poetry:    project.Poetry,
+	Nuget:     project.Nuget,
+	Dotnet:    project.Dotnet,
+	Cocoapods: project.Cocoapods,
 }
 
 type TechData struct {
@@ -174,6 +177,11 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{"conanfile.txt", "conanfile.py "},
 		formal:             "Conan",
 	},
+	Cocoapods: {
+		indicators:         []string{"Podfile"},
+		packageDescriptors: []string{"Podfile"},
+		formal:             "Cocoapods",
+	},
 }
 
 var (
@@ -203,17 +211,18 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 
 func TechnologyToLanguage(technology Technology) CodeLanguage {
 	languageMap := map[Technology]CodeLanguage{
-		Npm:    JavaScript,
-		Pip:    Python,
-		Poetry: Python,
-		Pipenv: Python,
-		Go:     GoLang,
-		Maven:  Java,
-		Gradle: Java,
-		Nuget:  CSharp,
-		Dotnet: CSharp,
-		Yarn:   JavaScript,
-		Pnpm:   JavaScript,
+		Npm:       JavaScript,
+		Pip:       Python,
+		Poetry:    Python,
+		Pipenv:    Python,
+		Go:        GoLang,
+		Maven:     Java,
+		Gradle:    Java,
+		Nuget:     CSharp,
+		Dotnet:    CSharp,
+		Yarn:      JavaScript,
+		Pnpm:      JavaScript,
+		Cocoapods: CocoapodsLang,
 	}
 	return languageMap[technology]
 }
