@@ -1155,7 +1155,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 11,
+						SeverityNumValue: 13,
 					},
 					Applicability: nil,
 					Finding:       "secret finding",
@@ -1171,7 +1171,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 11,
+						SeverityNumValue: 13,
 					},
 					Applicability: &formats.Applicability{Status: "Inactive", ScannerDescription: ""},
 					Finding:       "other secret finding",
@@ -1187,7 +1187,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 11,
+						SeverityNumValue: 13,
 					},
 					Applicability: &formats.Applicability{Status: "Active", ScannerDescription: "testmetadata"},
 					Finding:       "another secret finding",
