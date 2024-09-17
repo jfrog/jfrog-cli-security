@@ -61,6 +61,7 @@ const (
 	NotApplicable             ApplicabilityStatus = "Not Applicable"
 	ApplicabilityUndetermined ApplicabilityStatus = "Undetermined"
 	NotCovered                ApplicabilityStatus = "Not Covered"
+	MissingContext            ApplicabilityStatus = "Missing Context"
 	NotScanned                ApplicabilityStatus = ""
 )
 
@@ -94,6 +95,8 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 		return ApplicabilityUndetermined
 	case NotCovered.String():
 		return NotCovered
+	case MissingContext.String():
+		return MissingContext
 	default:
 		return NotScanned
 	}
@@ -108,9 +111,10 @@ func ApplicabilityRuleIdToCve(sarifRuleId string) string {
 }
 
 var applicableMapToScore = map[string]int{
-	"Applicable":                4,
-	"ApplicabilityUndetermined": 3,
-	"NotScanned":                2,
+	"Applicable":                5,
+	"ApplicabilityUndetermined": 4,
+	"NotScanned":                3,
+	"MissingContext":            2,
 	"NotCovered":                1,
 	"NotApplicable":             0,
 }

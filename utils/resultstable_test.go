@@ -623,6 +623,18 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves:   []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}}},
 		},
 		{
+			name: "missing context cve",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
+				},
+				EntitledForJas: true,
+			},
+			cves:           []services.Cve{{Id: "testCve1"}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}}},
+		},
+		{
 			name: "undetermined cve",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
@@ -685,13 +697,15 @@ func TestGetApplicableCveValue(t *testing.T) {
 					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
 					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
 					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve3"), []string{"applicability"}, []string{"not_covered"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve4"), []string{"applicability"}, []string{"missing_context"}),
 				},
 				EntitledForJas: true},
-			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}, {Id: "testCve4"}},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
 			},
 		},
 		{
@@ -709,16 +723,16 @@ func TestGetApplicableCveValue(t *testing.T) {
 			},
 		},
 		{
-			name: "new scan statuses - undetermined wins not covered",
+			name: "new scan statuses - undetermined wins missing-context",
 			scanResults: &ExtendedScanResults{
 				ApplicabilityScanResults: []*sarif.Run{
-					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"not_covered"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
 					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"undetermined"}),
 				},
 				EntitledForJas: true},
 			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
 			expectedResult: jasutils.ApplicabilityUndetermined,
-			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String()}},
 			},
 		},
@@ -733,6 +747,20 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedResult: jasutils.ApplicabilityUndetermined,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.ApplicabilityUndetermined.String(), UndeterminedReason: "however"}},
+			},
+		},
+		{
+			name: "new scan statuses - missing context wins not covered",
+			scanResults: &ExtendedScanResults{
+				ApplicabilityScanResults: []*sarif.Run{
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
+					sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_covered"}),
+				},
+				EntitledForJas: true},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
 			},
 		},
 	}
@@ -969,7 +997,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 17,
+						SeverityNumValue: 21,
 					},
 					Finding: "other iac finding",
 					Location: formats.Location{
@@ -984,7 +1012,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -999,7 +1027,7 @@ func TestPrepareIac(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "iac finding",
 					Location: formats.Location{
@@ -1067,7 +1095,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Low",
-						SeverityNumValue: 11,
+						SeverityNumValue: 13,
 					},
 					Finding: "other secret finding",
 					Location: formats.Location{
@@ -1082,7 +1110,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -1097,7 +1125,7 @@ func TestPrepareSecrets(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "secret finding",
 					Location: formats.Location{
@@ -1242,7 +1270,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "High",
-						SeverityNumValue: 17,
+						SeverityNumValue: 21,
 					},
 					Finding: "other sast finding",
 					Location: formats.Location{
@@ -1257,7 +1285,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{
@@ -1310,7 +1338,7 @@ func TestPrepareSast(t *testing.T) {
 				{
 					SeverityDetails: formats.SeverityDetails{
 						Severity:         "Medium",
-						SeverityNumValue: 14,
+						SeverityNumValue: 17,
 					},
 					Finding: "sast finding",
 					Location: formats.Location{

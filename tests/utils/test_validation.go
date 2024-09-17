@@ -66,14 +66,14 @@ func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, mi
 }
 
 func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets,
-	minApplicable, minUndetermined, minNotCovered, minNotApplicable, minInactives int) {
+	minApplicable, minUndetermined, minNotCovered, minNotApplicable, minMissingContext, minInactives int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
 		assert.GreaterOrEqual(t, len(results.Sast), minSastViolations, "Found less sast then expected")
 		assert.GreaterOrEqual(t, len(results.Secrets), minSecrets, "Found less secrets then expected")
 		assert.GreaterOrEqual(t, len(results.Iacs), minIacViolations, "Found less IaC then expected")
-		var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
+		var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults int
 		for _, vuln := range results.Vulnerabilities {
 			switch vuln.Applicable {
 			case string(jasutils.NotApplicable):
@@ -84,6 +84,8 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 				notCoveredResults++
 			case string(jasutils.ApplicabilityUndetermined):
 				undeterminedResults++
+			case string(jasutils.MissingContext):
+				missingContextResults++
 			}
 		}
 		countInactives := 0
@@ -99,5 +101,6 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 		assert.GreaterOrEqual(t, undeterminedResults, minUndetermined, "Found less undeterminedResults then expected")
 		assert.GreaterOrEqual(t, notCoveredResults, minNotCovered, "Found less notCoveredResults then expected")
 		assert.GreaterOrEqual(t, notApplicableResults, minNotApplicable, "Found less notApplicableResults then expected")
+		assert.GreaterOrEqual(t, missingContextResults, minMissingContext, "Found less missingContextResults then expected")
 	}
 }

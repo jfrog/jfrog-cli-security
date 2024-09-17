@@ -333,15 +333,15 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	assert.NoError(t, biutils.CopyDir(multiProject, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
 	defer clientTests.ChangeDirAndAssert(t, prevWd)
-	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s",
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s, %s",
 		filepath.Join(tempDirPath, "package-managers", "maven", "maven"), filepath.Join(tempDirPath, "package-managers", "nuget", "single4.0"),
-		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"))
+		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"), filepath.Join(tempDirPath, "package-managers", "go", "missing-context"))
 	// Configure a new server named "default"
 	securityTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 24, 2, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 24, 2, 1, 0)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
