@@ -16,7 +16,7 @@ func GetConfigProfile(serverDetails *config.ServerDetails, profileName string) (
 
 	xscVersion, err := xscManager.GetVersion()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get XSC service version '%s': %q", profileName, err)
+		return nil, fmt.Errorf("failed to get XSC service version: %q", err)
 	}
 
 	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, services.ConfigProfileMinXscVersion); err != nil {
