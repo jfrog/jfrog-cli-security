@@ -216,7 +216,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
 	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -273,8 +273,27 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
+	dynamicTokenVersionMismatchErr := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil {
+		if validateSecrets {
+			log.Info(fmt.Sprintf("Token validation (--validate-secrets flag) is not supported in your xray version, your xray version is %s and the minimum is %s", xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion))
+		}
+		return false
+	}
+	// Ordered By importance
+	// first check for flag and second check for env var
+	if validateSecrets || strings.ToLower(os.Getenv(JfSecretValidationEnvVariable)) == "true" {
+		return true
+	}
+	// third check for platform api
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	return err == nil && isEnabled
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}

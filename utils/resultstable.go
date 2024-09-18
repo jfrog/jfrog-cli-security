@@ -352,6 +352,13 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
+				var applicability *formats.Applicability
+				status := GetResultPropertyTokenValidation(secretResult)
+				statusDescription := GetResultPropertyMetadata(secretResult)
+				if status != "" || statusDescription != "" {
+					applicability = &formats.Applicability{Status: status,
+						ScannerDescription: statusDescription}
+				}
 				secretsRows = append(secretsRows,
 					formats.SourceCodeRow{
 						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
@@ -365,6 +372,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 							EndColumn:   sarifutils.GetLocationEndColumn(location),
 							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
+						Applicability: applicability,
 					},
 				)
 			}
@@ -372,18 +380,28 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
-		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		if secretsRows[i].SeverityNumValue != secretsRows[j].SeverityNumValue {
+			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		}
+		if secretsRows[i].Applicability != nil && secretsRows[j].Applicability != nil {
+			return jasutils.TokenValidationOrder[secretsRows[i].Applicability.Status] < jasutils.TokenValidationOrder[secretsRows[j].Applicability.Status]
+		}
+		return true
 	})
 
 	return secretsRows
 }
 
-func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool) error {
+func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool, tokenValidationEnabled bool) error {
 	if entitledForSecretsScan {
 		secretsRows := prepareSecrets(secrets, true)
 		log.Output()
-		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
+		err := coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
 			"✨ No secrets were found ✨", false)
+		if err == nil && tokenValidationEnabled {
+			log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
+		}
+		return err
 	}
 	return nil
 }
@@ -1031,6 +1049,14 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 
 func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
 	return sarifutils.GetRuleProperty("undetermined_reason", rule)
+}
+
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("tokenValidation", result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("metadata", result)
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {

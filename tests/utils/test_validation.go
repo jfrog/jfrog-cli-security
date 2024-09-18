@@ -66,7 +66,7 @@ func VerifySimpleJsonScanResults(t *testing.T, content string, minViolations, mi
 }
 
 func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations, minIacViolations, minSecrets,
-	minApplicable, minUndetermined, minNotCovered, minNotApplicable, minMissingContext int) {
+	minApplicable, minUndetermined, minNotCovered, minNotApplicable, minMissingContext, minInactives int) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	if assert.NoError(t, err) {
@@ -88,6 +88,15 @@ func VerifySimpleJsonJasResults(t *testing.T, content string, minSastViolations,
 				missingContextResults++
 			}
 		}
+		countInactives := 0
+		for _, result := range results.Secrets {
+			if result.Applicability != nil {
+				if result.Applicability.Status == "Inactive" {
+					countInactives += 1
+				}
+			}
+		}
+		assert.GreaterOrEqual(t, countInactives, minInactives)
 		assert.GreaterOrEqual(t, applicableResults, minApplicable, "Found less applicableResults then expected")
 		assert.GreaterOrEqual(t, undeterminedResults, minUndetermined, "Found less undeterminedResults then expected")
 		assert.GreaterOrEqual(t, notCoveredResults, minNotCovered, "Found less notCoveredResults then expected")
