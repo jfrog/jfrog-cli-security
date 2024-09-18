@@ -10,7 +10,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -21,8 +20,8 @@ const (
 )
 
 var (
-	mainDepRegex = regexp.MustCompile(`^- ([\w/+.\-]+) \(([\d.]+)\)`)
-	subDepRegex  = regexp.MustCompile(`^\s{2}- ([\w/+.\-]+)`)
+	mainDepRegex = regexp.MustCompile(`- ([\w/+.\-]+) \(([\d.]+)\)`)
+	subDepRegex  = regexp.MustCompile(`\s{2}- ([\w/+.\-]+)`)
 	versionRegex = regexp.MustCompile(`\((\d+(\.\d+){0,2})\)`)
 )
 
@@ -31,11 +30,6 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion, de
 }
 
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion, descriptorPath string) error {
-	path.Clean(descriptorPath)
-	_, err := os.ReadFile(descriptorPath)
-	if err != nil {
-		return fmt.Errorf("could not find file "+descriptorPath, err)
-	}
 	return nil
 }
 
@@ -76,12 +70,37 @@ func GetPodDependenciesGraph(data string) (map[string][]string, map[string]strin
 	return dependencyMap, versionMap
 }
 
-func GetDependenciesData(exePath, currentDir string) (string, error) {
-	result, _, err := cocoapods.RunPodCmd(exePath, currentDir, []string{"dependencies"})
+func extractPodsSection(filePath string) (string, error) {
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}
-	return string(result), nil
+	content := string(data)
+	startIndex := strings.Index(content, "PODS:")
+	if startIndex == -1 {
+		return "", fmt.Errorf("PODS: section not found")
+	}
+	subContent := content[startIndex:]
+	endIndex := strings.Index(subContent, "DEPENDENCIES:")
+	if endIndex == -1 {
+		endIndex = strings.Index(subContent, "SPEC REPOS:")
+	}
+	if endIndex != -1 {
+		subContent = subContent[:endIndex]
+	}
+	return subContent, nil
+}
+
+func GetDependenciesData(exePath, currentDir string) (string, error) {
+	_, _, err := cocoapods.RunPodCmd(exePath, currentDir, []string{"install"})
+	if err != nil {
+		return "", err
+	}
+	result, err := extractPodsSection(filepath.Join(currentDir, "Podfile.lock"))
+	if err != nil {
+		return "", err
+	}
+	return result, nil
 }
 
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {

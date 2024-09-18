@@ -178,8 +178,8 @@ var technologiesData = map[Technology]TechData{
 		formal:             "Conan",
 	},
 	Cocoapods: {
-		indicators:         []string{"Podfile"},
-		packageDescriptors: []string{"Podfile"},
+		indicators:         []string{"Podfile", "Podfile.lock"},
+		packageDescriptors: []string{"Podfile", "Podfile.lock"},
 		formal:             "Cocoapods",
 	},
 }
