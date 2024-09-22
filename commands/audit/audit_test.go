@@ -187,12 +187,6 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	searchForStrWithSubString(t, filesList, "sast_results")
 	searchForStrWithSubString(t, filesList, "secrets_results")
 	searchForStrWithSubString(t, filesList, "applicability_results")
-
-	// assert.Contains(t, filesList, "sca_results")
-	// assert.Contains(t, filesList, "iac_results")
-	// assert.Contains(t, filesList, "sast_results")
-	// assert.Contains(t, filesList, "secrets_results")
-	// assert.Contains(t, filesList, "applicability_results")
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {
