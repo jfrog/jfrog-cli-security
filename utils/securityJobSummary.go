@@ -187,7 +187,7 @@ func RecordSarifOutput(cmdResults *Results) (err error) {
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
-	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil, []SubScanType{}, cmdResults.ResultType)
+	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil, GetAllSupportedScans(), cmdResults.ResultType)
 	if err != nil {
 		return err
 	}
