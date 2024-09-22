@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -196,6 +197,9 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	}
 	jasScanner := &jas.JasScanner{}
 	if results.ExtendedScanResults.EntitledForJas {
+		log.Debug(fmt.Sprintf("Server details Nil check [after checking Jas entitlement]: serverDetails == nil -> %t", serverDetails == nil))
+		log.Debug(fmt.Sprintf("Server details URL check [after checking Jas entitlement]: %s", serverDetails.Url))
+		log.Debug(fmt.Sprintf("Server details Xray URL check [after checking Jas entitlement]: %s", serverDetails.XrayUrl))
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
 		if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
@@ -256,6 +260,9 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
 	}
+	log.Debug(fmt.Sprintf("Server details Nil check [before entering AddJasScannersTasks]: serverDetails == nil -> %t", serverDetails == nil))
+	log.Debug(fmt.Sprintf("Server details URL check [before entering AddJasScannersTasks]: %s", serverDetails.Url))
+	log.Debug(fmt.Sprintf("Server details Xray URL check [before entering AddJasScannersTasks]: %s", serverDetails.XrayUrl))
 	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile, auditParams.scanResultsOutputDir); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
