@@ -199,6 +199,7 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 		// Download (if needed) the analyzer manager and run scanners.
 		auditParallelRunner.JasWg.Add(1)
 		if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+			utils.PrintServerDetails(serverDetails, "Before downloading and executing AM")
 			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, jasScanner, jfrogAppsConfig, threadId)
 		}, auditParallelRunner.AddErrorToChan); jasErr != nil {
 			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
