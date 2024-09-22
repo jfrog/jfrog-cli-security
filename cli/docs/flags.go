@@ -106,6 +106,7 @@ const (
 	buildPrefix         = "build-"
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
+	SecretValidation    = "validate-secrets"
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -147,13 +148,13 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, OutputDir,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -258,6 +259,7 @@ var flagsMap = map[string]components.Flag{
 	Sast:             components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
 	Secrets:          components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
 	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+	SecretValidation: components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Execute Token validation sub-scan on secrets. Relevant only with --%s flag.", Secrets)),
 
 	// Git flags
 	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

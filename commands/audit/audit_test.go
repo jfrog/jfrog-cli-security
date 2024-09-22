@@ -43,7 +43,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				IsDefault: false,
 			},
 			expectedSastIssues:    0,
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 16,
 		},
 		{
 			name: "Enable only sast scanner",
@@ -87,7 +87,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				IsDefault: false,
 			},
 			expectedSastIssues:    1,
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 16,
 		},
 	}
 

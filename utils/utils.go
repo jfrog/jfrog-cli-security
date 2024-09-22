@@ -25,12 +25,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan SubScanType = "contextual_analysis"
-	ScaScan                SubScanType = "sca"
-	IacScan                SubScanType = "iac"
-	SastScan               SubScanType = "sast"
-	SecretsScan            SubScanType = "secrets"
-
+	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
+	ScaScan                      SubScanType        = "sca"
+	IacScan                      SubScanType        = "iac"
+	SastScan                     SubScanType        = "sast"
+	SecretsScan                  SubScanType        = "secrets"
+	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
 	ViolationTypeSecurity        ViolationIssueType = "security"
 	ViolationTypeLicense         ViolationIssueType = "license"
 	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
@@ -64,7 +64,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
 }
 
 func Md5Hash(values ...string) (string, error) {

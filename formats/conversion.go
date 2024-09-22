@@ -1,6 +1,7 @@
 package formats
 
 import (
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"strconv"
 	"strings"
 )
@@ -143,12 +144,21 @@ func ConvertToOperationalRiskViolationScanTableRow(rows []OperationalRiskViolati
 
 func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow) {
 	for i := range rows {
+		var status string
+		var info string
+		if rows[i].Applicability != nil {
+			status = rows[i].Applicability.Status
+			info = rows[i].Applicability.ScannerDescription
+		}
 		tableRows = append(tableRows, secretsTableRow{
-			severity:   rows[i].Severity,
-			file:       rows[i].File,
-			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
-			secret:     rows[i].Snippet,
+			severity:        rows[i].Severity,
+			file:            rows[i].File,
+			lineColumn:      strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			secret:          rows[i].Snippet,
+			tokenValidation: jasutils.TokenValidationStatus(status).ToString(),
+			tokenInfo:       info,
 		})
+
 	}
 	return
 }

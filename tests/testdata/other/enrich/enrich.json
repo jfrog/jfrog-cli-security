@@ -6,7 +6,7 @@
   "metadata": {
     "timestamp": "2024-05-22T08:20:45Z",
     "component": {
-      "bom-ref": "pypi://services/web@main",
+      "bom-ref": "pypggi://services/web@main",
       "type": "library",
       "name": "pypi://services/web@main",
       "version": "main",
