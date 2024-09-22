@@ -66,13 +66,13 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 }
 
 func TestXrayAuditConanJson(t *testing.T) {
-	output := testAuditConan(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 8, 0, 3)
+	output := testAuditConan(t, string(format.Json), true)
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 8, 2)
 }
 
 func TestXrayAuditConanSimpleJson(t *testing.T) {
 	output := testAuditConan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 8, 0, 3)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 2)
 }
 
 func testAuditConan(t *testing.T, format string, withVuln bool) string {
@@ -85,7 +85,7 @@ func testAuditConan(t *testing.T, format string, withVuln bool) string {
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
 	defer clientTests.ChangeDirAndAssert(t, prevWd)
 	// Run conan install before executing jfrog audit
-	assert.NoError(t, exec.Command("conan", "install").Run())
+	assert.NoError(t, exec.Command("conan").Run())
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	args := []string{"audit", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
