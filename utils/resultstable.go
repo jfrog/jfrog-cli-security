@@ -352,6 +352,13 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
+				var applicability *formats.Applicability
+				status := GetResultPropertyTokenValidation(secretResult)
+				statusDescription := GetResultPropertyMetadata(secretResult)
+				if status != "" || statusDescription != "" {
+					applicability = &formats.Applicability{Status: status,
+						ScannerDescription: statusDescription}
+				}
 				secretsRows = append(secretsRows,
 					formats.SourceCodeRow{
 						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
@@ -365,6 +372,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 							EndColumn:   sarifutils.GetLocationEndColumn(location),
 							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
+						Applicability: applicability,
 					},
 				)
 			}
@@ -372,18 +380,28 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
-		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		if secretsRows[i].SeverityNumValue != secretsRows[j].SeverityNumValue {
+			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		}
+		if secretsRows[i].Applicability != nil && secretsRows[j].Applicability != nil {
+			return jasutils.TokenValidationOrder[secretsRows[i].Applicability.Status] < jasutils.TokenValidationOrder[secretsRows[j].Applicability.Status]
+		}
+		return true
 	})
 
 	return secretsRows
 }
 
-func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool) error {
+func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool, tokenValidationEnabled bool) error {
 	if entitledForSecretsScan {
 		secretsRows := prepareSecrets(secrets, true)
 		log.Output()
-		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
+		err := coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
 			"✨ No secrets were found ✨", false)
+		if err == nil && tokenValidationEnabled {
+			log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
+		}
+		return err
 	}
 	return nil
 }
@@ -1033,6 +1051,14 @@ func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
 	return sarifutils.GetRuleProperty("undetermined_reason", rule)
 }
 
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("tokenValidation", result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("metadata", result)
+}
+
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
 	if rule.Properties["applicability"] != nil {
 		status, ok := rule.Properties["applicability"].(string)
@@ -1048,6 +1074,8 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 			return jasutils.NotApplicable
 		case "applicable":
 			return jasutils.Applicable
+		case "missing_context":
+			return jasutils.MissingContext
 		}
 	}
 	return ""
@@ -1056,6 +1084,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 // If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
 // If at least one cve is applicable -> final value is applicable
 // Else if at least one cve is undetermined -> final value is undetermined
+// Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
 func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
@@ -1063,6 +1092,7 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 		return jasutils.NotScanned
 	}
 	foundUndetermined := false
+	foundMissingContext := false
 	foundNotCovered := false
 	for _, status := range applicabilityStatuses {
 		if status == jasutils.Applicable {
@@ -1071,15 +1101,23 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 		if status == jasutils.ApplicabilityUndetermined {
 			foundUndetermined = true
 		}
+		if status == jasutils.MissingContext {
+			foundMissingContext = true
+		}
 		if status == jasutils.NotCovered {
 			foundNotCovered = true
 		}
+
 	}
 	if foundUndetermined {
 		return jasutils.ApplicabilityUndetermined
 	}
+	if foundMissingContext {
+		return jasutils.MissingContext
+	}
 	if foundNotCovered {
 		return jasutils.NotCovered
 	}
+
 	return jasutils.NotApplicable
 }

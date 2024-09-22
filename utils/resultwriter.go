@@ -754,7 +754,7 @@ func getBaseBinaryDescriptionMarkdown(subScanType SubScanType, cmdResults *Resul
 	if len(result.Locations) > 0 {
 		location = result.Locations[0]
 	}
-	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, location)
+	return content + getBinaryLocationMarkdownString(cmdResults.ResultType, subScanType, location, result)
 }
 
 func getDockerImageTag(cmdResults *Results) string {
@@ -773,7 +773,7 @@ func getDockerImageTag(cmdResults *Results) string {
 // * Layer: <HASH>
 // * Filepath: <PATH>
 // * Evidence: <Snippet>
-func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, location *sarif.Location) (content string) {
+func getBinaryLocationMarkdownString(commandType CommandType, subScanType SubScanType, location *sarif.Location, result *sarif.Result) (content string) {
 	if location == nil {
 		return ""
 	}
