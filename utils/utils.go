@@ -144,7 +144,10 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 
 // This is a temporary function to be used for a POC debug purposes
 func PrintServerDetails(serverDetails *config.ServerDetails, stepIndication string) {
-	log.Debug(fmt.Sprintf("Server details Nil check [%s]: serverDetails == nil -> %t", stepIndication, serverDetails == nil))
+	if serverDetails == nil {
+		log.Debug(fmt.Sprintf("Server details Nil check [%s]: serverDetails == nil -> true", stepIndication))
+		return
+	}
 	log.Debug(fmt.Sprintf("Server details URL check [%s]: %s", stepIndication, serverDetails.Url))
 	log.Debug(fmt.Sprintf("Server details Artifactory URL check [%s]: %s", stepIndication, serverDetails.ArtifactoryUrl))
 	log.Debug(fmt.Sprintf("Server details Xray URL check [%s]: %s", stepIndication, serverDetails.XrayUrl))
