@@ -24,7 +24,7 @@ func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, s
 	serverDetails *config.ServerDetails, thirdPartyApplicabilityScan bool, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType,
 	secretsScanType secrets.SecretsScanType, errHandlerFunc func(error), scansToPreform []utils.SubScanType, configProfile *services.ConfigProfile, scansOutputDir string) (err error) {
 	if serverDetails == nil || len(serverDetails.Url) == 0 {
-		log.Warn("To include 'Advanced Security' scan as part of the audit output, please run the 'jf c add' command before running this command.")
+		log.Warn("To incorporate the ‘Advanced Security’ scan into the audit output:\n1) If using the ‘audit’ command via CLI, make sure to run ‘jf c add’ beforehand.\n2) When using Frogbot, ensure that JF_URL is correctly defined and provided in the CI.")
 		return
 	}
 	// For docker scan we support only secrets and contextual scans.
