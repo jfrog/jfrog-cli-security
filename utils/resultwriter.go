@@ -141,7 +141,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	case format.Json:
 		return PrintJson(rw.results.GetScaScansXrayResults())
 	case format.Sarif:
-		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses, rw.subScansPreformed, rw.results.ResultType)
+		return PrintSarif(rw.results, rw.isMultipleRoots, rw.includeLicenses, rw.subScansPreformed)
 	}
 	return nil
 }
@@ -210,14 +210,14 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func filterAndPatchRunsIfRequired(requestedScans []SubScanType, subScan SubScanType, scanType CommandType, results *Results, scanResults []*sarif.Run) (filtered []*sarif.Run) {
-	if !shouldScannerBeCalled(requestedScans, subScan, scanType) {
+func filterAndPatchRunsIfRequired(requestedScans []SubScanType, subScan SubScanType, results *Results, scanResults []*sarif.Run) (filtered []*sarif.Run) {
+	if !shouldScannerBeCalled(requestedScans, subScan, results.ResultType) {
 		return
 	}
 	return patchRunsToPassIngestionRules(subScan, results, scanResults...)
 }
 
-func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string, requestedScans []SubScanType, scanType CommandType) (report *sarif.Report, err error) {
+func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string, requestedScans []SubScanType) (report *sarif.Report, err error) {
 	report, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -227,10 +227,10 @@ func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLi
 		return
 	}
 
-	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, ScaScan, scanType, results, []*sarif.Run{xrayRun})...)
-	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, IacScan, scanType, results, results.ExtendedScanResults.IacScanResults)...)
-	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SecretsScan, scanType, results, results.ExtendedScanResults.SecretsScanResults)...)
-	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SastScan, scanType, results, results.ExtendedScanResults.SastScanResults)...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, ScaScan, results, []*sarif.Run{xrayRun})...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, IacScan, results, results.ExtendedScanResults.IacScanResults)...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SecretsScan, results, results.ExtendedScanResults.SecretsScanResults)...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SastScan, results, results.ExtendedScanResults.SastScanResults)...)
 
 	return
 }
@@ -934,8 +934,8 @@ func PrintJson(output interface{}) error {
 	return nil
 }
 
-func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool, subScans []SubScanType, commandType CommandType) error {
-	sarifReport, err := GenerateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil, subScans, commandType)
+func PrintSarif(results *Results, isMultipleRoots, includeLicenses bool, subScans []SubScanType) error {
+	sarifReport, err := GenerateSarifReportFromResults(results, isMultipleRoots, includeLicenses, nil, subScans)
 	if err != nil {
 		return err
 	}

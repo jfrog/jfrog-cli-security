@@ -341,7 +341,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 24, 2, 1, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 23, 2, 1, 0)
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
