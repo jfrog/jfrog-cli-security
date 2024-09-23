@@ -292,7 +292,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 			name:                          "new applicability statuses",
 			fileName:                      "new_ca_status.sarif",
 			expectedResults:               5,
-			expectedApplicabilityStatuses: []string{"applicable", "undetermined", "not_covered", "not_applicable"},
+			expectedApplicabilityStatuses: []string{"applicable", "undetermined", "not_covered", "missing_context", "not_applicable"},
 		},
 	}
 

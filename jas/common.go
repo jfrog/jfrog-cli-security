@@ -40,12 +40,12 @@ type JasScanner struct {
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
+func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, secretTokenValidation bool, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
 	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
 		return scanner, err
 	}
-	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
+	if scanner.EnvVars, err = getJasEnvVars(serverDetails, secretTokenValidation, envVars); err != nil {
 		return scanner, err
 	}
 	var tempDir string
@@ -61,8 +61,8 @@ func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, 
 	return scanner, err
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
-	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
+func getJasEnvVars(serverDetails *config.ServerDetails, secretTokenValidation bool, vars map[string]string) (map[string]string, error) {
+	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails, secretTokenValidation)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	scanner := &JasScanner{}
-	scanner, err := CreateJasScanner(scanner, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(scanner, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -278,8 +278,27 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
+	dynamicTokenVersionMismatchErr := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil {
+		if validateSecrets {
+			log.Info(fmt.Sprintf("Token validation (--validate-secrets flag) is not supported in your xray version, your xray version is %s and the minimum is %s", xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion))
+		}
+		return false
+	}
+	// Ordered By importance
+	// first check for flag and second check for env var
+	if validateSecrets || strings.ToLower(os.Getenv(JfSecretValidationEnvVariable)) == "true" {
+		return true
+	}
+	// third check for platform api
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	return err == nil && isEnabled
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}

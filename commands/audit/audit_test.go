@@ -15,6 +15,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
+	"path/filepath"
+	"strings"
+	"testing"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -216,7 +220,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				IsDefault: false,
 			},
 			expectedSastIssues:    0,
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 16,
 		},
 		{
 			name: "Enable only sast scanner",
@@ -260,7 +264,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				IsDefault: false,
 			},
 			expectedSastIssues:    1,
-			expectedSecretsIssues: 7,
+			expectedSecretsIssues: 16,
 		},
 	}
 
@@ -341,16 +345,18 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, filesList, 5)
 
-	var fileNamesWithoutSuffix []string
-	for _, fileName := range filesList {
-		// Removing <hash>.json suffix to so we can check by suffix all expected files exist
-		splitName := strings.Split(fileName, "_")
-		fileNamesWithoutSuffix = append(fileNamesWithoutSuffix, splitName[0])
-	}
+	searchForStrWithSubString(t, filesList, "sca_results")
+	searchForStrWithSubString(t, filesList, "iac_results")
+	searchForStrWithSubString(t, filesList, "sast_results")
+	searchForStrWithSubString(t, filesList, "secrets_results")
+	searchForStrWithSubString(t, filesList, "applicability_results")
+}
 
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sca"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "iac"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "sast"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "secrets"))
-	assert.Contains(t, fileNamesWithoutSuffix, filepath.Join(outputDirPath, "applicability"))
+func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {
+	for _, file := range filesList {
+		if strings.Contains(file, subString) {
+			return
+		}
+	}
+	assert.Fail(t, "File %s not found in the list", subString)
 }

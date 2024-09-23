@@ -24,7 +24,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.8.14"
+	defaultAnalyzerManagerVersion             = "1.9.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -41,6 +41,8 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	// #nosec G101 -- Not credentials.
+	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
 
 var exitCodeErrorsMap = map[int]string{

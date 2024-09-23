@@ -10,6 +10,9 @@ import (
 const (
 	ApplicabilityRuleIdPrefix     = "applic_"
 	ApplicabilitySarifPropertyKey = "applicability"
+
+	DynamicTokenValidationMinXrayVersion = "3.101.0"
+	TokenValidationStatusForNonTokens = "Not a token"
 )
 
 const (
@@ -18,6 +21,16 @@ const (
 	IaC           JasScanType = "IaC"
 	Sast          JasScanType = "Sast"
 )
+
+const (
+	Active      TokenValidationStatus = "Active"
+	Inactive    TokenValidationStatus = "Inactive"
+	Unsupported TokenValidationStatus = "Unsupported"
+	Unavailable TokenValidationStatus = "Unavailable"
+	NotAToken   TokenValidationStatus = TokenValidationStatusForNonTokens
+)
+
+type TokenValidationStatus string
 
 type JasScanType string
 
@@ -29,6 +42,19 @@ func GetJasScanTypes() []JasScanType {
 	return []JasScanType{Applicability, Secrets, IaC, Sast}
 }
 
+func (tvs TokenValidationStatus) String() string { return string(tvs) }
+
+func (tvs TokenValidationStatus) ToString() string {
+	switch tvs {
+	case Active:
+		return color.New(color.Red).Render(tvs)
+	case Inactive:
+		return color.New(color.Green).Render(tvs)
+	default:
+		return tvs.String()
+	}
+}
+
 type ApplicabilityStatus string
 
 const (
@@ -36,6 +62,7 @@ const (
 	NotApplicable             ApplicabilityStatus = "Not Applicable"
 	ApplicabilityUndetermined ApplicabilityStatus = "Undetermined"
 	NotCovered                ApplicabilityStatus = "Not Covered"
+	MissingContext            ApplicabilityStatus = "Missing Context"
 	NotScanned                ApplicabilityStatus = ""
 )
 
@@ -83,6 +110,8 @@ func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
 		return ApplicabilityUndetermined
 	case NotCovered.String():
 		return NotCovered
+	case MissingContext.String():
+		return MissingContext
 	default:
 		return NotScanned
 	}
@@ -97,11 +126,21 @@ func ApplicabilityRuleIdToCve(sarifRuleId string) string {
 }
 
 var applicableMapToScore = map[string]int{
-	"Applicable":                4,
-	"ApplicabilityUndetermined": 3,
-	"NotScanned":                2,
+	"Applicable":                5,
+	"ApplicabilityUndetermined": 4,
+	"NotScanned":                3,
+	"MissingContext":            2,
 	"NotCovered":                1,
 	"NotApplicable":             0,
+}
+
+var TokenValidationOrder = map[string]int{
+	"Active":      1,
+	"Unsupported": 2,
+	"Unavailable": 3,
+	"Inactive":    4,
+	"Not a token": 5,
+	"":            6,
 }
 
 func ConvertApplicableToScore(applicability string) int {

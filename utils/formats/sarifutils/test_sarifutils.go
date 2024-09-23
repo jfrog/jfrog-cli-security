@@ -61,6 +61,20 @@ func CreateDummyResult(markdown, msg, ruleId, level string) *sarif.Result {
 	}
 }
 
+func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
+		Message:   *sarif.NewTextMessage(msg),
+		Level:     &level,
+		RuleID:    &ruleId,
+		Locations: locations,
+	}
+	result.Properties = map[string]interface{}{}
+	for key, val := range properties {
+		result.Properties[key] = val
+	}
+	return result
+}
+
 func CreateResultWithDummyLocationAmdProperty(fileName, property, value string) *sarif.Result {
 	resultWithLocation := CreateDummyResultInPath(fileName)
 	resultWithLocation.Properties = map[string]interface{}{property: value}

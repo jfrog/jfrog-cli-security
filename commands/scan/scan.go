@@ -67,6 +67,7 @@ type ScanCommand struct {
 	includeLicenses        bool
 	fail                   bool
 	printExtendedTable     bool
+	validateSecrets         bool
 	bypassArchiveLimits    bool
 	fixableOnly            bool
 	progress               ioUtils.ProgressMgr
@@ -78,6 +79,11 @@ type ScanCommand struct {
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
 	scanCmd.minSeverityFilter = minSeverityFilter
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetSecretValidation(validateSecrets bool) *ScanCommand {
+	scanCmd.validateSecrets = validateSecrets
 	return scanCmd
 }
 
@@ -237,6 +243,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		cmdResults.SetMultiScanId(scanCmd.analyticsMetricsService.GetMsi())
 	}
 
+	scanResults.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, xrayVersion, scanCmd.validateSecrets)
 	errGroup := new(errgroup.Group)
 	if cmdResults.EntitledForJas {
 		// Download (if needed) the analyzer manager in a background routine.

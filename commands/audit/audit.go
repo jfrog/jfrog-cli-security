@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"golang.org/x/exp/slices"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -256,7 +257,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	scanner, err = jas.CreateJasScanner(scanner, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
+	scanner, err = jas.CreateJasScanner(scanner, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.ExtendedScanResults.SecretValidation, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
