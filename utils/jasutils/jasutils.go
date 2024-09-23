@@ -12,7 +12,7 @@ const (
 	ApplicabilitySarifPropertyKey = "applicability"
 
 	DynamicTokenValidationMinXrayVersion = "3.101.0"
-	TokenValidationStatusForNonTokens = "Not a token"
+	TokenValidationStatusForNonTokens    = "Not a token"
 )
 
 const (

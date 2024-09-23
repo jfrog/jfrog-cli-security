@@ -38,38 +38,30 @@ func ValidateCommandJsonOutput(t *testing.T, params ValidationParams) {
 }
 
 func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, content ...services.ScanResponse) {
-	var vulnerabilities []services.Vulnerability
-	var licenses []services.License
-	var securityViolations []services.Violation
-	var licenseViolations []services.Violation
-	var operationalViolations []services.Violation
+	var vulnerabilities, licenses, securityViolations, licenseViolations, operationalViolations int
+
 	for _, result := range content {
-		vulnerabilities = append(vulnerabilities, result.Vulnerabilities...)
-		licenses = append(licenses, result.Licenses...)
+		vulnerabilities += len(result.Vulnerabilities)
+		licenses += len(result.Licenses)
 		for _, violation := range result.Violations {
 			switch violation.ViolationType {
 			case utils.ViolationTypeSecurity.String():
-				securityViolations = append(securityViolations, violation)
+				securityViolations += 1
 			case utils.ViolationTypeLicense.String():
-				licenseViolations = append(licenseViolations, violation)
+				licenseViolations += 1
 			case utils.ViolationTypeOperationalRisk.String():
-				operationalViolations = append(operationalViolations, violation)
+				operationalViolations += 1
 			}
 		}
 	}
-	if params.ExactResultsMatch {
-		assert.Equal(t, params.Vulnerabilities, len(vulnerabilities), fmt.Sprintf("Expected %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, len(vulnerabilities)))
-		assert.Equal(t, params.Licenses, len(licenses), fmt.Sprintf("Expected %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(licenses)))
-		assert.Equal(t, params.SecurityViolations, len(securityViolations), fmt.Sprintf("Expected %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, len(securityViolations)))
-		assert.Equal(t, params.LicenseViolations, len(licenseViolations), fmt.Sprintf("Expected %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(licenseViolations)))
-		assert.Equal(t, params.OperationalViolations, len(operationalViolations), fmt.Sprintf("Expected %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(operationalViolations)))
-	} else {
-		assert.GreaterOrEqual(t, len(vulnerabilities), params.Vulnerabilities, fmt.Sprintf("Expected at least %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, len(vulnerabilities)))
-		assert.GreaterOrEqual(t, len(licenses), params.Licenses, fmt.Sprintf("Expected at least %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(licenses)))
-		assert.GreaterOrEqual(t, len(securityViolations), params.SecurityViolations, fmt.Sprintf("Expected at least %d security violations in scan responses, but got %d security violations.", params.LicenseViolations, len(securityViolations)))
-		assert.GreaterOrEqual(t, len(licenseViolations), params.LicenseViolations, fmt.Sprintf("Expected at least %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(licenseViolations)))
-		assert.GreaterOrEqual(t, len(operationalViolations), params.OperationalViolations, fmt.Sprintf("Expected at least %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(operationalViolations)))
-	}
+
+	ValidateContent(t, params.ExactResultsMatch,
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "scan responses", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
+		CountValidation[int]{Expected: params.Licenses, Actual: licenses, Msg: GetValidationCountErrMsg("licenses", "scan responses", params.ExactResultsMatch, params.Licenses, licenses)},
+		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "scan responses", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "scan responses", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
+		CountValidation[int]{Expected: params.OperationalViolations, Actual: operationalViolations, Msg: GetValidationCountErrMsg("operational risk violations", "scan responses", params.ExactResultsMatch, params.OperationalViolations, operationalViolations)},
+	)
 }
 
 func ValidateScanResponses(t *testing.T, exactMatch bool, expected, actual []services.ScanResponse) {

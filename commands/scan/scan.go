@@ -67,7 +67,7 @@ type ScanCommand struct {
 	includeLicenses        bool
 	fail                   bool
 	printExtendedTable     bool
-	validateSecrets         bool
+	validateSecrets        bool
 	bypassArchiveLimits    bool
 	fixableOnly            bool
 	progress               ioUtils.ProgressMgr

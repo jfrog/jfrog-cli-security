@@ -15,10 +15,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
-	"path/filepath"
-	"strings"
-	"testing"
-
 	biutils "github.com/jfrog/build-info-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"

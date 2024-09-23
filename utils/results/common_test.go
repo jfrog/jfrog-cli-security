@@ -407,6 +407,16 @@ func TestGetApplicableCveValue(t *testing.T) {
 			}}}}},
 		},
 		{
+			name:           "missing context cve",
+			entitledForJas: true,
+			applicabilityScanResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
+			},
+			cves:           []services.Cve{{Id: "testCve1"}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves:   []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}}},
+		},
+		{
 			name:           "undetermined cve",
 			entitledForJas: true,
 			applicabilityScanResults: []*sarif.Run{
@@ -467,13 +477,15 @@ func TestGetApplicableCveValue(t *testing.T) {
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"applicable"}),
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_applicable"}),
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve3"), []string{"applicability"}, []string{"not_covered"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve4"), []string{"applicability"}, []string{"missing_context"}),
 			},
-			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}, {Id: "testCve4"}},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
-				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.Applicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
+				{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.Applicable.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
 			},
 		},
 		{
@@ -502,6 +514,19 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotCovered)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.ApplicabilityUndetermined)}},
+			},
+		},
+		{
+			name:           "new scan statuses - missing context wins not covered",
+			entitledForJas: true,
+			applicabilityScanResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve1"), []string{"applicability"}, []string{"missing_context"}),
+				sarifutils.CreateRunWithDummyResultAndRuleProperties(sarifutils.CreateDummyPassingResult("applic_testCve2"), []string{"applicability"}, []string{"not_covered"}),
+			},
+			cves:           []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}},
+			expectedResult: jasutils.MissingContext,
+			expectedCves: []formats.CveRow{{Id: "testCve1", Applicability: &formats.Applicability{Status: jasutils.MissingContext.String()}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: jasutils.NotCovered.String()}},
 			},
 		},
 		{

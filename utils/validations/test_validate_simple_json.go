@@ -44,51 +44,47 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
-	var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
+	var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, inactiveResults int
 	for _, vuln := range results.Vulnerabilities {
 		switch vuln.Applicable {
-		case string(jasutils.NotApplicable):
+		case jasutils.NotApplicable.String():
 			notApplicableResults++
-		case string(jasutils.Applicable):
+		case jasutils.Applicable.String():
 			applicableResults++
-		case string(jasutils.NotCovered):
+		case jasutils.NotCovered.String():
 			notCoveredResults++
-		case string(jasutils.ApplicabilityUndetermined):
+		case jasutils.ApplicabilityUndetermined.String():
 			undeterminedResults++
+		case jasutils.MissingContext.String():
+			missingContextResults++
+		}
+	}
+	for _, result := range results.Secrets {
+		if result.Applicability != nil {
+			if result.Applicability.Status == jasutils.Inactive.ToString() {
+				inactiveResults += 1
+			}
 		}
 	}
 
-	if params.ExactResultsMatch {
-		assert.Equal(t, params.Sast, len(results.Sast), "Expected %d sast in scan responses, but got %d sast.", params.Sast, len(results.Sast))
-		assert.Equal(t, params.Secrets, len(results.Secrets), "Expected %d secrets in scan responses, but got %d secrets.", params.Secrets, len(results.Secrets))
-		assert.Equal(t, params.Iac, len(results.Iacs), "Expected %d IaC in scan responses, but got %d IaC.", params.Iac, len(results.Iacs))
+	ValidateContent(t, params.ExactResultsMatch,
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: len(results.Vulnerabilities), Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, len(results.Vulnerabilities))},
+		CountValidation[int]{Expected: params.Sast, Actual: len(results.Sast), Msg: GetValidationCountErrMsg("sast", "simple-json", params.ExactResultsMatch, params.Sast, len(results.Sast))},
+		CountValidation[int]{Expected: params.Iac, Actual: len(results.Iacs), Msg: GetValidationCountErrMsg("IaC", "simple-json", params.ExactResultsMatch, params.Iac, len(results.Iacs))},
+		CountValidation[int]{Expected: params.Secrets, Actual: len(results.Secrets), Msg: GetValidationCountErrMsg("secrets", "simple-json", params.ExactResultsMatch, params.Secrets, len(results.Secrets))},
+		CountValidation[int]{Expected: params.Inactive, Actual: inactiveResults, Msg: GetValidationCountErrMsg("inactive secrets", "simple-json", params.ExactResultsMatch, params.Inactive, inactiveResults)},
 
-		assert.Equal(t, params.Applicable, applicableResults, "Expected %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-		assert.Equal(t, params.Undetermined, undeterminedResults, "Expected %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-		assert.Equal(t, params.NotCovered, notCoveredResults, "Expected %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-		assert.Equal(t, params.NotApplicable, notApplicableResults, "Expected %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
+		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.Applicable, applicableResults)},
+		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "simple-json", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
+		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
+		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
+		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "simple-json", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
 
-		assert.Equal(t, params.SecurityViolations, len(results.SecurityViolations), "Expected %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, len(results.SecurityViolations))
-		assert.Equal(t, params.LicenseViolations, len(results.LicensesViolations), "Expected %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(results.LicensesViolations))
-		assert.Equal(t, params.OperationalViolations, len(results.OperationalRiskViolations), "Expected %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(results.OperationalRiskViolations))
-
-		assert.Equal(t, params.Licenses, len(results.Licenses), "Expected %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(results.Licenses))
-		return
-	}
-	assert.GreaterOrEqual(t, len(results.Sast), params.Sast, "Expected at least %d sast in scan responses, but got %d sast.", params.Sast, len(results.Sast))
-	assert.GreaterOrEqual(t, len(results.Secrets), params.Secrets, "Expected at least %d secrets in scan responses, but got %d secrets.", params.Secrets, len(results.Secrets))
-	assert.GreaterOrEqual(t, len(results.Iacs), params.Iac, "Expected at least %d IaC in scan responses, but got %d IaC.", params.Iac, len(results.Iacs))
-
-	assert.GreaterOrEqual(t, applicableResults, params.Applicable, "Expected at least %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-	assert.GreaterOrEqual(t, undeterminedResults, params.Undetermined, "Expected at least %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-	assert.GreaterOrEqual(t, notCoveredResults, params.NotCovered, "Expected at least %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-	assert.GreaterOrEqual(t, notApplicableResults, params.NotApplicable, "Expected at least %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
-
-	assert.GreaterOrEqual(t, len(results.SecurityViolations), params.SecurityViolations, "Expected at least %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, len(results.SecurityViolations))
-	assert.GreaterOrEqual(t, len(results.LicensesViolations), params.LicenseViolations, "Expected at least %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, len(results.LicensesViolations))
-	assert.GreaterOrEqual(t, len(results.OperationalRiskViolations), params.OperationalViolations, "Expected at least %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, len(results.OperationalRiskViolations))
-
-	assert.GreaterOrEqual(t, len(results.Licenses), params.Licenses, "Expected at least %d Licenses in scan responses, but got %d Licenses.", params.Licenses, len(results.Licenses))
+		CountValidation[int]{Expected: params.SecurityViolations, Actual: len(results.SecurityViolations), Msg: GetValidationCountErrMsg("security violations", "simple-json", params.ExactResultsMatch, params.SecurityViolations, len(results.SecurityViolations))},
+		CountValidation[int]{Expected: params.LicenseViolations, Actual: len(results.LicensesViolations), Msg: GetValidationCountErrMsg("license violations", "simple-json", params.ExactResultsMatch, params.LicenseViolations, len(results.LicensesViolations))},
+		CountValidation[int]{Expected: params.OperationalViolations, Actual: len(results.OperationalRiskViolations), Msg: GetValidationCountErrMsg("operational risk violations", "simple-json", params.ExactResultsMatch, params.OperationalViolations, len(results.OperationalRiskViolations))},
+		CountValidation[int]{Expected: params.Licenses, Actual: len(results.Licenses), Msg: GetValidationCountErrMsg("Licenses", "simple-json", params.ExactResultsMatch, params.Licenses, len(results.Licenses))},
+	)
 }
 
 func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual formats.SimpleJsonResults) {

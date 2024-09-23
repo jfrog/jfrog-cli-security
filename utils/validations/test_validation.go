@@ -38,6 +38,8 @@ type ValidationParams struct {
 	Undetermined          int
 	NotCovered            int
 	NotApplicable         int
+	MissingContext        int
+	Inactive              int
 	Sast                  int
 	Iac                   int
 	Secrets               int
@@ -75,6 +77,29 @@ func validateStrContent(t *testing.T, expected, actual string, actualValue bool,
 
 func (sv StringValidation) ErrMsgs(_ *testing.T) []string {
 	return []string{sv.Msg}
+}
+
+// CountValidation validates the content of the given numbers.
+// Not ExactMatch: The actual content must be greater or equal to the expected content.
+type CountValidation[T any] struct {
+	Expected int
+	Actual   int
+	Msg      string
+}
+
+func (cv CountValidation[T]) Validate(t *testing.T, exactMatch bool) bool {
+	return validateNumberCount(t, cv.Expected, cv.Actual, exactMatch, cv.ErrMsgs(t))
+}
+
+func validateNumberCount(t *testing.T, expected, actual interface{}, actualValue bool, msgAndArgs ...interface{}) bool {
+	if actualValue {
+		return assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+	return assert.GreaterOrEqual(t, actual, expected, msgAndArgs...)
+}
+
+func (cv CountValidation[T]) ErrMsgs(_ *testing.T) []string {
+	return []string{cv.Msg}
 }
 
 // NumberValidation validates the content of the given numbers.

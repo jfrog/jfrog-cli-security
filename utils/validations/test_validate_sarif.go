@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -40,17 +41,17 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 // Actual content should be a *sarif.Report in the validation params.
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
-func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sarif.Report) {
-	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults int
+func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sarif.Report) {
+	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, inactiveResults int
 
-	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, IacToolName)...)
+	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, IacToolName)...)
 	vulnerabilities += iac
-	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, SecretsToolName)...)
+	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SecretsToolName)...)
 	vulnerabilities += secrets
-	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(results, SastToolName)...)
+	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SastToolName)...)
 	vulnerabilities += sast
 
-	scaRuns := sarifutils.GetRunsByToolName(results, sarifparser.ScaScannerToolName)
+	scaRuns := sarifutils.GetRunsByToolName(report, sarifparser.ScaScannerToolName)
 	for _, run := range scaRuns {
 		for _, result := range run.Results {
 			// If watch property exists, add to security violations or license violations else add to vulnerabilities
@@ -75,33 +76,30 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, results *sa
 					undeterminedResults++
 				case jasutils.NotCovered.String():
 					notCoveredResults++
+				case jasutils.MissingContext.String():
+					missingContextResults++
 				}
+			}
+			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.ToString() {
+				inactiveResults++
 			}
 		}
 	}
 
-	if params.ExactResultsMatch {
-		assert.Equal(t, params.Sast, sast, GetValidationCountErrMsg("sast", "sarif report", true, params.Sast, sast))
-		assert.Equal(t, params.Secrets, secrets, GetValidationCountErrMsg("secrets", "sarif report", true, params.Secrets, secrets))
-		assert.Equal(t, params.Iac, iac, GetValidationCountErrMsg("Iac", "sarif report", true, params.Iac, iac))
-		assert.Equal(t, params.Applicable, applicableResults, "Expected %d applicable results in sarif report, but got %d applicable results.", params.Applicable, applicableResults)
-		assert.Equal(t, params.Undetermined, undeterminedResults, "Expected %d undetermined results in sarif report, but got %d undetermined results.", params.Undetermined, undeterminedResults)
-		assert.Equal(t, params.NotCovered, notCoveredResults, "Expected %d not covered results in sarif report, but got %d not covered results.", params.NotCovered, notCoveredResults)
-		assert.Equal(t, params.NotApplicable, notApplicableResults, "Expected %d not applicable results in sarif report, but got %d not applicable results.", params.NotApplicable, notApplicableResults)
-		assert.Equal(t, params.SecurityViolations, securityViolations, "Expected %d security violations in sarif report, but got %d security violations.", params.SecurityViolations, securityViolations)
-		assert.Equal(t, params.LicenseViolations, licenseViolations, "Expected %d license violations in sarif report, but got %d license violations.", params.LicenseViolations, licenseViolations)
-		assert.Equal(t, params.Vulnerabilities, vulnerabilities, "Expected %d vulnerabilities in sarif report, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
-	} else {
-		assert.GreaterOrEqual(t, sast, params.Sast, "Expected at least %d sast in sarif report, but got %d sast.", params.Sast, sast)
-		assert.GreaterOrEqual(t, secrets, params.Secrets, "Expected at least %d secrets in sarif report, but got %d secrets.", params.Secrets, secrets)
-		assert.GreaterOrEqual(t, iac, params.Iac, "Expected at least %d IaC in sarif report, but got %d IaC.", params.Iac, iac)
-		assert.GreaterOrEqual(t, applicableResults, params.Applicable, "Expected at least %d applicable results in sarif report, but got %d applicable results.", params.Applicable, applicableResults)
-		assert.GreaterOrEqual(t, undeterminedResults, params.Undetermined, "Expected at least %d undetermined results in sarif report, but got %d undetermined results.", params.Undetermined, undeterminedResults)
-		assert.GreaterOrEqual(t, notCoveredResults, params.NotCovered, "Expected at least %d not covered results in sarif report, but got %d not covered results.", params.NotCovered, notCoveredResults)
-		assert.GreaterOrEqual(t, notApplicableResults, params.NotApplicable, "Expected at least %d not applicable results in sarif report, but got %d not applicable results.", params.NotApplicable, notApplicableResults)
-		assert.GreaterOrEqual(t, securityViolations, params.SecurityViolations, "Expected at least %d security violations in sarif report, but got %d security violations.", params.SecurityViolations, securityViolations)
-		assert.GreaterOrEqual(t, licenseViolations, params.LicenseViolations, "Expected at least %d license violations in sarif report, but got %d license violations.", params.LicenseViolations, licenseViolations)
-	}
+	ValidateContent(t, params.ExactResultsMatch,
+		CountValidation[int]{Expected: params.Sast, Actual: sast, Msg: GetValidationCountErrMsg("sast", "sarif report", params.ExactResultsMatch, params.Sast, sast)},
+		CountValidation[int]{Expected: params.Iac, Actual: iac, Msg: GetValidationCountErrMsg("Iac", "sarif report", params.ExactResultsMatch, params.Iac, iac)},
+		CountValidation[int]{Expected: params.Secrets, Actual: secrets, Msg: GetValidationCountErrMsg("secrets", "sarif report", params.ExactResultsMatch, params.Secrets, secrets)},
+		CountValidation[int]{Expected: params.Inactive, Actual: inactiveResults, Msg: GetValidationCountErrMsg("inactive secret results", "sarif report", params.ExactResultsMatch, params.Inactive, inactiveResults)},
+		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable results", "sarif report", params.ExactResultsMatch, params.Applicable, applicableResults)},
+		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined results", "sarif report", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
+		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered results", "sarif report", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
+		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable results", "sarif report", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
+		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context results", "sarif report", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
+		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "sarif report", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "sarif report", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "sarif report", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
+	)
 }
 
 func isSecurityIssue(result *sarif.Result) bool {

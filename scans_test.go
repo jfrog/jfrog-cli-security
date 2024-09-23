@@ -184,7 +184,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 			if validateSecrets {
 				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
 			} else {
-				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses:        minLicenses,})
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
 			}
 		}
 		// Run docker scan on image with watch

@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"fmt"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -190,7 +191,11 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		return
 	}
 	// Initialize Results struct
-	cmdResults = initCmdResults(entitledForJas, auditParams)
+	cmdResults = initCmdResults(
+		entitledForJas,
+		jas.CheckForSecretValidation(xrayManager, auditParams.xrayVersion, slices.Contains(auditParams.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan)),
+		auditParams,
+	)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
 	if err != nil {
 		return cmdResults, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
@@ -257,7 +262,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	scanner, err = jas.CreateJasScanner(scanner, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.ExtendedScanResults.SecretValidation, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
+	scanner, err = jas.CreateJasScanner(scanner, serverDetails, scanResults.SecretValidation, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
@@ -290,8 +295,8 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	return
 }
 
-func initCmdResults(entitledForJas bool, params *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	cmdResults = results.NewCommandResults(utils.SourceCode, params.xrayVersion, entitledForJas).SetMultiScanId(params.commonGraphScanParams.MultiScanId)
+func initCmdResults(entitledForJas, secretValidation bool, params *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	cmdResults = results.NewCommandResults(utils.SourceCode, params.xrayVersion, entitledForJas, secretValidation).SetMultiScanId(params.commonGraphScanParams.MultiScanId)
 	detectScanTargets(cmdResults, params)
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults)
 	if err != nil {

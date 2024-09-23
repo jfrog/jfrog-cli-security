@@ -222,17 +222,6 @@ func AggregateMultipleRunsIntoSingle(runs []*sarif.Run, destination *sarif.Run) 
 	}
 }
 
-func GetResultProperty(key string, result *sarif.Result) string {
-	if result != nil && result.Properties != nil && result.Properties[key] != nil {
-		status, ok := result.Properties[key].(string)
-		if !ok {
-			return ""
-		}
-		return status
-	}
-	return ""
-}
-
 func GetLocationRelatedCodeFlowsFromResult(location *sarif.Location, result *sarif.Result) (codeFlows []*sarif.CodeFlow) {
 	for _, codeFlow := range result.CodeFlows {
 		for _, stackTrace := range codeFlow.ThreadFlows {
@@ -382,16 +371,17 @@ func GetResultRuleId(result *sarif.Result) string {
 	return ""
 }
 
-func GetResultProperty(key string, result *sarif.Result) string {
-	if result.Properties == nil {
-		return ""
+func GetResultProperty(key string, result *sarif.Result) (value string) {
+	if result == nil || result.Properties == nil {
+		return
 	}
-	if _, exists := result.Properties[key]; exists {
-		if value, ok := result.Properties[key].(string); ok {
-			return value
-		}
+	if _, exists := result.Properties[key]; !exists {
+		return
 	}
-	return ""
+	if value, ok := result.Properties[key].(string); ok {
+		return value
+	}
+	return
 }
 
 func IsFingerprintsExists(result *sarif.Result) bool {

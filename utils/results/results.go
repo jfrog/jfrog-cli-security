@@ -17,9 +17,10 @@ import (
 // SecurityCommandResults is a struct that holds the results of a security scan/audit command.
 type SecurityCommandResults struct {
 	// General fields describing the command metadata
-	XrayVersion    string            `json:"xray_version"`
-	EntitledForJas bool              `json:"jas_entitled"`
-	CmdType        utils.CommandType `json:"command_type"`
+	XrayVersion      string            `json:"xray_version"`
+	EntitledForJas   bool              `json:"jas_entitled"`
+	SecretValidation bool              `json:"secret_validation,omitempty"`
+	CmdType          utils.CommandType `json:"command_type"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
@@ -78,8 +79,8 @@ func (st ScanTarget) String() (str string) {
 	return
 }
 
-func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas bool) *SecurityCommandResults {
-	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, targetsMutex: sync.Mutex{}}
+func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas, secretValidation bool) *SecurityCommandResults {
+	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, SecretValidation: secretValidation, targetsMutex: sync.Mutex{}}
 }
 
 func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {

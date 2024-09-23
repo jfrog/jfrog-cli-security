@@ -40,12 +40,12 @@ type JasScanner struct {
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, secretTokenValidation bool, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
+func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, validateSecrets bool, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
 	var err error
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
 		return scanner, err
 	}
-	if scanner.EnvVars, err = getJasEnvVars(serverDetails, secretTokenValidation, envVars); err != nil {
+	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {
 		return scanner, err
 	}
 	var tempDir string
@@ -61,11 +61,12 @@ func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, 
 	return scanner, err
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, secretTokenValidation bool, vars map[string]string) (map[string]string, error) {
-	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails, secretTokenValidation)
+func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
+	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
 		return nil, err
 	}
+	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
@@ -212,7 +213,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	scanner := &JasScanner{}
-	scanner, err := CreateJasScanner(scanner, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
+	scanner, err := CreateJasScanner(scanner, &FakeServerDetails, false, GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -296,9 +297,8 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
+func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
-	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}

@@ -315,12 +315,22 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 					EndColumn:   sarifutils.GetLocationEndColumn(location),
 					Snippet:     sarifutils.GetLocationSnippetText(location),
 				},
-				CodeFlow: codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), run.Invocations, pretty),
+				Applicability: getJasResultApplicability(result),
+				CodeFlow:      codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), run.Invocations, pretty),
 			},
 		)
 		return nil
 	})
 	return rows, err
+}
+
+func getJasResultApplicability(result *sarif.Result) *formats.Applicability {
+	status := results.GetResultPropertyTokenValidation(result)
+	statusDescription := results.GetResultPropertyMetadata(result)
+	if status == "" && statusDescription == "" {
+		return nil
+	}
+	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
 }
 
 func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invocation, isTable bool) (flowRows [][]formats.Location) {
@@ -605,6 +615,9 @@ func sortSourceCodeRow(rows []formats.SourceCodeRow) {
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].SeverityNumValue != rows[j].SeverityNumValue {
 			return rows[i].SeverityNumValue > rows[j].SeverityNumValue
+		}
+		if rows[i].Applicability != nil && rows[j].Applicability != nil {
+			return jasutils.TokenValidationOrder[rows[i].Applicability.Status] < jasutils.TokenValidationOrder[rows[j].Applicability.Status]
 		}
 		return rows[i].Location.File > rows[j].Location.File
 	})

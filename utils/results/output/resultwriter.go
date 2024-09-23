@@ -223,7 +223,7 @@ func (rw *ResultsWriter) printTables() (err error) {
 		}
 	}
 	if shouldPrintTable(rw.subScansPreformed, utils.SecretsScan, rw.commandResults.CmdType) {
-		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Secrets); err != nil {
+		if err = PrintSecretsTable(tableContent, rw.commandResults.EntitledForJas, rw.commandResults.SecretValidation); err != nil {
 			return
 		}
 	}
@@ -304,6 +304,19 @@ func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, cmdTyp
 		return coreutils.PrintTable(formats.ConvertLicenseTableRowToScanTableRow(tables.LicensesTable), "Licenses", "No licenses were found", printExtended)
 	}
 	return coreutils.PrintTable(tables.LicensesTable, "Licenses", "No licenses were found", printExtended)
+}
+
+func PrintSecretsTable(tables formats.ResultsTables, entitledForJas, tokenValidationEnabled bool) (err error) {
+	if !entitledForJas {
+		return
+	}
+	if err = PrintJasTable(tables, entitledForJas, jasutils.Secrets); err != nil {
+		return
+	}
+	if tokenValidationEnabled {
+		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
+	}
+	return
 }
 
 func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType jasutils.JasScanType) error {

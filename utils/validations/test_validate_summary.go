@@ -20,7 +20,7 @@ func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {
 }
 
 func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results formats.ResultsSummary) {
-	var vulnerabilities, securityViolations, licenseViolations, opRiskViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, sast, iac, secrets int
+	var vulnerabilities, securityViolations, licenseViolations, opRiskViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, sast, iac, secrets int
 
 	vulnerabilities = results.GetTotalVulnerabilities()
 
@@ -46,42 +46,27 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 							notCoveredResults += count
 						case jasutils.NotApplicable.String():
 							notApplicableResults += count
+						case jasutils.MissingContext.String():
+							missingContextResults += count
 						}
 					}
 				}
 			}
 		}
 	}
-	// validate the counts
-	if params.ExactResultsMatch {
-		assert.Equal(t, params.Vulnerabilities, vulnerabilities, "Expected %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
 
-		assert.Equal(t, params.Sast, sast, "Expected %d sast in scan responses, but got %d sast.", params.Sast, sast)
-		assert.Equal(t, params.Secrets, secrets, "Expected %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
-		assert.Equal(t, params.Iac, iac, "Expected %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
-
-		assert.Equal(t, params.Applicable, applicableResults, "Expected %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-		assert.Equal(t, params.Undetermined, undeterminedResults, "Expected %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-		assert.Equal(t, params.NotCovered, notCoveredResults, "Expected %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-		assert.Equal(t, params.NotApplicable, notApplicableResults, "Expected %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
-
-		assert.Equal(t, params.SecurityViolations, securityViolations, "Expected %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, securityViolations)
-		assert.Equal(t, params.LicenseViolations, licenseViolations, "Expected %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, licenseViolations)
-		assert.Equal(t, params.OperationalViolations, opRiskViolations, "Expected %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, opRiskViolations)
-		return
-	}
-	assert.GreaterOrEqual(t, vulnerabilities, params.Vulnerabilities, "Expected at least %d vulnerabilities in scan responses, but got %d vulnerabilities.", params.Vulnerabilities, vulnerabilities)
-
-	assert.GreaterOrEqual(t, sast, params.Sast, "Expected at least %d sast in scan responses, but got %d sast.", params.Sast, sast)
-	assert.GreaterOrEqual(t, secrets, params.Secrets, "Expected at least %d secrets in scan responses, but got %d secrets.", params.Secrets, secrets)
-	assert.GreaterOrEqual(t, iac, params.Iac, "Expected at least %d IaC in scan responses, but got %d IaC.", params.Iac, iac)
-
-	assert.GreaterOrEqual(t, applicableResults, params.Applicable, "Expected at least %d applicable vulnerabilities in scan responses, but got %d applicable vulnerabilities.", params.Applicable, applicableResults)
-	assert.GreaterOrEqual(t, undeterminedResults, params.Undetermined, "Expected at least %d undetermined vulnerabilities in scan responses, but got %d undetermined vulnerabilities.", params.Undetermined, undeterminedResults)
-	assert.GreaterOrEqual(t, notCoveredResults, params.NotCovered, "Expected at least %d not covered vulnerabilities in scan responses, but got %d not covered vulnerabilities.", params.NotCovered, notCoveredResults)
-	assert.GreaterOrEqual(t, notApplicableResults, params.NotApplicable, "Expected at least %d not applicable vulnerabilities in scan responses, but got %d not applicable vulnerabilities.", params.NotApplicable, notApplicableResults)
-
-	assert.GreaterOrEqual(t, securityViolations, params.SecurityViolations, "Expected at least %d security violations in scan responses, but got %d security violations.", params.SecurityViolations, securityViolations)
-	assert.GreaterOrEqual(t, licenseViolations, params.LicenseViolations, "Expected at least %d license violations in scan responses, but got %d license violations.", params.LicenseViolations, licenseViolations)
-	assert.GreaterOrEqual(t, securityViolations, params.OperationalViolations, "Expected at least %d operational risk violations in scan responses, but got %d operational risk violations.", params.OperationalViolations, opRiskViolations)
+	ValidateContent(t, params.ExactResultsMatch,
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "summary", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
+		CountValidation[int]{Expected: params.Sast, Actual: sast, Msg: GetValidationCountErrMsg("sast", "summary", params.ExactResultsMatch, params.Sast, sast)},
+		CountValidation[int]{Expected: params.Secrets, Actual: secrets, Msg: GetValidationCountErrMsg("secrets", "summary", params.ExactResultsMatch, params.Secrets, secrets)},
+		CountValidation[int]{Expected: params.Iac, Actual: iac, Msg: GetValidationCountErrMsg("IaC", "summary", params.ExactResultsMatch, params.Iac, iac)},
+		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "summary", params.ExactResultsMatch, params.Applicable, applicableResults)},
+		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "summary", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
+		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "summary", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
+		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "summary", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
+		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "summary", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
+		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "summary", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "summary", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
+		CountValidation[int]{Expected: params.OperationalViolations, Actual: opRiskViolations, Msg: GetValidationCountErrMsg("operational risk violations", "summary", params.ExactResultsMatch, params.OperationalViolations, opRiskViolations)},
+	)
 }

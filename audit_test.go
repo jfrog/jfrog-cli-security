@@ -556,7 +556,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive:5})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: 5})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
@@ -589,7 +589,7 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ Vulnerabilities: 1, NotApplicable: 1})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicable: 1})
 }
 
 func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool) string {
