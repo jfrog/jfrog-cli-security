@@ -51,15 +51,12 @@ func CreateJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDe
 		err = errors.New(NoServerDetailsError)
 		return
 	}
-	if serverDetails.Url == "" {
+	if len(serverDetails.Url) == 0 {
 		log.Warn(NoServerUrlError)
 		return
 	}
 	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
-		return
-	}
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
 		return
 	}
 	var tempDir string
