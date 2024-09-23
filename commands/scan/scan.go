@@ -201,7 +201,7 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
+		if err = utils.RecordSarifOutput(scanResults, utils.GetAllSupportedScans()); err != nil {
 			return
 		}
 		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(

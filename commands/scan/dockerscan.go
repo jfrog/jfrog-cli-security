@@ -106,7 +106,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			}
 		}
 		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
+		if err = utils.RecordSarifOutput(scanResults, utils.GetAllSupportedScans()); err != nil {
 			return
 		}
 		return utils.RecordSecurityCommandSummary(utils.NewDockerScanSummary(

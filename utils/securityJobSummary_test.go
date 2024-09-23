@@ -2,11 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
 	coreUtils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -15,6 +10,10 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
 )
 
 var (
@@ -62,7 +61,7 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 			cleanUp := clientTests.SetEnvWithCallbackAndAssert(t, coreUtils.SummaryOutputDirPathEnv, tempDir)
 			defer cleanUp()
 
-			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled)))
+			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), GetAllSupportedScans()))
 			assert.Equal(t, testCase.isJasEntitled, hasFilesInDir(t, filepath.Join(tempDir, commandsummary.OutputDirName, "security", string(commandsummary.SarifReport))))
 		})
 	}

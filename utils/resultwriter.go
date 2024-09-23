@@ -210,10 +210,11 @@ func printMessage(message string) {
 	log.Output("💬" + message)
 }
 
-func appendRunsIfRequired(requestedScans []SubScanType, subScan SubScanType, scanType CommandType, results *Results, scanResults []*sarif.Run, report *sarif.Report) {
-	if shouldScannerBeCalled(requestedScans, subScan, scanType) {
-		report.Runs = append(report.Runs, patchRunsToPassIngestionRules(subScan, results, scanResults...)...)
+func filterAndPatchRunsIfRequired(requestedScans []SubScanType, subScan SubScanType, scanType CommandType, results *Results, scanResults []*sarif.Run) (filtered []*sarif.Run) {
+	if !shouldScannerBeCalled(requestedScans, subScan, scanType) {
+		return
 	}
+	return patchRunsToPassIngestionRules(subScan, results, scanResults...)
 }
 
 func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLicenses bool, allowedLicenses []string, requestedScans []SubScanType, scanType CommandType) (report *sarif.Report, err error) {
@@ -226,10 +227,10 @@ func GenerateSarifReportFromResults(results *Results, isMultipleRoots, includeLi
 		return
 	}
 
-	appendRunsIfRequired(requestedScans, ScaScan, scanType, results, []*sarif.Run{xrayRun}, report)
-	appendRunsIfRequired(requestedScans, IacScan, scanType, results, results.ExtendedScanResults.IacScanResults, report)
-	appendRunsIfRequired(requestedScans, SecretsScan, scanType, results, results.ExtendedScanResults.SecretsScanResults, report)
-	appendRunsIfRequired(requestedScans, SastScan, scanType, results, results.ExtendedScanResults.SastScanResults, report)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, ScaScan, scanType, results, []*sarif.Run{xrayRun})...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, IacScan, scanType, results, results.ExtendedScanResults.IacScanResults)...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SecretsScan, scanType, results, results.ExtendedScanResults.SecretsScanResults)...)
+	report.Runs = append(report.Runs, filterAndPatchRunsIfRequired(requestedScans, SastScan, scanType, results, results.ExtendedScanResults.SastScanResults)...)
 
 	return
 }
