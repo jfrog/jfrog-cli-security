@@ -459,11 +459,6 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						log.Debug(fmt.Sprintf("Jas scanner was not created for %s, skipping Jas scans", filePath))
 						return nil
 					}
-					if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
-						log.Error(fmt.Sprintf("failed to get analyzer manager executable: %s", err.Error()))
-						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
-						return nil
-					}
 					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, &depsList, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans(), nil, "")
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))

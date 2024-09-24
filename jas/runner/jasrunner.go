@@ -21,6 +21,10 @@ import (
 
 func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, directDependencies *[]string, thirdPartyApplicabilityScan bool, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType,
 	secretsScanType secrets.SecretsScanType, errHandlerFunc func(error), scansToPreform []utils.SubScanType, configProfile *services.ConfigProfile, scansOutputDir string) (err error) {
+	// Set the analyzer manager executable path.
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+		return
+	}
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if scanType == applicability.ApplicabilityScannerType || secretsScanType == secrets.SecretsScannerType {
