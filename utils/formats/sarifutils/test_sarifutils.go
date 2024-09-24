@@ -43,6 +43,7 @@ func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties,
 	if rule == nil {
 		return nil
 	}
+	rule.Properties = map[string]interface{}{}
 	for index := range properties {
 		rule.Properties[properties[index]] = values[index]
 	}

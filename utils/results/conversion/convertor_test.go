@@ -2,12 +2,12 @@ package conversion
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -135,7 +135,7 @@ func validateSimpleJsonConversion(t *testing.T, expectedResults formats.SimpleJs
 		return
 	}
 	validationParams.Actual = actualResults
-
+	
 	validations.ValidateCommandSimpleJsonOutput(t, validationParams)
 }
 
@@ -147,10 +147,6 @@ func validateSarifConversion(t *testing.T, expectedResults *sarif.Report, inputR
 		return
 	}
 	validationParams.Actual = actualResults
-
-	marshAct, err := utils.GetAsJsonString(actualResults, false, true)
-	assert.NoError(t, err)
-	log.Output(marshAct)
 
 	validations.ValidateCommandSarifOutput(t, validationParams)
 }

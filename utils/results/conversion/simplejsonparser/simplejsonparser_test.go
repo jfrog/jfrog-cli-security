@@ -288,7 +288,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -303,7 +303,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -318,7 +318,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId: "XRAY-2",
 					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -393,7 +393,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						},
 					}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -441,7 +441,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-A",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -456,7 +456,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId: "XRAY-1",
 					Cves:    []formats.CveRow{{Id: "CVE-1"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 15},
+						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -471,7 +471,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId: "XRAY-2",
 					Cves:    []formats.CveRow{{Id: "CVE-2"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -486,7 +486,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					LicenseKey: "license-1",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
 						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
 					},
@@ -556,7 +556,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						},
 					}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -571,7 +571,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					LicenseKey: "license-1",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 9},
+						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
 						// Direct
 						Components: []formats.ComponentRow{{
@@ -682,7 +682,7 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 			expectedOutput: []formats.SourceCodeRow{
 				{
 					Location:        formats.Location{File: "file", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "secret-snippet"},
-					SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 11},
+					SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
 				},
 			},
 		},

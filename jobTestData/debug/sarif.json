@@ -243,55 +243,16 @@
           "name": "JFrog Xray Scanner",
           "rules": [
             {
-              "id": "CVE-2024-45490_debian:bookworm:libexpat1_2.5.0-1",
+              "id": "CVE-2024-6119_debian:bookworm:openssl_3.0.13-1~deb12u1",
               "shortDescription": {
-                "text": "[CVE-2024-45490] debian:bookworm:libexpat1 2.5.0-1"
+                "text": "[CVE-2024-6119] debian:bookworm:openssl 3.0.13-1~deb12u1"
               },
               "help": {
-                "text": "An issue was discovered in libexpat before 2.6.3. xmlparse.c does not reject a negative length for XML_ParseBuffer.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Not Applicable       | `sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar `       | No fix available   |"
+                "text": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |"
               },
               "properties": {
-                "security-severity": "9.8"
-              }
-            },
-            {
-              "id": "CVE-2011-3374_debian:bookworm:apt_2.6.1",
-              "shortDescription": {
-                "text": "[CVE-2011-3374] debian:bookworm:apt 2.6.1"
-              },
-              "help": {
-                "text": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.7      | Not Applicable       | `sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar `       | No fix available   |"
-              },
-              "properties": {
-                "security-severity": "3.7"
-              }
-            },
-            {
-              "id": "CVE-2024-38428_debian:bookworm:wget_1.21.3-1+b1",
-              "shortDescription": {
-                "text": "[CVE-2024-38428] debian:bookworm:wget 1.21.3-1+b1"
-              },
-              "help": {
-                "text": "url.c in GNU Wget through 1.24.5 mishandles semicolons in the userinfo subcomponent of a URI, and thus there may be insecure behavior in which data that was supposed to be in the userinfo subcomponent is misinterpreted to be part of the host subcomponent.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.1      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
-              },
-              "properties": {
-                "security-severity": "9.1"
-              }
-            },
-            {
-              "id": "XRAY-264729_cors.js_0.0.1-security",
-              "shortDescription": {
-                "text": "[XRAY-264729] cors.js 0.0.1-security"
-              },
-              "help": {
-                "text": "Malicious package cors.js for Node.js",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Not Covered       | `sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar `       | No fix available   |"
-              },
-              "properties": {
-                "security-severity": "10.0"
+                "security-severity": "0.0"
               }
             },
             {
@@ -321,9 +282,9 @@
               }
             },
             {
-              "id": "CVE-2011-3374_debian:bookworm:libapt-pkg6.0_2.6.1",
+              "id": "CVE-2011-3374_debian:bookworm:apt_2.6.1",
               "shortDescription": {
-                "text": "[CVE-2011-3374] debian:bookworm:libapt-pkg6.0 2.6.1"
+                "text": "[CVE-2011-3374] debian:bookworm:apt 2.6.1"
               },
               "help": {
                 "text": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
@@ -331,19 +292,6 @@
               },
               "properties": {
                 "security-severity": "3.7"
-              }
-            },
-            {
-              "id": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
-              "shortDescription": {
-                "text": "[CVE-2024-4741] debian:bookworm:openssl 3.0.13-1~deb12u1"
-              },
-              "help": {
-                "text": "CVE-2024-4741",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u1]   |"
-              },
-              "properties": {
-                "security-severity": "0.0"
               }
             },
             {
@@ -360,16 +308,42 @@
               }
             },
             {
-              "id": "CVE-2024-6119_debian:bookworm:openssl_3.0.13-1~deb12u1",
+              "id": "XRAY-264729_cors.js_0.0.1-security",
               "shortDescription": {
-                "text": "[CVE-2024-6119] debian:bookworm:openssl 3.0.13-1~deb12u1"
+                "text": "[XRAY-264729] cors.js 0.0.1-security"
               },
               "help": {
-                "text": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
-                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |"
+                "text": "Malicious package cors.js for Node.js",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Not Covered       | `sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar `       | No fix available   |"
               },
               "properties": {
-                "security-severity": "0.0"
+                "security-severity": "10.0"
+              }
+            },
+            {
+              "id": "CVE-2024-45490_debian:bookworm:libexpat1_2.5.0-1",
+              "shortDescription": {
+                "text": "[CVE-2024-45490] debian:bookworm:libexpat1 2.5.0-1"
+              },
+              "help": {
+                "text": "An issue was discovered in libexpat before 2.6.3. xmlparse.c does not reject a negative length for XML_ParseBuffer.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Not Applicable       | `sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "9.8"
+              }
+            },
+            {
+              "id": "CVE-2011-3374_debian:bookworm:libapt-pkg6.0_2.6.1",
+              "shortDescription": {
+                "text": "[CVE-2011-3374] debian:bookworm:libapt-pkg6.0 2.6.1"
+              },
+              "help": {
+                "text": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.7      | Not Applicable       | `sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "3.7"
               }
             },
             {
@@ -383,6 +357,32 @@
               },
               "properties": {
                 "security-severity": "0.0"
+              }
+            },
+            {
+              "id": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
+              "shortDescription": {
+                "text": "[CVE-2024-4741] debian:bookworm:openssl 3.0.13-1~deb12u1"
+              },
+              "help": {
+                "text": "CVE-2024-4741",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u1]   |"
+              },
+              "properties": {
+                "security-severity": "0.0"
+              }
+            },
+            {
+              "id": "CVE-2024-38428_debian:bookworm:wget_1.21.3-1+b1",
+              "shortDescription": {
+                "text": "[CVE-2024-38428] debian:bookworm:wget 1.21.3-1+b1"
+              },
+              "help": {
+                "text": "url.c in GNU Wget through 1.24.5 mishandles semicolons in the userinfo subcomponent of a URI, and thus there may be insecure behavior in which data that was supposed to be in the userinfo subcomponent is misinterpreted to be part of the host subcomponent.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.1      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "9.1"
               }
             }
           ],
@@ -404,7 +404,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-          "ruleIndex": 8,
+          "ruleIndex": 4,
           "level": "none",
           "message": {
             "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
@@ -438,7 +438,7 @@
             "fixedVersion": "[3.0.14-1~deb12u2]"
           },
           "ruleId": "CVE-2024-6119_debian:bookworm:openssl_3.0.13-1~deb12u1",
-          "ruleIndex": 9,
+          "ruleIndex": 0,
           "level": "none",
           "message": {
             "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
@@ -472,7 +472,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2024-38428_debian:bookworm:wget_1.21.3-1+b1",
-          "ruleIndex": 2,
+          "ruleIndex": 10,
           "level": "error",
           "message": {
             "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
@@ -506,7 +506,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "XRAY-264729_cors.js_0.0.1-security",
-          "ruleIndex": 3,
+          "ruleIndex": 5,
           "level": "error",
           "message": {
             "text": "[XRAY-264729] sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar ",
@@ -540,7 +540,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2024-45490_debian:bookworm:libexpat1_2.5.0-1",
-          "ruleIndex": 0,
+          "ruleIndex": 6,
           "level": "error",
           "message": {
             "text": "[CVE-2024-45490] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
@@ -574,7 +574,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2024-45492_debian:bookworm:libexpat1_2.5.0-1",
-          "ruleIndex": 4,
+          "ruleIndex": 1,
           "level": "error",
           "message": {
             "text": "[CVE-2024-45492] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
@@ -608,7 +608,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2023-51767_debian:bookworm:openssh-client:1_9.2p1-2+deb12u3",
-          "ruleIndex": 5,
+          "ruleIndex": 2,
           "level": "note",
           "message": {
             "text": "[CVE-2023-51767] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
@@ -642,7 +642,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2011-3374_debian:bookworm:apt_2.6.1",
-          "ruleIndex": 1,
+          "ruleIndex": 3,
           "level": "note",
           "message": {
             "text": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar ",
@@ -676,7 +676,7 @@
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2011-3374_debian:bookworm:libapt-pkg6.0_2.6.1",
-          "ruleIndex": 6,
+          "ruleIndex": 7,
           "level": "note",
           "message": {
             "text": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar ",
@@ -707,44 +707,10 @@
         {
           "properties": {
             "applicability": "Applicable",
-            "fixedVersion": "[3.0.14-1~deb12u1]"
-          },
-          "ruleId": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
-          "ruleIndex": 7,
-          "level": "none",
-          "message": {
-            "text": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
-            "markdown": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
-                }
-              },
-              "logicalLocations": [
-                {
-                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
-                  "kind": "layer",
-                  "properties": {
-                    "algorithm": "sha256"
-                  }
-                }
-              ]
-            }
-          ],
-          "fingerprints": {
-            "jfrogFingerprintHash": "a374e04992f42ee827634927edd7e8d4"
-          }
-        },
-        {
-          "properties": {
-            "applicability": "Applicable",
             "fixedVersion": "No fix available"
           },
           "ruleId": "CVE-2024-4741_debian:bookworm:libssl3_3.0.13-1~deb12u1",
-          "ruleIndex": 10,
+          "ruleIndex": 8,
           "level": "none",
           "message": {
             "text": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
@@ -770,6 +736,40 @@
           ],
           "fingerprints": {
             "jfrogFingerprintHash": "2c34553d9c75460bf14243ff13ba84c8"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "[3.0.14-1~deb12u1]"
+          },
+          "ruleId": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
+          "ruleIndex": 9,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "a374e04992f42ee827634927edd7e8d4"
           }
         }
       ]
