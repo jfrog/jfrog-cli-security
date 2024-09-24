@@ -145,7 +145,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(utils.Build, xrayVersion, false)
+	cmdResults := results.NewCommandResults(utils.Build, xrayVersion, false, false)
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
 	scanResults.NewScaScanResults(services.ScanResponse{
 		Violations:      buildScanResults.Violations,

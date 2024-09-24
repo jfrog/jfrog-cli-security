@@ -169,7 +169,7 @@ func TestDetectScansToPreform(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			results := results.NewCommandResults(utils.SourceCode, "", true)
+			results := results.NewCommandResults(utils.SourceCode, "", true, true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				for i := range results.Targets {

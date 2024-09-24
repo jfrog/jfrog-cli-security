@@ -156,7 +156,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	log.Info("JFrog Xray version is:", xrayVersion)
 
-	scanResults := results.NewCommandResults(utils.SBOM, xrayVersion, false)
+	scanResults := results.NewCommandResults(utils.SBOM, xrayVersion, false, false)
 
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)

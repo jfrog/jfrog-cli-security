@@ -28,17 +28,17 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanner := &jas.JasScanner{}
-	_, err = jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars(""))
+	_, err = jas.CreateJasScanner(scanner, &jas.FakeServerDetails, false, jas.GetAnalyzerManagerXscEnvVars(""))
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 }
 
 func TestGetExtendedScanResults_ServerNotValid(t *testing.T) {
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
-	targetResults := results.NewCommandResults(utils.SourceCode, "", true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
+	targetResults := results.NewCommandResults(utils.SourceCode, "", true, true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
 
 	scanner := &jas.JasScanner{}
-	jasScanner, err := jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", scanResults.GetScaScannedTechnologies()...))
+	jasScanner, err := jas.CreateJasScanner(scanner, &jas.FakeServerDetails, true, jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	assert.NoError(t, err)
 
 	targetResults.NewScaScanResults(jas.FakeBasicXrayResults[0])
@@ -62,7 +62,7 @@ func TestGetExtendedScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner := &jas.JasScanner{}
-	scanner, _ = jas.CreateJasScanner(scanner, nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars(""))
+	scanner, _ = jas.CreateJasScanner(scanner, &jas.FakeServerDetails, false, jas.GetAnalyzerManagerXscEnvVars(""))
 	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
 		scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 
