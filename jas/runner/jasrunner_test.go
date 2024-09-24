@@ -27,6 +27,9 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanner, err := jas.CreateJasScanner(nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", false))
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+		return
+	}
 	assert.Error(t, err)
 	assert.NotNil(t, scanner)
 	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
