@@ -27,6 +27,7 @@ func TestGetExtendedScanResults_AnalyzerManagerDoesntExist(t *testing.T) {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
 	scanner, err := jas.CreateJasScanner(nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", false))
+	assert.NoError(t, err)
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
 		return
 	}
