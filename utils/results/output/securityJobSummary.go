@@ -184,7 +184,7 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	return manager.Record(content)
 }
 
-func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulnerabilities, hasViolationContext bool) (err error) {
+func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulnerabilities, hasViolationContext bool, requestedScans ...utils.SubScanType) (err error) {
 	// Verify if we should record the results
 	manager, err := getRecordManager()
 	if err != nil || manager == nil {
@@ -203,6 +203,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulner
 	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeVulnerabilities: includeVulnerabilities,
 		HasViolationContext:    hasViolationContext,
+		RequestedScans:         requestedScans,
 		Pretty:                 true,
 	}).ConvertToSarif(cmdResults)
 	if err != nil {

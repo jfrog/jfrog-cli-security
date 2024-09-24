@@ -6,15 +6,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"golang.org/x/exp/slices"
+
+	"time"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"time"
 )
 
 const (
@@ -74,6 +77,14 @@ func (s CommandType) IsTargetBinary() bool {
 
 func GetAllSupportedScans() []SubScanType {
 	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
+}
+
+// IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
+func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ...SubScanType) bool {
+	if cmdType.IsTargetBinary() && (subScan == IacScan || subScan == SastScan) {
+		return false
+	}
+	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
 
 func IsCI() bool {

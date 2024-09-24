@@ -27,6 +27,8 @@ type ResultConvertParams struct {
 	IncludeLicenses bool
 	// Control and override converting command results as multi target results, if nil will be determined by the results.HasMultipleTargets()
 	IsMultipleRoots *bool
+	// The requested scans to be included in the results, if empty all scans will be included
+	RequestedScans []utils.SubScanType
 	// Create local license violations if repo context was not provided and a license is not in this list
 	AllowedLicenses []string
 	// Output will contain only the unique violations determined by the GetUniqueKey function (SimpleJson only)
@@ -90,7 +92,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
-		if targetScansResults.ScaResults != nil {
+		if utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.RequestedScans...) && targetScansResults.ScaResults != nil {
 			if err = parseScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
 				return
 			}
@@ -98,14 +100,20 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if !jasEntitled || targetScansResults.JasResults == nil {
 			continue
 		}
-		if err = parser.ParseSecrets(targetScansResults.ScanTarget, targetScansResults.JasResults.SecretsScanResults...); err != nil {
-			return
+		if utils.IsScanRequested(cmdResults.CmdType, utils.SecretsScan, params.RequestedScans...) {
+			if err = parser.ParseSecrets(targetScansResults.ScanTarget, targetScansResults.JasResults.SecretsScanResults...); err != nil {
+				return
+			}
 		}
-		if err = parser.ParseIacs(targetScansResults.ScanTarget, targetScansResults.JasResults.IacScanResults...); err != nil {
-			return
+		if utils.IsScanRequested(cmdResults.CmdType, utils.IacScan, params.RequestedScans...) {
+			if err = parser.ParseIacs(targetScansResults.ScanTarget, targetScansResults.JasResults.IacScanResults...); err != nil {
+				return
+			}
 		}
-		if err = parser.ParseSast(targetScansResults.ScanTarget, targetScansResults.JasResults.SastScanResults...); err != nil {
-			return
+		if utils.IsScanRequested(cmdResults.CmdType, utils.SastScan, params.RequestedScans...) {
+			if err = parser.ParseSast(targetScansResults.ScanTarget, targetScansResults.JasResults.SastScanResults...); err != nil {
+				return
+			}
 		}
 	}
 	return parser.Get()

@@ -3,7 +3,6 @@ package output
 import (
 	"fmt"
 	"os"
-	"slices"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -100,13 +99,6 @@ func isPrettyOutputSupported() bool {
 	return log.IsStdOutTerminal() && log.IsColorsSupported() || os.Getenv("GITLAB_CI") != ""
 }
 
-func shouldPrintTable(requestedScans []utils.SubScanType, subScan utils.SubScanType, cmdType utils.CommandType) bool {
-	if cmdType.IsTargetBinary() && (subScan == utils.IacScan || subScan == utils.SastScan) {
-		return false
-	}
-	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
-}
-
 // PrintScanResults prints the scan results in the specified format.
 // Note that errors are printed only with SimpleJson format.
 func (rw *ResultsWriter) PrintScanResults() error {
@@ -145,6 +137,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		IncludeLicenses:        rw.includeLicenses,
 		IncludeVulnerabilities: rw.includeVulnerabilities,
 		HasViolationContext:    rw.hasViolationContext,
+		RequestedScans:         rw.subScansPreformed,
 		Pretty:                 pretty,
 	})
 }
@@ -205,7 +198,7 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printOrSaveRawResults(true); err != nil {
 		return
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.ScaScan, rw.commandResults.CmdType) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPreformed...) {
 		if rw.hasViolationContext {
 			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 				return
@@ -222,17 +215,17 @@ func (rw *ResultsWriter) printTables() (err error) {
 			}
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.SecretsScan, rw.commandResults.CmdType) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPreformed...) {
 		if err = PrintSecretsTable(tableContent, rw.commandResults.EntitledForJas, rw.commandResults.SecretValidation); err != nil {
 			return
 		}
 	}
-	if shouldPrintTable(rw.subScansPreformed, utils.IacScan, rw.commandResults.CmdType) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.IacScan, rw.subScansPreformed...) {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
 			return
 		}
 	}
-	if !shouldPrintTable(rw.subScansPreformed, utils.SastScan, rw.commandResults.CmdType) {
+	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.SastScan, rw.subScansPreformed...) {
 		return nil
 	}
 	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
