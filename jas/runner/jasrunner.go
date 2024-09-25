@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/iac"
@@ -20,11 +19,10 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, directDependencies *[]string,
-	serverDetails *config.ServerDetails, thirdPartyApplicabilityScan bool, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType,
+func AddJasScannersTasks(securityParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results, directDependencies *[]string, thirdPartyApplicabilityScan bool, scanner *jas.JasScanner, scanType applicability.ApplicabilityScanType,
 	secretsScanType secrets.SecretsScanType, errHandlerFunc func(error), scansToPreform []utils.SubScanType, configProfile *services.ConfigProfile, scansOutputDir string) (err error) {
-	if serverDetails == nil || len(serverDetails.Url) == 0 {
-		log.Warn("To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)")
+	// Set the analyzer manager executable path.
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
 		return
 	}
 	// For docker scan we support only secrets and contextual scans.

@@ -31,6 +31,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	NoServerUrlError     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
+	NoServerDetailsError = "Jfrog Server details are missing"
+)
+
 type JasScanner struct {
 	TempDir               string
 	AnalyzerManager       AnalyzerManager
@@ -41,17 +46,22 @@ type JasScanner struct {
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
-	var err error
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
-		return scanner, err
+func CreateJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+	if serverDetails == nil {
+		err = errors.New(NoServerDetailsError)
+		return
 	}
+	if len(serverDetails.Url) == 0 {
+		log.Warn(NoServerUrlError)
+		return
+	}
+	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
-		return scanner, err
+		return
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return scanner, err
+		return
 	}
 	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
@@ -60,7 +70,7 @@ func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFro
 	scanner.ServerDetails = serverDetails
 	scanner.JFrogAppsConfig = jfrogAppsConfig
 	scanner.Exclusions = exclusions
-	return scanner, err
+	return
 }
 
 func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
@@ -215,8 +225,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
-	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
+	scanner, err := CreateJasScanner(jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
