@@ -6,10 +6,12 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -116,4 +118,49 @@ func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, 
 	installRequired, err := isInstallRequired(tempDirPath, []string{}, false)
 	assert.NoError(t, err)
 	assert.False(t, installRequired)
+}
+
+// This test checks that the tree construction is skipped when the project is not installed and the user prohibited installation
+func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
+	testCases := []struct {
+		name    string
+		testDir string
+	}{
+		{
+			name:    "yarn V1",
+			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v1"),
+		},
+		{
+			name:    "yarn V2",
+			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v2"),
+		},
+		{
+			name:    "yarn V3",
+			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v3"),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			// Create and change directory to test workspace
+			dirPath, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			defer cleanUp()
+
+			expectedLockFilePath := filepath.Join(dirPath, "yarn.lock")
+			exists, err := fileutils.IsFileExists(expectedLockFilePath, false)
+			assert.NoError(t, err)
+
+			if exists {
+				err = os.Remove(filepath.Join(dirPath, "yarn.lock"))
+				assert.NoError(t, err)
+			}
+
+			params := (&utils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+			assert.Nil(t, dependencyTrees)
+			assert.Nil(t, uniqueDeps)
+			assert.Error(t, err)
+			assert.IsType(t, &biutils.ErrInstallForbidden{}, err)
+		})
+	}
 }
