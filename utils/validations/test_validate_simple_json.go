@@ -66,9 +66,10 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 			}
 		}
 	}
+	vulnerabilitiesCount := len(results.Vulnerabilities) + len(results.Secrets) + len(results.Sast) + len(results.Iacs)
 
 	ValidateContent(t, params.ExactResultsMatch,
-		CountValidation[int]{Expected: params.Vulnerabilities, Actual: len(results.Vulnerabilities), Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, len(results.Vulnerabilities))},
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilitiesCount, Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilitiesCount)},
 		CountValidation[int]{Expected: params.Sast, Actual: len(results.Sast), Msg: GetValidationCountErrMsg("sast", "simple-json", params.ExactResultsMatch, params.Sast, len(results.Sast))},
 		CountValidation[int]{Expected: params.Iac, Actual: len(results.Iacs), Msg: GetValidationCountErrMsg("IaC", "simple-json", params.ExactResultsMatch, params.Iac, len(results.Iacs))},
 		CountValidation[int]{Expected: params.Secrets, Actual: len(results.Secrets), Msg: GetValidationCountErrMsg("secrets", "simple-json", params.ExactResultsMatch, params.Secrets, len(results.Secrets))},

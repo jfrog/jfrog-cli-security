@@ -47,6 +47,7 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, IacToolName)...)
 	vulnerabilities += iac
 	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SecretsToolName)...)
+	secrets += sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, sarifparser.BinarySecretScannerToolName)...)
 	vulnerabilities += secrets
 	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SastToolName)...)
 	vulnerabilities += sast

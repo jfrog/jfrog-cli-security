@@ -404,7 +404,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			expectedResults: []*sarif.Run{
 				{
 					Tool: sarif.Tool{
-						Driver: sarifutils.CreateDummyDriver(binarySecretScannerToolName, &sarif.ReportingDescriptor{
+						Driver: sarifutils.CreateDummyDriver(BinarySecretScannerToolName, &sarif.ReportingDescriptor{
 							ID:               "rule",
 							ShortDescription: sarif.NewMultiformatMessageString("[Secret in Binary found] "),
 						}),

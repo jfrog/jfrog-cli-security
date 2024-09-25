@@ -2,7 +2,6 @@ package conversion
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -47,12 +46,20 @@ func getAuditValidationParams() validations.ValidationParams {
 func getDockerScanValidationParams(unique bool) validations.ValidationParams {
 	params := validations.ValidationParams{
 		ExactResultsMatch: true,
-		Vulnerabilities:   11,
-		Applicable:        3,
-		NotApplicable:     3,
-		NotCovered:        1,
-		Undetermined:      1,
 		Secrets:           3,
+	}
+	if unique {
+		params.Vulnerabilities = 11
+		params.Applicable = 3
+		params.NotApplicable = 3
+		params.NotCovered = 1
+		params.Undetermined = 1
+	} else {
+		params.Vulnerabilities = 14
+		params.Applicable = 5
+		params.NotApplicable = 4
+		params.NotCovered = 1
+		params.Undetermined = 1
 	}
 	return params
 }
@@ -135,7 +142,7 @@ func validateSimpleJsonConversion(t *testing.T, expectedResults formats.SimpleJs
 		return
 	}
 	validationParams.Actual = actualResults
-	
+
 	validations.ValidateCommandSimpleJsonOutput(t, validationParams)
 }
 

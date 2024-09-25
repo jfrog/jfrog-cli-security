@@ -34,7 +34,7 @@ const (
 	maxPossibleCve                = 10.0
 
 	// #nosec G101 -- Not credentials.
-	binarySecretScannerToolName = "JFrog Binary Secrets Scanner"
+	BinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
 	ScaScannerToolName          = "JFrog Xray Scanner"
 )
 
@@ -424,7 +424,7 @@ func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.
 		patched := sarifutils.CopyRunMetadata(run)
 		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the tool name in case of binary scan
-			sarifutils.SetRunToolName(binarySecretScannerToolName, patched)
+			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
 		}
 		if patched.Tool.Driver != nil {
 			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, run.Tool.Driver.Rules...)
