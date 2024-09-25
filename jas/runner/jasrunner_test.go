@@ -26,7 +26,7 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
-	scanner, err := jas.CreateJasScanner(nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", false))
+	scanner, err := jas.CreateJasScanner(nil, &jas.FakeServerDetails, "", jas.GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
 		return
@@ -42,7 +42,7 @@ func TestJasRunner(t *testing.T) {
 
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig(nil)
 	assert.NoError(t, err)
-	jasScanner, err := jas.CreateJasScanner(jfrogAppsConfigForTest, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", false, scanResults.GetScaScannedTechnologies()...))
+	jasScanner, err := jas.CreateJasScanner(jfrogAppsConfigForTest, &jas.FakeServerDetails, "", jas.GetAnalyzerManagerXscEnvVars("", false, scanResults.GetScaScannedTechnologies()...))
 	assert.NoError(t, err)
 	err = AddJasScannersTasks(securityParallelRunnerForTest, scanResults, &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}, false, jasScanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, securityParallelRunnerForTest.AddErrorToChan, utils.GetAllSupportedScans(), nil, "")
 	assert.NoError(t, err)
@@ -52,7 +52,7 @@ func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
-	scanner, _ := jas.CreateJasScanner(nil, &jas.FakeServerDetails, jas.GetAnalyzerManagerXscEnvVars("", false))
+	scanner, _ := jas.CreateJasScanner(nil, &jas.FakeServerDetails, "", jas.GetAnalyzerManagerXscEnvVars("", false))
 	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
 		scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 	// Expect error:
