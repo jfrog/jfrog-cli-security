@@ -2,6 +2,8 @@ package npm
 
 import (
 	"encoding/json"
+	utils2 "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,4 +123,22 @@ func TestIgnoreScripts(t *testing.T) {
 	params := &utils.AuditBasicParams{}
 	_, _, err := BuildDependencyTree(params)
 	assert.NoError(t, err)
+}
+
+// This test checks that the tree construction is skipped when the project is not installed and the user prohibited installation
+func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
+	// Create and change directory to test workspace
+	dirPath, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
+	defer cleanUp()
+
+	exists, err := fileutils.IsFileExists(filepath.Join(dirPath, "package-lock.json"), false)
+	assert.NoError(t, err)
+	assert.False(t, exists)
+
+	params := (&utils.AuditBasicParams{}).SetSkipAutoInstall(true)
+	dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+	assert.Nil(t, dependencyTrees)
+	assert.Nil(t, uniqueDeps)
+	assert.Error(t, err)
+	assert.IsType(t, &utils2.ErrInstallForbidden{}, err)
 }
