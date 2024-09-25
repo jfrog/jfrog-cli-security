@@ -1,9 +1,10 @@
 package yarn
 
 import (
+	"errors"
 	"github.com/jfrog/build-info-go/build"
-	biutils "github.com/jfrog/build-info-go/build/utils"
-	utils2 "github.com/jfrog/build-info-go/utils"
+	bibuildutils "github.com/jfrog/build-info-go/build/utils"
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -14,12 +15,12 @@ import (
 )
 
 func TestParseYarnDependenciesList(t *testing.T) {
-	yarnDependencies := map[string]*biutils.YarnDependency{
-		"pack1@npm:1.0.0":        {Value: "pack1@npm:1.0.0", Details: biutils.YarnDepDetails{Version: "1.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}}}},
-		"pack2@npm:2.0.0":        {Value: "pack2@npm:2.0.0", Details: biutils.YarnDepDetails{Version: "2.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}, {Locator: "pack5@npm:5.0.0"}}}},
-		"@jfrog/pack3@npm:3.0.0": {Value: "@jfrog/pack3@npm:3.0.0", Details: biutils.YarnDepDetails{Version: "3.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack1@virtual:c192f6b3b32cd5d11a443144e162ec3bc#npm:1.0.0"}, {Locator: "pack2@npm:2.0.0"}}}},
-		"pack4@npm:4.0.0":        {Value: "pack4@npm:4.0.0", Details: biutils.YarnDepDetails{Version: "4.0.0"}},
-		"pack5@npm:5.0.0":        {Value: "pack5@npm:5.0.0", Details: biutils.YarnDepDetails{Version: "5.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack2@npm:2.0.0"}}}},
+	yarnDependencies := map[string]*bibuildutils.YarnDependency{
+		"pack1@npm:1.0.0":        {Value: "pack1@npm:1.0.0", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}}}},
+		"pack2@npm:2.0.0":        {Value: "pack2@npm:2.0.0", Details: bibuildutils.YarnDepDetails{Version: "2.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}, {Locator: "pack5@npm:5.0.0"}}}},
+		"@jfrog/pack3@npm:3.0.0": {Value: "@jfrog/pack3@npm:3.0.0", Details: bibuildutils.YarnDepDetails{Version: "3.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack1@virtual:c192f6b3b32cd5d11a443144e162ec3bc#npm:1.0.0"}, {Locator: "pack2@npm:2.0.0"}}}},
+		"pack4@npm:4.0.0":        {Value: "pack4@npm:4.0.0", Details: bibuildutils.YarnDepDetails{Version: "4.0.0"}},
+		"pack5@npm:5.0.0":        {Value: "pack5@npm:5.0.0", Details: bibuildutils.YarnDepDetails{Version: "5.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack2@npm:2.0.0"}}}},
 	}
 
 	rootXrayId := utils.NpmPackageTypeIdentifier + "@jfrog/pack3:3.0.0"
@@ -57,8 +58,8 @@ func TestIsInstallRequired(t *testing.T) {
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
-	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
-	installRequired, err := isInstallRequired(tempDirPath, []string{})
+	assert.NoError(t, biutils.CopyDir(yarnProjectPath, tempDirPath, true, nil))
+	installRequired, err := isInstallRequired(tempDirPath, []string{}, false)
 	assert.NoError(t, err)
 	assert.True(t, installRequired)
 
@@ -66,17 +67,24 @@ func TestIsInstallRequired(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, isTempDirEmpty)
 
-	executablePath, err := biutils.GetYarnExecutable()
+	executablePath, err := bibuildutils.GetYarnExecutable()
 	assert.NoError(t, err)
 
 	// We provide a user defined 'install' command and expect to get 'true' as an answer
-	installRequired, err = isInstallRequired(tempDirPath, []string{"yarn", "install"})
+	installRequired, err = isInstallRequired(tempDirPath, []string{"yarn", "install"}, false)
 	assert.NoError(t, err)
 	assert.True(t, installRequired)
 
+	// We specifically state that we should skip install even if the project is not installed
+	installRequired, err = isInstallRequired(tempDirPath, []string{}, true)
+	assert.False(t, installRequired)
+	assert.Error(t, err)
+	var installForbiddenErr *biutils.ErrInstallForbidden
+	assert.True(t, errors.As(err, &installForbiddenErr))
+
 	// We install the project so yarn.lock will be created and expect to get 'false' as an answer
 	assert.NoError(t, build.RunYarnCommand(executablePath, tempDirPath, "install"))
-	installRequired, err = isInstallRequired(tempDirPath, []string{})
+	installRequired, err = isInstallRequired(tempDirPath, []string{}, false)
 	assert.NoError(t, err)
 	assert.False(t, installRequired)
 }
@@ -92,20 +100,20 @@ func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, 
 	tempDirPath, createTempDirCallback := tests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	yarnProjectPath := filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "yarn", "yarn-project")
-	assert.NoError(t, utils2.CopyDir(yarnProjectPath, tempDirPath, true, nil))
+	assert.NoError(t, biutils.CopyDir(yarnProjectPath, tempDirPath, true, nil))
 
 	isTempDirEmpty, err := fileutils.IsDirEmpty(tempDirPath)
 	assert.NoError(t, err)
 	assert.False(t, isTempDirEmpty)
 
-	executablePath, err := biutils.GetYarnExecutable()
+	executablePath, err := bibuildutils.GetYarnExecutable()
 	assert.NoError(t, err)
 
 	err = runYarnInstallAccordingToVersion(tempDirPath, executablePath, params)
 	assert.NoError(t, err)
 
 	// Checking the installation worked - we expect to get a 'false' answer when checking whether the project is installed
-	installRequired, err := isInstallRequired(tempDirPath, []string{})
+	installRequired, err := isInstallRequired(tempDirPath, []string{}, false)
 	assert.NoError(t, err)
 	assert.False(t, installRequired)
 }
