@@ -93,7 +93,7 @@ func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual f
 	ValidateContent(t, false, NumberValidation[int]{Expected: len(expected.Errors), Actual: len(actual.Errors), Msg: "Errors count mismatch"})
 	// Validate vulnerabilities
 	for _, expectedVulnerability := range expected.Vulnerabilities {
-		vulnerability := getVulnerabilityOrViolationByIssueId(expectedVulnerability.IssueId, actual.Vulnerabilities)
+		vulnerability := getVulnerabilityOrViolationByIssueId(expectedVulnerability.IssueId, expectedVulnerability.ImpactedDependencyName, expectedVulnerability.ImpactedDependencyVersion, actual.Vulnerabilities)
 		if !assert.NotNil(t, vulnerability, fmt.Sprintf("IssueId %s not found in the vulnerabilities", expectedVulnerability.IssueId)) {
 			return
 		}
@@ -101,7 +101,7 @@ func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual f
 	}
 	// Validate securityViolations
 	for _, expectedViolation := range expected.SecurityViolations {
-		violation := getVulnerabilityOrViolationByIssueId(expectedViolation.IssueId, actual.SecurityViolations)
+		violation := getVulnerabilityOrViolationByIssueId(expectedViolation.IssueId, expectedViolation.ImpactedDependencyName, expectedViolation.ImpactedDependencyVersion, actual.SecurityViolations)
 		if !assert.NotNil(t, violation, fmt.Sprintf("IssueId %s not found in the securityViolations", expectedViolation.IssueId)) {
 			return
 		}
@@ -109,9 +109,9 @@ func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual f
 	}
 }
 
-func getVulnerabilityOrViolationByIssueId(issueId string, content []formats.VulnerabilityOrViolationRow) *formats.VulnerabilityOrViolationRow {
+func getVulnerabilityOrViolationByIssueId(issueId, impactedDependencyName, impactedDependencyVersion string, content []formats.VulnerabilityOrViolationRow) *formats.VulnerabilityOrViolationRow {
 	for _, result := range content {
-		if result.IssueId == issueId {
+		if result.IssueId == issueId && result.ImpactedDependencyName == impactedDependencyName && result.ImpactedDependencyVersion == impactedDependencyVersion {
 			return &result
 		}
 	}
@@ -126,8 +126,6 @@ func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected
 		StringValidation{Expected: expected.Technology.String(), Actual: actual.Technology.String(), Msg: fmt.Sprintf("IssueId %s: Technology mismatch", expected.IssueId)},
 		ListValidation[string]{Expected: expected.References, Actual: actual.References, Msg: fmt.Sprintf("IssueId %s: References mismatch", expected.IssueId)},
 
-		StringValidation{Expected: expected.ImpactedDependencyName, Actual: actual.ImpactedDependencyName, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyName mismatch", expected.IssueId)},
-		StringValidation{Expected: expected.ImpactedDependencyVersion, Actual: actual.ImpactedDependencyVersion, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyVersion mismatch", expected.IssueId)},
 		StringValidation{Expected: expected.ImpactedDependencyType, Actual: actual.ImpactedDependencyType, Msg: fmt.Sprintf("IssueId %s: ImpactedDependencyType mismatch", expected.IssueId)},
 
 		ListValidation[string]{Expected: expected.FixedVersions, Actual: actual.FixedVersions, Msg: fmt.Sprintf("IssueId %s: FixedVersions mismatch", expected.IssueId)},
@@ -142,15 +140,44 @@ func validateVulnerabilityOrViolationRow(t *testing.T, exactMatch bool, expected
 	}
 	validateComponentRows(t, expected.IssueId, exactMatch, expected.Components, actual.Components)
 	validateCveRows(t, expected.IssueId, exactMatch, expected.Cves, actual.Cves)
-	if exactMatch {
-		assert.ElementsMatch(t, expected.ImpactPaths, actual.ImpactPaths, fmt.Sprintf("IssueId %s: ImpactPaths mismatch", expected.IssueId))
-	} else {
-		assert.Len(t, actual.ImpactPaths, len(expected.ImpactPaths), fmt.Sprintf("IssueId %s: ImpactPaths count mismatch", expected.IssueId))
+	validateImpactPaths(t, expected.IssueId, exactMatch, expected.ImpactPaths, actual.ImpactPaths)
+}
+
+func validateImpactPaths(t *testing.T, issueId string, exactMatch bool, expected, actual [][]formats.ComponentRow) {
+	assert.Len(t, actual, len(expected), fmt.Sprintf("IssueId %s: ImpactPaths count mismatch", issueId))
+	if !exactMatch {
+		return
+	}
+	for _, expectedPath := range expected {
+		impactPath := getImpactPath(expectedPath, actual)
+		if !assert.NotNil(t, impactPath, fmt.Sprintf("IssueId %s: expected ImpactPath not found in the impactPaths", issueId)) {
+			return
+		}
 	}
 }
 
+func getImpactPath(path []formats.ComponentRow, content [][]formats.ComponentRow) *[]formats.ComponentRow {
+	for _, result := range content {
+		if len(result) != len(path) {
+			continue
+		}
+		found := true
+		for i, component := range result {
+			if component.Name != path[i].Name || component.Version != path[i].Version {
+				found = false
+				break
+			}
+		}
+		if found {
+			return &result
+		}
+	}
+	return nil
+}
+
 func validateComponentRows(t *testing.T, issueId string, exactMatch bool, expected, actual []formats.ComponentRow) {
-	if exactMatch && !assert.Len(t, actual, len(expected), fmt.Sprintf("IssueId %s: Components count mismatch", issueId)) {
+	assert.Len(t, actual, len(expected), fmt.Sprintf("IssueId %s: Components count mismatch", issueId))
+	if !exactMatch {
 		return
 	}
 	for _, expectedComponent := range expected {
@@ -181,7 +208,8 @@ func getComponent(name, version string, content []formats.ComponentRow) *formats
 }
 
 func validateCveRows(t *testing.T, issueId string, exactMatch bool, expected, actual []formats.CveRow) {
-	if exactMatch && !assert.Len(t, actual, len(expected), fmt.Sprintf("IssueId %s: CVEs count mismatch", issueId)) {
+	assert.Len(t, actual, len(expected), fmt.Sprintf("IssueId %s: CVEs count mismatch", issueId))
+	if !exactMatch {
 		return
 	}
 	for _, expectedCve := range expected {
