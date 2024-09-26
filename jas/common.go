@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	NoServerUrlError     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
+	NoServerUrlWarn     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
 	NoServerDetailsError = "jfrog Server details are missing"
 )
 
@@ -54,7 +54,7 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 		if len(serverDetails.XrayUrl) != 0 {
 			log.Debug("Xray URL provided without platform URL")
 		}
-		log.Warn(NoServerUrlError)
+		log.Warn(NoServerUrlWarn)
 		return
 	}
 	scanner = &JasScanner{}
