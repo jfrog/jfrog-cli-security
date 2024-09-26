@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	NoServerUrlWarn     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
+	NoServerUrlWarn      = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
 	NoServerDetailsError = "jfrog Server details are missing"
 )
 
@@ -43,9 +43,10 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
 	Exclusions            []string
+	MinSeverity           severityutils.Severity
 }
 
-func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, minSeverity severityutils.Severity, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
 	if serverDetails == nil {
 		err = errors.New(NoServerDetailsError)
 		return
@@ -71,6 +72,7 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 	}
 	scanner.ServerDetails = serverDetails
 	scanner.Exclusions = exclusions
+	scanner.MinSeverity = minSeverity
 	return
 }
 
@@ -123,7 +125,7 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
-func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
+func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
@@ -138,6 +140,7 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
+		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
 		addScoreToRunRules(sarifRun)
 	}
 	return
@@ -169,6 +172,26 @@ func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
 			continue
 		}
 		results = append(results, sarifResult)
+	}
+	return results
+}
+
+func excludeMinSeverityResults(sarifResults []*sarif.Result, minSeverity severityutils.Severity) []*sarif.Result {
+	if minSeverity == "" {
+		// No minimum severity to exclude
+		return sarifResults
+	}
+	results := []*sarif.Result{}
+	for _, sarifResult := range sarifResults {
+		resultSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+			resultSeverity = severityutils.Unknown
+		}
+		// Exclude results with severity lower than the minimum severity
+		if severityutils.GetSeverityPriority(resultSeverity, jasutils.ApplicabilityUndetermined) >= severityutils.GetSeverityPriority(minSeverity, jasutils.ApplicabilityUndetermined) {
+			results = append(results, sarifResult)
+		}
 	}
 	return results
 }
@@ -226,7 +249,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	scanner := &JasScanner{}
-	scanner, err := CreateJasScanner(&FakeServerDetails, false, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())

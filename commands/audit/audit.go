@@ -258,7 +258,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	jasScanner, err = jas.CreateJasScanner(serverDetails, scanResults.SecretValidation, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
+	jasScanner, err = jas.CreateJasScanner(serverDetails, scanResults.SecretValidation, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		err = fmt.Errorf("failed to create jas scanner: %s", err.Error())

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -219,6 +220,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
 		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+	case techutils.Conan:
+		depTreeResult.FullDepTrees, uniqueDeps, err = conan.BuildDependencyTree(params)
 	case techutils.Yarn:
 		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:

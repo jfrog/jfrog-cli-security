@@ -445,7 +445,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return
 				}
 				// Run Jas scans
-				scanner, err := getJasScanner(cmdResults.MultiScanId, scanCmd.serverDetails, targetResults, cmdResults.SecretValidation)
+				scanner, err := getJasScanner(cmdResults.MultiScanId, scanCmd.serverDetails, targetResults, cmdResults.SecretValidation, scanCmd.minSeverityFilter)
 				if err != nil {
 					return err
 				}
@@ -480,8 +480,8 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 	}
 }
 
-func getJasScanner(multiScanId string, serverDetails *config.ServerDetails, targetResults *results.TargetResults, secretValidation bool) (*jas.JasScanner, error) {
-	scanner, err := jas.CreateJasScanner(serverDetails, secretValidation, jas.GetAnalyzerManagerXscEnvVars(multiScanId, targetResults.GetTechnologies()...))
+func getJasScanner(multiScanId string, serverDetails *config.ServerDetails, targetResults *results.TargetResults, secretValidation bool, minSeverity severityutils.Severity) (*jas.JasScanner, error) {
+	scanner, err := jas.CreateJasScanner(serverDetails, secretValidation, minSeverity, jas.GetAnalyzerManagerXscEnvVars(multiScanId, targetResults.GetTechnologies()...))
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 		targetResults.AddError(err)

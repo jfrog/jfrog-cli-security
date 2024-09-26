@@ -74,7 +74,7 @@ func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix)
+	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
