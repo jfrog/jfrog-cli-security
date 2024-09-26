@@ -67,7 +67,7 @@ func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix)
+	workingDirResults, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
