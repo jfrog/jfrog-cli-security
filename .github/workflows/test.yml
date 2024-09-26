@@ -1,10 +1,6 @@
 name: JFrog CLI Security Tests
 on:
   push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '**'
   # Triggers the workflow on labeled PRs only.
   pull_request_target:
     types: [ labeled ]
@@ -26,11 +22,14 @@ jobs:
       CI: true
       JFROG_CLI_LOG_LEVEL: DEBUG
     steps:
-      # Install dependencies
-      - name: Install Go
-        uses: actions/setup-go@v3
+      # Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
         with:
-          go-version: 1.22.x
+          ref: ${{ github.event.pull_request.head.sha }}
+      # Install dependencies
+      - name: Setup Go with cache
+        uses: jfrog/.github/actions/install-go-with-cache@main
       - name: Install npm
         uses: actions/setup-node@v3
         with:
@@ -68,11 +67,6 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           gradle-version: 7.6
-      # Checkout code
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       # Test
       - name: Run security tests (without Docker Scan)
         run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray

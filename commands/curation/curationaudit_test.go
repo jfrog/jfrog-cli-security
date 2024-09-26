@@ -412,7 +412,7 @@ func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvInTempDir(t, tt.pathToTest)
+			configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, tt.pathToTest)
 			defer cleanUp()
 			// Set configuration for test
 			currentDir, err := os.Getwd()
