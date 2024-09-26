@@ -123,7 +123,7 @@ func GetAnalyzerManagerExecutable() (analyzerManagerPath string, err error) {
 		return
 	}
 	if !exists {
-		err = errors.New("unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
+		err = fmt.Errorf("unable to locate the analyzer manager package at %s. Advanced security scans cannot be performed without this package", analyzerManagerPath)
 	}
 	return analyzerManagerPath, err
 }

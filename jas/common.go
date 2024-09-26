@@ -31,6 +31,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	NoServerUrlError     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
+	NoServerDetailsError = "jfrog Server details are missing"
+)
+
 type JasScanner struct {
 	TempDir               string
 	AnalyzerManager       AnalyzerManager
@@ -40,17 +45,25 @@ type JasScanner struct {
 	Exclusions            []string
 }
 
-func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, validateSecrets bool, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
-	var err error
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
-		return scanner, err
+func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+	if serverDetails == nil {
+		err = errors.New(NoServerDetailsError)
+		return
 	}
+	if len(serverDetails.Url) == 0 {
+		if len(serverDetails.XrayUrl) != 0 {
+			log.Debug("Xray URL provided without platform URL")
+		}
+		log.Warn(NoServerUrlError)
+		return
+	}
+	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {
 		return scanner, err
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return scanner, err
+		return
 	}
 	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
@@ -58,7 +71,7 @@ func CreateJasScanner(scanner *JasScanner, serverDetails *config.ServerDetails, 
 	}
 	scanner.ServerDetails = serverDetails
 	scanner.Exclusions = exclusions
-	return scanner, err
+	return
 }
 
 func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
@@ -213,7 +226,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	scanner := &JasScanner{}
-	scanner, err := CreateJasScanner(scanner, &FakeServerDetails, false, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(&FakeServerDetails, false, GetAnalyzerManagerXscEnvVars(""))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
