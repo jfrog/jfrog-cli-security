@@ -33,7 +33,7 @@ import (
 
 const (
 	NoServerUrlError     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
-	NoServerDetailsError = "Jfrog Server details are missing"
+	NoServerDetailsError = "jfrog Server details are missing"
 )
 
 type JasScanner struct {
@@ -53,6 +53,12 @@ func CreateJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDe
 		return
 	}
 	if len(serverDetails.Url) == 0 {
+		if len(serverDetails.XrayUrl) != 0 {
+			log.Debug("Xray URL provided without platform URL")
+		}
+		if len(serverDetails.ArtifactoryUrl) != 0 {
+			log.Debug("Artifactory URL provided without platform URL")
+		}
 		log.Warn(NoServerUrlError)
 		return
 	}
