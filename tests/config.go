@@ -64,19 +64,26 @@ func getTestUserDefaultValue() string {
 	return "admin"
 }
 
+func getTestPasswordDefaultValue() string {
+	if os.Getenv(TestJfrogPasswordEnvVar) != "" {
+		return os.Getenv(TestJfrogPasswordEnvVar)
+	}
+	return "password"
+}
+
 func init() {
 	TestSecurity = flag.Bool("test.security", true, "Test Security")
 	TestDockerScan = flag.Bool("test.dockerScan", false, "Test Docker scan")
 
 	JfrogUrl = flag.String("jfrog.url", getTestUrlDefaultValue(), "JFrog platform url")
 	JfrogUser = flag.String("jfrog.user", getTestUserDefaultValue(), "JFrog platform  username")
-	JfrogPassword = flag.String("jfrog.password", "password", "JFrog platform password")
+	JfrogPassword = flag.String("jfrog.password", getTestPasswordDefaultValue(), "JFrog platform password")
 
 	JfrogSshKeyPath = flag.String("jfrog.sshKeyPath", "", "Ssh key file path")
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
 	JfrogAccessToken = flag.String("jfrog.adminToken", os.Getenv(TestJfrogTokenEnvVar), "JFrog platform admin token")
 
-	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8083", "Container registry")
+	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8084", "Container registry")
 
 	HideUnitTestLog = flag.Bool("test.hideUnitTestLog", false, "Hide unit tests logs and print it in a file")
 	SkipUnitTests = flag.Bool("test.skipUnitTests", false, "Skip unit tests")

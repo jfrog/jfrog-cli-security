@@ -16,6 +16,7 @@ const (
 	TestJfrogUrlEnvVar   = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
 	TestJfrogTokenEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
 	TestJfrogUserEnvVar  = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
+	TestJfrogPasswordEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
 
 	MavenCacheRedirectionVal = "-Dmaven.repo.local="
 )
