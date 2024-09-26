@@ -65,6 +65,36 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
+func TestXrayAuditConanJson(t *testing.T) {
+	output := testAuditConan(t, string(format.Json), true)
+	securityTestUtils.VerifyJsonScanResults(t, output, 0, 8, 2)
+}
+
+func TestXrayAuditConanSimpleJson(t *testing.T) {
+	output := testAuditConan(t, string(format.SimpleJson), true)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 2)
+}
+
+func testAuditConan(t *testing.T, format string, withVuln bool) string {
+	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	conanProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "conan")
+	// Copy the conan project from the testdata to a temp dir
+	assert.NoError(t, biutils.CopyDir(conanProjectPath, tempDirPath, true, nil))
+	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
+	defer clientTests.ChangeDirAndAssert(t, prevWd)
+	// Run conan install before executing jfrog audit
+	assert.NoError(t, exec.Command("conan").Run())
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	defer deleteWatch()
+	args := []string{"audit", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
+	if withVuln {
+		args = append(args, "--vuln")
+	}
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
+}
+
 func TestXrayAuditPnpmJson(t *testing.T) {
 	output := testXrayAuditPnpm(t, string(format.Json))
 	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
