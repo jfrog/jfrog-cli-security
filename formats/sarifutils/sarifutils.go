@@ -2,6 +2,7 @@ package sarifutils
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"strings"
 
@@ -85,6 +86,17 @@ func AggregateMultipleRunsIntoSingle(runs []*sarif.Run, destination *sarif.Run) 
 			destination.AddInvocations(invocation)
 		}
 	}
+}
+
+func GetResultProperty(key string, result *sarif.Result) string {
+	if result != nil && result.Properties != nil && result.Properties[key] != nil {
+		status, ok := result.Properties[key].(string)
+		if !ok {
+			return ""
+		}
+		return status
+	}
+	return ""
 }
 
 func GetLocationRelatedCodeFlowsFromResult(location *sarif.Location, result *sarif.Result) (codeFlows []*sarif.CodeFlow) {
@@ -395,6 +407,17 @@ func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {
 	return ""
 }
 
+func GetRuleProperty(key string, rule *sarif.ReportingDescriptor) string {
+	if rule != nil && rule.Properties != nil && rule.Properties[key] != nil {
+		prop, ok := rule.Properties[key].(string)
+		if !ok {
+			return ""
+		}
+		return prop
+	}
+	return ""
+}
+
 func GetRunRules(run *sarif.Run) []*sarif.ReportingDescriptor {
 	if run != nil && run.Tool.Driver != nil {
 		return run.Tool.Driver.Rules
@@ -418,4 +441,13 @@ func GetRulesPropertyCount(property, value string, runs ...*sarif.Run) (count in
 		}
 	}
 	return
+}
+
+func GetResultFingerprint(result *sarif.Result) string {
+	if result.Fingerprints != nil {
+		if value, ok := result.Fingerprints[jasutils.SastFingerprintKey].(string); ok {
+			return value
+		}
+	}
+	return ""
 }

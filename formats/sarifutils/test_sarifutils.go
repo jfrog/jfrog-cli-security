@@ -1,6 +1,8 @@
 package sarifutils
 
-import "github.com/owenrumney/go-sarif/v2/sarif"
+import (
+	"github.com/owenrumney/go-sarif/v2/sarif"
+)
 
 func CreateRunWithDummyResultsInWd(wd string, results ...*sarif.Result) *sarif.Run {
 	return createRunWithDummyResults("", results...).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))})
@@ -33,14 +35,19 @@ func createRunWithDummyResults(toolName string, results ...*sarif.Result) *sarif
 	return run
 }
 
-func CreateRunWithDummyResultAndRuleProperties(property, value string, result *sarif.Result) *sarif.Run {
+func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties, values []string) *sarif.Run {
+	if len(properties) != len(values) {
+		return nil
+	}
 	run := sarif.NewRunWithInformationURI("", "")
 	if result.RuleID != nil {
 		run.AddRule(*result.RuleID)
 	}
 	run.AddResult(result)
-	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties)
-	run.Tool.Driver.Rules[0].Properties[property] = value
+	run.Tool.Driver.Rules[0].Properties = make(sarif.Properties, len(properties))
+	for index := range properties {
+		run.Tool.Driver.Rules[0].Properties[properties[index]] = values[index]
+	}
 	return run
 }
 
@@ -54,6 +61,20 @@ func CreateDummyResult(markdown, msg, ruleId, level string) *sarif.Result {
 		Level:   &level,
 		RuleID:  &ruleId,
 	}
+}
+
+func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
+		Message:   *sarif.NewTextMessage(msg),
+		Level:     &level,
+		RuleID:    &ruleId,
+		Locations: locations,
+	}
+	result.Properties = map[string]interface{}{}
+	for key, val := range properties {
+		result.Properties[key] = val
+	}
+	return result
 }
 
 func CreateResultWithDummyLocationAmdProperty(fileName, property, value string) *sarif.Result {

@@ -54,7 +54,7 @@ func getTestUrlDefaultValue() string {
 	if os.Getenv(TestJfrogUrlEnvVar) != "" {
 		return os.Getenv(TestJfrogUrlEnvVar)
 	}
-	return "http://localhost:8081/"
+	return "http://localhost:8083/"
 }
 
 func getTestUserDefaultValue() string {
@@ -76,7 +76,7 @@ func init() {
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
 	JfrogAccessToken = flag.String("jfrog.adminToken", os.Getenv(TestJfrogTokenEnvVar), "JFrog platform admin token")
 
-	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8082", "Container registry")
+	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8083", "Container registry")
 
 	HideUnitTestLog = flag.Bool("test.hideUnitTestLog", false, "Hide unit tests logs and print it in a file")
 	SkipUnitTests = flag.Bool("test.skipUnitTests", false, "Skip unit tests")

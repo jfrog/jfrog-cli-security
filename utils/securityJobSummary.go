@@ -73,8 +73,8 @@ func newResultSummary(cmdResults *Results, cmdType CommandType, serverDetails *c
 	return
 }
 
-func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested, violationsRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
-	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, violationsRequested)
+func NewBuildScanSummary(cmdResults *Results, serverDetails *config.ServerDetails, vulnerabilitiesRequested bool, buildName, buildNumber string) (summary ScanCommandResultSummary) {
+	summary = newResultSummary(cmdResults, Build, serverDetails, vulnerabilitiesRequested, true)
 	summary.Args.BuildName = buildName
 	summary.Args.BuildNumbers = []string{buildNumber}
 	return
@@ -173,9 +173,13 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	return manager.Record(content)
 }
 
-func RecordSarifOutput(cmdResults *Results) (err error) {
+func RecordSarifOutput(cmdResults *Results, supportedScans []SubScanType) (err error) {
 	manager, err := getRecordManager()
 	if err != nil || manager == nil {
+		return
+	}
+	if cmdResults.ExtendedScanResults == nil || !cmdResults.ExtendedScanResults.EntitledForJas {
+		// If no JAS no GHAS
 		return
 	}
 	extended := true
@@ -183,7 +187,7 @@ func RecordSarifOutput(cmdResults *Results) (err error) {
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
-	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil)
+	sarifReport, err := GenerateSarifReportFromResults(cmdResults, true, false, nil, supportedScans)
 	if err != nil {
 		return err
 	}
