@@ -80,7 +80,7 @@ func testAuditConan(t *testing.T, format string, withVuln bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	conanProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "conan")
+	conanProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "conan")
 	// Copy the conan project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(conanProjectPath, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
