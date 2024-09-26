@@ -6,17 +6,21 @@ on:
     tags-ignore:
       - '**'
   pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   Static-Check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.22.x
+      - name: Setup Go with cache
+        uses: jfrog/.github/actions/install-go-with-cache@main
+
+      - name: Run Go vet
+        run: go vet -v ./...
 
       - name: Static Code Analysis
         uses: golangci/golangci-lint-action@v3

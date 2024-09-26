@@ -9,8 +9,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove 'safe to test' label
+        uses: actions-ecosystem/action-remove-labels@v1
+        if: ${{ github.event_name != 'push' }}
+        with:
+          labels: "safe to test"
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+  test:
+    
     runs-on: ${{ matrix.os }}-latest
     strategy:
       fail-fast: false
@@ -24,7 +37,7 @@ jobs:
     steps:
       # Checkout code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       # Install dependencies
