@@ -201,7 +201,7 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 
 func (scanCmd *ScanCommand) Run() (err error) {
 	return scanCmd.RunAndRecordResults(utils.Binary, func(scanResults *utils.Results) (err error) {
-		if err = utils.RecordSarifOutput(scanResults); err != nil {
+		if err = utils.RecordSarifOutput(scanResults, utils.GetAllSupportedScans()); err != nil {
 			return
 		}
 		return utils.RecordSecurityCommandSummary(utils.NewBinaryScanSummary(
@@ -451,13 +451,15 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						log.Error(fmt.Sprintf("failed to create JFrogAppsConfig: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
-					scanner := &jas.JasScanner{}
-					scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanResults.MultiScanId, validateSecrets, techutils.Technology(graphScanResults.ScannedPackageType)))
+					scanner, err := jas.CreateJasScanner(jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanResults.MultiScanId, validateSecrets, techutils.Technology(graphScanResults.ScannedPackageType)))
 					if err != nil {
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
+					} else if scanner == nil {
+						log.Debug(fmt.Sprintf("Jas scanner was not created for %s, skipping Jas scans", filePath))
+						return nil
 					}
-					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, &depsList, scanCmd.serverDetails, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans(), nil, "")
+					err = runner.AddJasScannersTasks(jasFileProducerConsumer, &scanResults, &depsList, false, scanner, applicability.ApplicabilityDockerScanScanType, secrets.SecretsScannerDockerScanType, jasErrHandlerFunc, utils.GetAllSupportedScans(), nil, "")
 					if err != nil {
 						log.Error(fmt.Sprintf("scanning '%s' failed with error: %s", graph.Id, err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})

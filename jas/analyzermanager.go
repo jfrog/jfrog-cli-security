@@ -24,7 +24,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.8.15"
+	defaultAnalyzerManagerVersion             = "1.9.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -123,6 +123,7 @@ func GetAnalyzerManagerExecutable() (analyzerManagerPath string, err error) {
 		return
 	}
 	if !exists {
+		log.Debug(fmt.Sprintf("The analyzer manager executable was not found at %s", analyzerManagerPath))
 		err = errors.New("unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 	}
 	return analyzerManagerPath, err
