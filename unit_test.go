@@ -4,7 +4,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
@@ -31,5 +30,5 @@ func TestUnitTests(t *testing.T) {
 
 	packages := clientTests.GetTestPackages("./...")
 	packages = clientTests.ExcludeTestsPackage(packages, CliIntegrationTests)
-	assert.NoError(t, clientTests.RunTests(packages, *configTests.HideUnitTestLog))
+	assert.NoError(t, clientTests.RunTests(packages, false))
 }

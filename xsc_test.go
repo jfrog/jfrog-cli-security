@@ -3,34 +3,28 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/jfrog/jfrog-cli-security/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	"github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 func TestReportError(t *testing.T) {
-	cleanUp := integration.InitXscTest(t, func() {securityTestUtils.ValidateXscVersion(t, xsc.MinXscVersionForErrorReport)})
+	cleanUp := integration.InitXscTest(t, func() { securityTestUtils.ValidateXscVersion(t, xsc.MinXscVersionForErrorReport) })
 	defer cleanUp()
 	errorToReport := errors.New("THIS IS NOT A REAL ERROR! This Error is posted as part of TestReportError test")
 	assert.NoError(t, xsc.ReportError(tests.XscDetails, errorToReport, "cli"))
 }
-
 
 // In the npm tests we use a watch flag, so we would get only violations
 func TestXscAuditNpmJsonWithWatch(t *testing.T) {
@@ -93,9 +87,9 @@ func validateAnalyticsBasicEvent(t *testing.T, output string) {
 }
 
 func TestAdvancedSecurityDockerScanWithXsc(t *testing.T) {
-	testCli, cleanup := initNativeDockerWithXrayTest(t)
-	restoreFunc := initXscTest(t)
-	defer restoreFunc()
-	defer cleanup()
+	cleanUpXsc := integration.InitXscTest(t)
+	defer cleanUpXsc()
+	testCli, cleanupDocker := integration.InitNativeDockerTest(t)
+	defer cleanupDocker()
 	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }

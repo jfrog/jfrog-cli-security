@@ -34,21 +34,25 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
+func getSkipTestMsg(testName, testFlag string) string {
+	return fmt.Sprintf("Skipping %s tests. To run them, add the '%s=true' option or don't supply any options.", testName, testFlag)
+}
+
 func InitUnitTest(t *testing.T) {
 	if !*configTests.TestUnit {
-		t.Skip("Skipping unit tests. To run unit tests, add the '-test.unit=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Unit", "--test.unit"))
 	}
 }
 
 func InitArtifactoryTest(t *testing.T) {
 	if !*configTests.TestArtifactory {
-		t.Skip("Skipping Artifactory integration tests. To run them, add the '-test.artifactory=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Artifactory integration", "--test.artifactory"))
 	}
 }
 
 func InitXrayTest(t *testing.T, minVersion string) {
 	if !*configTests.TestXray {
-		t.Skip("Skipping Xray commands integration tests. To run them, add the '-test.xray=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Xray commands", "--test.xray"))
 	}
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
@@ -59,12 +63,12 @@ func GetTestServerDetails() *config.ServerDetails {
 
 func InitXscTest(t *testing.T, validations ...func()) func() {
 	if !*configTests.TestXsc {
-		t.Skip("Skipping XSC integration tests. To run them, add the '-test.xsc=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("XSC integration", "--test.xsc"))
 	}
 	// validate XSC is enabled at the given server
 	xscManager, err := xsc.CreateXscServiceManager(configTests.XscDetails)
 	assert.NoError(t, err)
-	_, err := xscManager.GetVersion()
+	_, err = xscManager.GetVersion()
 	if err != nil {
 		t.Skip("Skipping XSC integration tests. XSC is not enabled at the given server.")
 	}
@@ -78,56 +82,43 @@ func InitXscTest(t *testing.T, validations ...func()) func() {
 	}
 }
 
-
-func initXscTest(t *testing.T) func() {
-	// Make sure the audit request will work with xsc and not xray
-	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
-	return func() {
-		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
-	}
-}
-
 func InitAuditTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAudit {
-		t.Skip("Skipping audit command integration tests. To run them, add the '-test.audit=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Audit command integration", "--test.audit"))
 	}
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
 func InitScanTest(t *testing.T, minVersion string) {
 	if !*configTests.TestScan {
-		t.Skip("Skipping other scan commands integration tests. To run them, add the '-test.scan=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Other scan commands integration", "--test.scan"))
 	}
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
 func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	if !*configTests.TestDockerScan {
-		t.Skip("Skipping Docker scan command integration tests. To run them, add the '-test.dockerScan=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Docker scan command integration (Ubuntu)", "--test.dockerScan"))
 	}
 	return InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
 func InitEnrichTest(t *testing.T, minVersion string) {
 	if !*configTests.TestEnrich {
-		t.Skip("Skipping enrich command integration tests. To run them, add the '-test.enrich=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Enrich command integration", "--test.enrich"))
 	}
-	ValidateXrayVersion(t, minVersion)
+	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
-func InitGitTest(t *testing.T, minVersion string) {
+func InitGitTest(t *testing.T) {
 	if !*configTests.TestGit {
-		t.Skip("Skipping Git commands integration tests. To run them, add the '-test.git=true' option or don't supply any options.")
+		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))
 	}
-	ValidateXrayVersion(t, minVersion)
+	err := configTests.PlatformCli.WithoutCredentials().Exec("git", "version")
+	if err != nil {
+		t.Skip(fmt.Sprintf("Skipping Git commands integration tests. Git is not installed. %s", err.Error()))
+	}
 }
-
-// func InitSecurityTest(t *testing.T, xrayMinVersion string) {
-// 	if !*configTests.TestSecurity {
-// 		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
-// 	}
-// 	testUtils.ValidateXrayVersion(t, xrayMinVersion)
-// }
 
 func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 	wd, err := os.Getwd()

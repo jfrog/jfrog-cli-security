@@ -6,9 +6,9 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
@@ -25,7 +25,7 @@ var (
 	RtAuth        auth.ServiceDetails
 	RtHttpDetails httputils.HttpClientDetails
 
-	PlatformCli *coreTests.JfrogCli
+	PlatformCli     *coreTests.JfrogCli
 	TestApplication *components.App
 
 	timestampAdded bool
@@ -41,18 +41,18 @@ var (
 	TestAudit       *bool
 	TestScan        *bool
 	TestDockerScan  *bool
-	TestEnrich	    *bool
-	TestGit 	    *bool
+	TestEnrich      *bool
+	TestGit         *bool
 
-	JfrogUrl           *string
-	JfrogUser          *string
-	JfrogPassword      *string
-	JfrogAccessToken   *string
+	JfrogUrl         *string
+	JfrogUser        *string
+	JfrogPassword    *string
+	JfrogAccessToken *string
 
 	JfrogSshKeyPath    *string
 	JfrogSshPassphrase *string
-	ContainerRegistry *string
-	ciRunId         *string
+	ContainerRegistry  *string
+	ciRunId            *string
 )
 
 func getTestUrlDefaultValue() string {

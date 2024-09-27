@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/generic"
@@ -35,6 +36,7 @@ import (
 // We perform validation on dependency resolution from an Artifactory server during the construction of the dependency tree during 'audit' flow.
 // This process involves resolving all dependencies required by the project.
 func TestDependencyResolutionFromArtifactory(t *testing.T) {
+	integration.InitArtifactoryTest(t)
 	testCases := []struct {
 		testProjectPath []string
 		resolveRepoName string
@@ -216,6 +218,7 @@ func clearOrRedirectLocalCacheIfNeeded(t *testing.T, projectType project.Project
 }
 
 func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
+	integration.InitArtifactoryTest(t)
 	// Configure a new JFrog CLI home dir.
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()

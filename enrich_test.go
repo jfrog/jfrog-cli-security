@@ -1,27 +1,19 @@
 package main
 
 import (
+	"path/filepath"
+	"testing"
+
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
-	"path/filepath"
-	"testing"
 )
 
-func testVulns(t *testing.T, vulns []struct {
-	BomRef string
-	Id     string
-}) {
-	for _, vuln := range vulns {
-		assert.NotEqual(t, vuln.BomRef, nil)
-		assert.NotEqual(t, vuln.Id, nil)
-	}
-}
-
 func TestXrayEnrichSbomOutput(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, enrichgraph.EnrichMinimumVersionXray)
+	integration.InitEnrichTest(t, enrichgraph.EnrichMinimumVersionXray)
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	testCases := []struct {
@@ -46,7 +38,7 @@ func TestXrayEnrichSbomOutput(t *testing.T) {
 			if tc.isXml {
 				enrichedSbom := securityTestUtils.UnmarshalXML(t, output)
 				assert.Greater(t, len(enrichedSbom.Vulnerabilities.Vulnerability), 0)
-				testVulns(t, []struct {
+				testVulnerabilities(t, []struct {
 					BomRef string
 					Id     string
 				}(enrichedSbom.Vulnerabilities.Vulnerability))
@@ -54,7 +46,7 @@ func TestXrayEnrichSbomOutput(t *testing.T) {
 			} else {
 				enrichedSbom := securityTestUtils.UnmarshalJson(t, output)
 				assert.Greater(t, len(enrichedSbom.Vulnerability), 0)
-				testVulns(t, []struct {
+				testVulnerabilities(t, []struct {
 					BomRef string
 					Id     string
 				}(enrichedSbom.Vulnerability))
@@ -62,5 +54,15 @@ func TestXrayEnrichSbomOutput(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func testVulnerabilities(t *testing.T, vulnerabilities []struct {
+	BomRef string
+	Id     string
+}) {
+	for _, vulnerability := range vulnerabilities {
+		assert.NotEqual(t, vulnerability.BomRef, nil)
+		assert.NotEqual(t, vulnerability.Id, nil)
 	}
 }
