@@ -139,13 +139,6 @@ func TestDockerScan(t *testing.T) {
 	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0, 0, false)
 }
 
-func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
-		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
-	}
-	return securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
-}
-
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int, minInactives int, validateSecrets bool) {
 	// Pull image from docker repo
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)

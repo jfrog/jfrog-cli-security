@@ -42,13 +42,6 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	return xmlMap
 }
 
-func InitSecurityTest(t *testing.T, xrayMinVersion string) {
-	if !*configTests.TestSecurity {
-		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
-	}
-	ValidateXrayVersion(t, xrayMinVersion)
-}
-
 func CleanTestsHomeEnv() {
 	os.Unsetenv(coreutils.HomeDir)
 	CleanFileSystem()

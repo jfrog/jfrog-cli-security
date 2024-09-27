@@ -19,21 +19,47 @@ jobs:
         with:
           labels: "safe to test"
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-  test:
-    
+      
+      - name: Setup Go with cache
+        uses: jfrog/.github/actions/install-go-with-cache@main
+
+      - name: Run Go vet
+        run: go vet -v ./...
+  Tests:
+    needs: Pretest
+    name: ${{ matrix.suite.name }} Tests (${{ matrix.os }}) 
     runs-on: ${{ matrix.os }}-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu, windows, macos ]
     env:
       GOPROXY: direct
       GRADLE_OPTS: -Dorg.gradle.daemon=false
       CI: true
       JFROG_CLI_LOG_LEVEL: DEBUG
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+        suite:
+          - name: 'Unit'
+            testFlags: '--test.unit'
+          - name: 'Artifactory Integration'
+            testFlags: '--test.artifactory'
+          - name: 'Xray Integration'
+            testFlags: '--test.xray'
+          - name: 'XSC Integration'
+            testFlags: '--test.xsc'
+          - name: 'Audit Command Integration'
+            testFlags: '--test.audit'
+          - name: 'Other Scan Commands Integration'
+            testFlags: '--test.scan'
+            # Run Docker Integration tests only on Ubuntu
+            ubuntuTestFlags: '--test.scan --test.dockerScan'
+          - name: 'Enrich Command Integration'
+            testFlags: '--test.enrich'
+          - name: 'Git commands Integration'
+            testFlags: '--test.git'
     steps:
       # Checkout code
       - name: Checkout code
@@ -81,9 +107,5 @@ jobs:
         with:
           gradle-version: 7.6
       # Test
-      - name: Run security tests (without Docker Scan)
-        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
-        if: ${{ matrix.os != 'ubuntu' }}
-      - name: Run security tests (with Docker Scan, only on Ubuntu)
-        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --test.dockerScan --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
-        if: ${{ matrix.os == 'ubuntu' }}
+      - name: Run tests
+        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 30m -cover ${{ matrix.os == 'ubuntu' && matrix.suite.ubuntuTestFlags || matrix.suite.testFlags }} --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-security-cli-tests

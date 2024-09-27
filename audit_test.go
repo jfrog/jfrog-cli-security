@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
@@ -28,6 +29,7 @@ import (
 
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -45,9 +47,8 @@ func TestXrayAuditNpmSimpleJson(t *testing.T) {
 }
 
 func testAuditNpm(t *testing.T, format string, withVuln bool) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	npmProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, npmProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm"))
 	defer cleanUp()
 	// Run npm install before executing jfrog xr npm-audit
 	assert.NoError(t, exec.Command("npm", "install").Run())
@@ -73,9 +74,8 @@ func TestXrayAuditConanSimpleJson(t *testing.T) {
 }
 
 func testAuditConan(t *testing.T, format string, withVuln bool) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	conanProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "conan")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, conanProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "conan"))
 	defer cleanUp()
 	// Run conan install before executing jfrog audit
 	assert.NoError(t, exec.Command("conan").Run())
@@ -99,9 +99,8 @@ func TestXrayAuditPnpmSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPnpm(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	npmProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, npmProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm-no-lock"))
 	defer cleanUp()
 	// Run pnpm install before executing audit
 	assert.NoError(t, exec.Command("pnpm", "install").Run())
@@ -124,24 +123,24 @@ func TestXrayAuditYarnV2SimpleJson(t *testing.T) {
 	})
 }
 
-// func TestXrayAuditYarnV1Json(t *testing.T) {
-// 	testXrayAuditYarn(t, "yarn-v1", func() {
-// 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
-// 		securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
-// 	})
-// }
+func TestXrayAuditYarnV1Json(t *testing.T) {
+	testXrayAuditYarn(t, "yarn-v1", func() {
+		output := runXrayAuditYarnWithOutput(t, string(format.Json))
+		securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	})
+}
 
-// func TestXrayAuditYarnV1JsonWithoutDevDependencies(t *testing.T) {
-// 	unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "NODE_ENV", "production")
-// 	defer unsetEnv()
-// 	testXrayAuditYarn(t, "yarn-v1", func() {
-// 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
-// 		var results []services.ScanResponse
-// 		err := json.Unmarshal([]byte(output), &results)
-// 		assert.NoError(t, err)
-// 		assert.Len(t, results[0].Vulnerabilities, 0)
-// 	})
-// }
+func TestXrayAuditYarnV1JsonWithoutDevDependencies(t *testing.T) {
+	unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "NODE_ENV", "production")
+	defer unsetEnv()
+	testXrayAuditYarn(t, "yarn-v1", func() {
+		output := runXrayAuditYarnWithOutput(t, string(format.Json))
+		var results []services.ScanResponse
+		err := json.Unmarshal([]byte(output), &results)
+		assert.NoError(t, err)
+		assert.Len(t, results[0].Vulnerabilities, 0)
+	})
+}
 
 func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
@@ -151,9 +150,8 @@ func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 }
 
 func testXrayAuditYarn(t *testing.T, projectDirName string, yarnCmd func()) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	yarnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName)
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, yarnProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "yarn", projectDirName))
 	defer cleanUp()
 	// Run yarn install before executing jf audit --yarn. Return error to assert according to test.
 	assert.NoError(t, exec.Command("yarn").Run())
@@ -262,9 +260,8 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, projectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -287,9 +284,8 @@ func TestXrayAuditGradleSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditGradle(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	gradleProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, gradleProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -307,9 +303,8 @@ func TestXrayAuditMavenSimpleJson(t *testing.T) {
 }
 
 func testXscAuditMaven(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, mvnProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -317,7 +312,7 @@ func testXscAuditMaven(t *testing.T, format string) string {
 }
 
 func TestXrayAuditNoTech(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -328,9 +323,8 @@ func TestXrayAuditNoTech(t *testing.T) {
 }
 
 func TestXrayAuditMultiProjects(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	multiProject := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects")
-	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, multiProject)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects"))
 	defer cleanUp()
 	// Set working-dirs flag with multiple projects
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s, %s",
@@ -365,9 +359,8 @@ func TestXrayAuditPipSimpleJsonWithRequirementsFile(t *testing.T) {
 }
 
 func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	pipProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, pipProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pip", "pip-project"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -390,9 +383,8 @@ func TestXrayAuditPipenvSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPipenv(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	pipenvProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, pipenvProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "pipenv", "pipenv-project"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -410,9 +402,8 @@ func TestXrayAuditPoetrySimpleJson(t *testing.T) {
 }
 
 func testXrayAuditPoetry(t *testing.T, format string) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	poetryProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, poetryProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "python", "poetry", "poetry-project"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
@@ -464,7 +455,7 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	integration.InitAuditTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 5)
 }
@@ -487,9 +478,8 @@ func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project))
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, projectDir)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
@@ -502,9 +492,8 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	mvnProjectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven")
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, mvnProjectPath)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven"))
 	defer cleanUp()
 	// Run generic audit on mvn project with a vulnerable dependency
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--licenses", "--format="+string(format.SimpleJson))
@@ -516,7 +505,7 @@ func TestXrayAuditDetectTech(t *testing.T) {
 }
 
 func TestXrayRecursiveScan(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
 	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers")
 	// Creating an inner NPM project
 	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(projectDir, "npm", "npm"))
@@ -541,9 +530,8 @@ func TestXrayRecursiveScan(t *testing.T) {
 }
 
 func TestAuditOnEmptyProject(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	projectDir := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps"))
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, projectDir)
+	integration.InitAuditTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps")))
 	defer cleanUp()
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)

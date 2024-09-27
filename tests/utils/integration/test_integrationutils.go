@@ -12,6 +12,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -31,6 +33,101 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
+
+func InitUnitTest(t *testing.T) {
+	if !*configTests.TestUnit {
+		t.Skip("Skipping unit tests. To run unit tests, add the '-test.unit=true' option or don't supply any options.")
+	}
+}
+
+func InitArtifactoryTest(t *testing.T) {
+	if !*configTests.TestArtifactory {
+		t.Skip("Skipping Artifactory integration tests. To run them, add the '-test.artifactory=true' option or don't supply any options.")
+	}
+}
+
+func InitXrayTest(t *testing.T, minVersion string) {
+	if !*configTests.TestXray {
+		t.Skip("Skipping Xray commands integration tests. To run them, add the '-test.xray=true' option or don't supply any options.")
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func GetTestServerDetails() *config.ServerDetails {
+	return configTests.RtDetails
+}
+
+func InitXscTest(t *testing.T, validations ...func()) func() {
+	if !*configTests.TestXsc {
+		t.Skip("Skipping XSC integration tests. To run them, add the '-test.xsc=true' option or don't supply any options.")
+	}
+	// validate XSC is enabled at the given server
+	xscManager, err := xsc.CreateXscServiceManager(configTests.XscDetails)
+	assert.NoError(t, err)
+	_, err := xscManager.GetVersion()
+	if err != nil {
+		t.Skip("Skipping XSC integration tests. XSC is not enabled at the given server.")
+	}
+	for _, validation := range validations {
+		validation()
+	}
+	// Make sure the audit request will work with xsc and not xray
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
+	return func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
+	}
+}
+
+
+func initXscTest(t *testing.T) func() {
+	// Make sure the audit request will work with xsc and not xray
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
+	return func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
+	}
+}
+
+func InitAuditTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAudit {
+		t.Skip("Skipping audit command integration tests. To run them, add the '-test.audit=true' option or don't supply any options.")
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitScanTest(t *testing.T, minVersion string) {
+	if !*configTests.TestScan {
+		t.Skip("Skipping other scan commands integration tests. To run them, add the '-test.scan=true' option or don't supply any options.")
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+	if !*configTests.TestDockerScan {
+		t.Skip("Skipping Docker scan command integration tests. To run them, add the '-test.dockerScan=true' option or don't supply any options.")
+	}
+	return InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
+}
+
+func InitEnrichTest(t *testing.T, minVersion string) {
+	if !*configTests.TestEnrich {
+		t.Skip("Skipping enrich command integration tests. To run them, add the '-test.enrich=true' option or don't supply any options.")
+	}
+	ValidateXrayVersion(t, minVersion)
+}
+
+func InitGitTest(t *testing.T, minVersion string) {
+	if !*configTests.TestGit {
+		t.Skip("Skipping Git commands integration tests. To run them, add the '-test.git=true' option or don't supply any options.")
+	}
+	ValidateXrayVersion(t, minVersion)
+}
+
+// func InitSecurityTest(t *testing.T, xrayMinVersion string) {
+// 	if !*configTests.TestSecurity {
+// 		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
+// 	}
+// 	testUtils.ValidateXrayVersion(t, xrayMinVersion)
+// }
 
 func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 	wd, err := os.Getwd()

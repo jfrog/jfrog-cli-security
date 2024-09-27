@@ -106,7 +106,7 @@ func GetTestResourcesPath() string {
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
 		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
-		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestArtifactory:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -115,7 +115,7 @@ func GetNonVirtualRepositories() map[*string]string {
 func GetVirtualRepositories() map[*string]string {
 	virtualReposMap := map[*bool][]*string{
 		TestDockerScan: {&DockerVirtualRepo},
-		TestSecurity:   {&GoVirtualRepo, &MvnVirtualRepo},
+		TestArtifactory:   {&GoVirtualRepo, &MvnVirtualRepo},
 	}
 	return getNeededRepositories(virtualReposMap)
 }
