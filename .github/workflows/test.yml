@@ -108,4 +108,4 @@ jobs:
           gradle-version: 7.6
       # Test
       - name: Run tests
-        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 30m -cover ${{ matrix.os == 'ubuntu' && matrix.suite.ubuntuTestFlags || matrix.suite.testFlags }} --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-security-cli-tests
+        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 30m -cover ${{ matrix.os == 'ubuntu' && matrix.suite.ubuntuTestFlags || matrix.suite.testFlags }} --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-cli-test
