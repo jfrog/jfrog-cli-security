@@ -20,9 +20,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/formats"
 
 	"github.com/jfrog/gofrog/datastructures"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -412,52 +413,14 @@ func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, tt.pathToTest)
-			defer cleanUp()
-			// Set configuration for test
-			currentDir, err := os.Getwd()
-			assert.NoError(t, err)
-			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
-			defer callback()
-
-
-			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
-			defer callbackCurationFlag()
-			// Golang option to disable the use of the checksum database
-			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
-			defer callbackNoSum()
-
-			// Create Mock server and write configuration file
+			// Create Mock server
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
-			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
-			defer func() {
-				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
-			}()
-			rootDir, err := os.Getwd()
-			assert.NoError(t, err)
-
-			// Run pre-test command
-			if tt.preTestExec != "" {
-				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
-				output, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
-				assert.NoErrorf(t, err, string(output))
-				callbackPreTest()
-			}
-
-			// Set the working dir for project.
-			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(configurationDir, string(os.PathSeparator)+".jfrog"))
-			defer func() {
-				cacheFolder, err := utils.GetCurationCacheFolder()
-				require.NoError(t, err)
-				err = fileutils.RemoveTempDir(cacheFolder)
-				if err != nil {
-					// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
-					assert.ErrorIs(t, err, os.ErrPermission)
-				}
-				callback3()
-			}()
-
+			// Create test env
+			cleanUpHome := createTempHomeDirWithConfig(t, config)
+			defer cleanUpHome()
+			cleanUpTestProject := createTempTestProject(t, tt)
+			defer cleanUpTestProject()
 			// Create audit command, and run it
 			curationCmd := NewCurationAuditCommand()
 			curationCmd.SetIsCurationCmd(true)
@@ -480,59 +443,115 @@ func TestDoCurationAudit(t *testing.T) {
 					assert.NoError(t, tt.cleanDependencies())
 				}
 			}()
-
-			// Add the mock server to the expected blocked message url
-			for key := range tt.expectedResp {
-				for index := range tt.expectedResp[key].packagesStatus {
-					tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s",
-						strings.TrimSuffix(config.GetArtifactoryUrl(), "/"),
-						tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
-				}
-			}
-			// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
-			if tt.tech == techutils.Pip {
-				for key := range results {
-					result := results[key]
-					result.totalNumberOfPackages = 0
-				}
-			}
-			assert.Equal(t, tt.expectedResp, results)
-			for _, requestDone := range tt.expectedRequest {
-				assert.True(t, requestDone)
-			}
-			for _, requestDone := range tt.expectedBuildRequest {
-				assert.True(t, requestDone)
-			}
+			// Validate the results
+			validateCurationResults(t, tt, results, config)
 		})
 	}
 }
 
-func initCurationTest(t *testing.T) func() {
-	configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, tt.pathToTest)
-	defer cleanUp()
-
-	// setCurationFlagsForTest
-
-	configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
-			defer func() {
-				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
-			}()
-			rootDir, err := os.Getwd()
-			assert.NoError(t, err)
+func createTempHomeDirWithConfig(t *testing.T, config *config.ServerDetails) func() {
+	tempHomeDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
+	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, false)
+	return func() {
+		callbackHomeDir()
+		createTempDirCallback()
+	}
 }
 
-func setCurationFlagsForTest(t *testing.T) func() {
-	currentDir, err := os.Getwd()
-			assert.NoError(t, err)
-			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
-			defer callback()
+func createTempTestProject(t *testing.T, testCase testCase) func() {
+	projectPath := strings.TrimSuffix(testCase.pathToTest, string(os.PathSeparator)+".jfrog")
+	_, cleanUpDir := securityTestUtils.CreateTestProjectEnvAndChdir(t, projectPath)
+	// Run the pre-test exec
+	if testCase.funcToGetGoals != nil {
+		output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
+		assert.NoErrorf(t, err, string(output))
+	}
+	return func() {
+		cacheFolder, err := utils.GetCurationCacheFolder()
+		require.NoError(t, err)
+		if err = fileutils.RemoveTempDir(cacheFolder); err != nil {
+			// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+			assert.ErrorIs(t, err, os.ErrPermission)
+		}
+		cleanUpDir()
+	}
+}
 
+func initCurationTest(t *testing.T, config *config.ServerDetails, testCase testCase) func() {
+	// Path to .jfrog of the project
+	testTempDir, cleanUpDir := securityTestUtils.CreateTestProjectEnvAndChdir(t, testCase.pathToTest)
+	cleanUpFlags := setCurationFlagsForTest(t, testTempDir)
+	// Create the server details config file
+	configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, testTempDir, testCase.createServerWithoutCreds)
+	// Set the working dir for project.
+	returnToCWD := clienttestutils.ChangeDirWithCallback(t, testTempDir, strings.TrimSuffix(testTempDir, string(os.PathSeparator)+".jfrog"))
+	// Run the pre-test exec
+	if testCase.funcToGetGoals != nil {
+		output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
+		assert.NoErrorf(t, err, string(output))
+	}
 
-			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
-			defer callbackCurationFlag()
-			// Golang option to disable the use of the checksum database
-			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
-			defer callbackNoSum()
+	return func() {
+		cacheFolder, err := utils.GetCurationCacheFolder()
+		require.NoError(t, err)
+		if err = fileutils.RemoveTempDir(cacheFolder); err != nil {
+			// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+			assert.ErrorIs(t, err, os.ErrPermission)
+		}
+
+		returnToCWD()
+		fileutils.RemovePath(configFilePath)
+		cleanUpFlags()
+		cleanUpDir()
+	}
+}
+
+func setCurationFlagsForTest(t *testing.T, testTempDir string) func() {
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, testTempDir)
+	callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
+	// Golang option to disable the use of the checksum database
+	callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
+	return func() {
+		callbackHomeDir()
+		callbackCurationFlag()
+		callbackNoSum()
+	}
+}
+
+func runPreTestExec(t *testing.T, currentWd string, testCase testCase) {
+	if testCase.preTestExec == "" {
+		return
+	}
+	callbackPreTest := clienttestutils.ChangeDirWithCallback(t, currentWd, testCase.pathToPreTest)
+	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
+	assert.NoErrorf(t, err, string(output))
+	callbackPreTest()
+}
+
+func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
+	// Add the mock server to the expected blocked message url
+	for key := range testCase.expectedResp {
+		for index := range testCase.expectedResp[key].packagesStatus {
+			testCase.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s",
+				strings.TrimSuffix(config.GetArtifactoryUrl(), "/"),
+				testCase.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
+		}
+	}
+	// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
+	if testCase.tech == techutils.Pip {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
+	assert.Equal(t, testCase.expectedResp, results)
+	for _, requestDone := range testCase.expectedRequest {
+		assert.True(t, requestDone)
+	}
+	for _, requestDone := range testCase.expectedBuildRequest {
+		assert.True(t, requestDone)
+	}
 }
 
 type testCase struct {
@@ -826,7 +845,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 
 func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool, resourceToServe map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
-	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, config, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			mapLockReadWrite.Lock()
 			if _, exist := expectedRequest[r.RequestURI]; exist {

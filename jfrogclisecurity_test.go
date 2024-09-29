@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -35,7 +34,7 @@ func setupIntegrationTests() {
 		os.Exit(1)
 	}
 	// General
-	flag.Parse()
+	configTests.InitTestFlags()
 	log.SetDefaultLogger()
 	// Init
 	integrationUtils.InitTestCliDetails()
