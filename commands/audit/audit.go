@@ -4,17 +4,17 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jfrog/gofrog/log"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-
-	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"golang.org/x/exp/slices"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -115,7 +115,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
-		SetThreads(auditCmd.Threads)
+		SetThreads(auditCmd.Threads).
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults, err := RunAudit(auditParams)
@@ -186,25 +187,19 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	if err != nil {
 		return
 	}
+	results.ExtendedScanResults.SecretValidation = jas.CheckForSecretValidation(xrayManager, auditParams.xrayVersion, slices.Contains(auditParams.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan))
 	results.MultiScanId = auditParams.commonGraphScanParams.MultiScanId
-
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	auditParallelRunner.ErrWg.Add(1)
 	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditParams.workingDirs)
 	if err != nil {
 		return results, fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error())
 	}
-	jasScanner := &jas.JasScanner{}
-	if results.ExtendedScanResults.EntitledForJas {
-		// Download (if needed) the analyzer manager and run scanners.
-		auditParallelRunner.JasWg.Add(1)
-		if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
-			return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, results, serverDetails, auditParams, jasScanner, jfrogAppsConfig, threadId)
-		}, auditParallelRunner.AddErrorToChan); jasErr != nil {
-			auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
-		}
+	var jasScanner *jas.JasScanner
+	var jasScanErr error
+	if jasScanner, jasScanErr = RunJasScans(auditParallelRunner, auditParams, results, jfrogAppsConfig); jasScanErr != nil {
+		auditParallelRunner.AddErrorToChan(jasScanErr)
 	}
-
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
 		auditParallelRunner.AddErrorToChan(scaScanErr)
@@ -214,9 +209,8 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 		auditParallelRunner.JasWg.Wait()
 		// Wait for all jas scanners to complete before cleaning up scanners temp dir
 		auditParallelRunner.JasScannersWg.Wait()
-		cleanup := jasScanner.ScannerDirCleanupFunc
-		if cleanup != nil {
-			auditParallelRunner.AddErrorToChan(cleanup())
+		if jasScanner != nil && jasScanner.ScannerDirCleanupFunc != nil {
+			auditParallelRunner.AddErrorToChan(jasScanner.ScannerDirCleanupFunc())
 		}
 		close(auditParallelRunner.ErrorsQueue)
 		auditParallelRunner.Runner.Done()
@@ -244,19 +238,41 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 	return jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
 }
 
-func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityParallelRunner, scanResults *utils.Results,
-	serverDetails *config.ServerDetails, auditParams *AuditParams, scanner *jas.JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, threadId int) (err error) {
+func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *utils.Results, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig) (jasScanner *jas.JasScanner, err error) {
+	if !results.ExtendedScanResults.EntitledForJas {
+		log.Info("Not entitled for JAS, skipping advance security scans...")
+		return
+	}
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		err = fmt.Errorf("failed to get server details: %s", err.Error())
+		return
+	}
+	jasScanner, err = jas.CreateJasScanner(jfrogAppsConfig, serverDetails, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, results.ExtendedScanResults.SecretValidation, results.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
+	if err != nil {
+		err = fmt.Errorf("failed to create jas scanner: %s", err.Error())
+		return
+	} else if jasScanner == nil {
+		log.Debug("Jas scanner was not created, skipping advance security scans...")
+		return
+	}
+	auditParallelRunner.JasWg.Add(1)
+	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(func(threadId int) error {
+		return downloadAnalyzerManagerAndRunScanners(auditParallelRunner, jasScanner, results, auditParams, threadId)
+	}, auditParallelRunner.AddErrorToChan); jasErr != nil {
+		auditParallelRunner.AddErrorToChan(fmt.Errorf("failed to create AM downloading task, skipping JAS scans...: %s", jasErr.Error()))
+	}
+	return
+}
+
+func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, scanResults *utils.Results, auditParams *AuditParams, threadId int) (err error) {
 	defer func() {
 		auditParallelRunner.JasWg.Done()
 	}()
 	if err = jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
 		return fmt.Errorf("%s failed to download analyzer manager: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
-	scanner, err = jas.CreateJasScanner(scanner, jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
-	if err != nil {
-		return fmt.Errorf("failed to create jas scanner: %s", err.Error())
-	}
-	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), serverDetails, auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile); err != nil {
+	if err = runner.AddJasScannersTasks(auditParallelRunner, scanResults, auditParams.DirectDependencies(), auditParams.thirdPartyApplicabilityScan, scanner, applicability.ApplicabilityScannerType, secrets.SecretsScannerType, auditParallelRunner.AddErrorToChan, auditParams.ScansToPerform(), auditParams.configProfile, auditParams.scanResultsOutputDir); err != nil {
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return

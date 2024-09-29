@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/cocoapods"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -154,6 +155,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
+		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan)
 		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -248,6 +250,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
 		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+	case techutils.Conan:
+		depTreeResult.FullDepTrees, uniqueDeps, err = conan.BuildDependencyTree(params)
 	case techutils.Yarn:
 		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:
@@ -386,4 +390,16 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*Depen
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return &treeResult, nil
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
+func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType) (err error) {
+	if scanResultsOutputDir == "" || results == nil {
+		return
+	}
+	fileContent, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }

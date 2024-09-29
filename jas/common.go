@@ -31,6 +31,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	NoServerUrlError     = "To incorporate the ‘Advanced Security’ scans into the audit output make sure platform url is provided and valid (run 'jf c add' prior to 'jf audit' via CLI, or provide JF_URL via Frogbot)"
+	NoServerDetailsError = "jfrog Server details are missing"
+)
+
 type JasScanner struct {
 	TempDir               string
 	AnalyzerManager       AnalyzerManager
@@ -39,19 +44,31 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
 	Exclusions            []string
+	MinSeverity           severityutils.Severity
 }
 
-func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, envVars map[string]string, exclusions ...string) (*JasScanner, error) {
-	var err error
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = GetAnalyzerManagerExecutable(); err != nil {
-		return scanner, err
+func CreateJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDetails *config.ServerDetails, minSeverity severityutils.Severity, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+	if serverDetails == nil {
+		err = errors.New(NoServerDetailsError)
+		return
 	}
+	if len(serverDetails.Url) == 0 {
+		if len(serverDetails.XrayUrl) != 0 {
+			log.Debug("Xray URL provided without platform URL")
+		}
+		if len(serverDetails.ArtifactoryUrl) != 0 {
+			log.Debug("Artifactory URL provided without platform URL")
+		}
+		log.Warn(NoServerUrlError)
+		return
+	}
+	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, envVars); err != nil {
-		return scanner, err
+		return
 	}
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-		return scanner, err
+		return
 	}
 	scanner.TempDir = tempDir
 	scanner.ScannerDirCleanupFunc = func() error {
@@ -60,7 +77,8 @@ func CreateJasScanner(scanner *JasScanner, jfrogAppsConfig *jfrogappsconfig.JFro
 	scanner.ServerDetails = serverDetails
 	scanner.JFrogAppsConfig = jfrogAppsConfig
 	scanner.Exclusions = exclusions
-	return scanner, err
+	scanner.MinSeverity = minSeverity
+	return
 }
 
 func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
@@ -111,7 +129,7 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
-func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRuns []*sarif.Run, err error) {
+func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
@@ -126,6 +144,7 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string) (sarifRu
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
+		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
 		addScoreToRunRules(sarifRun)
 	}
 	return
@@ -157,6 +176,26 @@ func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
 			continue
 		}
 		results = append(results, sarifResult)
+	}
+	return results
+}
+
+func excludeMinSeverityResults(sarifResults []*sarif.Result, minSeverity severityutils.Severity) []*sarif.Result {
+	if minSeverity == "" {
+		// No minimum severity to exclude
+		return sarifResults
+	}
+	results := []*sarif.Result{}
+	for _, sarifResult := range sarifResults {
+		resultSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+			resultSeverity = severityutils.Unknown
+		}
+		// Exclude results with severity lower than the minimum severity
+		if severityutils.GetSeverityPriority(resultSeverity, jasutils.ApplicabilityUndetermined) >= severityutils.GetSeverityPriority(minSeverity, jasutils.ApplicabilityUndetermined) {
+			results = append(results, sarifResult)
+		}
 	}
 	return results
 }
@@ -215,8 +254,7 @@ func InitJasTest(t *testing.T, workingDirs ...string) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
 	jfrogAppsConfigForTest, err := CreateJFrogAppsConfig(workingDirs)
 	assert.NoError(t, err)
-	scanner := &JasScanner{}
-	scanner, err = CreateJasScanner(scanner, jfrogAppsConfigForTest, &FakeServerDetails, GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(jfrogAppsConfigForTest, &FakeServerDetails, "", GetAnalyzerManagerXscEnvVars("", false))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -273,8 +311,27 @@ func convertToFilesExcludePatterns(excludePatterns []string) []string {
 	return patterns
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
+	dynamicTokenVersionMismatchErr := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion)
+	if dynamicTokenVersionMismatchErr != nil {
+		if validateSecrets {
+			log.Info(fmt.Sprintf("Token validation (--validate-secrets flag) is not supported in your xray version, your xray version is %s and the minimum is %s", xrayVersion, jasutils.DynamicTokenValidationMinXrayVersion))
+		}
+		return false
+	}
+	// Ordered By importance
+	// first check for flag and second check for env var
+	if validateSecrets || strings.ToLower(os.Getenv(JfSecretValidationEnvVariable)) == "true" {
+		return true
+	}
+	// third check for platform api
+	isEnabled, err := xrayManager.IsTokenValidationEnabled()
+	return err == nil && isEnabled
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, validateSecrets bool, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	envVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	if len(technologies) != 1 {
 		return envVars
 	}
