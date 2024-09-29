@@ -33,7 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
+var TestDataDir = filepath.FromSlash(filepath.Join("..", "..", "tests", "testdata"))
 
 func TestExtractPoliciesFromMsg(t *testing.T) {
 	var err error
@@ -419,6 +419,8 @@ func TestDoCurationAudit(t *testing.T) {
 			assert.NoError(t, err)
 			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
 			defer callback()
+
+
 			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
 			defer callbackCurationFlag()
 			// Golang option to disable the use of the checksum database
@@ -503,6 +505,34 @@ func TestDoCurationAudit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func initCurationTest(t *testing.T) func() {
+	configurationDir, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, tt.pathToTest)
+	defer cleanUp()
+
+	// setCurationFlagsForTest
+
+	configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
+			defer func() {
+				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
+			}()
+			rootDir, err := os.Getwd()
+			assert.NoError(t, err)
+}
+
+func setCurationFlagsForTest(t *testing.T) func() {
+	currentDir, err := os.Getwd()
+			assert.NoError(t, err)
+			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
+			defer callback()
+
+
+			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
+			defer callbackCurationFlag()
+			// Golang option to disable the use of the checksum database
+			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
+			defer callbackNoSum()
 }
 
 type testCase struct {

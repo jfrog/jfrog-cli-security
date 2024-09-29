@@ -37,6 +37,8 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 }
 
 func TestJasRunner(t *testing.T) {
+	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
+	
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
 	scanResults := &utils.Results{ScaResults: []*utils.ScaScanResult{{Technology: techutils.Pip, XrayResults: jas.FakeBasicXrayResults}}, ExtendedScanResults: &utils.ExtendedScanResults{}}
 
