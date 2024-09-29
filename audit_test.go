@@ -33,27 +33,20 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
-func TestXrayAuditSastCppFlagJson(t *testing.T) {
-	output := testAuditC(t, string(format.Json), true)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 0)
-}
-
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.Json), true)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 0)
-}
+	output := testAuditC(t, string(format.SimpleJson), true)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 0, 0, 0, 0, 0, 0, 0, 0)
 
-func TestXrayAuditWithoutSastCppFlagJson(t *testing.T) {
-	output := testAuditC(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 0, 0)
 }
 
 func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 0, 0)
+	output := testAuditC(t, string(format.SimpleJson), false)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
 func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getJasAuditMockCommand)
+	defer cleanUp()
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -69,7 +62,7 @@ func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
 		defer unsetEnv()
 	}
 	args := []string{"audit", "--licenses", "--vuln", "--format=" + format, "--watches=" + watchName, "--fail=false"}
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
+	return cliToRun.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditNpmJson(t *testing.T) {
@@ -490,6 +483,22 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	// Verify that JAS results are not printed
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+
+func getJasAuditMockCommand() components.Command {
+	return components.Command{
+		Name:  docs.Audit,
+		Flags: docs.GetCommandFlags(docs.Audit),
+		Action: func(c *components.Context) error {
+			auditCmd, err := cli.CreateAuditCmd(c)
+			if err != nil {
+				return err
+			}
+			// Disable Jas for this test
+			auditCmd.SetUseJas(true)
+			return progressbar.ExecWithProgress(auditCmd)
+		},
+	}
 }
 
 func getNoJasAuditMockCommand() components.Command {
