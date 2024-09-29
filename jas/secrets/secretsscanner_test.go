@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/stretchr/testify/require"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -72,7 +73,7 @@ func TestParseResults_EmptyResults(t *testing.T) {
 
 	// Act
 	var err error
-	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, secretsDocsUrlSuffix)
+	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, secretsDocsUrlSuffix, scanner.MinSeverity)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, secretScanManager.secretsScannerResults) {
@@ -95,7 +96,7 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 
 	// Act
 	var err error
-	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, secretsDocsUrlSuffix)
+	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, secretsDocsUrlSuffix, severityutils.Medium)
 
 	// Assert
 	if assert.NoError(t, err) && assert.NotNil(t, secretScanManager.secretsScannerResults) {
@@ -103,7 +104,7 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 		assert.NotEmpty(t, secretScanManager.secretsScannerResults[0].Results)
 		secretScanManager.secretsScannerResults = processSecretScanRuns(secretScanManager.secretsScannerResults)
 		assert.Len(t, secretScanManager.secretsScannerResults, 1)
-		assert.Len(t, secretScanManager.secretsScannerResults[0].Results, 7)
+		assert.Len(t, secretScanManager.secretsScannerResults[0].Results, 6)
 	}
 	assert.NoError(t, err)
 

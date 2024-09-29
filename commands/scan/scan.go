@@ -451,7 +451,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, entitledFo
 						log.Error(fmt.Sprintf("failed to create JFrogAppsConfig: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
 					}
-					scanner, err := jas.CreateJasScanner(jfrogAppsConfig, scanCmd.serverDetails, jas.GetAnalyzerManagerXscEnvVars(scanResults.MultiScanId, validateSecrets, techutils.Technology(graphScanResults.ScannedPackageType)))
+					scanner, err := jas.CreateJasScanner(jfrogAppsConfig, scanCmd.serverDetails, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(scanResults.MultiScanId, validateSecrets, techutils.Technology(graphScanResults.ScannedPackageType)))
 					if err != nil {
 						log.Error(fmt.Sprintf("failed to create jas scanner: %s", err.Error()))
 						indexedFileErrors[threadId] = append(indexedFileErrors[threadId], formats.SimpleJsonError{FilePath: filePath, ErrorMessage: err.Error()})
