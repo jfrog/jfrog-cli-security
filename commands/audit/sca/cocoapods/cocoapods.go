@@ -6,10 +6,12 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/cocoapods"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -25,11 +27,52 @@ var (
 	versionRegex = regexp.MustCompile(`\((\d+(\.\d+){0,2})\)`)
 )
 
-func GetTechDependencyLocation(directDependencyName, directDependencyVersion, descriptorPath string) ([]*sarif.Location, error) {
-	return nil, nil
+func GetTechDependencyLocation(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error) {
+	var podPositions []*sarif.Location
+	for _, descriptorPath := range descriptorPaths {
+		path.Clean(descriptorPath)
+		if !strings.HasSuffix(descriptorPath, "Podfile") {
+			return nil, errors.ErrUnsupported
+		}
+		data, err := os.ReadFile(descriptorPath)
+		if err != nil {
+			return nil, err
+		}
+		lines := strings.Split(string(data), "\n")
+		var startLine, startCol, endLine, endCol int
+		foundDependency := false
+		for i, line := range lines {
+			if strings.Contains(line, directDependencyName) {
+				startLine = i
+				startCol = strings.Index(line, directDependencyName)
+				foundDependency = true
+			}
+			if foundDependency && strings.Contains(line, directDependencyVersion) {
+				endLine = i
+				endCol = len(line)
+				var snippet string
+				if endLine == startLine {
+					snippet = lines[startLine][startCol:endCol]
+				} else {
+					for snippetLine := range endLine - startLine + 1 {
+						if snippetLine == 0 {
+							snippet += "\n" + lines[snippetLine][startLine:]
+						} else if snippetLine == endLine-startLine {
+							snippet += "\n" + lines[snippetLine][:endCol]
+						} else {
+							snippet += "\n" + lines[snippetLine]
+						}
+					}
+				}
+				podPositions = append(podPositions, sarifutils.CreateLocation(descriptorPath, startLine, endLine, startCol, endCol, snippet))
+				foundDependency = false
+			}
+		}
+	}
+	return podPositions, nil
 }
 
-func FixTechDependency(dependencyName, dependencyVersion, fixVersion, descriptorPath string) error {
+func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPath ...string) error {
 	return nil
 }
 
