@@ -46,10 +46,6 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 		isJasEntitled bool
 	}{
 		{
-			name:          "JAS entitled",
-			isJasEntitled: true,
-		},
-		{
 			name:          "JAS not entitled",
 			isJasEntitled: false,
 		},

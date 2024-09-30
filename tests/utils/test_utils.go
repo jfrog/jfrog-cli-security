@@ -176,6 +176,15 @@ func convertSarifRunPathsForOS(runs ...*sarif.Run) {
 					*location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(location))
 				}
 			}
+			for _, codeFlow := range result.CodeFlows {
+				for _, threadFlows := range codeFlow.ThreadFlows {
+					for _, location := range threadFlows.Locations {
+						if location != nil && location.Location != nil && location.Location.PhysicalLocation != nil && location.Location.PhysicalLocation.ArtifactLocation != nil && location.Location.PhysicalLocation.ArtifactLocation.URI != nil {
+							*location.Location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(location.Location))
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -217,6 +226,11 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 		return
 	}
 	jas.Location.File = getJasConvertedPath(jas.Location.File)
+	if jas.Applicability != nil {
+		for _, evidence := range jas.Applicability.Evidence {
+			evidence.Location.File = getJasConvertedPath(evidence.Location.File)
+		}
+	}
 	for _, codeFlow := range jas.CodeFlow {
 		for _, location := range codeFlow {
 			location.File = getJasConvertedPath(location.File)
