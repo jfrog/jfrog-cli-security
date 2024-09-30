@@ -95,12 +95,12 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	} else if err != nil {
 		log.Error(err)
 	}
-	artiVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
+	artiVersion, err := ca.getRtVersion(tech)
 	if err != nil {
 		return false, err
 	}
-
-	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	
+	xrayVersion, err := ca.getXrayVersion()
 	if err != nil {
 		return false, err
 	}
@@ -113,16 +113,32 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	return true, nil
 }
 
-func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech techutils.Technology) (string, *config.ServerDetails, error) {
-	rtManager, serveDetails, err := ca.getRtManagerAndAuth(tech)
+func (ca *CurationAuditCommand) getRtVersion(tech techutils.Technology) (string, error) {
+	rtManager, _, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	rtVersion, err := rtManager.GetVersion()
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return rtVersion, serveDetails, err
+	return rtVersion, err
+}
+
+func (ca *CurationAuditCommand) getXrayVersion() (string, error) {
+	serverDetails, err := ca.ServerDetails()
+	if err != nil {
+		return "", err
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return "", err
+	}
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	return xrayVersion, nil
 }
 
 type ErrorsResp struct {
