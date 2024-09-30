@@ -57,11 +57,12 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 					snippet = lines[startLine][startCol:endCol]
 				} else {
 					for snippetLine := range endLine - startLine + 1 {
-						if snippetLine == 0 {
+						switch snippetLine {
+						case 0:
 							snippet += "\n" + lines[snippetLine][startLine:]
-						} else if snippetLine == endLine-startLine {
+						case endLine - startLine:
 							snippet += "\n" + lines[snippetLine][:endCol]
-						} else {
+						default:
 							snippet += "\n" + lines[snippetLine]
 						}
 					}
@@ -123,7 +124,7 @@ func GetPodDependenciesGraph(data string) (map[string][]string, map[string]strin
 	dependencyMap := make(map[string][]string, len(lines))
 	versionMap := make(map[string]string, len(lines))
 	for _, line := range lines {
-		line = strings.Replace(line, "\"", "", -1)
+		line = strings.ReplaceAll(line, "\"", "")
 		mainDepMatch := mainDepRegex.FindStringSubmatch(line)
 		if len(mainDepMatch) == 3 {
 			versionMatch := versionRegex.FindStringSubmatch(line)
@@ -182,13 +183,13 @@ func GetDependenciesData(exePath, currentDir string) (string, error) {
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	clearResolutionServerFunc, err := configPodResolutionServerIfNeeded(params)
 	if err != nil {
 		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
-		return
+		return nil, nil, err
 	}
 	defer func() {
 		if clearResolutionServerFunc != nil {
@@ -206,7 +207,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	// Calculate pod dependencies
 	data, err := GetDependenciesData(podExecutablePath, currentDir)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	dependenciesGraph, versionMap := GetPodDependenciesGraph(data)

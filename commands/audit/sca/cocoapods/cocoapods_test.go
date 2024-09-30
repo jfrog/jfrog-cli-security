@@ -72,6 +72,7 @@ func TestFixTechDependency(t *testing.T) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
 	err = FixTechDependency("GoogleSignIn", "6.2.4", "6.2.5", filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
 	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
 	assert.NoError(t, err)
 	lines := strings.Split(string(file), "\n")
