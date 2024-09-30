@@ -474,7 +474,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
 	// Verify that scan results are printed
@@ -619,4 +619,38 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	defer chdirCallback()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+
+//xray-url only
+
+func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommandWithXrayUrl)
+	defer cleanUp()
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
+	// Verify that scan results are printed
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
+	// Verify that JAS results are not printed
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+
+func getNoJasAuditMockCommandWithXrayUrl() components.Command {
+	return components.Command{
+		Name:  docs.Audit,
+		Flags: docs.GetCommandFlags(docs.Audit),
+		Action: func(c *components.Context) error {
+			auditCmd, err := cli.CreateAuditCmd(c)
+			if err != nil {
+				return err
+			}
+			// Disable Jas for this test
+			auditCmd.SetUseJas(false)
+			return progressbar.ExecWithProgress(auditCmd)
+		},
+	}
+}
+
+func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
+	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
+	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2, 0, 0)
 }
