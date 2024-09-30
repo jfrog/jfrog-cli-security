@@ -61,7 +61,7 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 	}
 	for _, result := range results.Secrets {
 		if result.Applicability != nil {
-			if result.Applicability.Status == jasutils.Inactive.ToString() {
+			if result.Applicability.Status == jasutils.Inactive.String() {
 				inactiveResults += 1
 			}
 		}
