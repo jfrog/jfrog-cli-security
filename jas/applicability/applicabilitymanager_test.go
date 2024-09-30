@@ -310,7 +310,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			applicabilityManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", tc.fileName)
 			var err error
-			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix)
+			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, scanner.JFrogAppsConfig.Modules[0].SourceRoot, applicabilityDocsUrlSuffix, scanner.MinSeverity)
 			if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
 				assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
 				assert.Len(t, applicabilityManager.applicabilityScanResults[0].Results, tc.expectedResults)

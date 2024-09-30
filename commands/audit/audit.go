@@ -248,7 +248,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
-	jasScanner, err = jas.CreateJasScanner(jfrogAppsConfig, serverDetails, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, results.ExtendedScanResults.SecretValidation, results.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
+	jasScanner, err = jas.CreateJasScanner(jfrogAppsConfig, serverDetails, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, results.ExtendedScanResults.SecretValidation, results.GetScaScannedTechnologies()...), auditParams.Exclusions()...)
 	if err != nil {
 		err = fmt.Errorf("failed to create jas scanner: %s", err.Error())
 		return

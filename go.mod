@@ -10,8 +10,8 @@ require (
 	github.com/jfrog/froggit-go v1.16.1
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.56.1
-	github.com/jfrog/jfrog-client-go v1.47.1
+	github.com/jfrog/jfrog-cli-core/v2 v2.56.0
+	github.com/jfrog/jfrog-client-go v1.47.0
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
