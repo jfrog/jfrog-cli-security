@@ -106,6 +106,9 @@ func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralE
 	}
 }
 
+// Create a dummy content for general event. 1 SCA scan with 1 vulnerability
+// withJas - Add 2 JAS results for each scan type.
+// withErr - Add an error to the results.
 func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityCommandResults {
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 

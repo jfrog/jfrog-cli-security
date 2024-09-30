@@ -190,12 +190,8 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulner
 	if err != nil || manager == nil {
 		return
 	}
-	if !cmdResults.EntitledForJas {
+	if !cmdResults.EntitledForJas || !commandsummary.StaticMarkdownConfig.IsExtendedSummary() {
 		// If no JAS no GHAS
-		return
-	}
-	extended := true
-	if !extended && !commandsummary.StaticMarkdownConfig.IsExtendedSummary() {
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
