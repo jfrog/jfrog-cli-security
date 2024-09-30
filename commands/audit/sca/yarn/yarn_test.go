@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -81,8 +82,8 @@ func TestIsInstallRequired(t *testing.T) {
 	installRequired, err = isInstallRequired(tempDirPath, []string{}, true)
 	assert.False(t, installRequired)
 	assert.Error(t, err)
-	var installForbiddenErr *biutils.ErrInstallForbidden
-	assert.True(t, errors.As(err, &installForbiddenErr))
+	var projectNotInstalledErr *biutils.ErrProjectNotInstalled
+	assert.True(t, errors.As(err, &projectNotInstalledErr))
 
 	// We install the project so yarn.lock will be created and expect to get 'false' as an answer
 	assert.NoError(t, build.RunYarnCommand(executablePath, tempDirPath, "install"))
@@ -123,20 +124,55 @@ func executeRunYarnInstallAccordingToVersionAndVerifyInstallation(t *testing.T, 
 // This test checks that the tree construction is skipped when the project is not installed and the user prohibited installation
 func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	testCases := []struct {
-		name    string
-		testDir string
+		name                        string
+		testDir                     string
+		installCommand              string
+		shouldBeInstalled           bool
+		successfulTreeBuiltExpected bool
 	}{
 		{
-			name:    "yarn V1",
-			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v1"),
+			name:                        "yarn V1 - not installed | install required - install command",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v1"),
+			installCommand:              "yarn install",
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: true,
 		},
 		{
-			name:    "yarn V2",
-			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v2"),
+			name:                        "yarn V3 - not installed | install required - install command",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v3"),
+			installCommand:              "yarn install",
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: true,
 		},
 		{
-			name:    "yarn V3",
-			testDir: filepath.Join("projects", "package-managers", "yarn", "yarn-v3"),
+			name:                        "yarn V1 - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v1"),
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "yarn V2 - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v2"),
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "yarn V3 - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v3"),
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "yarn V1 - installed | install not required",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v1"),
+			shouldBeInstalled:           true,
+			successfulTreeBuiltExpected: true,
+		},
+		{
+			name:                        "yarn V3 - installed | install not required",
+			testDir:                     filepath.Join("projects", "package-managers", "yarn", "yarn-v3"),
+			shouldBeInstalled:           true,
+			successfulTreeBuiltExpected: true,
 		},
 	}
 
@@ -150,17 +186,28 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			exists, err := fileutils.IsFileExists(expectedLockFilePath, false)
 			assert.NoError(t, err)
 
-			if exists {
+			if !test.shouldBeInstalled && exists {
 				err = os.Remove(filepath.Join(dirPath, "yarn.lock"))
 				assert.NoError(t, err)
 			}
 
 			params := (&utils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			if test.installCommand != "" {
+				splitInstallCommand := strings.Split(test.installCommand, " ")
+				params = params.SetInstallCommandName(splitInstallCommand[0]).SetInstallCommandArgs(splitInstallCommand[1:])
+			}
+
 			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
-			assert.Nil(t, dependencyTrees)
-			assert.Nil(t, uniqueDeps)
-			assert.Error(t, err)
-			assert.IsType(t, &biutils.ErrInstallForbidden{}, err)
+			if !test.successfulTreeBuiltExpected {
+				assert.Nil(t, dependencyTrees)
+				assert.Nil(t, uniqueDeps)
+				assert.Error(t, err)
+				assert.IsType(t, &biutils.ErrProjectNotInstalled{}, err)
+			} else {
+				assert.NotNil(t, dependencyTrees)
+				assert.NotNil(t, uniqueDeps)
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
