@@ -29,6 +29,7 @@ func TestBuildGoDependencyList(t *testing.T) {
 		AccessToken:    "sdsdccs2232",
 	}
 	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
