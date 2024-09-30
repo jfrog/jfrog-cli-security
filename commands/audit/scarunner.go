@@ -76,8 +76,8 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
-			var installForbiddenErr *biutils.ErrInstallForbidden
-			if errors.As(bdtErr, &installForbiddenErr) {
+			var projectNotInstalledErr *biutils.ErrProjectNotInstalled
+			if errors.As(bdtErr, &projectNotInstalledErr) {
 				log.Warn(bdtErr.Error())
 				continue
 			}

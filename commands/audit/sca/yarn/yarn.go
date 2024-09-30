@@ -151,7 +151,7 @@ func isInstallRequired(currentDir string, installCommandArgs []string, skipAutoI
 	if len(installCommandArgs) > 0 {
 		return true, nil
 	} else if !yarnLockExits && skipAutoInstall {
-		return false, &biutils.ErrInstallForbidden{UninstalledDir: currentDir}
+		return false, &biutils.ErrProjectNotInstalled{UninstalledDir: currentDir}
 	}
 	return !yarnLockExits, nil
 }
