@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -58,7 +60,20 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	locations, err := GetTechDependencyLocation("AppAuth", "1.7.5", filepath.Join(currentDir, "Podfile.lock"))
+	locations, err := GetTechDependencyLocation("GoogleSignIn", "6.2.4", filepath.Join(currentDir, "Podfile"))
 	assert.NoError(t, err)
-	fmt.Println(locations)
+	assert.Len(t, locations, 1)
+	assert.Equal(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "GoogleSignIn', '~> 6.2.4'")
+}
+
+func TestFixTechDependency(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("GoogleSignIn", "6.2.4", "6.2.5", filepath.Join(currentDir, "Podfile"))
+	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
+	lines := strings.Split(string(file), "\n")
+	assert.Contains(t, lines, "pod 'GoogleSignIn', '~> 6.2.5'")
 }

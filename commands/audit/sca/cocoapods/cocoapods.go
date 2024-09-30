@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
@@ -32,11 +33,12 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Podfile") {
-			return nil, errors.ErrUnsupported
+			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		lines := strings.Split(string(data), "\n")
 		var startLine, startCol, endLine, endCol int
@@ -72,7 +74,38 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	return podPositions, nil
 }
 
-func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPath ...string) error {
+func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
+	for _, descriptorPath := range descriptorPaths {
+		path.Clean(descriptorPath)
+		if !strings.HasSuffix(descriptorPath, "Podfile") {
+			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+			continue
+		}
+		data, err := os.ReadFile(descriptorPath)
+		var newLines []string
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		foundDependency := false
+		for _, line := range lines {
+			if strings.Contains(line, dependencyName) {
+				foundDependency = true
+			}
+			if foundDependency && strings.Contains(line, dependencyVersion) {
+				newLine := strings.Replace(line, dependencyVersion, fixVersion, 1)
+				newLines = append(newLines, newLine)
+				foundDependency = false
+			} else {
+				newLines = append(newLines, line)
+			}
+		}
+		output := strings.Join(newLines, "\n")
+		err = os.WriteFile(descriptorPath, []byte(output), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write file: %v", err)
+		}
+	}
 	return nil
 }
 
