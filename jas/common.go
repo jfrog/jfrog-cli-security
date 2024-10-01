@@ -83,6 +83,7 @@ func CreateJasScanner(jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig, serverDe
 
 func getJasEnvVars(serverDetails *config.ServerDetails, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
+	log.Debug("Adding the following environment variables to the analyzer manager", amBasicVars)
 	if err != nil {
 		return nil, err
 	}

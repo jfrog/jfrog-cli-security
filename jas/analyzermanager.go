@@ -33,6 +33,7 @@ const (
 	jfPasswordEnvVariable                     = "JF_PASS"
 	jfTokenEnvVariable                        = "JF_TOKEN"
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
+	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
@@ -143,10 +144,11 @@ func isCI() bool {
 
 func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
 	envVars = map[string]string{
-		jfUserEnvVariable:        serverDetails.User,
-		jfPasswordEnvVariable:    serverDetails.Password,
-		jfPlatformUrlEnvVariable: serverDetails.Url,
-		jfTokenEnvVariable:       serverDetails.AccessToken,
+		jfUserEnvVariable:            serverDetails.User,
+		jfPasswordEnvVariable:        serverDetails.Password,
+		jfPlatformUrlEnvVariable:     serverDetails.Url,
+		jfPlatformXrayUrlEnvVariable: serverDetails.XrayUrl,
+		jfTokenEnvVariable:           serverDetails.AccessToken,
 	}
 	if !isCI() {
 		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
