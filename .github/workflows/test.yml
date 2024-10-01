@@ -46,7 +46,7 @@ jobs:
             testFlags: '--test.unit'
           - name: 'Artifactory Integration'
             testFlags: '--test.artifactory'
-          - name: 'Xray Integration'
+          - name: 'Xray Commands Integration'
             testFlags: '--test.xray'
           - name: 'XSC Integration'
             testFlags: '--test.xsc'
