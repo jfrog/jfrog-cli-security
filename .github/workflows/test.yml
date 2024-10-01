@@ -65,7 +65,7 @@ jobs:
             testFlags: '--test.git'
     steps:
       - name: Checkout, Install and Setup Dependencies
-        uses: ./.github/actions/install-and-setup
+        uses: ./actions/install-and-setup
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       # Test
