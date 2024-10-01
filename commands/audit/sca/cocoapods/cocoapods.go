@@ -43,13 +43,18 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 		lines := strings.Split(string(data), "\n")
 		var startLine, startCol, endLine, endCol int
 		foundDependency := false
+		var tempIndex int
 		for i, line := range lines {
 			if strings.Contains(line, directDependencyName) {
 				startLine = i
 				startCol = strings.Index(line, directDependencyName)
 				foundDependency = true
+				tempIndex = i
 			}
-			if foundDependency && strings.Contains(line, directDependencyVersion) {
+			// This means we are in a new dependency (we cannot find dependency name and version together)
+			if i > tempIndex && foundDependency && strings.Contains(line, "pod") {
+				foundDependency = false
+			} else if foundDependency && strings.Contains(line, directDependencyVersion) {
 				endLine = i
 				endCol = len(line)
 				var snippet string
@@ -89,11 +94,16 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 		}
 		lines := strings.Split(string(data), "\n")
 		foundDependency := false
-		for _, line := range lines {
+		var tempIndex int
+		for index, line := range lines {
 			if strings.Contains(line, dependencyName) {
 				foundDependency = true
+				tempIndex = index
 			}
-			if foundDependency && strings.Contains(line, dependencyVersion) {
+			// This means we are in a new dependency (we cannot find dependency name and version together)
+			if index > tempIndex && foundDependency && strings.Contains(line, "pod") {
+				foundDependency = false
+			} else if foundDependency && strings.Contains(line, dependencyVersion) {
 				newLine := strings.Replace(line, dependencyVersion, fixVersion, 1)
 				newLines = append(newLines, newLine)
 				foundDependency = false
