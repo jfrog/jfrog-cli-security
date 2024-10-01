@@ -82,7 +82,7 @@ jobs:
     name: Code Coverage Report
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    needs: test
+    needs: Tests
     steps:
       - uses: fgrosse/go-coverage-report@v1.2.0
         with:
