@@ -164,23 +164,23 @@ func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResul
 }
 
 func convertSarifRunPathsForOS(runs ...*sarif.Run) {
-	for _, run := range runs {
-		for _, invocation := range run.Invocations {
-			if invocation.WorkingDirectory != nil && invocation.WorkingDirectory.URI != nil {
-				*invocation.WorkingDirectory.URI = filepath.FromSlash(sarifutils.GetInvocationWorkingDirectory(invocation))
+	for r := range runs {
+		for i := range runs[r].Invocations {
+			if runs[r].Invocations[i].WorkingDirectory != nil && runs[r].Invocations[i].WorkingDirectory.URI != nil {
+				*runs[r].Invocations[i].WorkingDirectory.URI = filepath.FromSlash(sarifutils.GetInvocationWorkingDirectory(runs[r].Invocations[i]))
 			}
 		}
-		for _, result := range run.Results {
-			for _, location := range result.Locations {
-				if location != nil && location.PhysicalLocation != nil && location.PhysicalLocation.ArtifactLocation != nil && location.PhysicalLocation.ArtifactLocation.URI != nil {
-					*location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(location))
+		for i := range runs[r].Results {
+			for j := range runs[r].Results[i].Locations {
+				if runs[r].Results[i].Locations[j] != nil && runs[r].Results[i].Locations[j].PhysicalLocation != nil && runs[r].Results[i].Locations[j].PhysicalLocation.ArtifactLocation != nil && runs[r].Results[i].Locations[j].PhysicalLocation.ArtifactLocation.URI != nil {
+					*runs[r].Results[i].Locations[j].PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(runs[r].Results[i].Locations[j]))
 				}
 			}
-			for _, codeFlow := range result.CodeFlows {
-				for _, threadFlows := range codeFlow.ThreadFlows {
-					for _, location := range threadFlows.Locations {
-						if location != nil && location.Location != nil && location.Location.PhysicalLocation != nil && location.Location.PhysicalLocation.ArtifactLocation != nil && location.Location.PhysicalLocation.ArtifactLocation.URI != nil {
-							*location.Location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(location.Location))
+			for j := range runs[r].Results[i].CodeFlows {
+				for k := range runs[r].Results[i].CodeFlows[j].ThreadFlows {
+					for l := range runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations {
+						if runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l] != nil && runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location != nil && runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location.PhysicalLocation != nil && runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location.PhysicalLocation.ArtifactLocation != nil && runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location.PhysicalLocation.ArtifactLocation.URI != nil {
+							*runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location.PhysicalLocation.ArtifactLocation.URI = getJasConvertedPath(sarifutils.GetLocationFileName(runs[r].Results[i].CodeFlows[j].ThreadFlows[k].Locations[l].Location))
 						}
 					}
 				}
@@ -227,13 +227,13 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 	}
 	jas.Location.File = getJasConvertedPath(jas.Location.File)
 	if jas.Applicability != nil {
-		for _, evidence := range jas.Applicability.Evidence {
-			evidence.Location.File = getJasConvertedPath(evidence.Location.File)
+		for i := range jas.Applicability.Evidence {
+			jas.Applicability.Evidence[i].Location.File = getJasConvertedPath(jas.Applicability.Evidence[i].Location.File)
 		}
 	}
-	for _, codeFlow := range jas.CodeFlow {
-		for _, location := range codeFlow {
-			location.File = getJasConvertedPath(location.File)
+	for i := range jas.CodeFlow {
+		for j := range jas.CodeFlow[i] {
+			jas.CodeFlow[i][j].File = getJasConvertedPath(jas.CodeFlow[i][j].File)
 		}
 	}
 }
@@ -241,27 +241,27 @@ func convertJasSimpleJsonPathsForOS(jas *formats.SourceCodeRow) {
 func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow, potentialImpactPaths *[][]formats.ComponentRow, potentialImpactedDependencyDetails *formats.ImpactedDependencyDetails, potentialCves *[]formats.CveRow) {
 	if potentialComponents != nil {
 		components := *potentialComponents
-		for _, component := range components {
-			if component.Location != nil {
-				component.Location.File = filepath.FromSlash(component.Location.File)
+		for i := range components {
+			if components[i].Location != nil {
+				components[i].Location.File = filepath.FromSlash(components[i].Location.File)
 			}
 		}
 	}
 	if potentialImpactPaths != nil {
 		impactPaths := *potentialImpactPaths
-		for _, impactPath := range impactPaths {
-			for _, pathComponent := range impactPath {
-				if pathComponent.Location != nil {
-					pathComponent.Location.File = filepath.FromSlash(pathComponent.Location.File)
+		for i := range impactPaths {
+			for j := range impactPaths[i] {
+				if impactPaths[i][j].Location != nil {
+					impactPaths[i][j].Location.File = filepath.FromSlash(impactPaths[i][j].Location.File)
 				}
 			}
 		}
 	}
 	if potentialImpactedDependencyDetails != nil {
 		impactedDependencyDetails := *potentialImpactedDependencyDetails
-		for _, component := range impactedDependencyDetails.Components {
-			if component.Location != nil {
-				component.Location.File = filepath.FromSlash(component.Location.File)
+		for i := range impactedDependencyDetails.Components {
+			if impactedDependencyDetails.Components[i].Location != nil {
+				impactedDependencyDetails.Components[i].Location.File = filepath.FromSlash(impactedDependencyDetails.Components[i].Location.File)
 			}
 		}
 	}
@@ -269,20 +269,11 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		cves := *potentialCves
 		for _, cve := range cves {
 			if cve.Applicability != nil {
-				for _, evidence := range cve.Applicability.Evidence {
-					evidence.Location.File = filepath.FromSlash(evidence.Location.File)
+				for i := range cve.Applicability.Evidence {
+					cve.Applicability.Evidence[i].Location.File = filepath.FromSlash(cve.Applicability.Evidence[i].Location.File)
 				}
 			}
 		}
-	}
-	printCve(potentialCves)
-}
-
-func printCve(potentialCves *[]formats.CveRow) {
-	for _, cve := range *potentialCves {
-		cveId := cve.Id
-		applicability := cve.Applicability
-		log.Output(fmt.Sprintf("Cve: %v, Applicability: %v", cveId, applicability))
 	}
 }
 
