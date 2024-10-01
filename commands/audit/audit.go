@@ -315,6 +315,10 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 func initCmdResults(entitledForJas, secretValidation bool, params *AuditParams) (cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(utils.SourceCode, params.xrayVersion, entitledForJas, secretValidation).SetMultiScanId(params.commonGraphScanParams.MultiScanId)
 	detectScanTargets(cmdResults, params)
+	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
+		// No SCA targets were detected, add the root directory as a target for JAS scans.
+		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
+	}
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults)
 	if err != nil {
 		return
