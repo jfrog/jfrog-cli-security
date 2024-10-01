@@ -267,10 +267,10 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 	}
 	if potentialCves != nil {
 		cves := *potentialCves
-		for _, cve := range cves {
-			if cve.Applicability != nil {
-				for i := range cve.Applicability.Evidence {
-					cve.Applicability.Evidence[i].Location.File = filepath.FromSlash(cve.Applicability.Evidence[i].Location.File)
+		for i := range cves {
+			if cves[i].Applicability != nil {
+				for i := range cves[i].Applicability.Evidence {
+					cves[i].Applicability.Evidence[i].Location.File = filepath.FromSlash(cves[i].Applicability.Evidence[i].Location.File)
 				}
 			}
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -186,16 +187,33 @@ func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected,
 }
 
 func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.Result {
+	log.Output("====================================")
+	log.Output(fmt.Sprintf(":: Actual results with expected results: %s", getResultId(expected)))
 	for _, result := range actual {
+
+		log.Output(fmt.Sprintf("Compare actual result (isPotential=%t, hasSameLocations=%t) with expected result: %s", isPotentialSimilarResults(expected, result), hasSameLocations(expected, result) , getResultId(result)))
 		if isPotentialSimilarResults(expected, result) && hasSameLocations(expected, result) {
 			return result
 		}
 	}
+	log.Output("====================================")
 	return nil
 }
 
 func isPotentialSimilarResults(expected, actual *sarif.Result) bool {
 	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultMsgText(actual) == sarifutils.GetResultMsgText(expected) && sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, expected)
+}
+
+func getResultId(result *sarif.Result) string {
+	return fmt.Sprintf("%s-%s-%s-%s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, result), getLocationsId(result.Locations))
+}
+
+func getLocationsId(locations []*sarif.Location) string {
+	var locationsId string
+	for _, location := range locations {
+		locationsId += sarifutils.GetLocationId(location)
+	}
+	return locationsId
 }
 
 func hasSameLocations(expected, actual *sarif.Result) bool {
