@@ -1,18 +1,9 @@
 name: "Checkout, Install and Setup Dependencies"
 description: "Checkout code and install dependencies like Go, Node, Java, Python, etc."
-inputs:
-  ref:
-    description: 'The ref to checkout'
-    required: true
 
 runs:
   using: "composite"
   steps:
-    # Checkout code
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.ref }}
     # Install dependencies
     - name: Setup Go with cache
       uses: jfrog/.github/actions/install-go-with-cache@main

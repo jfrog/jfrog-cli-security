@@ -64,10 +64,12 @@ jobs:
           - name: 'Git commands Integration'
             testFlags: '--test.git'
     steps:
-      - name: Checkout, Install and Setup Dependencies
-        uses: ./actions/install-and-setup
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
       # Test
       - name: Run tests
         run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 30m -cover ${{ matrix.os == 'ubuntu' && matrix.suite.ubuntuTestFlags || matrix.suite.testFlags }} --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-sec-test
