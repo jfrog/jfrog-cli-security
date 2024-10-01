@@ -56,7 +56,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 				if endLine == startLine {
 					snippet = lines[startLine][startCol:endCol]
 				} else {
-					for snippetLine := range endLine - startLine + 1 {
+					for snippetLine := 1; snippetLine < endLine-startLine+1; snippetLine++ {
 						switch snippetLine {
 						case 0:
 							snippet += "\n" + lines[snippetLine][startLine:]
