@@ -158,11 +158,19 @@ func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run
 	// validate results
 	for _, expectedResult := range expected.Results {
 		result := getResultByResultId(expectedResult, actual.Results)
-		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found in %v", expected.Tool.Driver.Name, sarifutils.GetResultRuleId(expectedResult), actual.Results)) {
+		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found in %v", expected.Tool.Driver.Name, sarifutils.GetResultRuleId(expectedResult), getResultsRuleIds(actual.Results))) {
 			continue
 		}
 		validateSarifResult(t, exactMatch, expected.Tool.Driver.Name, expectedResult, result)
 	}
+}
+
+func getResultsRuleIds(results []*sarif.Result) []string {
+	var ruleIds []string
+	for _, result := range results {
+		ruleIds = append(ruleIds, sarifutils.GetResultRuleId(result))
+	}
+	return ruleIds
 }
 
 func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.ReportingDescriptor) {

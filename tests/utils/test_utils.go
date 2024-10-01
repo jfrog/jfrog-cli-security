@@ -275,6 +275,15 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 			}
 		}
 	}
+	printCve(potentialCves)
+}
+
+func printCve(potentialCves *[]formats.CveRow) {
+	for _, cve := range *potentialCves {
+		cveId := cve.Id
+		applicability := cve.Applicability
+		log.Output(fmt.Sprintf("Cve: %v, Applicability: %v", cveId, applicability))
+	}
 }
 
 func ReadSarifResults(t *testing.T, path string) *sarif.Report {
