@@ -48,6 +48,8 @@ type CmdResultsSarifConverter struct {
 	// Include vulnerabilities/violations in the output
 	includeVulnerabilities bool
 	hasViolationContext    bool
+	// If we are running on Github actions, we need to add/change information to the output
+	patchBinaryPaths	   bool
 	// Current stream parse cache information
 	current       *sarif.Report
 	scaCurrentRun *sarif.Run
@@ -59,8 +61,8 @@ type CmdResultsSarifConverter struct {
 	currentCmdType utils.CommandType
 }
 
-func NewCmdResultsSarifConverter(includeVulnerabilities, hasViolationContext bool) *CmdResultsSarifConverter {
-	return &CmdResultsSarifConverter{includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext}
+func NewCmdResultsSarifConverter(includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
+	return &CmdResultsSarifConverter{includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext, patchBinaryPaths: patchBinaryPaths}
 }
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
@@ -94,7 +96,7 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 	}
 	if sc.scaCurrentRun != nil {
 		// Flush the current run
-		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, sc.currentTarget, sc.scaCurrentRun)...)
+		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, sc.currentTarget, sc.scaCurrentRun)...)
 	}
 	sc.currentTarget = target
 	if sc.hasViolationContext || sc.includeVulnerabilities {
@@ -163,7 +165,7 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, secr
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, target, secrets...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, target, secrets...)...)
 	return
 }
 
@@ -174,7 +176,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, iacs ..
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, target, iacs...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, target, iacs...)...)
 	return
 }
 
@@ -185,7 +187,7 @@ func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, sast ..
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, target, sast...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, target, sast...)...)
 	return
 }
 
@@ -414,7 +416,7 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 	return fmt.Sprintf("%s<br/>Direct dependencies:<br/>%s", getLicenseViolationSummary(depName, version, key), formattedDirectDependencies), nil
 }
 
-func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.SubScanType, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
+func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
 	// Since we run in temp directories files should be relative
 	// Patch by converting the file paths to relative paths according to the invocations
 	convertPaths(cmdType, subScanType, runs...)
@@ -429,7 +431,7 @@ func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.
 		if patched.Tool.Driver != nil {
 			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, run.Tool.Driver.Rules...)
 		}
-		patched.Results = patchResults(cmdType, subScanType, target, run, run.Results...)
+		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, target, run, run.Results...)
 		patchedRuns = append(patchedRuns, patched)
 	}
 	return patchedRuns
@@ -494,7 +496,7 @@ func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, ru
 	return
 }
 
-func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, target results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
+func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, run *sarif.Run, results ...*sarif.Result) (patched []*sarif.Result) {
 	patched = []*sarif.Result{}
 	for _, result := range results {
 		if len(result.Locations) == 0 {
@@ -511,8 +513,10 @@ func patchResults(commandType utils.CommandType, subScanType utils.SubScanType, 
 				markdown = getScaInBinaryMarkdownMsg(commandType, target, result)
 			}
 			sarifutils.SetResultMsgMarkdown(markdown, result)
-			// For Binary scans, override the physical location if applicable (after data already used for markdown)
-			result = convertBinaryPhysicalLocations(commandType, run, result)
+			if patchBinaryPaths {
+				// For Binary scans, override the physical location if applicable (after data already used for markdown)
+				result = convertBinaryPhysicalLocations(commandType, run, result)
+			}
 			// Calculate the fingerprints if not exists
 			if !sarifutils.IsFingerprintsExists(result) {
 				if err := calculateResultFingerprints(commandType, run, result); err != nil {

@@ -199,6 +199,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulner
 	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeVulnerabilities: includeVulnerabilities,
 		HasViolationContext:    hasViolationContext,
+		PatchBinaryPaths: 	 	true,
 		RequestedScans:         requestedScans,
 		Pretty:                 true,
 	}).ConvertToSarif(cmdResults)

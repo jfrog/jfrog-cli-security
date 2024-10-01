@@ -568,10 +568,9 @@ func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
 // Helper for both C & Cpp Sast scans tests
 func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), filepath.Join("projects", "package-managers", "c"))
+	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "c")
 	// Copy the c project from the testdata to a temp dir
 	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
 	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
@@ -581,7 +580,7 @@ func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
 		defer unsetEnv()
 	}
 	args := []string{"audit", "--format=" + format}
-	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {

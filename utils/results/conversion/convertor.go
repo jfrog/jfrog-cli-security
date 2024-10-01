@@ -23,6 +23,8 @@ type ResultConvertParams struct {
 	HasViolationContext bool
 	// Control if the output should include vulnerabilities information
 	IncludeVulnerabilities bool
+	// If true and commandType.IsTargetBinary(), binary inner paths in results will be converted to the CI job file (relevant only for SARIF)
+	PatchBinaryPaths bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool
 	// Control and override converting command results as multi target results, if nil will be determined by the results.HasMultipleTargets()
@@ -65,7 +67,7 @@ func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.Securi
 }
 
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
-	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext)
+	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext, c.Params.PatchBinaryPaths)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
