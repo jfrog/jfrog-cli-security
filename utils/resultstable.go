@@ -30,6 +30,7 @@ const (
 	directDependencyPathLength = 2
 	nodeModules                = "node_modules"
 	NpmPackageTypeIdentifier   = "npm://"
+	SwiftPackageTypeIdentifier = "swift://"
 )
 
 // PrintViolationsTable prints the violations in 4 tables: security violations, license compliance violations, operational risk violations and ignore rule URLs.

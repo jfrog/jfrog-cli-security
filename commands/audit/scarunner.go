@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -266,6 +267,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		})
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+	case techutils.Swift:
+		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}

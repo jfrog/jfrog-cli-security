@@ -38,6 +38,7 @@ const (
 	Docker Technology = "docker"
 	Oci    Technology = "oci"
 	Conan  Technology = "conan"
+	Swift  Technology = "swift"
 )
 const Pypi = "pypi"
 
@@ -52,6 +53,7 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
+	SwiftLang  CodeLanguage = "any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
@@ -67,6 +69,7 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Poetry: project.Poetry,
 	Nuget:  project.Nuget,
 	Dotnet: project.Dotnet,
+	Swift:  project.Swift,
 }
 
 type TechData struct {
@@ -176,6 +179,11 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{"conanfile.txt", "conanfile.py "},
 		formal:             "Conan",
 	},
+	Swift: {
+		indicators:         []string{"Package.swift", "Package.resolved"},
+		packageDescriptors: []string{"Package.swift", "Package.resolved"},
+		formal:             "Swift",
+	},
 }
 
 var (
@@ -216,6 +224,7 @@ func TechnologyToLanguage(technology Technology) CodeLanguage {
 		Dotnet: CSharp,
 		Yarn:   JavaScript,
 		Pnpm:   JavaScript,
+		Swift:  SwiftLang,
 	}
 	return languageMap[technology]
 }
