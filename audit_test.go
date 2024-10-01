@@ -621,7 +621,7 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
-//xray-url only
+// xray-url only
 
 func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommandWithXrayUrl)
