@@ -1,0 +1,76 @@
+name: "Checkout, Install and Setup Dependencies"
+description: "Checkout code and install dependencies like Go, Node, Java, Python, etc."
+inputs:
+  ref:
+    description: 'The ref to checkout'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref }}
+    # Install dependencies
+    - name: Setup Go with cache
+      uses: jfrog/.github/actions/install-go-with-cache@main
+
+    - name: Install npm
+      uses: actions/setup-node@v3
+      with:
+        node-version: "16"
+    - name: Setup Pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
+
+    - name: Install Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: "11"
+        distribution: "adopt"
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 7.6
+
+    - name: Install NuGet
+      uses: nuget/setup-nuget@v1
+      with:
+        nuget-version: 6.x
+    - name: Install dotnet
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '6.x'
+    
+    - name: Setup Python3
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+    - name: Setup Pipenv
+      run: |
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          python -m pip install pipenv
+        else
+          python3 -m pip install pipenv
+        fi
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Poetry
+      run: |
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          python -m pip install poetry
+        else
+          python3 -m pip install poetry
+        fi
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Conan
+      run: |
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          python -m pip install conan
+        else
+          python3 -m pip install conan
+        fi
+        conan profile detect
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
