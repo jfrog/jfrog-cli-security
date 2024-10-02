@@ -1,5 +1,6 @@
 [default.extend-words]
-laf = "laf"
-ist = "ist"
+testng = "testng"
+afe = "afe"
+
 [files]
-extend-exclude = ["go.mod", "go.sum", "./tests/**"]
+extend-exclude = ["go.mod", "go.sum", "tests/**"]

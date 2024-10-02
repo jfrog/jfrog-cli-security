@@ -102,7 +102,7 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionP
 		// Determine if the project is a NuGet or .NET project
 		toolName, err = getProjectToolName(tmpWd)
 		if err != nil {
-			err = fmt.Errorf("failed while checking for the porject's tool type: %s", err.Error())
+			err = fmt.Errorf("failed while checking for the project's tool type: %s", err.Error())
 			return
 		}
 	}
@@ -187,7 +187,7 @@ func getProjectToolName(wd string) (toolName string, err error) {
 func getProjectConfigurationFilesPaths(wd string) (projectConfigFilesPaths []string, err error) {
 	err = filepath.WalkDir(wd, func(path string, d fs.DirEntry, innerErr error) error {
 		if innerErr != nil {
-			return fmt.Errorf("error has occured when trying to access or traverse the files system: %s", err.Error())
+			return fmt.Errorf("error has occurred when trying to access or traverse the files system: %s", err.Error())
 		}
 
 		if strings.HasSuffix(path, csprojFileSuffix) || strings.HasSuffix(path, packagesConfigFileName) {
