@@ -3,9 +3,5 @@ testng = "testng"
 afe = "afe"
 Bouned = "Bouned"
 
-[type.po]
-extend-glob = ["**/tests/testdata/**"]
-check-file = false
-
 [files]
-extend-exclude = ["go.mod", "go.sum"]
+extend-exclude = ["go.mod", "go.sum", "tests"]
