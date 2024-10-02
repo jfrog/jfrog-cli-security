@@ -68,7 +68,7 @@ const (
 	MinArtiPassThroughSupport = "7.82.0"
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
-	MinXrayPassTHroughSupport = "3.92.0"
+	MinXrayPassThroughSupport = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -105,7 +105,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassThroughSupport)
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)

@@ -1,6 +1,7 @@
 [default.extend-words]
 testng = "testng"
 afe = "afe"
+Bouned = "Bouned"
 
 [type.po]
 extend-glob = ["**/tests/testdata/**"]
