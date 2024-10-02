@@ -71,7 +71,7 @@ jobs:
           path: cover-unit-tests
 
   Audit_Command_Integration_Tests:
-    name: "[${{ matrix.suite.name }}] (${{ matrix.os }}) Audit Command Integration Tests"
+    name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -79,17 +79,17 @@ jobs:
       matrix:
         os: [ ubuntu, windows, macos ]
         suite:
-          - name: 'General Functionality Suite (Jas, MultiTech, NoTech...)'
+          - name: 'General Suite (Jas, MultiTech, NoTech...)'
             testFlags: '--test.audit'
-          - name: 'Java Script Technologies Suite (Npm, Pnpm, Yarn)'
+          - name: 'Java Script Suite (Npm, Pnpm, Yarn)'
             testFlags: '--test.audit.JavaScript'
-          - name: 'Python Technologies Suite (Pip, Pipenv, Poetry)'
+          - name: 'Python Suite (Pip, Pipenv, Poetry)'
             testFlags: '--test.audit.Python'
-          - name: 'Java Technologies Suite (Maven, Gradle)'
+          - name: 'Java Suite (Maven, Gradle)'
             testFlags: '--test.audit.Java'
-          - name: 'Go Technologies Suite (Go Modules, Dep, Glide)'
+          - name: 'Go Suite (Go Modules, Dep, Glide)'
             testFlags: '--test.audit.Go'
-          - name: 'C/C++/C# Technologies Suite (Conan, NuGet, Dotnet)'
+          - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
             testFlags: '--test.audit.C'
         
     steps:
