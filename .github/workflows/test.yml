@@ -14,7 +14,7 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m  --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m  --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
@@ -61,8 +61,8 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover -coverprofile=cover-unit-tests --test.unit
-    
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
+
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu'
@@ -90,7 +90,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover --coverprofile=cover-audit-tests --test.audit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-audit-tests --test.audit
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -119,7 +119,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover --coverprofile=cover-artifactory-tests --test.artifactory --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-artifactory-tests --test.artifactory --ci.runId=${{ runner.os }}-sec-test
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -148,7 +148,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover --coverprofile=cover-xray-tests --test.xray
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-xray-tests --test.xray
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -177,7 +177,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover --coverprofile=cover-xsc-tests --test.xsc
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-xsc-tests --test.xsc
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -206,10 +206,10 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test --test.scan
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
         if: ${{ matrix.os != 'ubuntu' }}
       - name: Run security tests (with Docker Scan)
-        run: go test -cover --coverprofile=cover-scan-tests --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-scan-tests --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
         if: ${{ matrix.os == 'ubuntu' }}
 
       - name: Archive Code Coverage Results
@@ -239,7 +239,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test -cover --coverprofile=cover-other-tests --test.enrich --test.git
+        run:  ${{ env.GO_COMMON_TEST_ARGS }}${{ env.GO_COMMON_TEST_ARGS }} -cover --coverprofile=cover-other-tests --test.enrich --test.git
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
