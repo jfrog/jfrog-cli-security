@@ -286,7 +286,7 @@ func sortVulnerabilityOrViolationRows(rows []formats.VulnerabilityOrViolationRow
 
 // getJfrogResearchPriority returns the score of JFrog Research Severity.
 // If there is no such severity will return the normal severity score.
-// When vulnerability with JFrog Reasearch to a vulnerability without we'll compare the JFrog Research Severity to the normal severity
+// When vulnerability with JFrog Research to a vulnerability without we'll compare the JFrog Research Severity to the normal severity
 func getJfrogResearchPriority(vulnerabilityOrViolation formats.VulnerabilityOrViolationRow) int {
 	if vulnerabilityOrViolation.JfrogResearchInformation == nil {
 		return vulnerabilityOrViolation.SeverityNumValue

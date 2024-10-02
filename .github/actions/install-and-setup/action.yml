@@ -41,27 +41,13 @@ runs:
       with:
         python-version: "3.x"
     - name: Setup Pipenv
-      run: |
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          python -m pip install pipenv
-        else
-          python3 -m pip install pipenv
-        fi
+      run: python -m pip install pipenv
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
     - name: Setup Poetry
-      run: |
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          python -m pip install poetry
-        else
-          python3 -m pip install poetry
-        fi
+      run: python -m pip install poetry
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
     - name: Setup Conan
       run: |
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          python -m pip install conan
-        else
-          python3 -m pip install conan
-        fi
+        python -m pip install conan
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
