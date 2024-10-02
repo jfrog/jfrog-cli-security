@@ -83,9 +83,44 @@ func InitXscTest(t *testing.T, validations ...func()) func() {
 	}
 }
 
-func InitAuditTest(t *testing.T, minVersion string) {
-	if !*configTests.TestAudit {
-		t.Skip(getSkipTestMsg("Audit command integration", "--test.audit"))
+func InitAuditGeneralTests(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditGeneral {
+		t.Skip(getSkipTestMsg("Audit command general integration", "--test.audit"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditJavaScriptTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJavaScript {
+		t.Skip(getSkipTestMsg("Audit command JavaScript technologies (Npm, Pnpm, Yarn) integration", "--test.audit.JavaScript"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditJavaTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJava {
+		t.Skip(getSkipTestMsg("Audit command Java technologies (Maven, Gradle) integration", "--test.audit.Java"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditCTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditCTypes {
+		t.Skip(getSkipTestMsg("Audit command C/C++/C# technologies (Nuget/DotNet, Conan) integration", "--test.audit.C"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditGoTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditGo {
+		t.Skip(getSkipTestMsg("Audit command Go technologies (GoLang) integration", "--test.audit.Go"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditPythonTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditPython {
+		t.Skip(getSkipTestMsg("Audit command Python technologies (Pip, PipEnv, Poetry) integration", "--test.audit.Python"))
 	}
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
@@ -102,6 +137,12 @@ func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp fu
 		t.Skip(getSkipTestMsg("Docker scan command integration (Ubuntu)", "--test.dockerScan"))
 	}
 	return InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
+}
+
+func InitCurationTest(t *testing.T) {
+	if !*configTests.TestCuration {
+		t.Skip(getSkipTestMsg("Curation command integration", "--test.curation"))
+	}
 }
 
 func InitEnrichTest(t *testing.T, minVersion string) {

@@ -215,7 +215,7 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 // Curation tests
 
 func TestCurationAudit(t *testing.T) {
-	integration.InitScanTest(t, "")
+	integration.InitCurationTest(t)
 	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm"))
 	defer cleanUp()
 

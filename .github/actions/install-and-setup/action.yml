@@ -1,5 +1,5 @@
-name: "Checkout, Install and Setup Dependencies"
-description: "Checkout code and install dependencies like Go, Node, Java, Python, etc."
+name: "Install and Setup Dependencies"
+description: "Install needed dependencies for this repository like Go, Node, Java, Python, etc."
 
 runs:
   using: "composite"
@@ -9,7 +9,7 @@ runs:
       uses: jfrog/.github/actions/install-go-with-cache@main
 
     - name: Install npm
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: "16"
     - name: Setup Pnpm
@@ -18,7 +18,7 @@ runs:
         version: 8
 
     - name: Install Java
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: "11"
         distribution: "adopt"

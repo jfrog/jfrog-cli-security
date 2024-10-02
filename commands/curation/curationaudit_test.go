@@ -19,6 +19,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/formats"
 
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -29,7 +30,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -442,7 +442,6 @@ func TestDoCurationAudit(t *testing.T) {
 	}
 }
 
-
 func createCurationTestEnv(t *testing.T, testCase testCase, config *config.ServerDetails) func() {
 	tempHomeDir, cleanUpHome := createTempHomeDirWithConfig(t, testCase, config)
 	cleanUpFlags := setCurationFlagsForTest(t)
@@ -469,7 +468,7 @@ func createTempHomeDirWithConfig(t *testing.T, testCase testCase, config *config
 	// create .jfrog dir in temp home dir
 	jfrogDir := filepath.Join(tempHomeDirPath, ".jfrog")
 	assert.NoError(t, os.MkdirAll(jfrogDir, 0777))
-	// copy content from 
+	// copy content from
 	assert.NoError(t, biutils.CopyDir(filepath.Join(testCase.pathToTest, ".jfrog"), jfrogDir, true, nil))
 	// Set the home dir
 	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
@@ -503,12 +502,12 @@ func runPreTestExec(t *testing.T, currentWd string, testCase testCase) {
 
 func createCurationCmdAndRun(t *testing.T, tt testCase, config *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
 	curationCmd := NewCurationAuditCommand()
-			curationCmd.SetIsCurationCmd(true)
-			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
-			cmdResults = map[string]*CurationReport{}
-			err = curationCmd.doCurateAudit(cmdResults)
-			return
+	curationCmd.SetIsCurationCmd(true)
+	curationCmd.parallelRequests = 3
+	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	cmdResults = map[string]*CurationReport{}
+	err = curationCmd.doCurateAudit(cmdResults)
+	return
 }
 
 func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
@@ -537,19 +536,19 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 }
 
 type testCase struct {
-	name                     string
-	pathToTest               string
-	pathToPreTest            string
-	preTestExec              string
-	serveResources           map[string]string
-	funcToGetGoals           func(t *testing.T) []string
-	shouldIgnoreConfigFile   bool
-	expectedBuildRequest     map[string]bool
-	expectedRequest          map[string]bool
-	requestToFail            map[string]bool
-	expectedResp             map[string]*CurationReport
-	requestToError           map[string]bool
-	expectedError            string
+	name                   string
+	pathToTest             string
+	pathToPreTest          string
+	preTestExec            string
+	serveResources         map[string]string
+	funcToGetGoals         func(t *testing.T) []string
+	shouldIgnoreConfigFile bool
+	expectedBuildRequest   map[string]bool
+	expectedRequest        map[string]bool
+	requestToFail          map[string]bool
+	expectedResp           map[string]*CurationReport
+	requestToError         map[string]bool
+	expectedError          string
 	// cleanDependencies        func() error
 	tech                     techutils.Technology
 	createServerWithoutCreds bool

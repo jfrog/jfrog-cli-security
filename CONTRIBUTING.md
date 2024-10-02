@@ -71,17 +71,23 @@ go test -v github.com/jfrog/jfrog-cli-security [test-types] [flags]
 
 ### The available test types are (Not supplying flags will run all tests):
 
-| Type                 | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `-test.unit`         | [Optional] Unit tests                             |
-| `-test.artifactory`  | [Optional] Artifactory integration tests          |
-| `-test.xsc`          | [Optional] XSC integration tests                  |
-| `-test.xray`         | [Optional] Xray commands integration tests        |
-| `-test.audit`        | [Optional] Audit command integration tests        |
-| `-test.scan`         | [Optional] Other scan commands integration tests  |
-| `-test.enrich`       | [Optional] Enrich Command integration tests       |
-| `-test.git`          | [Optional] Git commands integration tests         |
-| `-test.dockerScan`   | [Optional] Docker scan command integration tests  |
+| Type                     | Description                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `-test.unit`             | [Optional] Unit tests                                                                 |
+| `-test.artifactory`      | [Optional] Artifactory integration tests                                              |
+| `-test.xsc`              | [Optional] XSC integration tests                                                      |
+| `-test.xray`             | [Optional] Xray commands integration tests                                            |
+| `-test.audit`            | [Optional] Audit command general (Jas, MultiTech...) integration tests                |
+| `-test.audit.JavaScript` | [Optional] Audit command JavaScript technologies (Npm, Pnpm, Yarn)integration tests   |
+| `-test.audit.Java`       | [Optional] Audit command Java technologies (Maven, Gradle)integration tests           |
+| `-test.audit.C`          | [Optional] Audit command C/C++/C# technologies (Nuget/DotNet, Conan)integration tests |
+| `-test.audit.Go`         | [Optional] Audit command Go integration tests                                         |
+| `-test.audit.Python`     | [Optional] Audit command Python technologies (Pip, PipEnv, Poetry)integration tests   |
+| `-test.scan`             | [Optional] Other scan commands integration tests                                      |
+| `-test.curation`         | [Optional] Curation command integration tests                                         |
+| `-test.enrich`           | [Optional] Enrich Command integration tests                                           |
+| `-test.git`              | [Optional] Git commands integration tests                                             |
+| `-test.dockerScan`       | [Optional] Docker scan command integration tests                                      |
 
 ### Docker Scan tests
 

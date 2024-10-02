@@ -99,7 +99,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	if err != nil {
 		return false, err
 	}
-	
+
 	xrayVersion, err := ca.getXrayVersion()
 	if err != nil {
 		return false, err
