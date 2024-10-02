@@ -425,7 +425,6 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	output := testAuditC(t, string(format.SimpleJson), true)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 0, 0, 0, 0, 0, 0, 0, 0)
-
 }
 
 func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
@@ -435,50 +434,32 @@ func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
 
 // Helper for both C & Cpp Sast scans tests
 func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getJasAuditMockCommand)
+	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
+
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "c"))
 	defer cleanUp()
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	cProjectPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "c")
-	// Copy the c project from the testdata to a temp dir
-	assert.NoError(t, biutils.CopyDir(cProjectPath, tempDirPath, true, nil))
-	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
-	defer clientTests.ChangeDirAndAssert(t, prevWd)
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
-	defer deleteWatch()
+
+	// Configure a new server named "default"
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+
 	if enableCppFlag {
 		unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "JFROG_SAST_ENABLE_CPP", "1")
 		defer unsetEnv()
 	}
-	args := []string{"audit", "--licenses", "--vuln", "--format=" + format, "--watches=" + watchName, "--fail=false"}
-	return cliToRun.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+	args := []string{"audit", "--licenses", "--format=" + format}
+	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
-	cliToRun, cleanUp := securityIntegrationTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
 	// Verify that scan results are printed
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	// Verify that JAS results are not printed
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-}
-
-func getJasAuditMockCommand() components.Command {
-	return components.Command{
-		Name:  docs.Audit,
-		Flags: docs.GetCommandFlags(docs.Audit),
-		Action: func(c *components.Context) error {
-			auditCmd, err := cli.CreateAuditCmd(c)
-			if err != nil {
-				return err
-			}
-			// Disable Jas for this test
-			auditCmd.SetUseJas(true)
-			return progressbar.ExecWithProgress(auditCmd)
-		},
-	}
 }
 
 func getNoJasAuditMockCommand() components.Command {
