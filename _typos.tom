@@ -4,4 +4,4 @@ afe = "afe"
 Bouned = "Bouned"
 
 [files]
-extend-exclude = ["go.mod", "go.sum", "tests"]
+extend-exclude = ["go.mod", "go.sum", "tests", "_typos.tom"]
