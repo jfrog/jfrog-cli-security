@@ -65,7 +65,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: unit-tests-code-coverage
           path: cover-unit-tests
@@ -94,7 +94,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: audit-tests-code-coverage
           path: cover-audit-tests
@@ -123,7 +123,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: artifactory-tests-code-coverage
           path: cover-artifactory-tests
@@ -152,7 +152,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: xray-tests-code-coverage
           path: cover-xray-tests
@@ -181,7 +181,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: xsc-tests-code-coverage
           path: cover-xsc-tests
@@ -214,7 +214,7 @@ jobs:
 
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: scan-tests-code-coverage
           path: cover-scan-tests
@@ -243,7 +243,7 @@ jobs:
     
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
+        if: matrix.os == 'ubuntu'
         with:
           name: other-tests-code-coverage
           path: cover-other-tests
