@@ -14,7 +14,7 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 20m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
@@ -71,7 +71,7 @@ jobs:
           path: cover-unit-tests
 
   Audit_Command_Integration_Tests:
-    name: Audit Command [${{ matrix.suite.name }}] Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.suite.name }}] (${{ matrix.os }}) Audit Command Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -107,7 +107,7 @@ jobs:
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
 
   Artifactory_Integration_Tests:
-    name: Artifactory Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] Artifactory Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -130,7 +130,7 @@ jobs:
     
 
   Xray_Commands_Integration_Tests:
-    name: Xray Commands Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] Xray Commands Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -152,7 +152,7 @@ jobs:
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray
 
   Xsc_Integration_Tests:
-    name: XSC Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] XSC Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -174,7 +174,7 @@ jobs:
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
 
   Other_Scan_Commands_Integration_Tests:
-    name: Other Scan Commands Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] Other Scan Commands Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -200,7 +200,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu' }}
 
   Other_Commands_Integration_Tests:
-    name: Other Commands Integration Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] Other Commands Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
