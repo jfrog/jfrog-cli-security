@@ -76,13 +76,13 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error()))
+			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error())))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
-			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
 		})
 		if taskErr != nil {
 			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
