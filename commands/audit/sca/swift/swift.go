@@ -32,7 +32,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+			log.Logger.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -41,14 +41,18 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 		}
 		lines := strings.Split(string(data), "\n")
 		var startLine, startCol, endLine, endCol int
+		var tempIndex int
 		foundDependency := false
 		for i, line := range lines {
 			if strings.Contains(line, directDependencyName) {
 				startLine = i
 				startCol = strings.Index(line, directDependencyName)
 				foundDependency = true
+				tempIndex = i
 			}
-			if foundDependency && strings.Contains(line, directDependencyVersion) {
+			if i > tempIndex && foundDependency && strings.Contains(line, ".package") {
+				foundDependency = false
+			} else if foundDependency && strings.Contains(line, directDependencyVersion) {
 				endLine = i
 				endCol = len(line)
 				var snippet string
@@ -77,8 +81,8 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
-		if !strings.HasSuffix(descriptorPath, "Podfile") {
-			log.Logger.Warn("Cannot support other files besides Podfile: %s", descriptorPath)
+		if !strings.HasSuffix(descriptorPath, "Package.swift") {
+			log.Logger.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -88,11 +92,14 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 		}
 		lines := strings.Split(string(data), "\n")
 		foundDependency := false
-		for _, line := range lines {
+		var tempIndex int
+		for i, line := range lines {
 			if strings.Contains(line, dependencyName) {
 				foundDependency = true
 			}
-			if foundDependency && strings.Contains(line, dependencyVersion) {
+			if i > tempIndex && foundDependency && strings.Contains(line, ".package") {
+				foundDependency = false
+			} else if foundDependency && strings.Contains(line, dependencyVersion) {
 				newLine := strings.Replace(line, dependencyVersion, fixVersion, 1)
 				newLines = append(newLines, newLine)
 				foundDependency = false
@@ -146,21 +153,18 @@ func GetPodDependenciesGraph(data string) (map[string][]string, map[string]strin
 	return dependencyMap, versionMap
 }
 
-func extractPodsSection(filePath string) (string, error) {
+func extractDepSection(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}
 	content := string(data)
-	startIndex := strings.Index(content, "PODS:")
+	startIndex := strings.Index(content, "dependencies:")
 	if startIndex == -1 {
-		return "", fmt.Errorf("PODS: section not found")
+		return "", fmt.Errorf("dependencies: section not found")
 	}
 	subContent := content[startIndex:]
-	endIndex := strings.Index(subContent, "DEPENDENCIES:")
-	if endIndex == -1 {
-		endIndex = strings.Index(subContent, "SPEC REPOS:")
-	}
+	endIndex := strings.Index(subContent, "targets:")
 	if endIndex != -1 {
 		subContent = subContent[:endIndex]
 	}
@@ -168,11 +172,11 @@ func extractPodsSection(filePath string) (string, error) {
 }
 
 func GetDependenciesData(exePath, currentDir string) (string, error) {
-	_, _, err := cocoapods.RunPodCmd(exePath, currentDir, []string{"install"})
+	_, _, err := swift.RunSwiftCmd(exePath, currentDir, []string{"package", "show-dependencies", "--format", "json"})
 	if err != nil {
 		return "", err
 	}
-	result, err := extractPodsSection(filepath.Join(currentDir, "Podfile.lock"))
+	result, err := extractDepSection(filepath.Join(currentDir, "Package.resolved"))
 	if err != nil {
 		return "", err
 	}
@@ -198,7 +202,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, podExecutablePath, err := cocoapods.GetPodVersionAndExecPath()
+	_, podExecutablePath, err := swift.GetSwiftversionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		return
@@ -217,7 +221,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	}
 	versionMap[packageName] = VersionForMainModule
 	rootNode := &xrayUtils.GraphNode{
-		Id:    utils.CocoapodsPackageTypeIdentifier + packageInfo,
+		Id:    utils.SwiftPackageTypeIdentifier + packageInfo,
 		Nodes: []*xrayUtils.GraphNode{},
 	}
 	// Parse the dependencies into Xray dependency tree format
@@ -239,7 +243,7 @@ func configPodResolutionServerIfNeeded(params utils.AuditParams) (clearResolutio
 		return
 	}
 
-	clearResolutionServerFunc, err = cocoapods.SetArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
+	clearResolutionServerFunc, err = swift.SetArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
 	return
 }
 
@@ -249,12 +253,12 @@ func parsePodDependenciesList(currNode *xrayUtils.GraphNode, dependenciesGraph m
 		return
 	}
 	uniqueDepsSet.Add(currNode.Id)
-	pkgName := strings.Split(strings.TrimPrefix(currNode.Id, utils.CocoapodsPackageTypeIdentifier), ":")[0]
+	pkgName := strings.Split(strings.TrimPrefix(currNode.Id, utils.SwiftPackageTypeIdentifier), ":")[0]
 	currDepChildren := dependenciesGraph[pkgName]
 	for _, childName := range currDepChildren {
 		fullChildName := fmt.Sprintf("%s:%s", childName, versionMap[childName])
 		childNode := &xrayUtils.GraphNode{
-			Id:     utils.CocoapodsPackageTypeIdentifier + fullChildName,
+			Id:     utils.SwiftPackageTypeIdentifier + fullChildName,
 			Nodes:  []*xrayUtils.GraphNode{},
 			Parent: currNode,
 		}
