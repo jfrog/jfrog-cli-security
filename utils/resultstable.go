@@ -25,11 +25,12 @@ import (
 )
 
 const (
-	rootIndex                  = 0
-	directDependencyIndex      = 1
-	directDependencyPathLength = 2
-	nodeModules                = "node_modules"
-	NpmPackageTypeIdentifier   = "npm://"
+	rootIndex                      = 0
+	directDependencyIndex          = 1
+	directDependencyPathLength     = 2
+	nodeModules                    = "node_modules"
+	NpmPackageTypeIdentifier       = "npm://"
+	CocoapodsPackageTypeIdentifier = "cocoapods://"
 )
 
 // PrintViolationsTable prints the violations in 4 tables: security violations, license compliance violations, operational risk violations and ignore rule URLs.
