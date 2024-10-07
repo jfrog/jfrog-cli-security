@@ -1,0 +1,909 @@
+{
+  "xray_version": "3.104.8",
+  "jas_entitled": true,
+  "command_type": "docker_image",
+  "targets": [
+    {
+      "target": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar",
+      "name": "platform.jfrog.io/swamp-docker/swamp:latest",
+      "technology": "oci",
+      "sca_scans": {
+        "xray_scan": [
+          {
+            "scan_id": "27da9106-88ea-416b-799b-bc7d15783473",
+            "vulnerabilities": [
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2024-6119"
+                  }
+                ],
+                "summary": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+                "severity": "Unknown",
+                "components": {
+                  "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                          "full_path": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1",
+                          "full_path": "libssl3:3.0.13-1~deb12u1"
+                        }
+                      ]
+                    ]
+                  },
+                  "deb://debian:bookworm:openssl:3.0.13-1~deb12u1": {
+                    "fixed_versions": [
+                      "[3.0.14-1~deb12u2]"
+                    ],
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                          "full_path": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:openssl:3.0.13-1~deb12u1",
+                          "full_path": "openssl:3.0.13-1~deb12u1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-632747",
+                "references": [
+                  "https://openssl-library.org/news/secadv/20240903.txt",
+                  "https://github.com/openssl/openssl/commit/621f3729831b05ee828a3203eddb621d014ff2b2",
+                  "https://github.com/openssl/openssl/commit/05f360d9e849a1b277db628f1f13083a7f8dd04f",
+                  "https://security-tracker.debian.org/tracker/CVE-2024-6119",
+                  "https://github.com/openssl/openssl/commit/7dfcee2cd2a63b2c64b9b4b0850be64cb695b0a0",
+                  "https://github.com/openssl/openssl/commit/06d1dc3fa96a2ba5a3e22735a033012aadc9f0d6"
+                ],
+                "extended_information": {
+                  "short_description": "Out of bounds read in OpenSSL clients can lead to denial of service when using non-default TLS verification options and connecting to malicious TLS servers",
+                  "jfrog_research_severity": "Medium",
+                  "jfrog_research_severity_reasons": [
+                    {
+                      "name": "The issue has an exploit published",
+                      "description": "The fix commit contains PoC certificates that trigger the denial of service issue"
+                    },
+                    {
+                      "name": "The prerequisites for exploiting the issue are extremely unlikely",
+                      "description": "The attacker must make the victim client connect to their malicious TLS server, in order to serve the malformed TLS certificate. The victim client must use OpenSSL and must enable non-default certificate verification options, either -\n\n* DNS verification - by using `X509_VERIFY_PARAM_set1_host` or `X509_check_host`\n* Email verification - by using ` X509_VERIFY_PARAM_set1_email` or `X509_check_email`",
+                      "is_positive": true
+                    },
+                    {
+                      "name": "The issue cannot result in a severe impact (such as remote code execution)",
+                      "description": "Denial of service of a TLS clients only. This out of bounds read cannot lead to data disclosure.",
+                      "is_positive": true
+                    }
+                  ]
+                }
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2024-38428",
+                    "cvss_v3_score": "9.1",
+                    "cvss_v3_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+                    "cwe": [
+                      "CWE-436"
+                    ],
+                    "cwe_details": {
+                      "CWE-436": {
+                        "name": "Interpretation Conflict",
+                        "description": "Product A handles inputs or steps differently than Product B, which causes A to perform incorrect actions based on its perception of B's state."
+                      }
+                    }
+                  }
+                ],
+                "summary": "url.c in GNU Wget through 1.24.5 mishandles semicolons in the userinfo subcomponent of a URI, and thus there may be insecure behavior in which data that was supposed to be in the userinfo subcomponent is misinterpreted to be part of the host subcomponent.",
+                "severity": "Critical",
+                "components": {
+                  "deb://debian:bookworm:wget:1.21.3-1+b1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                          "full_path": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:wget:1.21.3-1+b1",
+                          "full_path": "wget:1.21.3-1+b1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-606103",
+                "references": [
+                  "https://git.savannah.gnu.org/cgit/wget.git/commit/?id=ed0c7c7e0e8f7298352646b2fd6e06a11e242ace",
+                  "https://lists.gnu.org/archive/html/bug-wget/2024-06/msg00005.html",
+                  "https://security-tracker.debian.org/tracker/CVE-2024-38428"
+                ]
+              },
+              {
+                "summary": "Malicious package cors.js for Node.js",
+                "severity": "Critical",
+                "components": {
+                  "npm://cors.js:0.0.1-security": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f/sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar",
+                          "full_path": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar"
+                        },
+                        {
+                          "component_id": "npm://cors.js:0.0.1-security",
+                          "full_path": "usr/src/app/node_modules/cors.js/package.json"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-264729",
+                "references": [
+                  "https://registry.npmjs.com"
+                ],
+                "extended_information": {
+                  "short_description": "Malicious package cors.js for Node.js",
+                  "full_description": "The package cors.js for Node.js contains malicious code that installs a persistent connectback shell. The package is typosquatting the popular `cors` package. When installed, the package opens a connectback shell to the hardcoded host `107.175.32.229` on TCP port 56173. The malicious payload achieves persistency by installing a cron job that repeats every 10 seconds - `*/10 * * * * *`",
+                  "jfrog_research_severity": "Critical",
+                  "remediation": "As with any malware, the malicious package must be completely removed, and steps must be taken care to remediate the damage that was done by the malicious package -\n\n##### Removing the malicious package\n\nRun `npm uninstall cors.js`\n\n##### Refreshing stolen credentials\n\nMany malicious packages steal stored user credentials, focusing on the following -\n\n* [Browser autocomplete](https://jfrog.com/blog/malicious-pypi-packages-stealing-credit-cards-injecting-code/) data, such as saved passwords and credit cards\n* [Environment variables](https://jfrog.com/blog/malicious-npm-packages-are-after-your-discord-tokens-17-new-packages-disclosed/) passed to the malicious code\n* [Stored Discord tokens](https://jfrog.com/blog/malicious-npm-packages-are-after-your-discord-tokens-17-new-packages-disclosed/)\n* AWS / GitHub credentials stored in cleartext files\n\nIt is highly recommended to change or revoke data that is stored in the infected machine at those locations\n\n##### Stopping malicious processes\n\nMany malicious packages start malicious processes such as [connectback shells](https://jfrog.com/blog/jfrog-discloses-3-remote-access-trojans-in-pypi/) or crypto-miners. Search for any unfamiliar processes that consume a large amount of CPU or a large amount of network traffic, and stop them. On Windows, this can be facilitated with [Sysinternals Process Explorer](https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer).\n\n##### Removing installed backdoors\n\nMany malicious packages install themselves as a [persistent backdoor](https://jfrog.com/blog/npm-supply-chain-attack-targets-german-based-companies/), in order to guarantee the malicious code survives a reboot. Search for any unfamiliar binaries set to be run on startup, and remove them. On Windows, this can be facilitated with [Sysinternals Autoruns](https://docs.microsoft.com/en-us/sysinternals/downloads/autoruns).\n\n##### Defining an Xray policy that blocks downloads of Artifacts with malicious packages\n\nIt is possible to [create an Xray policy](https://www.jfrog.com/confluence/display/JFROG/Creating+Xray+Policies+and+Rules) that will not allow artifacts with identified malicious packages to be downloaded from Artifactory. To create such a policy, add a new `Security` policy and set `Minimal Severity` to `Critical`. Under `Automatic Actions` check the `Block Download` action.\n\n##### Contacting the JFrog Security Research team for additional information\n\nOptionally, if you are unsure of the full impact of the malicious package and wish to get more details, the JFrog Security Research team can help you assess the potential damage from the installed malicious package.\n\nPlease contact us at research@jfrog.com with details of the affected artifact and the name of the identified malicious package."
+                }
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2024-45490",
+                    "cvss_v3_score": "9.8",
+                    "cvss_v3_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                    "cwe": [
+                      "CWE-611"
+                    ],
+                    "cwe_details": {
+                      "CWE-611": {
+                        "name": "Improper Restriction of XML External Entity Reference",
+                        "description": "The product processes an XML document that can contain XML entities with URIs that resolve to documents outside of the intended sphere of control, causing the product to embed incorrect documents into its output."
+                      }
+                    }
+                  }
+                ],
+                "summary": "An issue was discovered in libexpat before 2.6.3. xmlparse.c does not reject a negative length for XML_ParseBuffer.",
+                "severity": "Critical",
+                "components": {
+                  "deb://debian:bookworm:libexpat1:2.5.0-1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1/sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+                          "full_path": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:libexpat1:2.5.0-1",
+                          "full_path": "libexpat1:2.5.0-1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-632613",
+                "references": [
+                  "https://github.com/libexpat/libexpat/issues/887",
+                  "https://security-tracker.debian.org/tracker/CVE-2024-45490",
+                  "https://github.com/libexpat/libexpat/pull/890"
+                ]
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2024-45492",
+                    "cvss_v3_score": "9.8",
+                    "cvss_v3_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                    "cwe": [
+                      "CWE-190"
+                    ],
+                    "cwe_details": {
+                      "CWE-190": {
+                        "name": "Integer Overflow or Wraparound",
+                        "description": "The product performs a calculation that can produce an integer overflow or wraparound, when the logic assumes that the resulting value will always be larger than the original value. This can introduce other weaknesses when the calculation is used for resource management or execution control.",
+                        "categories": [
+                          {
+                            "category": "2023 CWE Top 25",
+                            "rank": "14"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "summary": "An issue was discovered in libexpat before 2.6.3. nextScaffoldPart in xmlparse.c can have an integer overflow for m_groupSize on 32-bit platforms (where UINT_MAX equals SIZE_MAX).",
+                "severity": "Critical",
+                "components": {
+                  "deb://debian:bookworm:libexpat1:2.5.0-1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1/sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+                          "full_path": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:libexpat1:2.5.0-1",
+                          "full_path": "libexpat1:2.5.0-1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-632612",
+                "references": [
+                  "https://github.com/libexpat/libexpat/issues/889",
+                  "https://security-tracker.debian.org/tracker/CVE-2024-45492",
+                  "https://github.com/libexpat/libexpat/pull/892"
+                ]
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2023-51767",
+                    "cvss_v3_score": "7.0",
+                    "cvss_v3_vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+                    "cwe": [
+                      "NVD-CWE-Other"
+                    ]
+                  }
+                ],
+                "summary": "OpenSSH through 9.6, when common types of DRAM are used, might allow row hammer attacks (for authentication bypass) because the integer value of authenticated in mm_answer_authpassword does not resist flips of a single bit. NOTE: this is applicable to a certain threat model of attacker-victim co-location in which the attacker has user privileges.",
+                "severity": "Low",
+                "components": {
+                  "deb://debian:bookworm:openssh-client:1:9.2p1-2+deb12u3": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1/sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+                          "full_path": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:openssh-client:1:9.2p1-2+deb12u3",
+                          "full_path": "openssh-client:1:9.2p1-2+deb12u3"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-585612",
+                "references": [
+                  "https://arxiv.org/abs/2309.02545",
+                  "https://github.com/openssh/openssh-portable/blob/8241b9c0529228b4b86d88b1a6076fb9f97e4a99/monitor.c#L878",
+                  "https://github.com/openssh/openssh-portable/blob/8241b9c0529228b4b86d88b1a6076fb9f97e4a99/auth-passwd.c#L77",
+                  "https://bugzilla.redhat.com/show_bug.cgi?id=2255850",
+                  "https://security-tracker.debian.org/tracker/CVE-2023-51767",
+                  "https://ubuntu.com/security/CVE-2023-51767",
+                  "https://security.netapp.com/advisory/ntap-20240125-0006/",
+                  "https://access.redhat.com/security/cve/CVE-2023-51767"
+                ],
+                "extended_information": {
+                  "short_description": "The RowHammer fault injection attack can theoretically lead to local authentication bypass in OpenSSH.",
+                  "full_description": "[OpenSSH](https://www.openssh.com/) is a popular open-source implementation of the SSH (Secure Shell) protocol, providing encrypted communication over a network.\nIt was discovered that the OpenSSH authentication logic can be susceptible in some cases to a side-channel fault injection attack. The attack can theoretically be carried out by a local attacker which eventually bypass OpenSSH authentication mechanism.\n\nThis vulnerability currently lacks widely known published exploits, and its exploitation is considered highly complex. The intricacies of the attack, combined with the absence of well-documented exploits, contribute to the difficulty in achieving successful exploitation. Furthermore, it's essential to note that the susceptibility to this vulnerability is hardware-dependent, and the success of an attack relies on probabilities associated with the specific hardware configuration. \n\nThe vulnerability is theoretically exploitable by several different ways, the only two published ways are:\n\nIn the OpenSSH function `mm_answer_authpassword()`, a stack variable `authenticated`, is assigned to the value of the function `auth_password()` which returns 1/0 and then returned. If the value of `authenticated` is 1, the SSH connection will be established. Since `authenticated` is stored on the stack, therefore in DRAM, a local attacker could flip this 32-bit integer least significant bit, thus, bypass authentication.\n\nAnother possible exploit is the `result` stack variable in `auth_password()` function. It is initialized to 0 and set to 1 if the password is correct. \nSimilarly to the previous method, this attack requires a single bit flip of the `result` variable in order for the function to return 1 and bypass the authentication.\n\nAttackers can trigger the vulnerability via a RowHammer fault injection. The Rowhammer bug is a hardware reliability issue in which an attacker repeatedly accesses (hammers) DRAM cells to cause unauthorized changes in physically adjacent memory locations.\nSimply put:\n\n* A specific register value(`authenticated`/`result` value) is pushed onto the stack during program execution. \n* The stack, where the register value is stored, is identified to be located in a memory row susceptible to bit flips (flippable row) due to the RowHammer vulnerability in DRAM.\n* The attacker performs a series of rapid and repeated memory accesses to the adjacent rows of the flippable row in the DRAM. This repeated access exploits the RowHammer vulnerability, inducing bit flips in the targeted flippable row.\n* Due to the RowHammer effect, bit flips occur in the flippable row, potentially corrupting the data stored there.\n* After inducing bit flips in the flippable row, the attacker manipulates the program's control flow to pop the corrupted value from the stack into a register.\n* The register now holds a value that has been corrupted through the RowHammer attack. Now the `authenticated`/`result` variables hold this corrupted value thus it can lead to authentication bypass, as it may impact the control flow in a way advantageous to the attacker.",
+                  "jfrog_research_severity": "Low",
+                  "jfrog_research_severity_reasons": [
+                    {
+                      "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+                      "description": "The vulnerability depends on the OS and hardware. It was only evaluated in one test environment, therefore results for other conditions might differ. The attacker must be extremely familiar with the details of the exploited system (ex. know the exact hardware which is running the OS).",
+                      "is_positive": true
+                    },
+                    {
+                      "name": "The issue can only be exploited by an attacker that can execute code on the vulnerable machine (excluding exceedingly rare circumstances)",
+                      "is_positive": true
+                    },
+                    {
+                      "name": "No high-impact exploit or technical writeup were published, and exploitation of the issue with high impact is either non-trivial or completely unproven",
+                      "description": "Exploitation is extremely non-trivial (even theoretically), no public exploits have been published.",
+                      "is_positive": true
+                    },
+                    {
+                      "name": "The reported CVSS was either wrongly calculated, downgraded by other vendors, or does not reflect the vulnerability's impact",
+                      "description": "The vulnerability's attack complexity is significantly higher than what the CVSS represents.",
+                      "is_positive": true
+                    }
+                  ]
+                }
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2011-3374",
+                    "cvss_v2_score": "4.3",
+                    "cvss_v2_vector": "CVSS:2.0/AV:N/AC:M/Au:N/C:N/I:P/A:N",
+                    "cvss_v3_score": "3.7",
+                    "cvss_v3_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
+                    "cwe": [
+                      "CWE-347"
+                    ],
+                    "cwe_details": {
+                      "CWE-347": {
+                        "name": "Improper Verification of Cryptographic Signature",
+                        "description": "The product does not verify, or incorrectly verifies, the cryptographic signature for data."
+                      }
+                    }
+                  }
+                ],
+                "summary": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+                "severity": "Low",
+                "components": {
+                  "deb://debian:bookworm:apt:2.6.1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e/sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+                          "full_path": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:apt:2.6.1",
+                          "full_path": "apt:2.6.1"
+                        }
+                      ]
+                    ]
+                  },
+                  "deb://debian:bookworm:libapt-pkg6.0:2.6.1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e/sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+                          "full_path": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:libapt-pkg6.0:2.6.1",
+                          "full_path": "libapt-pkg6.0:2.6.1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-34417",
+                "references": [
+                  "https://people.canonical.com/~ubuntu-security/cve/2011/CVE-2011-3374.html",
+                  "https://seclists.org/fulldisclosure/2011/Sep/221",
+                  "https://ubuntu.com/security/CVE-2011-3374",
+                  "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=642480",
+                  "https://access.redhat.com/security/cve/cve-2011-3374",
+                  "https://snyk.io/vuln/SNYK-LINUX-APT-116518",
+                  "https://security-tracker.debian.org/tracker/CVE-2011-3374"
+                ],
+                "extended_information": {
+                  "short_description": "Improper signature validation in apt-key may enable Man-in-the-Middle attacks and result in code execution.",
+                  "full_description": "`apt-key` is [`apt`](https://github.com/Debian/apt)'s key management utility, and is used to manage the keys that are used by `apt` to authenticate packages.\n\nA vulnerability in `apt-key`'s `net-update` function exists, in which [`GPG`](https://www.gnupg.org/) keys, that are used for signing packages and validating their authenticity, aren't validated correctly. The `net-update` function pulls the signing keys that should be added from an insecure location (`http://...`), exposing it to a Man-in-the-Middle attack in which malicious signing keys could be added to the system's keyring. This issue happens due to a vulnerability in the `add_keys_with_veirfy_against_master_keyring()` function, which allows adding signing keys without proper signature validation. \n\nThis vulnerability then potentially allows a malicious actor to perform a Man-in-the-Middle attack on a target, by making it validate malicious packages that were signed with the `GPG` signing key used by the attacker. Effectively, this means that `apt` can be duped to install malicious services and daemons with root privileges.\n\nThe conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man In The Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from [python-apt](https://pypi.org/project/python-apt/) Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.\n\nDo note that `apt-key` is **deprecated** and shouldn't be used, and in most Debian versions `ARCHIVE_KEYRING_URI` is not defined, making this vulnerability unexploitable in most Debian systems.",
+                  "jfrog_research_severity": "High",
+                  "jfrog_research_severity_reasons": [
+                    {
+                      "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+                      "description": "The conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the python-apt Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.",
+                      "is_positive": true
+                    },
+                    {
+                      "name": "The issue can be exploited by attackers over the network",
+                      "description": "This vulnerability is remotely exploitable when the applicability conditions apply."
+                    },
+                    {
+                      "name": "The issue results in a severe impact (such as remote code execution)",
+                      "description": "Remote code execution is possible when the applicability conditions apply."
+                    },
+                    {
+                      "name": "The issue has an exploit published",
+                      "description": "The reporter of this issue has provided a GPG key that can be used for an actual attack, as well as a simple PoC example."
+                    }
+                  ],
+                  "remediation": "##### Deployment mitigations\n\n* Dot not execute `apt-key` command, as it is deprecated.\n* Remove the URI configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`."
+                }
+              },
+              {
+                "cves": [
+                  {
+                    "cve": "CVE-2024-4741"
+                  }
+                ],
+                "summary": "CVE-2024-4741",
+                "severity": "Unknown",
+                "components": {
+                  "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1": {
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                          "full_path": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1",
+                          "full_path": "libssl3:3.0.13-1~deb12u1"
+                        }
+                      ]
+                    ]
+                  },
+                  "deb://debian:bookworm:openssl:3.0.13-1~deb12u1": {
+                    "fixed_versions": [
+                      "[3.0.14-1~deb12u1]"
+                    ],
+                    "impact_paths": [
+                      [
+                        {
+                          "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest"
+                        },
+                        {
+                          "component_id": "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+                          "full_path": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                        },
+                        {
+                          "component_id": "deb://debian:bookworm:openssl:3.0.13-1~deb12u1",
+                          "full_path": "openssl:3.0.13-1~deb12u1"
+                        }
+                      ]
+                    ]
+                  }
+                },
+                "issue_id": "XRAY-603657",
+                "references": [
+                  "https://security-tracker.debian.org/tracker/CVE-2024-4741"
+                ]
+              }
+            ],
+            "component_id": "docker://platform.jfrog.io/swamp-docker/swamp:latest",
+            "package_type": "oci",
+            "status": "completed"
+          }
+        ]
+      },
+      "jas_scans": {
+        "contextual_analysis": [
+          {
+            "tool": {
+              "driver": {
+                "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
+                "name": "JFrog Applicability Scanner",
+                "rules": [
+                  {
+                    "id": "applic_CVE-2024-6119",
+                    "name": "CVE-2024-6119",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2024-6119"
+                    },
+                    "fullDescription": {
+                      "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `X509_VERIFY_PARAM_set1_email`\n\n- `X509_check_email`\n\n- `X509_VERIFY_PARAM_set1_host`\n\n- `X509_check_host`",
+                      "markdown": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `X509_VERIFY_PARAM_set1_email`\n\n- `X509_check_email`\n\n- `X509_VERIFY_PARAM_set1_host`\n\n- `X509_check_host`"
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2024-45490",
+                    "name": "CVE-2024-45490",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2024-45490"
+                    },
+                    "fullDescription": {
+                      "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `XML_Parse()`\n- `XML_ParseBuffer()`\n\nAn additional condition, which the scanner currently does not check, is that the `len` parameter which is passed to those functions is user-controlled.",
+                      "markdown": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `XML_Parse()`\n- `XML_ParseBuffer()`\n\nAn additional condition, which the scanner currently does not check, is that the `len` parameter which is passed to those functions is user-controlled."
+                    },
+                    "properties": {
+                      "applicability": "not_applicable",
+                      "conclusion": "positive",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2024-38428",
+                    "name": "CVE-2024-38428",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2024-38428"
+                    },
+                    "fullDescription": {
+                      "text": "",
+                      "markdown": ""
+                    },
+                    "properties": {
+                      "applicability": "undetermined",
+                      "conclusion": "private"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2024-45492",
+                    "name": "CVE-2024-45492",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2024-45492"
+                    },
+                    "fullDescription": {
+                      "text": "The scanner checks whether the current binary was compiled with 32-bit architecture and if any of the vulnerable functions are called:\n\n- `XML_ParseBuffer()`\n- `XML_Parse()`\n\nNote - the vulnerability occurs when certain inputs are passed to those functions.",
+                      "markdown": "The scanner checks whether the current binary was compiled with 32-bit architecture and if any of the vulnerable functions are called:\n\n- `XML_ParseBuffer()`\n- `XML_Parse()`\n\nNote - the vulnerability occurs when certain inputs are passed to those functions."
+                    },
+                    "properties": {
+                      "applicability": "not_applicable",
+                      "conclusion": "positive",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2023-51767",
+                    "name": "CVE-2023-51767",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2023-51767"
+                    },
+                    "fullDescription": {
+                      "text": "The CVE is always applicable.\n\nNote - The vulnerability is hardware-dependent.",
+                      "markdown": "The CVE is always applicable.\n\nNote - The vulnerability is hardware-dependent."
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2011-3374",
+                    "name": "CVE-2011-3374",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2011-3374"
+                    },
+                    "fullDescription": {
+                      "text": "The scanner checks if the vulnerable variable `ARCHIVE_KEYRING_URI` in `/usr/bin/apt-key` is not empty and not commented out. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n\nThe below prerequisites are also crucial for exploitability but are not checked in the scanner:\n\n1. The command apt-key net-update should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the `python-apt` Python module should be called. This is for the malicious keys download.\n\n2. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.",
+                      "markdown": "The scanner checks if the vulnerable variable `ARCHIVE_KEYRING_URI` in `/usr/bin/apt-key` is not empty and not commented out. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n\nThe below prerequisites are also crucial for exploitability but are not checked in the scanner:\n\n1. The command apt-key net-update should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the `python-apt` Python module should be called. This is for the malicious keys download.\n\n2. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine."
+                    },
+                    "properties": {
+                      "applicability": "not_applicable",
+                      "conclusion": "positive",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "applic_CVE-2024-4741",
+                    "name": "CVE-2024-4741",
+                    "shortDescription": {
+                      "text": "Scanner for CVE-2024-4741"
+                    },
+                    "fullDescription": {
+                      "text": "The scanner checks whether the vulnerable function `SSL_free_buffers` is called.",
+                      "markdown": "The scanner checks whether the vulnerable function `SSL_free_buffers` is called."
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative",
+                      "security-severity": "6.9"
+                    }
+                  }
+                ],
+                "version": "1.0"
+              }
+            },
+            "invocations": [
+              {
+                "arguments": [
+                  "/Users/user/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
+                  "scan",
+                  "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210780-681556384/Applicability_1726210780/config.yaml"
+                ],
+                "executionSuccessful": true,
+                "workingDirectory": {
+                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+                }
+              }
+            ],
+            "results": [
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "applic_CVE-2024-4741",
+                "message": {
+                  "text": "References to the vulnerable functions were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///usr/local/bin/node"
+                      },
+                      "region": {
+                        "snippet": {
+                          "text": ""
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "ruleId": "applic_CVE-2024-45490",
+                "kind": "pass",
+                "message": {
+                  "text": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `XML_Parse()`\n- `XML_ParseBuffer()`\n\nAn additional condition, which the scanner currently does not check, is that the `len` parameter which is passed to those functions is user-controlled."
+                }
+              },
+              {
+                "ruleId": "applic_CVE-2011-3374",
+                "kind": "pass",
+                "message": {
+                  "text": "The scanner checks if the vulnerable variable `ARCHIVE_KEYRING_URI` in `/usr/bin/apt-key` is not empty and not commented out. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n\nThe below prerequisites are also crucial for exploitability but are not checked in the scanner:\n\n1. The command apt-key net-update should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the `python-apt` Python module should be called. This is for the malicious keys download.\n\n2. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine."
+                }
+              },
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "applic_CVE-2024-6119",
+                "message": {
+                  "text": "References to the vulnerable functions were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///usr/local/bin/node"
+                      },
+                      "region": {
+                        "snippet": {
+                          "text": ""
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "applic_CVE-2024-6119",
+                "message": {
+                  "text": "References to the vulnerable functions were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///usr/local/bin/node"
+                      },
+                      "region": {
+                        "snippet": {
+                          "text": ""
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "ruleId": "applic_CVE-2024-45492",
+                "kind": "pass",
+                "message": {
+                  "text": "The scanner checks whether the current binary was compiled with 32-bit architecture and if any of the vulnerable functions are called:\n\n- `XML_ParseBuffer()`\n- `XML_Parse()`\n\nNote - the vulnerability occurs when certain inputs are passed to those functions."
+                }
+              }
+            ]
+          }
+        ],
+        "secrets": [
+          {
+            "tool": {
+              "driver": {
+                "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
+                "name": "JFrog Secrets scanner",
+                "rules": [
+                  {
+                    "id": "REQ.SECRET.GENERIC.TEXT",
+                    "name": "REQ.SECRET.GENERIC.TEXT",
+                    "shortDescription": {
+                      "text": "Scanner for REQ.SECRET.GENERIC.TEXT"
+                    },
+                    "fullDescription": {
+                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                    },
+                    "properties": {
+                      "applicability": "not_applicable",
+                      "conclusion": "positive"
+                    }
+                  },
+                  {
+                    "id": "REQ.SECRET.GENERIC.CODE",
+                    "name": "REQ.SECRET.GENERIC.CODE",
+                    "shortDescription": {
+                      "text": "Scanner for REQ.SECRET.GENERIC.CODE"
+                    },
+                    "fullDescription": {
+                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "REQ.SECRET.KEYS",
+                    "name": "REQ.SECRET.KEYS",
+                    "shortDescription": {
+                      "text": "Scanner for REQ.SECRET.KEYS"
+                    },
+                    "fullDescription": {
+                      "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
+                      "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative",
+                      "security-severity": "6.9"
+                    }
+                  },
+                  {
+                    "id": "REQ.CRED.PUBLIC-ONLY",
+                    "name": "REQ.CRED.PUBLIC-ONLY",
+                    "shortDescription": {
+                      "text": "Scanner for REQ.CRED.PUBLIC-ONLY"
+                    },
+                    "fullDescription": {
+                      "text": "",
+                      "markdown": ""
+                    },
+                    "properties": {
+                      "applicability": "undetermined",
+                      "conclusion": "private"
+                    }
+                  },
+                  {
+                    "id": "REQ.SECRET.GENERIC.URL",
+                    "name": "REQ.SECRET.GENERIC.URL",
+                    "shortDescription": {
+                      "text": "Scanner for REQ.SECRET.GENERIC.URL"
+                    },
+                    "fullDescription": {
+                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                    },
+                    "properties": {
+                      "applicability": "applicable",
+                      "conclusion": "negative",
+                      "security-severity": "6.9"
+                    }
+                  }
+                ],
+                "version": "1.0"
+              }
+            },
+            "invocations": [
+              {
+                "arguments": [
+                  "/Users/user/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
+                  "scan",
+                  "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210780-681556384/Secrets_1726210839/config.yaml"
+                ],
+                "executionSuccessful": true,
+                "workingDirectory": {
+                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+                }
+              }
+            ],
+            "results": [
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "REQ.SECRET.GENERIC.CODE",
+                "message": {
+                  "text": "Hardcoded secrets were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///private/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/tmpsfyn_3d1/unpacked/filesystem/blobs/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js"
+                      },
+                      "region": {
+                        "startLine": 5,
+                        "startColumn": 7,
+                        "endLine": 5,
+                        "endColumn": 57,
+                        "snippet": {
+                          "text": "tok************"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "REQ.SECRET.KEYS",
+                "message": {
+                  "text": "Secret keys were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///private/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/tmpsfyn_3d1/unpacked/filesystem/blobs/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js"
+                      },
+                      "region": {
+                        "startLine": 6,
+                        "startColumn": 14,
+                        "endLine": 6,
+                        "endColumn": 24,
+                        "snippet": {
+                          "text": "eyJ************"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "properties": {
+                  "metadata": "",
+                  "tokenValidation": ""
+                },
+                "ruleId": "REQ.SECRET.GENERIC.URL",
+                "message": {
+                  "text": "Hardcoded secrets were found"
+                },
+                "locations": [
+                  {
+                    "physicalLocation": {
+                      "artifactLocation": {
+                        "uri": "file:///usr/src/app/server/scripts/__pycache__/fetch_github_repo.cpython-311.pyc"
+                      },
+                      "region": {
+                        "snippet": {
+                          "text": "htt************"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

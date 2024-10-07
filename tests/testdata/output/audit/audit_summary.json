@@ -1,0 +1,67 @@
+{
+    "scans": [
+        {
+            "target": "",
+            "vulnerabilities": {
+                "sca": {
+                    "scan_ids": [
+                        "711851ce-68c4-4dfd-7afb-c29737ebcb96"
+                    ],
+                    "security": {
+                        "Critical": {
+                            "Applicable": 1,
+                            "Not Applicable": 2
+                        },
+                        "High": {
+                            "Not Applicable": 2
+                        },
+                        "Medium": {
+                            "Not Applicable": 3,
+                            "Not Covered": 3
+                        },
+                        "Unknown": {
+                            "Not Covered": 1
+                        }
+                    }
+                },
+                "iac": {},
+                "secrets": {
+                    "Medium": {
+                        "": 3
+                    }
+                },
+                "sast": {
+                    "High": {
+                        "": 1
+                    },
+                    "Low": {
+                        "": 3
+                    }
+                }
+            },
+            "violations": {
+                "watches": [
+                    "Security_watch_1"
+                ],
+                "sca": {
+                    "scan_ids": [
+                        "711851ce-68c4-4dfd-7afb-c29737ebcb96"
+                    ],
+                    "security": {
+                        "Critical": {
+                            "Applicable": 1,
+                            "Not Applicable": 2
+                        },
+                        "High": {
+                            "Not Applicable": 2
+                        },
+                        "Medium": {
+                            "Not Applicable": 3,
+                            "Not Covered": 3
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -9,7 +9,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
@@ -157,16 +158,26 @@ func (ams *AnalyticsMetricsService) GetGeneralEvent(msi string) (*xscservices.Xs
 	return event, err
 }
 
-func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *utils.Results) *xscservices.XscAnalyticsGeneralEventFinalize {
+func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults *results.SecurityCommandResults) *xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(ams.GetStartTime())
 	eventStatus := xscservices.Completed
-	if auditResults.ScansErr != nil {
+	if auditResults.GetErrors() != nil {
 		eventStatus = xscservices.Failed
 	}
-
+	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to convert audit results to summary. %s", err.Error()))
+	}
+	var totalFindings int
+	if summary.HasViolations() {
+		totalFindings = summary.GetTotalViolations()
+	} else {
+		totalFindings = summary.GetTotalVulnerabilities()
+	}
+	// return summary.GetTotalVulnerabilities()
 	basicEvent := xscservices.XscAnalyticsBasicGeneralEvent{
 		EventStatus:       eventStatus,
-		TotalFindings:     auditResults.CountScanResultsFindings(true, true),
+		TotalFindings:     totalFindings,
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{

@@ -69,9 +69,26 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Dotnet: project.Dotnet,
 }
 
+var packageTypes = map[string]string{
+	"gav":      "Maven",
+	"docker":   "Docker",
+	"rpm":      "RPM",
+	"deb":      "Debian",
+	"nuget":    "NuGet",
+	"generic":  "Generic",
+	"npm":      "npm",
+	"pip":      "Python",
+	"pypi":     "Python",
+	"composer": "Composer",
+	"go":       "Go",
+	"alpine":   "Alpine",
+}
+
 type TechData struct {
 	// The name of the package type used in this technology.
 	packageType string
+	// The package type ID used in Xray.
+	packageTypeId string
 	// Suffixes of file/directory names that indicate if a project uses this technology.
 	// The name of at least one of the files/directories in the project's directory must end with one of these suffixes.
 	indicators []string
@@ -118,6 +135,7 @@ var technologiesData = map[Technology]TechData{
 		exclude:                    []string{".yarnrc.yml", "yarn.lock", ".yarn"},
 		packageDescriptors:         []string{"package.json"},
 		packageVersionOperator:     "@",
+		packageTypeId:              "npm://",
 		packageInstallationCommand: "update",
 	},
 	Yarn: {
@@ -243,6 +261,13 @@ func (tech Technology) GetPackageType() string {
 		return tech.String()
 	}
 	return technologiesData[tech].packageType
+}
+
+func (tech Technology) GetPackageTypeId() string {
+	if technologiesData[tech].packageTypeId == "" {
+		return fmt.Sprintf("%s://", tech.GetPackageType())
+	}
+	return technologiesData[tech].packageTypeId
 }
 
 func (tech Technology) GetPackageDescriptor() []string {
@@ -537,4 +562,69 @@ func GetAllTechnologiesList() (technologies []Technology) {
 		technologies = append(technologies, tech)
 	}
 	return
+}
+
+// SplitComponentId splits a Xray component ID to the component name, version and package type.
+// In case componentId doesn't contain a version, the returned version will be an empty string.
+// In case componentId's format is invalid, it will be returned as the component name
+// and empty strings will be returned instead of the version and the package type.
+// Examples:
+//  1. componentId: "gav://antparent:ant:1.6.5"
+//     Returned values:
+//     Component name: "antparent:ant"
+//     Component version: "1.6.5"
+//     Package type: "Maven"
+//  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
+//     Returned values:
+//     Component name: "foo.jar"
+//     Component version: ""
+//     Package type: "Generic"
+//  3. componentId: "invalid-comp-id"
+//     Returned values:
+//     Component name: "invalid-comp-id"
+//     Component version: ""
+//     Package type: ""
+func SplitComponentId(componentId string) (string, string, string) {
+	compIdParts := strings.Split(componentId, "://")
+	// Invalid component ID
+	if len(compIdParts) != 2 {
+		return componentId, "", ""
+	}
+
+	packageType := compIdParts[0]
+	packageId := compIdParts[1]
+
+	// Generic identifier structure: generic://sha256:<Checksum>/name
+	if packageType == "generic" {
+		lastSlashIndex := strings.LastIndex(packageId, "/")
+		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
+	}
+
+	var compName, compVersion string
+	switch packageType {
+	case "rpm":
+		// RPM identifier structure: rpm://os-version:package:epoch-version:version
+		// os-version is optional.
+		splitCompId := strings.Split(packageId, ":")
+		if len(splitCompId) >= 3 {
+			compName = splitCompId[len(splitCompId)-3]
+			compVersion = fmt.Sprintf("%s:%s", splitCompId[len(splitCompId)-2], splitCompId[len(splitCompId)-1])
+		}
+	default:
+		// All other identifiers look like this: package-type://package-name:version.
+		// Sometimes there's a namespace or a group before the package name, separated by a '/' or a ':'.
+		lastColonIndex := strings.LastIndex(packageId, ":")
+
+		if lastColonIndex != -1 {
+			compName = packageId[:lastColonIndex]
+			compVersion = packageId[lastColonIndex+1:]
+		}
+	}
+
+	// If there's an error while parsing the component ID
+	if compName == "" {
+		compName = packageId
+	}
+
+	return compName, compVersion, packageTypes[packageType]
 }

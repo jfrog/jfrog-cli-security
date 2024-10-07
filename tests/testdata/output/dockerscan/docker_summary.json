@@ -1,0 +1,43 @@
+{
+    "scans": [
+      {
+        "target": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar",
+        "name": "platform.jfrog.io/swamp-docker/swamp:latest",
+        "vulnerabilities": {
+          "sca": {
+            "scan_ids": [
+              "27da9106-88ea-416b-799b-bc7d15783473"
+            ],
+            "security": {
+              "Critical": {
+                "Not Applicable": 2,
+                "Not Covered": 1,
+                "Undetermined": 1
+              },
+              "Low": {
+                "Applicable": 1,
+                "Not Applicable": 1
+              },
+              "Unknown": {
+                "Applicable": 2
+              }
+            }
+          },
+          "iac": {},
+          "secrets": {
+            "Medium": {
+              "": 3
+            }
+          },
+          "sast": {}
+        },
+        "violations": {
+          "sca": {
+            "scan_ids": [
+              "27da9106-88ea-416b-799b-bc7d15783473"
+            ]
+          }
+        }
+      }
+    ]
+  }

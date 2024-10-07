@@ -1,19 +1,21 @@
 package yarn
 
 import (
+	"path/filepath"
+	"testing"
+
 	"github.com/jfrog/build-info-go/build"
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	utils2 "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
-	"path/filepath"
-	"testing"
 )
 
 func TestParseYarnDependenciesList(t *testing.T) {
+	npmId := techutils.Npm.GetPackageTypeId()
 	yarnDependencies := map[string]*biutils.YarnDependency{
 		"pack1@npm:1.0.0":        {Value: "pack1@npm:1.0.0", Details: biutils.YarnDepDetails{Version: "1.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}}}},
 		"pack2@npm:2.0.0":        {Value: "pack2@npm:2.0.0", Details: biutils.YarnDepDetails{Version: "2.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}, {Locator: "pack5@npm:5.0.0"}}}},
@@ -22,31 +24,25 @@ func TestParseYarnDependenciesList(t *testing.T) {
 		"pack5@npm:5.0.0":        {Value: "pack5@npm:5.0.0", Details: biutils.YarnDepDetails{Version: "5.0.0", Dependencies: []biutils.YarnDependencyPointer{{Locator: "pack2@npm:2.0.0"}}}},
 	}
 
-	rootXrayId := utils.NpmPackageTypeIdentifier + "@jfrog/pack3:3.0.0"
+	rootXrayId := npmId + "@jfrog/pack3:3.0.0"
 	expectedTree := &xrayUtils.GraphNode{
 		Id: rootXrayId,
 		Nodes: []*xrayUtils.GraphNode{
-			{Id: utils.NpmPackageTypeIdentifier + "pack1:1.0.0",
+			{Id: npmId + "pack1:1.0.0",
 				Nodes: []*xrayUtils.GraphNode{
-					{Id: utils.NpmPackageTypeIdentifier + "pack4:4.0.0",
+					{Id: npmId + "pack4:4.0.0",
 						Nodes: []*xrayUtils.GraphNode{}},
 				}},
-			{Id: utils.NpmPackageTypeIdentifier + "pack2:2.0.0",
+			{Id: npmId + "pack2:2.0.0",
 				Nodes: []*xrayUtils.GraphNode{
-					{Id: utils.NpmPackageTypeIdentifier + "pack4:4.0.0",
+					{Id: npmId + "pack4:4.0.0",
 						Nodes: []*xrayUtils.GraphNode{}},
-					{Id: utils.NpmPackageTypeIdentifier + "pack5:5.0.0",
+					{Id: npmId + "pack5:5.0.0",
 						Nodes: []*xrayUtils.GraphNode{}},
 				}},
 		},
 	}
-	expectedUniqueDeps := []string{
-		utils.NpmPackageTypeIdentifier + "pack1:1.0.0",
-		utils.NpmPackageTypeIdentifier + "pack2:2.0.0",
-		utils.NpmPackageTypeIdentifier + "pack4:4.0.0",
-		utils.NpmPackageTypeIdentifier + "pack5:5.0.0",
-		utils.NpmPackageTypeIdentifier + "@jfrog/pack3:3.0.0",
-	}
+	expectedUniqueDeps := []string{npmId + "pack1:1.0.0", npmId + "pack2:2.0.0", npmId + "pack4:4.0.0", npmId + "pack5:5.0.0", npmId + "@jfrog/pack3:3.0.0"}
 
 	xrayDependenciesTree, uniqueDeps := parseYarnDependenciesMap(yarnDependencies, rootXrayId)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")

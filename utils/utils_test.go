@@ -6,6 +6,72 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestUniqueIntersection(t *testing.T) {
+	testCases := []struct {
+		name     string
+		slice1   []string
+		slice2   []string
+		expected []string
+	}{
+		{
+			name:     "Empty",
+			slice1:   []string{},
+			slice2:   []string{},
+			expected: []string{},
+		},
+		{
+			name:     "One element",
+			slice1:   []string{"element1"},
+			slice2:   []string{"element1"},
+			expected: []string{"element1"},
+		},
+		{
+			name:     "Two elements",
+			slice1:   []string{"element1", "element2"},
+			slice2:   []string{"element2", "element3"},
+			expected: []string{"element2"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.expected, UniqueIntersection(tc.slice1, tc.slice2...))
+		})
+	}
+}
+
+func TestUniqueUnion(t *testing.T) {
+	testCases := []struct {
+		name     string
+		slice    []string
+		elements []string
+		expected []string
+	}{
+		{
+			name:     "Empty",
+			slice:    []string{},
+			elements: []string{},
+			expected: []string{},
+		},
+		{
+			name:     "One element",
+			slice:    []string{"element1"},
+			elements: []string{"element1"},
+			expected: []string{"element1"},
+		},
+		{
+			name:     "Two elements",
+			slice:    []string{"element1", "element2"},
+			elements: []string{"element2", "element3"},
+			expected: []string{"element1", "element2", "element3"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ElementsMatch(t, tc.expected, UniqueUnion(tc.slice, tc.elements...))
+		})
+	}
+}
+
 func TestToCommandEnvVars(t *testing.T) {
 	testCases := []struct {
 		name       string

@@ -12,16 +12,19 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
+
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
@@ -43,26 +46,40 @@ import (
 
 func TestXrayBinaryScanJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
+	})
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
+	})
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
@@ -92,7 +109,10 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 	// Run with bypass flag and expect it to find vulnerabilities
 	scanArgs = append(scanArgs, "--bypass-archive-limits")
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, scanArgs...)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 // Docker scan tests
@@ -162,9 +182,9 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			if validateSecrets {
-				securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, minInactives)
+				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
 			} else {
-				securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
 			}
 		}
 		// Run docker scan on image with watch
@@ -174,7 +194,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
+			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations})
 		}
 	}
 }
