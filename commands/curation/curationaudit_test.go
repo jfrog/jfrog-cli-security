@@ -427,7 +427,7 @@ func TestDoCurationAudit(t *testing.T) {
 			cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
 			defer cleanUp()
 			// Create audit command, and run it
-			results, err := createCurationCmdAndRun(t, tt)
+			results, err := createCurationCmdAndRun(tt)
 			// Validate the results
 			if tt.requestToError == nil {
 				assert.NoError(t, err)
@@ -506,7 +506,7 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	callbackPreTest()
 }
 
-func createCurationCmdAndRun(t *testing.T, tt testCase) (cmdResults map[string]*CurationReport, err error) {
+func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport, err error) {
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
