@@ -28,7 +28,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
@@ -502,7 +501,6 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	callbackPreTest := testUtils.ChangeWDWithCallback(t, filepath.Join(basePathToTests, testCase.pathToPreTest))
 	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
 	assert.NoErrorf(t, err, string(output))
-	log.Debug(string(output))
 	callbackPreTest()
 }
 
