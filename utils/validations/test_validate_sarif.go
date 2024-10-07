@@ -147,6 +147,10 @@ func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run
 		PointerValidation[string]{Expected: expected.Tool.Driver.InformationURI, Actual: actual.Tool.Driver.InformationURI, Msg: fmt.Sprintf("Run tool information URI mismatch for tool %s", expected.Tool.Driver.Name)},
 		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", expected.Tool.Driver.Name)},
 	)
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, expected.Tool.Driver.Name, "run")
+	if ValidateContent(t, exactMatch, PointerValidation[sarif.RunAutomationDetails]{Expected: expected.AutomationDetails, Actual: actual.AutomationDetails, Msg: fmt.Sprintf("Run tool automation details mismatch for tool %s", expected.Tool.Driver.Name)}) && expected.AutomationDetails != nil {
+		ValidateContent(t, exactMatch, StringValidation{Expected: sarifutils.GetRunGUID(expected), Actual: sarifutils.GetRunGUID(actual), Msg: fmt.Sprintf("Run tool GUID mismatch for tool %s", expected.Tool.Driver.Name)})
+	}
 	// validate rules
 	for _, expectedRule := range expected.Tool.Driver.Rules {
 		rule, err := actual.GetRuleById(expectedRule.ID)
@@ -183,7 +187,7 @@ func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected,
 		StringValidation{Expected: sarifutils.GetRuleHelpMarkdown(expected), Actual: sarifutils.GetRuleHelpMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule help markdown mismatch for rule %s", toolName, expected.ID)},
 	)
 	// validate properties
-	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, expected.ID)
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, fmt.Sprintf("rule %s", expected.ID))
 }
 
 func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.Result {
@@ -234,7 +238,7 @@ func validateSarifResult(t *testing.T, exactMatch bool, toolName string, expecte
 		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, sarifutils.GetResultRuleId(expected))},
 	)
 	// validate properties
-	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, sarifutils.GetResultRuleId(expected))
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, fmt.Sprintf("result rule %s", sarifutils.GetResultRuleId(expected)))
 	// validate locations
 	for _, expectedLocation := range expected.Locations {
 		location := getLocationById(expectedLocation, actual.Locations)
@@ -253,20 +257,20 @@ func getLocationById(expected *sarif.Location, actual []*sarif.Location) *sarif.
 	return nil
 }
 
-func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual map[string]interface{}, toolName, ruleID string) {
+func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual map[string]interface{}, toolName, id string) {
 	for key, expectedValue := range expected {
 		actualValue, ok := actual[key]
-		if !assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s not found for rule %s", toolName, key, ruleID)) {
+		if !assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s not found for %s", toolName, key, id)) {
 			continue
 		}
 		// If the property is a string, compare the string values
 		if expectedStr, ok := expectedValue.(string); ok {
 			actualStr, ok := actualValue.(string)
-			if assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s is not a string for rule %s", toolName, key, ruleID)) {
-				ValidateContent(t, exactMatch, StringValidation{Expected: expectedStr, Actual: actualStr, Msg: fmt.Sprintf("Run tool %s: Rule property mismatch for rule %s", toolName, ruleID)})
+			if assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s is not a string for %s", toolName, key, id)) {
+				ValidateContent(t, exactMatch, StringValidation{Expected: expectedStr, Actual: actualStr, Msg: fmt.Sprintf("Run tool %s: Rule property mismatch for rule %s", toolName, id)})
 				continue
 			}
-			assert.Fail(t, fmt.Sprintf("Run tool %s: Expected property with key %s is a string for rule %s", toolName, key, ruleID))
+			assert.Fail(t, fmt.Sprintf("Run tool %s: Expected property with key %s is a string for %s", toolName, key, id))
 		}
 	}
 }

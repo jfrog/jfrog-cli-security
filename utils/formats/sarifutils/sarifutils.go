@@ -37,6 +37,20 @@ func GetToolVersion(run *sarif.Run) string {
 	return ""
 }
 
+func GetRunGUID(run *sarif.Run) string {
+	if run != nil && run.AutomationDetails != nil && run.AutomationDetails.GUID != nil {
+		return *run.AutomationDetails.GUID
+	}
+	return ""
+}
+
+func SetRunGUID(guid string, run *sarif.Run) {
+	if run.AutomationDetails == nil {
+		run.AutomationDetails = sarif.NewRunAutomationDetails()
+	}
+	run.AutomationDetails.GUID = &guid
+}
+
 func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
 	if run == nil {
 		return
