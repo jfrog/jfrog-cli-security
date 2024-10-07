@@ -24,17 +24,18 @@ import (
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var TestDataDir = filepath.FromSlash(filepath.Join("..", "..", "tests", "testdata"))
+var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
 
 func TestExtractPoliciesFromMsg(t *testing.T) {
 	var err error
@@ -411,13 +412,19 @@ func fillSyncedMap(pkgStatus []*PackageStatus) *sync.Map {
 
 func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	assert.NoError(t, err)
+
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create Mock server
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
 			// Create test env
-			cleanUp := createCurationTestEnv(t, tt, config)
+			testDirPath, cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
 			defer cleanUp()
 			// Create audit command, and run it
 			results, err := createCurationCmdAndRun(t, tt, config)
@@ -437,46 +444,66 @@ func TestDoCurationAudit(t *testing.T) {
 			// 		assert.NoError(t, tt.cleanDependencies())
 			// 	}
 			// }()
-			validateCurationResults(t, tt, results, config)
+			validateCurationResults(t, testDirPath, tt, results, config)
 		})
 	}
 }
 
-func createCurationTestEnv(t *testing.T, testCase testCase, config *config.ServerDetails) func() {
-	tempHomeDir, cleanUpHome := createTempHomeDirWithConfig(t, testCase, config)
-	cleanUpFlags := setCurationFlagsForTest(t)
-	// Run pre test exec
-	runPreTestExec(t, tempHomeDir, testCase)
+func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) (string, func()) {
+	_, cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, testCase, config)
 	// Set the test path
-	cleanUpTestPathDir := clienttestutils.ChangeDirWithCallback(t, tempHomeDir, testCase.pathToTest)
-	return func() {
-		cacheFolder, err := utils.GetCurationCacheFolder()
-		require.NoError(t, err)
-		err = fileutils.RemoveTempDir(cacheFolder)
-		if err != nil {
-			// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
-			assert.ErrorIs(t, err, os.ErrPermission)
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, testCase.pathToProject))
+	cwd, err := os.Getwd()
+	assert.NoError(t, err)
+	log.Debug("Current working directory: ", cwd)
+	var cleanUpChdir func()
+	if testCase.pathToTest != "" {
+		cleanUpChdir = testUtils.ChangeWDWithCallback(t, filepath.Join(testDirPath, testCase.pathToTest))
+	}
+	cwd, err = os.Getwd()
+	assert.NoError(t, err)
+	log.Debug("Current working directory: ", cwd)
+	// Run pre test exec
+	runPreTestExec(t, testDirPath, testCase)
+	// cleanUpTestPathDir := clienttestutils.ChangeDirWithCallback(t, tempHomeDir,  filepath.Join(basePathToTests, testCase.pathToTest))
+	cwd, err = os.Getwd()
+	assert.NoError(t, err)
+	log.Debug("Current working directory: ", cwd)
+	return filepath.Join(testDirPath, testCase.pathToTest), func() {
+		if cleanUpChdir != nil {
+			cleanUpChdir()
 		}
+		// cacheFolder, err := utils.GetCurationCacheFolder()
+		// require.NoError(t, err)
+		// err = fileutils.RemoveTempDir(cacheFolder)
+		// if err != nil {
+		// 	// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+		// 	assert.ErrorIs(t, err, os.ErrPermission)
+		// }
 		cleanUpTestPathDir()
-		cleanUpFlags()
 		cleanUpHome()
 	}
 }
 
-func createTempHomeDirWithConfig(t *testing.T, testCase testCase, config *config.ServerDetails) (string, func()) {
-	tempHomeDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+func createTempHomeDirWithConfig(t *testing.T, basePathToTests string,  testCase testCase, config *config.ServerDetails) (string, func()) {
+	tempHomeDirPath, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
 	// create .jfrog dir in temp home dir
 	jfrogDir := filepath.Join(tempHomeDirPath, ".jfrog")
 	assert.NoError(t, os.MkdirAll(jfrogDir, 0777))
-	// copy content from
-	assert.NoError(t, biutils.CopyDir(filepath.Join(testCase.pathToTest, ".jfrog"), jfrogDir, true, nil))
+	// copy .jfrog config content from test project to temp home dir
+	assert.NoError(t, biutils.CopyDir(filepath.Join(basePathToTests, testCase.getPathToTests(), ".jfrog"), jfrogDir, true, nil))
 	// Set the home dir
 	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
 	// Create the server details config file
 	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
 	return tempHomeDirPath, func() {
 		callbackHomeDir()
-		createTempDirCallback()
+		err := fileutils.RemoveTempDir(tempHomeDirPath)
+		if err != nil {
+			// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+			assert.ErrorIs(t, err, os.ErrPermission)
+		}
 	}
 }
 
@@ -490,11 +517,14 @@ func setCurationFlagsForTest(t *testing.T) func() {
 	}
 }
 
-func runPreTestExec(t *testing.T, currentWd string, testCase testCase) {
+func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	if testCase.preTestExec == "" {
 		return
 	}
-	callbackPreTest := clienttestutils.ChangeDirWithCallback(t, currentWd, testCase.pathToPreTest)
+	callbackPreTest := testUtils.ChangeWDWithCallback(t, filepath.Join(basePathToTests, testCase.pathToPreTest))
+	cwd, err := os.Getwd()
+	assert.NoError(t, err)
+	log.Debug("Current working directory: ", cwd)
 	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
 	assert.NoErrorf(t, err, string(output))
 	callbackPreTest()
@@ -506,11 +536,14 @@ func createCurationCmdAndRun(t *testing.T, tt testCase, config *config.ServerDet
 	curationCmd.parallelRequests = 3
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	cmdResults = map[string]*CurationReport{}
+	cwd, err := os.Getwd()
+	assert.NoError(t, err)
+	log.Debug("Current working directory: ", cwd)
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
 }
 
-func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
+func validateCurationResults(t *testing.T, testDirPath string, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
 	// Add the mock server to the expected blocked message url
 	for key := range testCase.expectedResp {
 		for index := range testCase.expectedResp[key].packagesStatus {
@@ -526,7 +559,7 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 			result.totalNumberOfPackages = 0
 		}
 	}
-	// assert.Equal(t, testCase.expectedResp, results)
+	assert.Equal(t, testCase.expectedResp, results)
 	for _, requestDone := range testCase.expectedRequest {
 		assert.True(t, requestDone)
 	}
@@ -537,6 +570,7 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 
 type testCase struct {
 	name                   string
+	pathToProject		   string
 	pathToTest             string
 	pathToPreTest          string
 	preTestExec            string
@@ -554,12 +588,19 @@ type testCase struct {
 	createServerWithoutCreds bool
 }
 
+func (tc testCase) getPathToTests() string {
+	if len(tc.pathToTest) > 0 {
+		return filepath.Join(tc.pathToProject, tc.pathToTest)
+	}
+	return tc.pathToProject
+}
+
 func getTestCasesForDoCurationAudit() []testCase {
 	tests := []testCase{
 		{
 			name:                     "go tree - one blocked package",
 			tech:                     techutils.Go,
-			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "curation-project"),
+			pathToProject:               filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
 				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
@@ -619,7 +660,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:       "python tree - one blocked package",
 			tech:       techutils.Pip,
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation"),
+			pathToProject: filepath.Join("projects", "package-managers", "python", "pip", "pip-curation"),
 			serveResources: map[string]string{
 				"pip":                                   filepath.Join("resources", "pip-resp"),
 				"pexpect":                               filepath.Join("resources", "pexpect-resp"),
@@ -656,19 +697,19 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:          "maven tree - one blocked package",
 			tech:          techutils.Maven,
-			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
+			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation"),
+			pathToTest: "test",
+			pathToPreTest: "pretest",
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
-				rootDir, err := os.Getwd()
-				assert.NoError(t, err)
 				// set the cache to test project dir, in order to fill its cache with dependencies
-				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join(rootDir, "test"))
+				cwd, err := os.Getwd()
+				assert.NoError(t, err)
+				log.Debug("Current working directory: ", cwd)
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
-				callbackPreTest()
 				require.NoError(t, err)
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
 			},
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "test"),
 			expectedBuildRequest: map[string]bool{
 				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
 			},
@@ -708,7 +749,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked package ",
 			tech:                   techutils.Npm,
-			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project"),
+			pathToProject:             filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -744,7 +785,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked one error",
 			tech:                   techutils.Npm,
-			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project"),
+			pathToProject:             filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -786,7 +827,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:       "dotnet tree",
 			tech:       techutils.Dotnet,
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "dotnet", "dotnet-curation"),
+			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
 				"curated-nuget": filepath.Join("resources", "feed.json"),
 				"index.json":    filepath.Join("resources", "index.json"),

@@ -5,11 +5,13 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/jfrog/jfrog-cli-security/formats"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
@@ -83,6 +85,13 @@ func ChangeWD(t *testing.T, newPath string) string {
 	return prevDir
 }
 
+func ChangeWDWithCallback(t *testing.T, newPath string) func() {
+	prevDir := ChangeWD(t, newPath)
+	return func() {
+		clientTests.ChangeDirAndAssert(t, prevDir)
+	}
+}
+
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
@@ -122,8 +131,9 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 
 func CreateTestProjectEnvInTempDir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
-	return tempDirPath, createTempDirCallback
+	maskedPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, biutils.CopyDir(projectPath, maskedPath, true, nil))
+	return maskedPath, createTempDirCallback
 }
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {

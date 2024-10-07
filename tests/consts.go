@@ -99,7 +99,15 @@ var reposConfigMap = map[*string]string{
 
 func GetTestResourcesPath() string {
 	dir, _ := os.Getwd()
-	return filepath.ToSlash(dir + "/tests/testdata/")
+	return getTestResourcesPath(dir)
+}
+
+func GetTestResourcesPathFromPath(basePaths ...string) string {
+	return getTestResourcesPath(filepath.Join(basePaths...))
+}
+
+func getTestResourcesPath(basePath string) string {
+	return filepath.Join(basePath, "tests", "testdata")
 }
 
 // Return local and remote repositories for the test suites, respectfully
