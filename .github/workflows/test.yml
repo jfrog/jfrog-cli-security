@@ -42,7 +42,7 @@ jobs:
         run: go vet -v ./...
   
   Unit_Tests:
-    name: Unit Tests (${{ matrix.os }}) 
+    name: "[${{ matrix.os }}] Unit Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
