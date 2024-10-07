@@ -380,7 +380,7 @@ func DeleteRepos(repos map[*string]string) {
 func CreateRepos(repos map[*string]string) {
 	for repoName, configFile := range repos {
 		if !isRepoExist(*repoName) {
-			repoConfig := configTests.GetTestResourcesPath() + "artifactory-repo-configs/" + configFile
+			repoConfig := configTests.GetTestResourcesPath() + "/artifactory-repo-configs/" + configFile
 			repoConfig, err := commonTests.ReplaceTemplateVariables(repoConfig, "", configTests.GetSubstitutionMap())
 			if err != nil {
 				log.Error(err)

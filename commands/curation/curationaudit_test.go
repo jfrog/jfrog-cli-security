@@ -424,10 +424,10 @@ func TestDoCurationAudit(t *testing.T) {
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
 			// Create test env
-			testDirPath, cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
+			cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
 			defer cleanUp()
 			// Create audit command, and run it
-			results, err := createCurationCmdAndRun(t, tt, config)
+			results, err := createCurationCmdAndRun(t, tt)
 			// Validate the results
 			if tt.requestToError == nil {
 				assert.NoError(t, err)
@@ -439,53 +439,31 @@ func TestDoCurationAudit(t *testing.T) {
 					tt.expectedError[strings.Index(tt.expectedError, "/")+1:]
 				assert.EqualError(t, err, errMsgExpected)
 			}
-			// defer func() {
-			// 	if tt.cleanDependencies != nil {
-			// 		assert.NoError(t, tt.cleanDependencies())
-			// 	}
-			// }()
-			validateCurationResults(t, testDirPath, tt, results, config)
+			validateCurationResults(t, tt, results, config)
 		})
 	}
 }
 
-func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) (string, func()) {
+func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) func() {
 	_, cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, testCase, config)
-	// Set the test path
 	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, testCase.pathToProject))
-	cwd, err := os.Getwd()
-	assert.NoError(t, err)
-	log.Debug("Current working directory: ", cwd)
 	var cleanUpChdir func()
 	if testCase.pathToTest != "" {
+		// Set the test path as the current working directory
 		cleanUpChdir = testUtils.ChangeWDWithCallback(t, filepath.Join(testDirPath, testCase.pathToTest))
 	}
-	cwd, err = os.Getwd()
-	assert.NoError(t, err)
-	log.Debug("Current working directory: ", cwd)
 	// Run pre test exec
 	runPreTestExec(t, testDirPath, testCase)
-	// cleanUpTestPathDir := clienttestutils.ChangeDirWithCallback(t, tempHomeDir,  filepath.Join(basePathToTests, testCase.pathToTest))
-	cwd, err = os.Getwd()
-	assert.NoError(t, err)
-	log.Debug("Current working directory: ", cwd)
-	return filepath.Join(testDirPath, testCase.pathToTest), func() {
+	return func() {
 		if cleanUpChdir != nil {
 			cleanUpChdir()
 		}
-		// cacheFolder, err := utils.GetCurationCacheFolder()
-		// require.NoError(t, err)
-		// err = fileutils.RemoveTempDir(cacheFolder)
-		// if err != nil {
-		// 	// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
-		// 	assert.ErrorIs(t, err, os.ErrPermission)
-		// }
 		cleanUpTestPathDir()
 		cleanUpHome()
 	}
 }
 
-func createTempHomeDirWithConfig(t *testing.T, basePathToTests string,  testCase testCase, config *config.ServerDetails) (string, func()) {
+func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) (string, func()) {
 	tempHomeDirPath, err := fileutils.CreateTempDir()
 	assert.NoError(t, err)
 	// create .jfrog dir in temp home dir
@@ -522,29 +500,23 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 		return
 	}
 	callbackPreTest := testUtils.ChangeWDWithCallback(t, filepath.Join(basePathToTests, testCase.pathToPreTest))
-	cwd, err := os.Getwd()
-	assert.NoError(t, err)
-	log.Debug("Current working directory: ", cwd)
 	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
 	assert.NoErrorf(t, err, string(output))
 	log.Debug(string(output))
 	callbackPreTest()
 }
 
-func createCurationCmdAndRun(t *testing.T, tt testCase, config *config.ServerDetails) (cmdResults map[string]*CurationReport, err error) {
+func createCurationCmdAndRun(t *testing.T, tt testCase) (cmdResults map[string]*CurationReport, err error) {
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	cmdResults = map[string]*CurationReport{}
-	cwd, err := os.Getwd()
-	assert.NoError(t, err)
-	log.Debug("Current working directory: ", cwd)
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
 }
 
-func validateCurationResults(t *testing.T, testDirPath string, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
+func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
 	// Add the mock server to the expected blocked message url
 	for key := range testCase.expectedResp {
 		for index := range testCase.expectedResp[key].packagesStatus {
@@ -570,21 +542,20 @@ func validateCurationResults(t *testing.T, testDirPath string, testCase testCase
 }
 
 type testCase struct {
-	name                   string
-	pathToProject		   string
-	pathToTest             string
-	pathToPreTest          string
-	preTestExec            string
-	serveResources         map[string]string
-	funcToGetGoals         func(t *testing.T) []string
-	shouldIgnoreConfigFile bool
-	expectedBuildRequest   map[string]bool
-	expectedRequest        map[string]bool
-	requestToFail          map[string]bool
-	expectedResp           map[string]*CurationReport
-	requestToError         map[string]bool
-	expectedError          string
-	// cleanDependencies        func() error
+	name                     string
+	pathToProject            string
+	pathToTest               string
+	pathToPreTest            string
+	preTestExec              string
+	serveResources           map[string]string
+	funcToGetGoals           func(t *testing.T) []string
+	shouldIgnoreConfigFile   bool
+	expectedBuildRequest     map[string]bool
+	expectedRequest          map[string]bool
+	requestToFail            map[string]bool
+	expectedResp             map[string]*CurationReport
+	requestToError           map[string]bool
+	expectedError            string
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
 }
@@ -601,7 +572,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                     "go tree - one blocked package",
 			tech:                     techutils.Go,
-			pathToProject:               filepath.Join("projects", "package-managers", "go", "curation-project"),
+			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
 				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
@@ -659,8 +630,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
-			name:       "python tree - one blocked package",
-			tech:       techutils.Pip,
+			name:          "python tree - one blocked package",
+			tech:          techutils.Pip,
 			pathToProject: filepath.Join("projects", "package-managers", "python", "pip", "pip-curation"),
 			serveResources: map[string]string{
 				"pip":                                   filepath.Join("resources", "pip-resp"),
@@ -673,7 +644,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"pip-curation": &CurationReport{packagesStatus: []*PackageStatus{
+				"pip-curation": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "4.8.0",
@@ -699,7 +670,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 			name:          "maven tree - one blocked package",
 			tech:          techutils.Maven,
 			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation"),
-			pathToTest: "test",
+			pathToTest:    "test",
 			pathToPreTest: "pretest",
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
@@ -707,9 +678,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 				// Cache dir is determined by the project dir so we need to "fake" the cache dir when we run the pretest build.
 				// When we run the test we will resolve the blocked package from the same cache dir that was filled in the pretest build.
 				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
-				cwd, err := os.Getwd()
-				assert.NoError(t, err)
-				log.Debug("Current working directory: ", cwd)
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
 				require.NoError(t, err)
 				cleanUpTestDirChange()
@@ -718,15 +686,11 @@ func getTestCasesForDoCurationAudit() []testCase {
 			expectedBuildRequest: map[string]bool{
 				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
 			},
-			// cleanDependencies: func() error {
-			// 	return os.RemoveAll(filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation",
-			// 		".jfrog", "curation", "cache", "maven", "org", "webjars", "npm"))
-			// },
 			requestToFail: map[string]bool{
 				"/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"test:my-app:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"test:my-app:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -754,7 +718,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked package ",
 			tech:                   techutils.Npm,
-			pathToProject:             filepath.Join("projects", "package-managers", "npm", "npm-project"),
+			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -764,7 +728,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"npm_test:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -790,7 +754,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked one error",
 			tech:                   techutils.Npm,
-			pathToProject:             filepath.Join("projects", "package-managers", "npm", "npm-project"),
+			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -803,7 +767,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"npm_test:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -830,8 +794,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
 		{
-			name:       "dotnet tree",
-			tech:       techutils.Dotnet,
+			name:          "dotnet tree",
+			tech:          techutils.Dotnet,
 			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
 				"curated-nuget": filepath.Join("resources", "feed.json"),
@@ -886,20 +850,6 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 			}
 		}
 		if r.Method == http.MethodGet {
-			if strings.Contains(r.URL.Path, "/api/system/version") {
-				w.WriteHeader(http.StatusOK)
-				w.Header().Add("content-type", "application/json")
-				_, err := w.Write([]byte(`{"version":"9.0.0"}`))
-				require.NoError(t, err)
-				return
-			}
-			if strings.Contains(r.URL.Path, "/api/v1/system/version") {
-				w.WriteHeader(http.StatusOK)
-				// w.Header().Add("content-type", "application/json")
-				_, err := w.Write([]byte(`{"xray_version":"4.0.0"}`))
-				require.NoError(t, err)
-				return
-			}
 			if resourceToServe != nil {
 				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
