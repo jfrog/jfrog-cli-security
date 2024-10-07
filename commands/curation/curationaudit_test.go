@@ -527,6 +527,7 @@ func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
 	log.Debug("Current working directory: ", cwd)
 	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
 	assert.NoErrorf(t, err, string(output))
+	log.Debug(string(output))
 	callbackPreTest()
 }
 
@@ -702,12 +703,16 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToPreTest: "pretest",
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
-				// set the cache to test project dir, in order to fill its cache with dependencies
+				// We want to fill the cache with dependencies before the tests to only resolve in the test the blocked package
+				// Cache dir is determined by the project dir so we need to "fake" the cache dir when we run the pretest build.
+				// When we run the test we will resolve the blocked package from the same cache dir that was filled in the pretest build.
+				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
 				cwd, err := os.Getwd()
 				assert.NoError(t, err)
 				log.Debug("Current working directory: ", cwd)
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
 				require.NoError(t, err)
+				cleanUpTestDirChange()
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
 			},
 			expectedBuildRequest: map[string]bool{
