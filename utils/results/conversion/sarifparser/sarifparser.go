@@ -49,11 +49,10 @@ type CmdResultsSarifConverter struct {
 	includeVulnerabilities bool
 	hasViolationContext    bool
 	// If we are running on Github actions, we need to add/change information to the output
-	patchBinaryPaths	   bool
+	patchBinaryPaths bool
 	// Current stream parse cache information
 	current       *sarif.Report
 	scaCurrentRun *sarif.Run
-	scaCurrentRunIds *datastructures.Set[string]
 	currentTarget results.ScanTarget
 	parsedScaKeys *datastructures.Set[string]
 	// General information on the current command results
@@ -96,18 +95,10 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 		return results.ErrResetConvertor
 	}
 	if sc.scaCurrentRun != nil {
-		if sc.scaCurrentRunIds.Size() > 0 {
-			id := sc.scaCurrentRunIds.ToSlice()[0]
-			if sc.scaCurrentRunIds.Size() > 1 {
-				log.Warn(fmt.Sprintf("Multiple SCA scan ids parsed as a single run. Setting run as %s, from %v", id, sc.scaCurrentRunIds.ToSlice()))
-			}
-			sarifutils.SetRunGUID(id, sc.scaCurrentRun)
-		}
 		// Flush the current run
 		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, sc.currentTarget, sc.scaCurrentRun)...)
 	}
 	sc.currentTarget = target
-	sc.scaCurrentRunIds = datastructures.MakeSet[string]()
 	if sc.hasViolationContext || sc.includeVulnerabilities {
 		// Create Sca Run if requested to parse all vulnerabilities/violations to it
 		sc.scaCurrentRun = sc.createScaRun(sc.currentTarget, len(errors))
@@ -147,7 +138,6 @@ func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, s
 		return
 	}
 	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
-	sc.scaCurrentRunIds.Add(scanResponse.ScanId)
 	return
 }
 
@@ -160,7 +150,6 @@ func (sc *CmdResultsSarifConverter) ParseVulnerabilities(target results.ScanTarg
 		return
 	}
 	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
-	sc.scaCurrentRunIds.Add(scanResponse.ScanId)
 	return
 }
 

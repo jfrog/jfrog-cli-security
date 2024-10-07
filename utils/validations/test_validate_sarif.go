@@ -148,9 +148,6 @@ func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run
 		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", expected.Tool.Driver.Name)},
 	)
 	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, expected.Tool.Driver.Name, "run")
-	if ValidateContent(t, exactMatch, PointerValidation[sarif.RunAutomationDetails]{Expected: expected.AutomationDetails, Actual: actual.AutomationDetails, Msg: fmt.Sprintf("Run tool automation details mismatch for tool %s", expected.Tool.Driver.Name)}) && expected.AutomationDetails != nil {
-		ValidateContent(t, exactMatch, StringValidation{Expected: sarifutils.GetRunGUID(expected), Actual: sarifutils.GetRunGUID(actual), Msg: fmt.Sprintf("Run tool GUID mismatch for tool %s", expected.Tool.Driver.Name)})
-	}
 	// validate rules
 	for _, expectedRule := range expected.Tool.Driver.Rules {
 		rule, err := actual.GetRuleById(expectedRule.ID)
@@ -195,7 +192,7 @@ func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.
 	log.Output(fmt.Sprintf(":: Actual results with expected results: %s", getResultId(expected)))
 	for _, result := range actual {
 
-		log.Output(fmt.Sprintf("Compare actual result (isPotential=%t, hasSameLocations=%t) with expected result: %s", isPotentialSimilarResults(expected, result), hasSameLocations(expected, result) , getResultId(result)))
+		log.Output(fmt.Sprintf("Compare actual result (isPotential=%t, hasSameLocations=%t) with expected result: %s", isPotentialSimilarResults(expected, result), hasSameLocations(expected, result), getResultId(result)))
 		if isPotentialSimilarResults(expected, result) && hasSameLocations(expected, result) {
 			return result
 		}
