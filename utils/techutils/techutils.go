@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
@@ -19,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 type Technology string
@@ -67,6 +69,35 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Poetry: project.Poetry,
 	Nuget:  project.Nuget,
 	Dotnet: project.Dotnet,
+}
+
+type DetectDependencyTreeParams struct {
+	Technology Technology `json:"technology"`
+	// Files that the technology handlers use to detect the project's dependencies.
+	Descriptors []string `json:"descriptors"`
+}
+
+type TechnologyDependencyTrees struct {
+	UniqueDependencies []string `json:"uniqueDependencies"`
+	DownloadUrls       map[string]string `json:"downloadUrls,omitempty"`
+	// descriptor path -> dependency tree
+	DependencyTrees map[string]*xrayUtils.GraphNode `json:"dependencyTrees,omitempty"`
+}
+
+func (tdr TechnologyDependencyTrees) GetAsXrayScaScanParam() *xrayUtils.GraphNode {
+	return &xrayUtils.GraphNode{
+		Id: "root",
+	}
+}
+
+type TechnologyHandler interface {
+	// Get a dependency tree for each descriptor file, the tree will have a root node id with the descriptor/project id, second level nodes are the direct dependencies...
+	// If no descriptor files are provided, the handler will try to use cwd as the context to find the dependencies.
+	GetTechDependencyTree(params DetectDependencyTreeParams) (*TechnologyDependencyTrees, error)
+	// Get the locations of the direct dependency in the given descriptor files. if no descriptor files are provided, the handler will try to find at cwd.
+	GetTechDependencyLocations(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error)
+	// Change a direct dependency version in the given descriptor files. if no descriptor files are provided, the handler will try to find at cwd.
+	FixTechDependencyVersion(directDependencyName, directDependencyVersion, fixVersion string, descriptorPaths ...string) error
 }
 
 type TechData struct {
