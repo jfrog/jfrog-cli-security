@@ -119,7 +119,10 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
 	}
-	err = getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	output, err := getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("failed to install project: %w\n%s", err, string(output))
+	}
 	return
 }
 
