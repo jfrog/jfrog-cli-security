@@ -8,13 +8,14 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -73,8 +74,22 @@ var TechToProjectType = map[Technology]project.ProjectType{
 
 type DetectDependencyTreeParams struct {
 	Technology Technology `json:"technology"`
+	// If the tech need to create temp file for the output of the command it should output it to this path.
+	OutputDirPath string `json:"outputDirPath,omitempty"`
 	// Files that the technology handlers use to detect the project's dependencies.
 	Descriptors []string `json:"descriptors"`
+	// Artifactory related options
+	DependenciesRepository string `json:"dependenciesRepository,omitempty"`
+	// Curation related options
+	IncludeCuration bool `json:"includeCuration,omitempty"`
+	ServerDetails *config.ServerDetails `json:"artifactoryServerDetails,omitempty"`
+	CurationCacheFolder string `json:"curationCacheFolder,omitempty"`
+	
+	// Common Tech options
+	UseWrapper bool `json:"useWrapper,omitempty"`
+
+	// Specific Maven options
+	IsMavenDepTreeInstalled bool `json:"isMavenDepTreeInstalled,omitempty"`
 }
 
 type TechnologyDependencyTrees struct {
@@ -90,17 +105,24 @@ func (tdr TechnologyDependencyTrees) GetAsXrayScaScanParam() *xrayUtils.GraphNod
 	}
 }
 
+func (tdr TechnologyDependencyTrees) GetUnifiedTree() []*xrayUtils.GraphNode {
+	return []*xrayUtils.GraphNode{}
+}
+
 type TechnologyHandler interface {
 	// Get a dependency tree for each descriptor file, the tree will have a root node id with the descriptor/project id, second level nodes are the direct dependencies...
 	// If no descriptor files are provided, the handler will try to use cwd as the context to find the dependencies.
-	GetTechDependencyTree(params DetectDependencyTreeParams) (*TechnologyDependencyTrees, error)
+	GetTechDependencyTree(params DetectDependencyTreeParams) (TechnologyDependencyTrees, error)
 	// Get the locations of the direct dependency in the given descriptor files. if no descriptor files are provided, the handler will try to find at cwd.
-	GetTechDependencyLocations(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error)
+	GetTechDependencyLocations(directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error) // maybe ([]formats.ComponentRow, error)
 	// Change a direct dependency version in the given descriptor files. if no descriptor files are provided, the handler will try to find at cwd.
-	FixTechDependencyVersion(directDependencyName, directDependencyVersion, fixVersion string, descriptorPaths ...string) error
+	ChangeTechDependencyVersion(directDependencyName, directDependencyVersion, fixVersion string, descriptorPaths ...string) error
 }
 
 type TechData struct {
+	techIdentifier string
+
+
 	// The name of the package type used in this technology.
 	packageType string
 	// Suffixes of file/directory names that indicate if a project uses this technology.
@@ -130,11 +152,13 @@ var technologiesData = map[Technology]TechData{
 	Maven: {
 		indicators:         []string{"pom.xml"},
 		packageDescriptors: []string{"pom.xml"},
+		techIdentifier: "gav",
 		execCommand:        "mvn",
 	},
 	Gradle: {
 		indicators:         []string{"build.gradle", "build.gradle.kts"},
 		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
+		techIdentifier: "gav",
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},

@@ -140,20 +140,22 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 
 // Preform the SCA scan for the given scan information.
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
-	scan *xrayutils.ScaScanResult, treeResult *technologies.DependencyTreeResult) parallel.TaskFunc {
+	scan *xrayutils.ScaScanResult, treeResult *techutils.TechnologyDependencyTrees) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
 		defer func() {
 			auditParallelRunner.ScaScansWg.Done()
 		}()
 		// Scan the dependency tree.
-		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
+		flatTree := treeResult.GetAsXrayScaScanParam()
+		fullDepTrees := treeResult.GetUnifiedTree()
+		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *flatTree, fullDepTrees)
 		if xrayErr != nil {
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
 		}
-		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.IsMultipleRootProject = clientutils.Pointer(len(fullDepTrees) > 1)
 		auditParallelRunner.ResultsMu.Lock()
-		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
+		addThirdPartyDependenciesToParams(auditParams, scan.Technology, flatTree, fullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan)
 		auditParallelRunner.ResultsMu.Unlock()
@@ -365,8 +367,23 @@ func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technolo
 // 	return
 // }
 
+func getDependencyTreeDetectionParams(scan *utils.ScaScanResult, params *AuditParams, serverDetails *config.ServerDetails, curationCacheDir string) techutils.DetectDependencyTreeParams {
+	detectionParams := techutils.DetectDependencyTreeParams{Technology: scan.Technology, Descriptors: scan.Descriptors}
+	// Artifactory params
+	detectionParams.DependenciesRepository = params.DepsRepo()
+	// Curation optional params
+	detectionParams.IncludeCuration = params.IsCurationCmd()
+	detectionParams.ServerDetails = serverDetails
+	detectionParams.CurationCacheFolder = curationCacheDir
+	// Common params
+	detectionParams.UseWrapper = params.UseWrapper()
+	// Maven params
+	detectionParams.IsMavenDepTreeInstalled = params.IsMavenDepTreeInstalled()
+	return detectionParams
+}
+
 // This method will change the working directory to the scan's working directory.
-func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*technologies.DependencyTreeResult, error) {
+func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*techutils.TechnologyDependencyTrees, error) {
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
@@ -374,12 +391,11 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*techn
 	if err != nil {
 		return nil, err
 	}
-	// technologies.GetDependencyTree(techutils.DetectDependencyTreeParams{Technology: scan.Technology, Descriptors: scan.Descriptors})
-	treeResult, techErr := technologies.GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
+	treeResult, techErr := technologies.GetDependencyTree(getDependencyTreeDetectionParams(scan, params, serverDetails))// technologies.GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
 	}
-	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+	if len(treeResult.UniqueDependencies) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return &treeResult, nil

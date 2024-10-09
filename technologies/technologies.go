@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -24,25 +25,78 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
 
+	javaHandlers "github.com/jfrog/jfrog-cli-security/technologies/java"
+
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 var TechnologyHandlers = map[techutils.Technology]techutils.TechnologyHandler{
-
+	// Java technologies
+	techutils.Maven:  &javaHandlers.MavenTechnologyHandler{},
 }
 
-func GetDependencyTree(params techutils.DetectDependencyTreeParams) (*techutils.TechnologyDependencyTrees, error) {
-	if handler, ok := TechnologyHandlers[params.Technology]; ok {
+func GetTechHandler(tech techutils.Technology) (techutils.TechnologyHandler, error) {
+	if handler, ok := TechnologyHandlers[tech]; ok {
+		return handler, nil
+	}
+	return nil, fmt.Errorf("%s is currently not supported", tech.ToFormal())
+}
+
+func GetTechDependencyLocations(tech techutils.Technology, directDependencyName, directDependencyVersion string, descriptorPaths ...string) ([]*sarif.Location, error) {
+	handler, err := GetTechHandler(tech)
+	if err != nil {
+		return nil, err
+	}
+	return handler.GetTechDependencyLocations(directDependencyName, directDependencyVersion, descriptorPaths...)
+}
+
+func ChangeTechDependencyVersion(tech techutils.Technology, directDependencyName, directDependencyVersion, fixVersion string, descriptorPaths ...string) error {
+	handler, err := GetTechHandler(tech)
+	if err != nil {
+		return err
+	}
+	return handler.ChangeTechDependencyVersion(directDependencyName, directDependencyVersion, fixVersion, descriptorPaths...)
+}
+
+func GetDependencyTree(params techutils.DetectDependencyTreeParams) (techutils.TechnologyDependencyTrees, error) {
+	if handler, err := GetTechHandler(params.Technology); err == nil {
 		log.Info(fmt.Sprintf("Handler Calculating %s dependencies...", params.Technology.ToFormal()))
 		if tree, err := handler.GetTechDependencyTree(params); err == nil {
 			return tree, nil
 		}
-		log.Warn(fmt.Sprintf("Handler failed to calculate %s dependencies, falling back to default handler", params.Technology.ToFormal()))
+		return techutils.TechnologyDependencyTrees{}, fmt.Errorf("Handler failed to calculate %s dependencies", params.Technology.ToFormal())
 	}
+	return runFallback(params)
+}
+
+func runFallback(params techutils.DetectDependencyTreeParams) (techutils.TechnologyDependencyTrees, error) {
 	log.Info(fmt.Sprintf("Calculating %s dependencies...", params.Technology.ToFormal()))
-	return nil, fmt.Errorf("%s is currently not supported", string(params.Technology))
+	auditParams := toAuditParams(params)
+	oldTreeStruct, err := GetTechDependencyTree(auditParams, params.ServerDetails, params.Technology)
+	if err != nil {
+		return techutils.TechnologyDependencyTrees{}, err
+	}
+	return toResultNewStruct(oldTreeStruct), nil
+}
+
+func toAuditParams(params techutils.DetectDependencyTreeParams) utils.AuditParams {
+	auditParams := &utils.AuditBasicParams{}
+	auditParams.SetServerDetails(params.ServerDetails)
+	return auditParams
+}
+
+func toResultNewStruct(oldTreeStruct DependencyTreeResult) techutils.TechnologyDependencyTrees {
+	uniqueDeps := make([]string, 0, len(oldTreeStruct.FlatTree.Nodes))
+	for _, node := range oldTreeStruct.FlatTree.Nodes {
+		uniqueDeps = append(uniqueDeps, node.Id)
+	}
+	tree := map[string]*xrayUtils.GraphNode{}
+	for _, node := range oldTreeStruct.FullDepTrees {
+		tree["root"] = node
+	}
+	return techutils.TechnologyDependencyTrees{DownloadUrls: oldTreeStruct.DownloadUrls, UniqueDependencies: uniqueDeps, DependencyTrees: tree}
 }
 
 type DependencyTreeResult struct {
