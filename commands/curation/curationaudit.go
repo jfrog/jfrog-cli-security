@@ -39,6 +39,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
 	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
@@ -373,7 +374,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 	if err != nil {
 		return err
 	}
-	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
+	depTreeResult, err := technologies.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		return err
 	}

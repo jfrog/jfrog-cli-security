@@ -14,6 +14,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -70,6 +71,9 @@ var TechToProjectType = map[Technology]project.ProjectType{
 }
 
 type TechData struct {
+	techIdentifier string
+
+
 	// The name of the package type used in this technology.
 	packageType string
 	// Suffixes of file/directory names that indicate if a project uses this technology.
@@ -99,11 +103,13 @@ var technologiesData = map[Technology]TechData{
 	Maven: {
 		indicators:         []string{"pom.xml"},
 		packageDescriptors: []string{"pom.xml"},
+		techIdentifier: "gav",
 		execCommand:        "mvn",
 	},
 	Gradle: {
 		indicators:         []string{"build.gradle", "build.gradle.kts"},
 		packageDescriptors: []string{"build.gradle", "build.gradle.kts"},
+		techIdentifier: "gav",
 	},
 	Npm: {
 		indicators:                 []string{"package.json", "package-lock.json", "npm-shrinkwrap.json"},
@@ -229,6 +235,10 @@ func (tech Technology) ToFormal() string {
 
 func (tech Technology) String() string {
 	return string(tech)
+}
+
+func (tech Technology) GetIdentifier() string {
+	return technologiesData[tech].techIdentifier
 }
 
 func (tech Technology) GetExecCommandName() string {
