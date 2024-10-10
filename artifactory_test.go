@@ -221,6 +221,9 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	setEnvCallBack := clientTests.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempDirPath)
 	defer setEnvCallBack()
 
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
+
 	// Download
 	err := jas.DownloadAnalyzerManagerIfNeeded(0)
 	assert.NoError(t, err)

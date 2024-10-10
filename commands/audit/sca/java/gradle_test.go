@@ -3,6 +3,7 @@ package java
 import (
 	"errors"
 	"fmt"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +48,8 @@ func TestGradleTreesWithoutConfig(t *testing.T) {
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
-
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	// Run getModulesDependencyTrees
 	modulesDependencyTrees, uniqueDeps, err := buildGradleDependencyTree(&DepTreeParams{})
 	if assert.NoError(t, err) && assert.NotNil(t, modulesDependencyTrees) {
@@ -71,6 +73,9 @@ func TestGradleTreesWithConfig(t *testing.T) {
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle-example-config"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 
 	// Run getModulesDependencyTrees
 	modulesDependencyTrees, uniqueDeps, err := buildGradleDependencyTree(&DepTreeParams{UseWrapper: true})

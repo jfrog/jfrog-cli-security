@@ -1,6 +1,7 @@
 package java
 
 import (
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -15,6 +16,8 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 	// Create and change directory to test workspace
 	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
+	cleanup := securityTestUtils.ConfigureReleasesRepoForTest(t)
+	defer cleanup()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 	expectedTree := map[string]map[string]string{
 		"org.jfrog.example.gradle:shared:1.0":                             {},
