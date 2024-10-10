@@ -202,6 +202,7 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
+		// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
 		_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("An error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s.", auditParams.workingDirs), scaScanErr)
 	}
 	go func() {
@@ -278,8 +279,9 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 	return
 }
 
-// This function checks if partial results is allowed. If so we log the error and continue.
-// If partial results is not allowed we add the error to the SecurityParallelRunner error's channel if one is provided, or simply return the error if not.
+// This function checks if partial results are allowed. If so we log the error and continue.
+// If partial results are not allowed and a SecurityParallelRunner is provided we add the error to its error queue and return without an error, since the errors will be later collected from the queue.
+// If partial results are not allowed and a SecurityParallelRunner is not provided we return the error.
 func createErrorIfPartialResultsDisabled(auditParams *AuditParams, auditParallelRunner *utils.SecurityParallelRunner, extraMassageForLog string, err error) error {
 	if err == nil {
 		return nil

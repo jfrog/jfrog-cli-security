@@ -82,6 +82,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
+			// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
 			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
 			auditParallelRunner.ScaScansWg.Done()
 		})
