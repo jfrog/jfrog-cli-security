@@ -61,6 +61,11 @@ func ChangeTechDependencyVersion(tech techutils.Technology, directDependencyName
 }
 
 func GetDependencyTree(params techutils.DetectDependencyTreeParams) (techutils.TechnologyDependencyTrees, error) {
+	msg := fmt.Sprintf("Calculating %s dependencies...", params.Technology.ToFormal())
+	if params.IncludeCuration {
+		getCurationCacheFolderAndLogMsg(params.Technology)
+	}
+	
 	if handler, err := GetTechHandler(params.Technology); err == nil {
 		log.Info(fmt.Sprintf("Handler Calculating %s dependencies...", params.Technology.ToFormal()))
 		if tree, err := handler.GetTechDependencyTree(params); err == nil {
@@ -210,10 +215,7 @@ func logDeps(uniqueDeps any) (err error) {
 	return
 }
 
-func getCurationCacheFolderAndLogMsg(params utils.AuditParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
-	if !params.IsCurationCmd() {
-		return
-	}
+func getCurationCacheFolderAndLogMsg(tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
 	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
 		return
 	}
