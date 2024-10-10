@@ -51,7 +51,7 @@ jobs:
       - name: Install dotnet
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '6.11.0'
+          dotnet-version: '6.x'
       - name: Setup Python3
         uses: actions/setup-python@v4
         with:
