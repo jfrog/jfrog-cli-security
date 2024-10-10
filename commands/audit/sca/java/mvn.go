@@ -89,7 +89,7 @@ func buildMavenDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtil
 }
 
 // Runs maven-dep-tree according to cmdName. Returns the plugin output along with a function pointer to revert the plugin side effects.
-// If a non-nil clearMavenDepTreeRun pointer is returnes it means we had no error during the entire function execution
+// If a non-nil clearMavenDepTreeRun pointer is returns it means we had no error during the entire function execution
 func (mdt *MavenDepTreeManager) RunMavenDepTree() (depTreeOutput string, clearMavenDepTreeRun func() error, err error) {
 	// depTreeExecDir is a temp directory for all the files that are required for the maven-dep-tree run
 	depTreeExecDir, clearMavenDepTreeRun, err := mdt.CreateTempDirWithSettingsXmlIfNeeded()
@@ -254,7 +254,7 @@ func (mdt *MavenDepTreeManager) createSettingsXmlWithConfiguredArtifactory(setti
 }
 
 // Creates a temporary directory.
-// If Artifactory resolution repo is provided, a settings.xml file with the provided server and repository will be created inside the temprary directory.
+// If Artifactory resolution repo is provided, a settings.xml file with the provided server and repository will be created inside the temporarily directory.
 func (mdt *MavenDepTreeManager) CreateTempDirWithSettingsXmlIfNeeded() (tempDirPath string, clearMavenDepTreeRun func() error, err error) {
 	tempDirPath, err = fileutils.CreateTempDir()
 	if err != nil {

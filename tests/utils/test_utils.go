@@ -5,25 +5,26 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/formats"
+
+	biutils "github.com/jfrog/build-info-go/utils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	// coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -41,32 +42,6 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	err := xml.Unmarshal([]byte(output), &xmlMap)
 	assert.NoError(t, err)
 	return xmlMap
-}
-
-func InitSecurityTest(t *testing.T, xrayMinVersion string) {
-	if !*configTests.TestSecurity {
-		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
-	}
-	ValidateXrayVersion(t, xrayMinVersion)
-}
-
-func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, true)
-	// Create mock cli with the mock commands.
-	commands := []components.Command{}
-	for _, mockCommand := range mockCommands {
-		commands = append(commands, mockCommand())
-	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands)), func() {
-		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
-	}
-}
-
-func GetTestResourcesPath() string {
-	dir, _ := os.Getwd()
-	return filepath.ToSlash(dir + "/tests/testdata/")
 }
 
 func CleanTestsHomeEnv() {
@@ -110,6 +85,13 @@ func ChangeWD(t *testing.T, newPath string) string {
 	return prevDir
 }
 
+func ChangeWDWithCallback(t *testing.T, newPath string) func() {
+	prevDir := ChangeWD(t, newPath)
+	return func() {
+		clientTests.ChangeDirAndAssert(t, prevDir)
+	}
+}
+
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
@@ -144,5 +126,23 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 	return watchParams.Name, func() {
 		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
+}
+
+func CreateTestProjectEnvInTempDir(t *testing.T, projectPath string) (string, func()) {
+	// We are not using coreTests.CreateTempDirWithCallbackAndAssert(t) since the callback fails to remove the temp dir on Windows. (Unknown reason)
+	// tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	tempDirPath := t.TempDir()
+	maskedPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, biutils.CopyDir(projectPath, maskedPath, true, nil))
+	return maskedPath, func(){}
+}
+
+func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := CreateTestProjectEnvInTempDir(t, projectPath)
+	prevWd := ChangeWD(t, tempDirPath)
+	return tempDirPath, func() {
+		clientTests.ChangeDirAndAssert(t, prevWd)
+		createTempDirCallback()
 	}
 }

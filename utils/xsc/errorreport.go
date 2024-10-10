@@ -2,6 +2,7 @@ package xsc
 
 import (
 	"fmt"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -44,7 +45,7 @@ func IsReportLogErrorEventPossible(xscManager *xsc.XscServicesManager) bool {
 		log.Debug("Xsc service is not available. Reporting to JFrog analytics is skipped...")
 		return false
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, minXscVersionForErrorReport); err != nil {
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, MinXscVersionForErrorReport); err != nil {
 		log.Debug(err.Error())
 		return false
 	}

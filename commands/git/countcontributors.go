@@ -278,7 +278,7 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 	return cc.getOwnersMatchingRepos(reposMap)
 }
 
-// getOwnersMatchingRepos gets all projects and their repo map and look for thr specific owner.
+// getOwnersMatchingRepos gets all projects and their repo map and look for the specific owner.
 func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
 	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {

@@ -123,7 +123,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		return false, err
 	}
 
-	// A patch for Xray issue where it returns Base URL from the API but it is somtimes not the URL that is configured in the CLI
+	// A patch for Xray issue where it returns Base URL from the API but it is sometimes not the URL that is configured in the CLI
 	// More info in https://jfrog-int.atlassian.net/browse/XRAY-77451
 
 	url, endpoint, trimerr := trimUrl(buildScanResults.MoreDetailsUrl)
