@@ -202,7 +202,8 @@ func RunAudit(auditParams *AuditParams) (results *utils.Results, err error) {
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	if scaScanErr := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, results); scaScanErr != nil {
-		auditParallelRunner.AddErrorToChan(scaScanErr)
+		// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
+		_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("An error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s.", auditParams.workingDirs), scaScanErr)
 	}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
@@ -276,4 +277,28 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 		return fmt.Errorf("%s failed to run JAS scanners: %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 	}
 	return
+}
+
+// This function checks if partial results are allowed. If so we log the error and continue.
+// If partial results are not allowed and a SecurityParallelRunner is provided we add the error to its error queue and return without an error, since the errors will be later collected from the queue.
+// If partial results are not allowed and a SecurityParallelRunner is not provided we return the error.
+func createErrorIfPartialResultsDisabled(auditParams *AuditParams, auditParallelRunner *utils.SecurityParallelRunner, extraMassageForLog string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if auditParams.AllowPartialResults() {
+		if extraMassageForLog == "" {
+			extraMassageForLog = "An error has occurred during the audit scans"
+		}
+		log.Warn(fmt.Sprintf("%s\nSince partial results are allowed, the error is skipped: %s", extraMassageForLog, err.Error()))
+		return nil
+	}
+
+	// When SecurityParallelRunner is provided we add the error to the queue, otherwise we return the error
+	if auditParallelRunner != nil {
+		auditParallelRunner.AddErrorToChan(err)
+		return nil
+	}
+	return err
 }
