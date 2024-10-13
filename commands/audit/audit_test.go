@@ -394,7 +394,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 		// TODO when applying allow-partial-results to JAS make sure to add a test case that checks failures in JAS scans + add  some JAS api call to the mock server
 	}
 
-	serverMock, serverDetails := utils.CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
+	serverMock, serverDetails := validations.CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == "/xray/api/v1/system/version" {
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, scangraph.GraphScanMinXrayVersion)))
 			if !assert.NoError(t, err) {
@@ -427,16 +427,16 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
-					MultiScanId:            utils.TestScaScanId,
+					MultiScanId:            validations.TestScaScanId,
 				})
 			auditParams.SetIsRecursiveScan(true)
 
 			scanResults, err := RunAudit(auditParams)
 			if testcase.allowPartialResults {
-				assert.NoError(t, scanResults.ScansErr)
+				assert.NoError(t, scanResults.GetErrors())
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, scanResults.ScansErr)
+				assert.Error(t, scanResults.GetErrors())
 				assert.NoError(t, err)
 			}
 		})

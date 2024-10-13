@@ -124,8 +124,8 @@ func (r *SecurityCommandResults) GetErrors() (err error) {
 	return
 }
 
-func (r *SecurityCommandResults) GetTechnologies() []techutils.Technology {
-	technologies := datastructures.MakeSet[techutils.Technology]()
+func (r *SecurityCommandResults) GetTechnologies(additionalTechs ...techutils.Technology) []techutils.Technology {
+	technologies := datastructures.MakeSetFromElements(additionalTechs...)
 	for _, scan := range r.Targets {
 		technologies.AddElements(scan.GetTechnologies()...)
 	}
