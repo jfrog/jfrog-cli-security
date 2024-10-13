@@ -31,8 +31,8 @@ func (r *Results) GetScaScansXrayResults() (results []services.ScanResponse) {
 	return
 }
 
-func (r *Results) GetScaScannedTechnologies() []techutils.Technology {
-	technologies := datastructures.MakeSet[techutils.Technology]()
+func (r *Results) GetScaScannedTechnologies(otherTech ...techutils.Technology) []techutils.Technology {
+	technologies := datastructures.MakeSetFromElements(otherTech...)
 	for _, scaResult := range r.ScaResults {
 		technologies.Add(scaResult.Technology)
 	}

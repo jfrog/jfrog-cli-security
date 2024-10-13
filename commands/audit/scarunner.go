@@ -82,13 +82,15 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				log.Warn(bdtErr.Error())
 				continue
 			}
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error()))
+			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error())))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
-			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
+			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			auditParallelRunner.ScaScansWg.Done()
 		})
 		if taskErr != nil {
 			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
@@ -147,8 +149,12 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
+		var xrayErr error
 		defer func() {
-			auditParallelRunner.ScaScansWg.Done()
+			if xrayErr == nil {
+				// We Sca waitGroup as done only when we have no errors. If we have errors we mark it done in the error's handler function
+				auditParallelRunner.ScaScansWg.Done()
+			}
 		}()
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
