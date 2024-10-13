@@ -16,7 +16,6 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
@@ -28,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -38,7 +38,20 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, results *xrayutils.Results) (err error) {
+// We can only preform SCA scan if we identified at least one technology for a target.
+func hasAtLeastOneTech(cmdResults *results.SecurityCommandResults) bool {
+	if len(cmdResults.Targets) == 0 {
+		return false
+	}
+	for _, scan := range cmdResults.Targets {
+		if scan.Technology != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (err error) {
 	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
@@ -57,23 +70,20 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if err != nil {
 		return
 	}
-
-	scans := getScaScansToPreform(auditParams)
-	if len(scans) == 0 {
+	if !hasAtLeastOneTech(cmdResults) {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 		return
 	}
-	scanInfo, err := coreutils.GetJsonIndent(scans)
-	if err != nil {
-		return
-	}
-	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
-
 	defer func() {
 		// Make sure to return to the original working directory, buildDependencyTree may change it
 		err = errors.Join(err, os.Chdir(currentWorkingDir))
 	}()
-	for _, scan := range scans {
+	// Preform SCA scans
+	for _, scan := range cmdResults.Targets {
+		if scan.Technology == "" {
+			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", scan.Target))
+			continue
+		}
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
@@ -82,55 +92,17 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				log.Warn(bdtErr.Error())
 				continue
 			}
-			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error())))
+			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("failed to get dependencies trees in '%s':\n%s", scan.Target, bdtErr.Error())))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
-			// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
-			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("SCA scan failed in '%s':\n%s", scan.Target, err.Error()))
 			auditParallelRunner.ScaScansWg.Done()
 		})
 		if taskErr != nil {
 			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
-		}
-		// Add the scan to the results
-		auditParallelRunner.ResultsMu.Lock()
-		results.ScaResults = append(results.ScaResults, scan)
-		auditParallelRunner.ResultsMu.Unlock()
-	}
-	return
-}
-
-// Calculate the scans to preform
-func getScaScansToPreform(params *AuditParams) (scansToPreform []*xrayutils.ScaScanResult) {
-	for _, requestedDirectory := range params.workingDirs {
-		if !fileutils.IsPathExists(requestedDirectory, false) {
-			log.Warn("The working directory", requestedDirectory, "doesn't exist. Skipping SCA scan...")
-			continue
-		}
-		// Detect descriptors and technologies in the requested directory.
-		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), sca.GetExcludePattern(params.AuditBasicParams))
-		if err != nil {
-			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
-			continue
-		}
-		// Create scans to preform
-		for tech, workingDirs := range techToWorkingDirs {
-			if tech == techutils.Dotnet {
-				// We detect Dotnet and Nuget the same way, if one detected so does the other.
-				// We don't need to scan for both and get duplicate results.
-				continue
-			}
-			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators was not found, scan only requested directory for this technology.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: requestedDirectory, Technology: tech})
-			}
-			for workingDir, descriptors := range workingDirs {
-				// Add scan for each detected working directory.
-				scansToPreform = append(scansToPreform, &xrayutils.ScaScanResult{Target: workingDir, Technology: tech, Descriptors: descriptors})
-			}
 		}
 	}
 	return
@@ -146,7 +118,7 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 
 // Preform the SCA scan for the given scan information.
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
-	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
+	scan *results.TargetResults, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
 		var xrayErr error
@@ -161,10 +133,9 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		if xrayErr != nil {
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
 		}
-		scan.IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		auditParallelRunner.ResultsMu.Lock()
+		scan.NewScaScanResults(scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
-		scan.XrayResults = append(scan.XrayResults, scanResults...)
 		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan)
 		auditParallelRunner.ResultsMu.Unlock()
 		return
@@ -382,7 +353,7 @@ func logDeps(uniqueDeps any) (err error) {
 }
 
 // This method will change the working directory to the scan's working directory.
-func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*DependencyTreeResult, error) {
+func buildDependencyTree(scan *results.TargetResults, params *AuditParams) (*DependencyTreeResult, error) {
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}

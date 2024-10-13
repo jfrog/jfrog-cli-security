@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/jfrog/jfrog-cli-security/cli"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
@@ -48,9 +47,7 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 	assert.NoError(t, err)
 }
 
-func InitTestCliDetails() {
-	testApplication := cli.GetJfrogCliSecurityApp()
-
+func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
 		configTests.PlatformCli = GetTestCli(testApplication)
