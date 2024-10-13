@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -397,6 +398,11 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
 	}
 
+	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
+		// No secrets flag but secret validation is provided, error
+		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
+	}
+
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
@@ -421,7 +427,7 @@ func AuditCmd(c *components.Context) error {
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA))
+		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
 func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
@@ -457,6 +463,11 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	if err != nil {
 		return nil, err
 	}
+	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
+	if err != nil {
+		return nil, err
+	}
+
 	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
@@ -467,7 +478,10 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis))
+		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
+		SetScansResultsOutputDir(scansOutputDir).
+		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
+		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -565,7 +579,7 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 	if !IsSupportedCommandForCurationInspect(cmdName) {
 		return
 	}
-	if os.Getenv(coreutils.OutputDirPathEnv) == "" ||
+	if os.Getenv(coreutils.SummaryOutputDirPathEnv) == "" ||
 		os.Getenv(SkipCurationAfterFailureEnv) == "true" {
 		return
 	}
@@ -629,6 +643,21 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 	return curationAuditCommand, nil
+}
+
+func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
+	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
+	if scansOutputDir == "" {
+		return "", nil
+	}
+	exists, err := fileutils.IsDirExists(scansOutputDir, false)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
+	}
+	return scansOutputDir, nil
 }
 
 func DockerScanMockCommand() components.Command {
@@ -704,7 +733,8 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
+		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails)).
+		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}

@@ -24,7 +24,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.8.13"
+	defaultAnalyzerManagerVersion             = "1.9.7"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -41,6 +41,8 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	// #nosec G101 -- Not credentials.
+	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
 
 var exitCodeErrorsMap = map[int]string{
@@ -121,6 +123,7 @@ func GetAnalyzerManagerExecutable() (analyzerManagerPath string, err error) {
 		return
 	}
 	if !exists {
+		log.Debug(fmt.Sprintf("The analyzer manager executable was not found at %s", analyzerManagerPath))
 		err = errors.New("unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 	}
 	return analyzerManagerPath, err

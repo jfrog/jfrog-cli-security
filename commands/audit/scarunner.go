@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -42,6 +43,11 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
 	}
+	if auditParams.configProfile != nil {
+		log.Debug("Skipping SCA scan as a configuration profile is being utilized and currently only Secrets and Sast scanners are supported when utilizing a configuration profile")
+		return
+	}
+
 	// Prepare
 	currentWorkingDir, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
@@ -71,13 +77,20 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
 		if bdtErr != nil {
-			err = errors.Join(err, fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error()))
+			var projectNotInstalledErr *biutils.ErrProjectNotInstalled
+			if errors.As(bdtErr, &projectNotInstalledErr) {
+				log.Warn(bdtErr.Error())
+				continue
+			}
+			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, bdtErr.Error())))
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
-			auditParallelRunner.AddErrorToChan(fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			// If error to be caught, we add it to the auditParallelRunner error queue and continue. The error need not be returned
+			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("audit command in '%s' failed:\n%s", scan.Target, err.Error()))
+			auditParallelRunner.ScaScansWg.Done()
 		})
 		if taskErr != nil {
 			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
@@ -136,8 +149,12 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 	scan *xrayutils.ScaScanResult, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
+		var xrayErr error
 		defer func() {
-			auditParallelRunner.ScaScansWg.Done()
+			if xrayErr == nil {
+				// We Sca waitGroup as done only when we have no errors. If we have errors we mark it done in the error's handler function
+				auditParallelRunner.ScaScansWg.Done()
+			}
 		}()
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
@@ -148,6 +165,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 		scan.XrayResults = append(scan.XrayResults, scanResults...)
+		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan)
 		auditParallelRunner.ResultsMu.Unlock()
 		return
 	}
@@ -242,6 +260,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
 		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+	case techutils.Conan:
+		depTreeResult.FullDepTrees, uniqueDeps, err = conan.BuildDependencyTree(params)
 	case techutils.Yarn:
 		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:
@@ -298,7 +318,7 @@ func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutil
 	return logMessage, curationCacheFolder, err
 }
 
-func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	if serverDetails, err = params.ServerDetails(); err != nil {
 		return
 	}
@@ -366,16 +386,28 @@ func buildDependencyTree(scan *utils.ScaScanResult, params *AuditParams) (*Depen
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoIfExists(params.AuditBasicParams, scan.Technology)
+	serverDetails, err := SetResolutionRepoInAuditParamsIfExists(params.AuditBasicParams, scan.Technology)
 	if err != nil {
 		return nil, err
 	}
 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
 	if techErr != nil {
-		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%s", scan.Technology, techErr.Error())
+		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%w", scan.Technology, techErr)
 	}
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
 	return &treeResult, nil
+}
+
+// If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
+func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType) (err error) {
+	if scanResultsOutputDir == "" || results == nil {
+		return
+	}
+	fileContent, err := json.Marshal(results)
+	if err != nil {
+		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	}
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }

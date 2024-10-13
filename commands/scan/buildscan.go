@@ -149,17 +149,17 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
 	}}
 
-	scanResults := utils.NewAuditResults()
+	scanResults := utils.NewAuditResults(utils.Build)
 	scanResults.XrayVersion = xrayVersion
 	scanResults.ScaResults = []*utils.ScaScanResult{{Target: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber), XrayResults: scanResponse}}
 
 	resultsPrinter := utils.NewResultsWriter(scanResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetHasViolationContext(true).
 		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
 		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable).
-		SetScanType(services.Binary).
 		SetExtraMessages(nil)
 
 	if bsc.outputFormat != outputFormat.Table {
@@ -176,14 +176,13 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 				return false, err
 			}
 		}
-		if bsc.includeVulnerabilities {
-			resultsPrinter.SetIncludeVulnerabilities(true)
-			if err = resultsPrinter.PrintScanResults(); err != nil {
-				return false, err
-			}
-		}
 	}
-	err = utils.RecordSecurityCommandOutput(utils.ScanCommandSummaryResult{Results: scanResults.GetSummary(), Section: utils.Build})
+	err = utils.RecordSecurityCommandSummary(utils.NewBuildScanSummary(
+		scanResults,
+		bsc.serverDetails,
+		bsc.includeVulnerabilities,
+		params.BuildName, params.BuildNumber,
+	))
 	return
 }
 

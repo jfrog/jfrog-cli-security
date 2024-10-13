@@ -1,0 +1,1 @@
+<pre>watch: watch1</pre><br><pre>26 Policy Violations:&Tab;20 Security&Tab;2 Operational&Tab;1 License&Tab;3 Secrets<br><br><a href="https://jfrog.com/help/access?xinfo:appid=csh-gen-gitbook">🐸 Unlock detailed findings</a></pre>

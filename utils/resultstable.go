@@ -38,13 +38,13 @@ const (
 // In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintViolationsTable(violations []services.Violation, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
+func PrintViolationsTable(violations []services.Violation, results *Results, multipleRoots, printExtended bool) error {
 	securityViolationsRows, licenseViolationsRows, operationalRiskViolationsRows, err := prepareViolations(violations, results, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
 	// Print tables, if scan is true; print the scan tables.
-	if scanType == services.Binary {
+	if results.ResultType.IsTargetBinary() {
 		err = coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(securityViolationsRows), "Security Violations", "No security violations were found", printExtended)
 		if err != nil {
 			return err
@@ -90,7 +90,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 			return nil, nil, nil, err
 		}
 		switch violation.ViolationType {
-		case formats.ViolationTypeSecurity.String():
+		case ViolationTypeSecurity.String():
 			cves := convertCves(violation.Cves)
 			if results.ExtendedScanResults.EntitledForJas {
 				for i := range cves {
@@ -125,7 +125,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					},
 				)
 			}
-		case formats.ViolationTypeLicense.String():
+		case ViolationTypeLicense.String():
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
@@ -144,7 +144,7 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 					},
 				)
 			}
-		case formats.ViolationTypeOperationalRisk.String():
+		case ViolationTypeOperationalRisk.String():
 			currSeverity, err := severityutils.ParseSeverity(violation.Severity, false)
 			if err != nil {
 				return nil, nil, nil, err
@@ -192,13 +192,13 @@ func prepareViolations(violations []services.Violation, results *Results, multip
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, printExtended bool, scanType services.ScanType) error {
+func PrintVulnerabilitiesTable(vulnerabilities []services.Vulnerability, results *Results, multipleRoots, printExtended bool, scanType CommandType) error {
 	vulnerabilitiesRows, err := prepareVulnerabilities(vulnerabilities, results, multipleRoots, true, true)
 	if err != nil {
 		return err
 	}
 
-	if scanType == services.Binary {
+	if scanType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertToVulnerabilityScanTableRow(vulnerabilitiesRows), "Vulnerable Components", "✨ No vulnerable components were found ✨", printExtended)
 	}
 	var emptyTableMessage string
@@ -300,12 +300,12 @@ func getJfrogResearchPriority(vulnerabilityOrViolation formats.VulnerabilityOrVi
 // In case multipleRoots is true, the field Component will show the root of each impact path, otherwise it will show the root's child.
 // Set printExtended to true to print fields with 'extended' tag.
 // If the scan argument is set to true, print the scan tables.
-func PrintLicensesTable(licenses []services.License, printExtended bool, scanType services.ScanType) error {
+func PrintLicensesTable(licenses []services.License, printExtended bool, scanType CommandType) error {
 	licensesRows, err := PrepareLicenses(licenses)
 	if err != nil {
 		return err
 	}
-	if scanType == services.Binary {
+	if scanType.IsTargetBinary() {
 		return coreutils.PrintTable(formats.ConvertToLicenseScanTableRow(licensesRows), "Licenses", "No licenses were found", printExtended)
 	}
 	return coreutils.PrintTable(formats.ConvertToLicenseTableRow(licensesRows), "Licenses", "No licenses were found", printExtended)
@@ -352,10 +352,18 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 				currSeverity = severityutils.Unknown
 			}
 			for _, location := range secretResult.Locations {
+				var applicability *formats.Applicability
+				status := GetResultPropertyTokenValidation(secretResult)
+				statusDescription := GetResultPropertyMetadata(secretResult)
+				if status != "" || statusDescription != "" {
+					applicability = &formats.Applicability{Status: status,
+						ScannerDescription: statusDescription}
+				}
 				secretsRows = append(secretsRows,
 					formats.SourceCodeRow{
 						SeverityDetails: severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						Finding:         sarifutils.GetResultMsgText(secretResult),
+						Fingerprint:     sarifutils.GetResultFingerprint(secretResult),
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, secretRun.Invocations),
 							StartLine:   sarifutils.GetLocationStartLine(location),
@@ -364,6 +372,7 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 							EndColumn:   sarifutils.GetLocationEndColumn(location),
 							Snippet:     sarifutils.GetLocationSnippet(location),
 						},
+						Applicability: applicability,
 					},
 				)
 			}
@@ -371,18 +380,28 @@ func prepareSecrets(secrets []*sarif.Run, isTable bool) []formats.SourceCodeRow 
 	}
 
 	sort.Slice(secretsRows, func(i, j int) bool {
-		return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		if secretsRows[i].SeverityNumValue != secretsRows[j].SeverityNumValue {
+			return secretsRows[i].SeverityNumValue > secretsRows[j].SeverityNumValue
+		}
+		if secretsRows[i].Applicability != nil && secretsRows[j].Applicability != nil {
+			return jasutils.TokenValidationOrder[secretsRows[i].Applicability.Status] < jasutils.TokenValidationOrder[secretsRows[j].Applicability.Status]
+		}
+		return true
 	})
 
 	return secretsRows
 }
 
-func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool) error {
+func PrintSecretsTable(secrets []*sarif.Run, entitledForSecretsScan bool, tokenValidationEnabled bool) error {
 	if entitledForSecretsScan {
 		secretsRows := prepareSecrets(secrets, true)
 		log.Output()
-		return coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
+		err := coreutils.PrintTable(formats.ConvertToSecretsTableRow(secretsRows), "Secret Detection",
 			"✨ No secrets were found ✨", false)
+		if err == nil && tokenValidationEnabled {
+			log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
+		}
+		return err
 	}
 	return nil
 }
@@ -398,7 +417,7 @@ func prepareIacs(iacs []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, iacResult := range iacRun.Results {
 			scannerDescription := ""
 			if rule, err := iacRun.GetRuleById(*iacResult.RuleID); err == nil {
-				scannerDescription = sarifutils.GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			}
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(iacResult), true)
 			if err != nil {
@@ -410,6 +429,7 @@ func prepareIacs(iacs []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 					formats.SourceCodeRow{
 						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						Finding:            sarifutils.GetResultMsgText(iacResult),
+						Fingerprint:        sarifutils.GetResultFingerprint(iacResult),
 						ScannerDescription: scannerDescription,
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, iacRun.Invocations),
@@ -452,7 +472,7 @@ func prepareSast(sasts []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 		for _, sastResult := range sastRun.Results {
 			scannerDescription := ""
 			if rule, err := sastRun.GetRuleById(*sastResult.RuleID); err == nil {
-				scannerDescription = sarifutils.GetRuleFullDescription(rule)
+				scannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			}
 			currSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sastResult), true)
 			if err != nil {
@@ -466,6 +486,7 @@ func prepareSast(sasts []*sarif.Run, isTable bool) []formats.SourceCodeRow {
 						SeverityDetails:    severityutils.GetAsDetails(currSeverity, jasutils.Applicable, isTable),
 						ScannerDescription: scannerDescription,
 						Finding:            sarifutils.GetResultMsgText(sastResult),
+						Fingerprint:        sarifutils.GetResultFingerprint(sastResult),
 						Location: formats.Location{
 							File:        sarifutils.GetRelativeLocationFileName(location, sastRun.Invocations),
 							StartLine:   sarifutils.GetLocationStartLine(location),
@@ -935,8 +956,9 @@ func getCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	var applicabilityStatuses []jasutils.ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
 		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
-			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
+			applicability.ScannerDescription = sarifutils.GetRuleFullDescriptionText(rule)
 			status := getApplicabilityStatusFromRule(rule)
+			applicability.UndeterminedReason = GetRuleUndeterminedReason(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
@@ -1025,6 +1047,18 @@ func extractDependencyNameFromComponent(key string, techIdentifier string) (depe
 	return
 }
 
+func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
+	return sarifutils.GetRuleProperty("undetermined_reason", rule)
+}
+
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("tokenValidation", result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return sarifutils.GetResultProperty("metadata", result)
+}
+
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
 	if rule.Properties["applicability"] != nil {
 		status, ok := rule.Properties["applicability"].(string)
@@ -1040,6 +1074,8 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 			return jasutils.NotApplicable
 		case "applicable":
 			return jasutils.Applicable
+		case "missing_context":
+			return jasutils.MissingContext
 		}
 	}
 	return ""
@@ -1048,6 +1084,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 // If we don't get any statues it means the applicability scanner didn't run -> final value is not scanned
 // If at least one cve is applicable -> final value is applicable
 // Else if at least one cve is undetermined -> final value is undetermined
+// Else if at least one cve is missing context -> final value is missing context
 // Else if all cves are not covered -> final value is not covered
 // Else (case when all cves aren't applicable) -> final value is not applicable
 func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityStatus) jasutils.ApplicabilityStatus {
@@ -1055,6 +1092,7 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 		return jasutils.NotScanned
 	}
 	foundUndetermined := false
+	foundMissingContext := false
 	foundNotCovered := false
 	for _, status := range applicabilityStatuses {
 		if status == jasutils.Applicable {
@@ -1063,15 +1101,23 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 		if status == jasutils.ApplicabilityUndetermined {
 			foundUndetermined = true
 		}
+		if status == jasutils.MissingContext {
+			foundMissingContext = true
+		}
 		if status == jasutils.NotCovered {
 			foundNotCovered = true
 		}
+
 	}
 	if foundUndetermined {
 		return jasutils.ApplicabilityUndetermined
 	}
+	if foundMissingContext {
+		return jasutils.MissingContext
+	}
 	if foundNotCovered {
 		return jasutils.NotCovered
 	}
+
 	return jasutils.NotApplicable
 }

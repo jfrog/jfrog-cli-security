@@ -1,6 +1,7 @@
 package severityutils
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/gookit/color"
@@ -29,6 +30,25 @@ const (
 	Low      Severity = "Low"
 	Unknown  Severity = "Unknown"
 )
+
+func GetSeverityIcon(severity Severity) string {
+	return getSeverityEmojiIcon(severity)
+}
+
+func getSeverityEmojiIcon(severity Severity) string {
+	switch severity {
+	case Critical:
+		return "❗️"
+	case High:
+		return "🔴"
+	case Medium:
+		return "🟠"
+	case Low:
+		return "🟡"
+	default:
+		return "⚪️"
+	}
+}
 
 type Severity string
 
@@ -88,32 +108,37 @@ func (sd SeverityDetails) ToDetails(severity Severity, pretty bool) formats.Seve
 
 var Severities = map[Severity]map[jasutils.ApplicabilityStatus]*SeverityDetails{
 	Critical: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 20, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 19, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 18, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 25, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 24, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 23, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 22, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 5, Score: MaxCveScore, Emoji: "💀", style: color.New(color.Gray)},
 	},
 	High: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 17, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 16, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 15, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 21, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 20, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 19, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 18, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 4, Score: 8.9, Emoji: "🔥", style: color.New(color.Gray)},
 	},
 	Medium: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 14, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 13, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 12, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 17, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 16, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 15, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 14, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 3, Score: 6.9, Emoji: "🎃", style: color.New(color.Gray)},
 	},
 	Low: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 11, Score: 3.9, Emoji: "👻"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 10, Score: 3.9, Emoji: "👻"},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 9, Score: 3.9, Emoji: "👻"},
+		jasutils.Applicable:                &SeverityDetails{Priority: 13, Score: 3.9, Emoji: "👻"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 12, Score: 3.9, Emoji: "👻"},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 11, Score: 3.9, Emoji: "👻"},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 10, Score: 3.9, Emoji: "👻"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 2, Score: 3.9, Emoji: "👻", style: color.New(color.Gray)},
 	},
 	Unknown: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 8, Score: MinCveScore, Emoji: "😐"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
+		jasutils.Applicable:                &SeverityDetails{Priority: 9, Score: MinCveScore, Emoji: "😐"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 8, Score: MinCveScore, Emoji: "😐"},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotCovered:                &SeverityDetails{Priority: 6, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 1, Score: MinCveScore, Emoji: "😐", style: color.New(color.Gray)},
 	},
@@ -214,6 +239,10 @@ func ParseToSeverityDetails(severity string, sarifSeverity, pretty bool, applica
 // -- Getters functions (With default values) --
 
 func GetAsDetails(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus, pretty bool) formats.SeverityDetails {
+	if applicabilityStatus == jasutils.NotScanned {
+		// Pass 'NotCovered' as default value to get priority, since 'NotScanned' returns 0 priority for all severities
+		applicabilityStatus = jasutils.NotCovered
+	}
 	return GetSeverityDetails(severity, applicabilityStatus).ToDetails(severity, pretty)
 }
 

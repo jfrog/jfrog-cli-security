@@ -53,14 +53,14 @@ func init() {
 	TestSecurity = flag.Bool("test.security", true, "Test Security")
 	TestDockerScan = flag.Bool("test.dockerScan", false, "Test Docker scan")
 
-	JfrogUrl = flag.String("jfrog.url", "http://localhost:8081/", "JFrog platform url")
+	JfrogUrl = flag.String("jfrog.url", "http://localhost:8083/", "JFrog platform url")
 	JfrogUser = flag.String("jfrog.user", "admin", "JFrog platform  username")
 	JfrogPassword = flag.String("jfrog.password", "password", "JFrog platform password")
 	JfrogSshKeyPath = flag.String("jfrog.sshKeyPath", "", "Ssh key file path")
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
 	JfrogAccessToken = flag.String("jfrog.adminToken", "", "JFrog platform admin token")
 
-	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8082", "Container registry")
+	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8083", "Container registry")
 
 	HideUnitTestLog = flag.Bool("test.hideUnitTestLog", false, "Hide unit tests logs and print it in a file")
 	SkipUnitTests = flag.Bool("test.skipUnitTests", false, "Skip unit tests")

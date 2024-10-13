@@ -67,9 +67,11 @@ type OperationalRiskViolationRow struct {
 type SourceCodeRow struct {
 	SeverityDetails
 	Location
-	Finding            string       `json:"finding,omitempty"`
-	ScannerDescription string       `json:"scannerDescription,omitempty"`
-	CodeFlow           [][]Location `json:"codeFlow,omitempty"`
+	Finding            string         `json:"finding,omitempty"`
+	Fingerprint        string         `json:"fingerprint,omitempty"`
+	Applicability      *Applicability `json:"applicability,omitempty"`
+	ScannerDescription string         `json:"scannerDescription,omitempty"`
+	CodeFlow           [][]Location   `json:"codeFlow,omitempty"`
 }
 
 type Location struct {
@@ -96,6 +98,7 @@ type CveRow struct {
 type Applicability struct {
 	Status             string     `json:"status"`
 	ScannerDescription string     `json:"scannerDescription,omitempty"`
+	UndeterminedReason string     `json:"undeterminedReason,omitempty"`
 	Evidence           []Evidence `json:"evidence,omitempty"`
 }
 
