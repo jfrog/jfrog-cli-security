@@ -672,9 +672,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			pathToPreTest: "pretest",
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
-				// We want to fill the cache with dependencies before the tests to only resolve in the test the blocked package
-				// Cache dir is determined by the project dir so we need to "fake" the cache dir when we run the pretest build.
-				// When we run the test we will resolve the blocked package from the same cache dir that was filled in the pretest build.
+				// We want to populate the cache with dependencies before running the tests, so that during the test only the blocked package needs to be resolved.
+				// The cache directory is determined by the project directory, so we need to "simulate" the cache directory when running the pretest build.
+				// During the test, the blocked package will be resolved from the same cache directory that was populated in the pretest build.
 				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
 				require.NoError(t, err)

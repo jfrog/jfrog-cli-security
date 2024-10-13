@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -155,10 +154,6 @@ func InitEnrichTest(t *testing.T, minVersion string) {
 func InitGitTest(t *testing.T) {
 	if !*configTests.TestGit {
 		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))
-	}
-	err := exec.Command("npm", "install").Run()
-	if err != nil {
-		t.Skipf("Skipping Git commands integration tests. Git is not installed. %s", err.Error())
 	}
 }
 
