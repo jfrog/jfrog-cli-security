@@ -552,7 +552,7 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.SimpleJson), true)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Sast:            1,
@@ -560,33 +560,15 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.SimpleJson), false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, false)
 	// verify no results for Sast
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
-}
-
-// Helper for both C & Cpp Sast scans tests
-func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	projectDir := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "c")
-	// Copy the c project from the testdata to a temp dir
-	assert.NoError(t, biutils.CopyDir(projectDir, tempDirPath, true, nil))
-	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
-	defer clientTests.ChangeDirAndAssert(t, prevWd)
-	if enableCppFlag {
-		unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "JFROG_SAST_ENABLE_CPP", "1")
-		defer unsetEnv()
-	}
-	args := []string{"audit", "--format=" + format}
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
 }
 
@@ -607,7 +589,7 @@ func getNoJasAuditMockCommand() components.Command {
 }
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Sast:    1,
 		Iac:     9,
@@ -623,12 +605,12 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: 5})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Sast:    1,
 		Iac:     9,
@@ -643,7 +625,7 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Secrets: 1,
 
@@ -656,11 +638,11 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicable: 1})
 }
 
-func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool) string {
+func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets, validateSastCpp bool) string {
 	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -677,6 +659,10 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	args := []string{"audit", "--format=" + string(format.SimpleJson), "--threads=" + threads}
 	if validateSecrets {
 		args = append(args, "--secrets", "--validate-secrets")
+	}
+	if validateSastCpp {
+		unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "JFROG_SAST_ENABLE_CPP", "1")
+		defer unsetEnv()
 	}
 	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }
