@@ -3,12 +3,13 @@ package yarn
 import (
 	"errors"
 	"fmt"
+	biutils "github.com/jfrog/build-info-go/utils"
 	"path/filepath"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/build-info-go/build"
-	biutils "github.com/jfrog/build-info-go/build/utils"
+	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/yarn"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -47,17 +48,17 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	if err != nil {
 		return
 	}
-	executablePath, err := biutils.GetYarnExecutable()
+	executablePath, err := bibuildutils.GetYarnExecutable()
 	if errorutils.CheckError(err) != nil {
 		return
 	}
 
-	packageInfo, err := biutils.ReadPackageInfoFromPackageJsonIfExists(currentDir, nil)
+	packageInfo, err := bibuildutils.ReadPackageInfoFromPackageJsonIfExists(currentDir, nil)
 	if errorutils.CheckError(err) != nil {
 		return
 	}
 
-	installRequired, err := isInstallRequired(currentDir, params.InstallCommandArgs())
+	installRequired, err := isInstallRequired(currentDir, params.InstallCommandArgs(), params.SkipAutoInstall())
 	if err != nil {
 		return
 	}
@@ -71,7 +72,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	}
 
 	// Calculate Yarn dependencies
-	dependenciesMap, root, err := biutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger)
+	dependenciesMap, root, err := bibuildutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger)
 	if err != nil {
 		return
 	}
@@ -90,7 +91,7 @@ func configureYarnResolutionServerAndRunInstall(params utils.AuditParams, curWd,
 		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs())
 	}
 
-	executableYarnVersion, err := biutils.GetVersion(yarnExecPath, curWd)
+	executableYarnVersion, err := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if err != nil {
 		return
 	}
@@ -137,19 +138,23 @@ func configureYarnResolutionServerAndRunInstall(params utils.AuditParams, curWd,
 	return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs())
 }
 
-func isInstallRequired(currentDir string, installCommandArgs []string) (installRequired bool, err error) {
+// We verify the project's installation status by examining the presence of the yarn.lock file and the presence of an installation command provided by the user.
+// If install command was provided - we install
+// If yarn.lock is missing, we should install unless the user has explicitly disabled auto-install. In this case we return an error
+// Notice!: If alterations are made manually in the package.json file, it necessitates a manual update to the yarn.lock file as well.
+func isInstallRequired(currentDir string, installCommandArgs []string, skipAutoInstall bool) (installRequired bool, err error) {
 	yarnLockExits, err := fileutils.IsFileExists(filepath.Join(currentDir, yarn.YarnLockFileName), false)
 	if err != nil {
 		err = fmt.Errorf("failed to check the existence of '%s' file: %s", filepath.Join(currentDir, yarn.YarnLockFileName), err.Error())
 		return
 	}
 
-	// We verify the project's installation status by examining the presence of the yarn.lock file and the presence of an installation command provided by the user.
-	// Notice!: If alterations are made manually in the package.json file, it necessitates a manual update to the yarn.lock file as well.
-	if len(installCommandArgs) > 0 || !yarnLockExits {
-		installRequired = true
+	if len(installCommandArgs) > 0 {
+		return true, nil
+	} else if !yarnLockExits && skipAutoInstall {
+		return false, &biutils.ErrProjectNotInstalled{UninstalledDir: currentDir}
 	}
-	return
+	return !yarnLockExits, nil
 }
 
 // Executes the user-defined 'install' command; if absent, defaults to running an 'install' command with specific flags suited to the current yarn version.
@@ -163,7 +168,7 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 	}
 
 	installCommandArgs = []string{"install"}
-	executableVersionStr, err := biutils.GetVersion(yarnExecPath, curWd)
+	executableVersionStr, err := bibuildutils.GetVersion(yarnExecPath, curWd)
 	if err != nil {
 		return
 	}
@@ -201,13 +206,13 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 }
 
 // Parse the dependencies into a Xray dependency tree format
-func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string) {
+func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string) {
 	treeMap := make(map[string]xray.DepTreeNode)
 	for _, dependency := range dependencies {
 		xrayDepId := getXrayDependencyId(dependency)
 		var subDeps []string
 		for _, subDepPtr := range dependency.Details.Dependencies {
-			subDeps = append(subDeps, getXrayDependencyId(dependencies[biutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]))
+			subDeps = append(subDeps, getXrayDependencyId(dependencies[bibuildutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]))
 		}
 		if len(subDeps) > 0 {
 			treeMap[xrayDepId] = xray.DepTreeNode{Children: subDeps}
@@ -217,6 +222,6 @@ func parseYarnDependenciesMap(dependencies map[string]*biutils.YarnDependency, r
 	return graph, maps.Keys(uniqDeps)
 }
 
-func getXrayDependencyId(yarnDependency *biutils.YarnDependency) string {
+func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) string {
 	return techutils.Npm.GetPackageTypeId() + yarnDependency.Name() + ":" + yarnDependency.Details.Version
 }

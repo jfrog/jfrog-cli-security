@@ -1,6 +1,9 @@
 package audit
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -355,4 +358,145 @@ func searchForStrWithSubString(t *testing.T, filesList []string, subString strin
 		}
 	}
 	assert.Fail(t, "File %s not found in the list", subString)
+}
+
+func TestAuditWithPartialResults(t *testing.T) {
+	testcases := []struct {
+		name                string
+		allowPartialResults bool
+		useJas              bool
+		testDirPath         string
+	}{
+		{
+			name:                "Failure in SCA during dependency tree construction",
+			allowPartialResults: false,
+			useJas:              false,
+			testDirPath:         filepath.Join("..", "..", "tests", "testdata", "projects", "package-managers", "npm", "npm-un-installable"),
+		},
+		{
+			name:                "Failure in SCA during scan itself",
+			allowPartialResults: false,
+			useJas:              false,
+			testDirPath:         filepath.Join("..", "..", "tests", "testdata", "projects", "package-managers", "npm", "npm-project"),
+		},
+		{
+			name:                "Skip failure in SCA during dependency tree construction",
+			allowPartialResults: true,
+			useJas:              false,
+			testDirPath:         filepath.Join("..", "..", "tests", "testdata", "projects", "package-managers", "npm", "npm-un-installable"),
+		},
+		{
+			name:                "Skip failure in SCA during scan itself",
+			allowPartialResults: true,
+			useJas:              false,
+			testDirPath:         filepath.Join("..", "..", "tests", "testdata", "projects", "package-managers", "npm", "npm-project"),
+		},
+		// TODO when applying allow-partial-results to JAS make sure to add a test case that checks failures in JAS scans + add  some JAS api call to the mock server
+	}
+
+	serverMock, serverDetails := utils.CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI == "/xray/api/v1/system/version" {
+			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, scangraph.GraphScanMinXrayVersion)))
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
+		if strings.HasPrefix(r.RequestURI, "/xray/api/v1/scan/graph") && r.Method == http.MethodPost {
+			// We set SCA scan graph API to fail
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	defer serverMock.Close()
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+			defer createTempDirCallback()
+
+			assert.NoError(t, biutils.CopyDir(testcase.testDirPath, tempDirPath, false, nil))
+
+			auditBasicParams := (&utils.AuditBasicParams{}).
+				SetServerDetails(serverDetails).
+				SetOutputFormat(format.Table).
+				SetUseJas(testcase.useJas).
+				SetAllowPartialResults(testcase.allowPartialResults)
+
+			auditParams := NewAuditParams().
+				SetWorkingDirs([]string{tempDirPath}).
+				SetGraphBasicParams(auditBasicParams).
+				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
+					ScanType:               scanservices.Dependency,
+					IncludeVulnerabilities: true,
+					MultiScanId:            utils.TestScaScanId,
+				})
+			auditParams.SetIsRecursiveScan(true)
+
+			scanResults, err := RunAudit(auditParams)
+			if testcase.allowPartialResults {
+				assert.NoError(t, scanResults.ScansErr)
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, scanResults.ScansErr)
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateErrorIfPartialResultsDisabled(t *testing.T) {
+	testcases := []struct {
+		name                string
+		allowPartialResults bool
+		auditParallelRunner bool
+	}{
+		{
+			name:                "Allow partial results - no error expected",
+			allowPartialResults: true,
+			auditParallelRunner: true,
+		},
+		{
+			name:                "Partial results disabled with SecurityParallelRunner",
+			allowPartialResults: false,
+			auditParallelRunner: true,
+		},
+		{
+			name:                "Partial results disabled without SecurityParallelRunner",
+			allowPartialResults: false,
+			auditParallelRunner: false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			auditBasicParams := (&utils.AuditBasicParams{}).SetAllowPartialResults(testcase.allowPartialResults)
+			auditParams := NewAuditParams().SetGraphBasicParams(auditBasicParams)
+
+			var auditParallelRunner *utils.SecurityParallelRunner
+			if testcase.auditParallelRunner {
+				auditParallelRunner = utils.CreateSecurityParallelRunner(1)
+			}
+
+			err := createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, "", errors.New("error"))
+			if testcase.allowPartialResults {
+				assert.NoError(t, err)
+			} else {
+				if testcase.auditParallelRunner {
+					assert.False(t, isErrorsQueueEmpty(auditParallelRunner))
+				} else {
+					assert.Error(t, err)
+				}
+			}
+		})
+	}
+}
+
+func isErrorsQueueEmpty(spr *utils.SecurityParallelRunner) bool {
+	select {
+	case <-spr.ErrorsQueue:
+		// Channel is not empty
+		return false
+	default:
+		// Channel is empty
+		return true
+	}
 }

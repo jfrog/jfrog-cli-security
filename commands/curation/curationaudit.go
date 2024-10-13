@@ -368,7 +368,7 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	params := ca.getAuditParamsByTech(tech)
-	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
+	serverDetails, err := audit.SetResolutionRepoInAuditParamsIfExists(params, tech)
 	if err != nil {
 		return err
 	}

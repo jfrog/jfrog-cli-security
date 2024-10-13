@@ -2,19 +2,20 @@ package npm
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"testing"
-
+	bibuildutils "github.com/jfrog/build-info-go/build/utils"
+	buildinfo "github.com/jfrog/build-info-go/entities"
+	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-
-	biutils "github.com/jfrog/build-info-go/build/utils"
-	buildinfo "github.com/jfrog/build-info-go/entities"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
 )
 
 func TestParseNpmDependenciesList(t *testing.T) {
@@ -26,7 +27,7 @@ func TestParseNpmDependenciesList(t *testing.T) {
 	var dependencies []buildinfo.Dependency
 	err = json.Unmarshal(dependenciesJson, &dependencies)
 	assert.NoError(t, err)
-	packageInfo := &biutils.PackageInfo{Name: "npmexmaple", Version: "0.1.0"}
+	packageInfo := &bibuildutils.PackageInfo{Name: "npmexmaple", Version: "0.1.0"}
 	looseEnvifyJsTokens := []*xrayUtils.GraphNode{{Id: "npm://loose-envify:1.4.0", Nodes: []*xrayUtils.GraphNode{{Id: "npm://js-tokens:4.0.0"}}}}
 	expectedTree := &xrayUtils.GraphNode{
 		Id: "npm://npmexmaple:0.1.0",
@@ -122,4 +123,67 @@ func TestIgnoreScripts(t *testing.T) {
 	params := &utils.AuditBasicParams{}
 	_, _, err := BuildDependencyTree(params)
 	assert.NoError(t, err)
+}
+
+// This test checks that the tree construction is skipped when the project is not installed and the user prohibited installation
+func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
+	testCases := []struct {
+		name                        string
+		testDir                     string
+		installCommand              string
+		shouldBeInstalled           bool
+		successfulTreeBuiltExpected bool
+	}{
+		{
+			name:                        "not installed | install required - install command",
+			testDir:                     filepath.Join("projects", "package-managers", "npm", "npm-no-lock"),
+			installCommand:              "npm install",
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: true,
+		},
+		{
+			name:                        "not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "npm", "npm-no-lock"),
+			shouldBeInstalled:           false,
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "installed | install not required",
+			testDir:                     filepath.Join("projects", "package-managers", "npm", "npm-project"),
+			shouldBeInstalled:           true,
+			successfulTreeBuiltExpected: true,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			dirPath, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			defer cleanUp()
+
+			exists, err := fileutils.IsFileExists(filepath.Join(dirPath, "package-lock.json"), false)
+			assert.NoError(t, err)
+
+			if !test.shouldBeInstalled && exists {
+				err = os.Remove(filepath.Join(dirPath, "package-lock.json"))
+				assert.NoError(t, err)
+			}
+
+			params := (&utils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			if test.installCommand != "" {
+				splitInstallCommand := strings.Split(test.installCommand, " ")
+				params = params.SetInstallCommandName(splitInstallCommand[0]).SetInstallCommandArgs(splitInstallCommand[1:])
+			}
+			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+			if !test.successfulTreeBuiltExpected {
+				assert.Nil(t, dependencyTrees)
+				assert.Nil(t, uniqueDeps)
+				assert.Error(t, err)
+				assert.IsType(t, &biutils.ErrProjectNotInstalled{}, err)
+			} else {
+				assert.NotNil(t, dependencyTrees)
+				assert.NotNil(t, uniqueDeps)
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
