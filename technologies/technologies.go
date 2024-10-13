@@ -61,13 +61,17 @@ func ChangeTechDependencyVersion(tech techutils.Technology, directDependencyName
 }
 
 func GetDependencyTree(params techutils.DetectDependencyTreeParams) (techutils.TechnologyDependencyTrees, error) {
-	msg := fmt.Sprintf("Calculating %s dependencies...", params.Technology.ToFormal())
+	msg := fmt.Sprintf("Calculating %s dependencies", params.Technology.ToFormal())
 	if params.IncludeCuration {
-		getCurationCacheFolderAndLogMsg(params.Technology)
+		if logExtraMsg, cacheDir, err := getCurationCacheFolderAndLogMsg(params.Technology); err != nil {
+			return techutils.TechnologyDependencyTrees{}, err
+		} else {
+			params.CurationCacheFolder = cacheDir
+			msg += logExtraMsg
+		}
 	}
-	
+	log.Info(msg)
 	if handler, err := GetTechHandler(params.Technology); err == nil {
-		log.Info(fmt.Sprintf("Handler Calculating %s dependencies...", params.Technology.ToFormal()))
 		if tree, err := handler.GetTechDependencyTree(params); err == nil {
 			return tree, nil
 		}
@@ -112,7 +116,7 @@ type DependencyTreeResult struct {
 
 func GetTechDependencyTree(params utils.AuditParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
-	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
+	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(tech)
 	if err != nil {
 		return
 	}

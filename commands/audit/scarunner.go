@@ -367,14 +367,13 @@ func SetResolutionRepoIfExists(params utils.AuditParams, tech techutils.Technolo
 // 	return
 // }
 
-func getDependencyTreeDetectionParams(scan *utils.ScaScanResult, params *AuditParams, serverDetails *config.ServerDetails, curationCacheDir string) techutils.DetectDependencyTreeParams {
+func getDependencyTreeDetectionParams(scan *utils.ScaScanResult, params *AuditParams, serverDetails *config.ServerDetails) techutils.DetectDependencyTreeParams {
 	detectionParams := techutils.DetectDependencyTreeParams{Technology: scan.Technology, Descriptors: scan.Descriptors}
 	// Artifactory params
 	detectionParams.DependenciesRepository = params.DepsRepo()
 	// Curation optional params
 	detectionParams.IncludeCuration = params.IsCurationCmd()
 	detectionParams.ServerDetails = serverDetails
-	detectionParams.CurationCacheFolder = curationCacheDir
 	// Common params
 	detectionParams.UseWrapper = params.UseWrapper()
 	// Maven params
