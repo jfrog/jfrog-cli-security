@@ -554,9 +554,9 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities:5, Inactive: 5})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 5, Inactive: 5})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {

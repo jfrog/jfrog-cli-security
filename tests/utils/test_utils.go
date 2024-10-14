@@ -47,13 +47,6 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	return xmlMap
 }
 
-func InitSecurityTest(t *testing.T, xrayMinVersion string) {
-	if !*configTests.TestSecurity {
-		t.Skip("Skipping Security test. To run Security test add the '-test.security=true' option.")
-	}
-	ValidateXrayVersion(t, xrayMinVersion)
-}
-
 func ValidateXrayVersion(t *testing.T, minVersion string) {
 	xrayVersion, err := getTestsXrayVersion()
 	if err != nil {
@@ -75,25 +68,6 @@ func ValidateXscVersion(t *testing.T, minVersion string) {
 	if err != nil {
 		t.Skip(err)
 	}
-}
-
-func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	oldHomeDir := os.Getenv(coreutils.HomeDir)
-	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, true)
-	// Create mock cli with the mock commands.
-	commands := []components.Command{}
-	for _, mockCommand := range mockCommands {
-		commands = append(commands, mockCommand())
-	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands)), func() {
-		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
-	}
-}
-
-func GetTestResourcesPath() string {
-	dir, _ := os.Getwd()
-	return filepath.ToSlash(dir + "/tests/testdata/")
 }
 
 func CleanTestsHomeEnv() {
