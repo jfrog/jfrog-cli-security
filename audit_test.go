@@ -15,7 +15,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
-	"github.com/jfrog/jfrog-cli-security/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
@@ -38,12 +39,19 @@ import (
 
 func TestXrayAuditNpmJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 1, 0, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		SecurityViolations: 1,
+		Licenses:           1,
+	})
 }
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 0, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		SecurityViolations: 1,
+		Vulnerabilities:    1,
+		Licenses:           1,
+	})
 }
 
 func testAuditNpm(t *testing.T, format string, withVuln bool) string {
@@ -65,12 +73,18 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 
 func TestXrayAuditConanJson(t *testing.T) {
 	output := testAuditConan(t, string(format.Json), true)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 8, 2)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 8,
+		Licenses:        2,
+	})
 }
 
 func TestXrayAuditConanSimpleJson(t *testing.T) {
 	output := testAuditConan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 2)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 8,
+		Licenses:        2,
+	})
 }
 
 func testAuditConan(t *testing.T, format string, withVuln bool) string {
@@ -90,12 +104,18 @@ func testAuditConan(t *testing.T, format string, withVuln bool) string {
 
 func TestXrayAuditPnpmJson(t *testing.T) {
 	output := testXrayAuditPnpm(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditPnpmSimpleJson(t *testing.T) {
 	output := testXrayAuditPnpm(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func testXrayAuditPnpm(t *testing.T, format string) string {
@@ -112,21 +132,30 @@ func testXrayAuditPnpm(t *testing.T, format string) string {
 func TestXrayAuditYarnV2Json(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v2", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
-		securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+		validations.VerifyJsonResults(t, output, validations.ValidationParams{
+			Vulnerabilities: 1,
+			Licenses:        1,
+		})
 	})
 }
 
 func TestXrayAuditYarnV2SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v3", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
-		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+		validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+			Vulnerabilities: 1,
+			Licenses:        1,
+		})
 	})
 }
 
 func TestXrayAuditYarnV1Json(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
-		securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+		validations.VerifyJsonResults(t, output, validations.ValidationParams{
+			Vulnerabilities: 1,
+			Licenses:        1,
+		})
 	})
 }
 
@@ -145,7 +174,10 @@ func TestXrayAuditYarnV1JsonWithoutDevDependencies(t *testing.T) {
 func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
-		securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+		validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+			Vulnerabilities: 1,
+			Licenses:        1,
+		})
 	})
 }
 
@@ -214,7 +246,10 @@ func TestXrayAuditNugetJson(t *testing.T) {
 		t.Run(fmt.Sprintf("projectName:%s,runInstallCommand:%t", test.projectName, runInstallCommand),
 			func(t *testing.T) {
 				output := testXrayAuditNuget(t, test.projectName, test.format, test.restoreTech)
-				securityTestUtils.VerifyJsonScanResults(t, output, 0, test.minVulnerabilities, test.minLicences)
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{
+					Vulnerabilities: test.minVulnerabilities,
+					Licenses:        test.minLicences,
+				})
 			})
 	}
 }
@@ -254,7 +289,10 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 		t.Run(fmt.Sprintf("projectName:%s,runInstallCommand:%t", test.projectName, runInstallCommand),
 			func(t *testing.T) {
 				output := testXrayAuditNuget(t, test.projectName, test.format, test.restoreTech)
-				securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, test.minVulnerabilities, test.minLicences)
+				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+					Vulnerabilities: test.minVulnerabilities,
+					Licenses:        test.minLicences,
+				})
 			})
 	}
 }
@@ -275,12 +313,18 @@ func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech st
 
 func TestXrayAuditGradleJson(t *testing.T) {
 	output := testXrayAuditGradle(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 3, 3)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        3,
+	})
 }
 
 func TestXrayAuditGradleSimpleJson(t *testing.T) {
 	output := testXrayAuditGradle(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 3)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        3,
+	})
 }
 
 func testXrayAuditGradle(t *testing.T, format string) string {
@@ -294,12 +338,18 @@ func testXrayAuditGradle(t *testing.T, format string) string {
 
 func TestXrayAuditMavenJson(t *testing.T) {
 	output := testXscAuditMaven(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditMavenSimpleJson(t *testing.T) {
 	output := testXscAuditMaven(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func testXscAuditMaven(t *testing.T, format string) string {
@@ -334,28 +384,44 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 35, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 0, 23, 2, 1, 0)
+
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Sast:    1,
+		Iac:     9,
+		Secrets: 6,
+
+		Vulnerabilities: 35,
+		Applicable:      3,
+		Undetermined:    0,
+		NotCovered:      23,
+		NotApplicable:   2,
+	})
 }
 
 func TestXrayAuditPipJson(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.Json), "")
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditPipSimpleJson(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.SimpleJson), "")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditPipJsonWithRequirementsFile(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.Json), "requirements.txt")
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 2, 0)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 2})
 }
 
 func TestXrayAuditPipSimpleJsonWithRequirementsFile(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.SimpleJson), "requirements.txt")
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 2, 0)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 2})
 }
 
 func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
@@ -374,12 +440,18 @@ func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
 
 func TestXrayAuditPipenvJson(t *testing.T) {
 	output := testXrayAuditPipenv(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditPipenvSimpleJson(t *testing.T) {
 	output := testXrayAuditPipenv(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func testXrayAuditPipenv(t *testing.T, format string) string {
@@ -393,12 +465,18 @@ func testXrayAuditPipenv(t *testing.T, format string) string {
 
 func TestXrayAuditPoetryJson(t *testing.T) {
 	output := testXrayAuditPoetry(t, string(format.Json))
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func TestXrayAuditPoetrySimpleJson(t *testing.T) {
 	output := testXrayAuditPoetry(t, string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 3, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 3,
+		Licenses:        1,
+	})
 }
 
 func testXrayAuditPoetry(t *testing.T, format string) string {
@@ -423,43 +501,25 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 // JAS
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, true)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Sast:            1,
+	})
 }
 
 func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
-	output := testAuditC(t, string(format.SimpleJson), false)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-}
-
-// Helper for both C & Cpp Sast scans tests
-func testAuditC(t *testing.T, format string, enableCppFlag bool) string {
-	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
-
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "c"))
-	defer cleanUp()
-
-	// Configure a new server named "default"
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
-	defer securityTestUtils.CleanTestsHomeEnv()
-
-	if enableCppFlag {
-		unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "JFROG_SAST_ENABLE_CPP", "1")
-		defer unsetEnv()
-	}
-	args := []string{"audit", "--licenses", "--format=" + format}
-	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, false)
+	// verify no results for Sast
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
-	// Verify that scan results are printed
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
-	// Verify that JAS results are not printed
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
 }
 
 func getNoJasAuditMockCommand() components.Command {
@@ -479,35 +539,60 @@ func getNoJasAuditMockCommand() components.Command {
 }
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2, 0, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Sast:    1,
+		Iac:     9,
+		Secrets: 6,
+
+		Vulnerabilities: 8,
+		Applicable:      3,
+		Undetermined:    1,
+		NotCovered:      1,
+		NotApplicable:   2,
+	})
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
-	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 5)
+	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities:5, Inactive: 5})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2, 0, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Sast:    1,
+		Iac:     9,
+		Secrets: 6,
+
+		Vulnerabilities: 8,
+		Applicable:      3,
+		Undetermined:    1,
+		NotCovered:      1,
+		NotApplicable:   2,
+	})
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 1, 3, 1, 1, 2, 0, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Secrets: 1,
+
+		Vulnerabilities: 8,
+		Applicable:      3,
+		Undetermined:    1,
+		NotCovered:      1,
+		NotApplicable:   2,
+	})
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 1, 0)
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 1, 0, 0)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicable: 1})
 }
 
-func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool) string {
+func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets, validateSastCpp bool) string {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
@@ -517,6 +602,10 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	args := []string{"audit", "--format=" + string(format.SimpleJson), "--threads=" + threads}
 	if validateSecrets {
 		args = append(args, "--secrets", "--validate-secrets")
+	}
+	if validateSastCpp {
+		unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, "JFROG_SAST_ENABLE_CPP", "1")
+		defer unsetEnv()
 	}
 	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }
@@ -550,7 +639,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format=json")
 
 	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 4, 0)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 4})
 
 	var results []services.ScanResponse
 	err = json.Unmarshal([]byte(output), &results)
@@ -568,5 +657,6 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
-	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	// No issues should be found in an empty project
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
 }

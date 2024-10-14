@@ -5,6 +5,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/log"
+	"github.com/jfrog/jfrog-cli-security/cli"
 	integrationUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
@@ -37,7 +38,7 @@ func setupIntegrationTests() {
 	configTests.InitTestFlags()
 	log.SetDefaultLogger()
 	// Init
-	integrationUtils.InitTestCliDetails()
+	integrationUtils.InitTestCliDetails(cli.GetJfrogCliSecurityApp())
 	integrationUtils.AuthenticateArtifactory()
 	integrationUtils.AuthenticateXsc()
 	integrationUtils.CreateRequiredRepositories()

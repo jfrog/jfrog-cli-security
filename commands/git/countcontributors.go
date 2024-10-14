@@ -4,19 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/google/go-github/v56/github"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 	"os"
-	"sort"
-	"strings"
-	"time"
 )
 
 type scmTypeName string
@@ -192,7 +193,7 @@ func (cc *CountContributorsCommand) Run() error {
 	report.ScannedRepos = totalScannedRepos
 	report.SkippedRepos = totalSkippedRepos
 
-	return utils.PrintJson(report)
+	return output.PrintJson(report)
 }
 
 func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContributors, error) {
