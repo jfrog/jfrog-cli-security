@@ -298,7 +298,7 @@ func parseScaToSarifFormat(cmdType utils.CommandType, xrayId, summary, markdownD
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
 	level := severityutils.SeverityToSarifSeverityLevel(severity)
-	// Add rule fpr the cve if not exists
+	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
 		cveImpactedComponentRuleId,
 		generateTitleFunc(impactedPackagesName, impactedPackagesVersion, issueId),
