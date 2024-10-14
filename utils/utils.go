@@ -33,7 +33,7 @@ var (
 	// Exclude pattern for files.
 	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/.vs/**"}
 	// Exclude pattern for directories.
-	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "*.vs/*"} // vscode?
+	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "*.vs*"} // vscode?
 )
 
 const (
