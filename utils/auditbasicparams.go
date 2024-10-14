@@ -68,6 +68,7 @@ type AuditBasicParams struct {
 	exclusions                       []string
 	isRecursiveScan                  bool
 	skipAutoInstall                  bool
+	allowPartialResults              bool
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -105,6 +106,11 @@ func (abp *AuditBasicParams) SetUseJas(useJas bool) *AuditBasicParams {
 
 func (abp *AuditBasicParams) SetSkipAutoInstall(skipAutoInstall bool) *AuditBasicParams {
 	abp.skipAutoInstall = skipAutoInstall
+	return abp
+}
+
+func (abp *AuditBasicParams) SetAllowPartialResults(allowPartialResults bool) *AuditBasicParams {
+	abp.allowPartialResults = allowPartialResults
 	return abp
 }
 
@@ -275,4 +281,8 @@ func (abp *AuditBasicParams) IsRecursiveScan() bool {
 
 func (abp *AuditBasicParams) SkipAutoInstall() bool {
 	return abp.skipAutoInstall
+}
+
+func (abp *AuditBasicParams) AllowPartialResults() bool {
+	return abp.allowPartialResults
 }

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -139,13 +139,6 @@ func getResultLocationStr(result *sarif.Result) string {
 		sarifutils.GetLocationEndColumn(location))
 }
 
-func getResultRuleId(result *sarif.Result) string {
-	if result.RuleID == nil {
-		return ""
-	}
-	return *result.RuleID
-}
-
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
+	return sarifutils.GetResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }

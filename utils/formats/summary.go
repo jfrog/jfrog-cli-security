@@ -29,6 +29,7 @@ type ResultsSummary struct {
 
 type ScanSummary struct {
 	Target          string                 `json:"target"`
+	Name            string                 `json:"name,omitempty"`
 	Vulnerabilities *ScanResultSummary     `json:"vulnerabilities,omitempty"`
 	Violations      *ScanViolationsSummary `json:"violations,omitempty"`
 	CuratedPackages *CuratedPackages       `json:"curated,omitempty"`

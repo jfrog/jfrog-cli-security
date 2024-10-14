@@ -121,6 +121,7 @@ const (
 	WorkingDirs                  = "working-dirs"
 	OutputDir                    = "output-dir"
 	SkipAutoInstall              = "skip-auto-install"
+	AllowPartialResults          = "allow-partial-results"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -157,7 +158,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -232,9 +233,10 @@ var flagsMap = map[string]components.Flag{
 		"Set to false if you wish to not use the gradle or maven wrapper.",
 		components.WithBoolDefaultValue(true),
 	),
-	WorkingDirs:     components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
-	OutputDir:       components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
-	SkipAutoInstall: components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
+	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
+	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
+	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
+	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",

@@ -15,6 +15,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -178,7 +179,7 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 
 // Return npm://<name>:<version> of a dependency
 func getDependencyId(depName, version string) string {
-	return utils.NpmPackageTypeIdentifier + depName + ":" + version
+	return techutils.Npm.GetPackageTypeId() + depName + ":" + version
 }
 
 func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]xray.DepTreeNode) {

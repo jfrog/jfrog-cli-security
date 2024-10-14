@@ -1,0 +1,826 @@
+{
+  "vulnerabilities": [
+    {
+      "severity": "Critical",
+      "impactedPackageName": "debian:bookworm:wget",
+      "impactedPackageVersion": "1.21.3-1+b1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+          }
+        }
+      ],
+      "summary": "url.c in GNU Wget through 1.24.5 mishandles semicolons in the userinfo subcomponent of a URI, and thus there may be insecure behavior in which data that was supposed to be in the userinfo subcomponent is misinterpreted to be part of the host subcomponent.",
+      "applicable": "Undetermined",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-38428",
+          "cvssV2": "",
+          "cvssV3": "9.1",
+          "applicability": {
+            "status": "Undetermined"
+          }
+        }
+      ],
+      "issueId": "XRAY-606103",
+      "references": [
+        "https://git.savannah.gnu.org/cgit/wget.git/commit/?id=ed0c7c7e0e8f7298352646b2fd6e06a11e242ace",
+        "https://lists.gnu.org/archive/html/bug-wget/2024-06/msg00005.html",
+        "https://security-tracker.debian.org/tracker/CVE-2024-38428"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:wget",
+            "version": "1.21.3-1+b1",
+            "location": {
+              "file": "wget:1.21.3-1+b1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Critical",
+      "impactedPackageName": "cors.js",
+      "impactedPackageVersion": "0.0.1-security",
+      "impactedPackageType": "npm",
+      "components": [
+        {
+          "name": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar"
+          }
+        }
+      ],
+      "summary": "Malicious package cors.js for Node.js",
+      "applicable": "Not Covered",
+      "fixedVersions": null,
+      "cves": null,
+      "issueId": "XRAY-264729",
+      "references": [
+        "https://registry.npmjs.com"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar"
+            }
+          },
+          {
+            "name": "cors.js",
+            "version": "0.0.1-security",
+            "location": {
+              "file": "usr/src/app/node_modules/cors.js/package.json"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "Critical",
+        "summary": "Malicious package cors.js for Node.js",
+        "details": "The package cors.js for Node.js contains malicious code that installs a persistent connectback shell. The package is typosquatting the popular `cors` package. When installed, the package opens a connectback shell to the hardcoded host `107.175.32.229` on TCP port 56173. The malicious payload achieves persistency by installing a cron job that repeats every 10 seconds - `*/10 * * * * *`",
+        "remediation": "As with any malware, the malicious package must be completely removed, and steps must be taken care to remediate the damage that was done by the malicious package -\n\n##### Removing the malicious package\n\nRun `npm uninstall cors.js`\n\n##### Refreshing stolen credentials\n\nMany malicious packages steal stored user credentials, focusing on the following -\n\n* [Browser autocomplete](https://jfrog.com/blog/malicious-pypi-packages-stealing-credit-cards-injecting-code/) data, such as saved passwords and credit cards\n* [Environment variables](https://jfrog.com/blog/malicious-npm-packages-are-after-your-discord-tokens-17-new-packages-disclosed/) passed to the malicious code\n* [Stored Discord tokens](https://jfrog.com/blog/malicious-npm-packages-are-after-your-discord-tokens-17-new-packages-disclosed/)\n* AWS / GitHub credentials stored in cleartext files\n\nIt is highly recommended to change or revoke data that is stored in the infected machine at those locations\n\n##### Stopping malicious processes\n\nMany malicious packages start malicious processes such as [connectback shells](https://jfrog.com/blog/jfrog-discloses-3-remote-access-trojans-in-pypi/) or crypto-miners. Search for any unfamiliar processes that consume a large amount of CPU or a large amount of network traffic, and stop them. On Windows, this can be facilitated with [Sysinternals Process Explorer](https://docs.microsoft.com/en-us/sysinternals/downloads/process-explorer).\n\n##### Removing installed backdoors\n\nMany malicious packages install themselves as a [persistent backdoor](https://jfrog.com/blog/npm-supply-chain-attack-targets-german-based-companies/), in order to guarantee the malicious code survives a reboot. Search for any unfamiliar binaries set to be run on startup, and remove them. On Windows, this can be facilitated with [Sysinternals Autoruns](https://docs.microsoft.com/en-us/sysinternals/downloads/autoruns).\n\n##### Defining an Xray policy that blocks downloads of Artifacts with malicious packages\n\nIt is possible to [create an Xray policy](https://www.jfrog.com/confluence/display/JFROG/Creating+Xray+Policies+and+Rules) that will not allow artifacts with identified malicious packages to be downloaded from Artifactory. To create such a policy, add a new `Security` policy and set `Minimal Severity` to `Critical`. Under `Automatic Actions` check the `Block Download` action.\n\n##### Contacting the JFrog Security Research team for additional information\n\nOptionally, if you are unsure of the full impact of the malicious package and wish to get more details, the JFrog Security Research team can help you assess the potential damage from the installed malicious package.\n\nPlease contact us at research@jfrog.com with details of the affected artifact and the name of the identified malicious package."
+      }
+    },
+    {
+      "severity": "Low",
+      "impactedPackageName": "debian:bookworm:openssh-client:1",
+      "impactedPackageVersion": "9.2p1-2+deb12u3",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+          }
+        }
+      ],
+      "summary": "OpenSSH through 9.6, when common types of DRAM are used, might allow row hammer attacks (for authentication bypass) because the integer value of authenticated in mm_answer_authpassword does not resist flips of a single bit. NOTE: this is applicable to a certain threat model of attacker-victim co-location in which the attacker has user privileges.",
+      "applicable": "Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2023-51767",
+          "cvssV2": "",
+          "cvssV3": "7.0",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The CVE is always applicable.\n\nNote - The vulnerability is hardware-dependent."
+          }
+        }
+      ],
+      "issueId": "XRAY-585612",
+      "references": [
+        "https://arxiv.org/abs/2309.02545",
+        "https://github.com/openssh/openssh-portable/blob/8241b9c0529228b4b86d88b1a6076fb9f97e4a99/monitor.c#L878",
+        "https://github.com/openssh/openssh-portable/blob/8241b9c0529228b4b86d88b1a6076fb9f97e4a99/auth-passwd.c#L77",
+        "https://bugzilla.redhat.com/show_bug.cgi?id=2255850",
+        "https://security-tracker.debian.org/tracker/CVE-2023-51767",
+        "https://ubuntu.com/security/CVE-2023-51767",
+        "https://security.netapp.com/advisory/ntap-20240125-0006/",
+        "https://access.redhat.com/security/cve/CVE-2023-51767"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:openssh-client:1",
+            "version": "9.2p1-2+deb12u3",
+            "location": {
+              "file": "openssh-client:1:9.2p1-2+deb12u3"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "Low",
+        "summary": "The RowHammer fault injection attack can theoretically lead to local authentication bypass in OpenSSH.",
+        "details": "[OpenSSH](https://www.openssh.com/) is a popular open-source implementation of the SSH (Secure Shell) protocol, providing encrypted communication over a network.\nIt was discovered that the OpenSSH authentication logic can be susceptible in some cases to a side-channel fault injection attack. The attack can theoretically be carried out by a local attacker which eventually bypass OpenSSH authentication mechanism.\n\nThis vulnerability currently lacks widely known published exploits, and its exploitation is considered highly complex. The intricacies of the attack, combined with the absence of well-documented exploits, contribute to the difficulty in achieving successful exploitation. Furthermore, it's essential to note that the susceptibility to this vulnerability is hardware-dependent, and the success of an attack relies on probabilities associated with the specific hardware configuration. \n\nThe vulnerability is theoretically exploitable by several different ways, the only two published ways are:\n\nIn the OpenSSH function `mm_answer_authpassword()`, a stack variable `authenticated`, is assigned to the value of the function `auth_password()` which returns 1/0 and then returned. If the value of `authenticated` is 1, the SSH connection will be established. Since `authenticated` is stored on the stack, therefore in DRAM, a local attacker could flip this 32-bit integer least significant bit, thus, bypass authentication.\n\nAnother possible exploit is the `result` stack variable in `auth_password()` function. It is initialized to 0 and set to 1 if the password is correct. \nSimilarly to the previous method, this attack requires a single bit flip of the `result` variable in order for the function to return 1 and bypass the authentication.\n\nAttackers can trigger the vulnerability via a RowHammer fault injection. The Rowhammer bug is a hardware reliability issue in which an attacker repeatedly accesses (hammers) DRAM cells to cause unauthorized changes in physically adjacent memory locations.\nSimply put:\n\n* A specific register value(`authenticated`/`result` value) is pushed onto the stack during program execution. \n* The stack, where the register value is stored, is identified to be located in a memory row susceptible to bit flips (flippable row) due to the RowHammer vulnerability in DRAM.\n* The attacker performs a series of rapid and repeated memory accesses to the adjacent rows of the flippable row in the DRAM. This repeated access exploits the RowHammer vulnerability, inducing bit flips in the targeted flippable row.\n* Due to the RowHammer effect, bit flips occur in the flippable row, potentially corrupting the data stored there.\n* After inducing bit flips in the flippable row, the attacker manipulates the program's control flow to pop the corrupted value from the stack into a register.\n* The register now holds a value that has been corrupted through the RowHammer attack. Now the `authenticated`/`result` variables hold this corrupted value thus it can lead to authentication bypass, as it may impact the control flow in a way advantageous to the attacker.",
+        "severityReasons": [
+          {
+            "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+            "description": "The vulnerability depends on the OS and hardware. It was only evaluated in one test environment, therefore results for other conditions might differ. The attacker must be extremely familiar with the details of the exploited system (ex. know the exact hardware which is running the OS).",
+            "isPositive": true
+          },
+          {
+            "name": "The issue can only be exploited by an attacker that can execute code on the vulnerable machine (excluding exceedingly rare circumstances)",
+            "isPositive": true
+          },
+          {
+            "name": "No high-impact exploit or technical writeup were published, and exploitation of the issue with high impact is either non-trivial or completely unproven",
+            "description": "Exploitation is extremely non-trivial (even theoretically), no public exploits have been published.",
+            "isPositive": true
+          },
+          {
+            "name": "The reported CVSS was either wrongly calculated, downgraded by other vendors, or does not reflect the vulnerability's impact",
+            "description": "The vulnerability's attack complexity is significantly higher than what the CVSS represents.",
+            "isPositive": true
+          }
+        ]
+      }
+    },
+    {
+      "severity": "Unknown",
+      "impactedPackageName": "debian:bookworm:libssl3",
+      "impactedPackageVersion": "3.0.13-1~deb12u1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+          }
+        }
+      ],
+      "summary": "CVE-2024-4741",
+      "applicable": "Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-4741",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The scanner checks whether the vulnerable function `SSL_free_buffers` is called.",
+            "evidence": [
+              {
+                "file": "usr/local/bin/node",
+                "reason": "References to the vulnerable functions were found"
+              }
+            ]
+          }
+        }
+      ],
+      "issueId": "XRAY-603657",
+      "references": [
+        "https://security-tracker.debian.org/tracker/CVE-2024-4741"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:libssl3",
+            "version": "3.0.13-1~deb12u1",
+            "location": {
+              "file": "libssl3:3.0.13-1~deb12u1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Unknown",
+      "impactedPackageName": "debian:bookworm:openssl",
+      "impactedPackageVersion": "3.0.13-1~deb12u1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+          }
+        }
+      ],
+      "summary": "CVE-2024-4741",
+      "applicable": "Applicable",
+      "fixedVersions": [
+        "[3.0.14-1~deb12u1]"
+      ],
+      "cves": [
+        {
+          "id": "CVE-2024-4741",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The scanner checks whether the vulnerable function `SSL_free_buffers` is called.",
+            "evidence": [
+              {
+                "file": "usr/local/bin/node",
+                "reason": "References to the vulnerable functions were found"
+              }
+            ]
+          }
+        }
+      ],
+      "issueId": "XRAY-603657",
+      "references": [
+        "https://security-tracker.debian.org/tracker/CVE-2024-4741"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:openssl",
+            "version": "3.0.13-1~deb12u1",
+            "location": {
+              "file": "openssl:3.0.13-1~deb12u1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Unknown",
+      "impactedPackageName": "debian:bookworm:libssl3",
+      "impactedPackageVersion": "3.0.13-1~deb12u1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+          }
+        }
+      ],
+      "summary": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+      "applicable": "Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-6119",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `X509_VERIFY_PARAM_set1_email`\n\n- `X509_check_email`\n\n- `X509_VERIFY_PARAM_set1_host`\n\n- `X509_check_host`",
+            "evidence": [
+              {
+                "file": "usr/local/bin/node",
+                "reason": "References to the vulnerable functions were found"
+              }
+            ]
+          }
+        }
+      ],
+      "issueId": "XRAY-632747",
+      "references": [
+        "https://openssl-library.org/news/secadv/20240903.txt",
+        "https://github.com/openssl/openssl/commit/621f3729831b05ee828a3203eddb621d014ff2b2",
+        "https://github.com/openssl/openssl/commit/05f360d9e849a1b277db628f1f13083a7f8dd04f",
+        "https://security-tracker.debian.org/tracker/CVE-2024-6119",
+        "https://github.com/openssl/openssl/commit/7dfcee2cd2a63b2c64b9b4b0850be64cb695b0a0",
+        "https://github.com/openssl/openssl/commit/06d1dc3fa96a2ba5a3e22735a033012aadc9f0d6"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:libssl3",
+            "version": "3.0.13-1~deb12u1",
+            "location": {
+              "file": "libssl3:3.0.13-1~deb12u1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "Medium",
+        "summary": "Out of bounds read in OpenSSL clients can lead to denial of service when using non-default TLS verification options and connecting to malicious TLS servers",
+        "severityReasons": [
+          {
+            "name": "The issue has an exploit published",
+            "description": "The fix commit contains PoC certificates that trigger the denial of service issue"
+          },
+          {
+            "name": "The prerequisites for exploiting the issue are extremely unlikely",
+            "description": "The attacker must make the victim client connect to their malicious TLS server, in order to serve the malformed TLS certificate. The victim client must use OpenSSL and must enable non-default certificate verification options, either -\n\n* DNS verification - by using `X509_VERIFY_PARAM_set1_host` or `X509_check_host`\n* Email verification - by using ` X509_VERIFY_PARAM_set1_email` or `X509_check_email`",
+            "isPositive": true
+          },
+          {
+            "name": "The issue cannot result in a severe impact (such as remote code execution)",
+            "description": "Denial of service of a TLS clients only. This out of bounds read cannot lead to data disclosure.",
+            "isPositive": true
+          }
+        ]
+      }
+    },
+    {
+      "severity": "Unknown",
+      "impactedPackageName": "debian:bookworm:openssl",
+      "impactedPackageVersion": "3.0.13-1~deb12u1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+          }
+        }
+      ],
+      "summary": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+      "applicable": "Applicable",
+      "fixedVersions": [
+        "[3.0.14-1~deb12u2]"
+      ],
+      "cves": [
+        {
+          "id": "CVE-2024-6119",
+          "cvssV2": "",
+          "cvssV3": "",
+          "applicability": {
+            "status": "Applicable",
+            "scannerDescription": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `X509_VERIFY_PARAM_set1_email`\n\n- `X509_check_email`\n\n- `X509_VERIFY_PARAM_set1_host`\n\n- `X509_check_host`",
+            "evidence": [
+              {
+                "file": "usr/local/bin/node",
+                "reason": "References to the vulnerable functions were found"
+              }
+            ]
+          }
+        }
+      ],
+      "issueId": "XRAY-632747",
+      "references": [
+        "https://openssl-library.org/news/secadv/20240903.txt",
+        "https://github.com/openssl/openssl/commit/621f3729831b05ee828a3203eddb621d014ff2b2",
+        "https://github.com/openssl/openssl/commit/05f360d9e849a1b277db628f1f13083a7f8dd04f",
+        "https://security-tracker.debian.org/tracker/CVE-2024-6119",
+        "https://github.com/openssl/openssl/commit/7dfcee2cd2a63b2c64b9b4b0850be64cb695b0a0",
+        "https://github.com/openssl/openssl/commit/06d1dc3fa96a2ba5a3e22735a033012aadc9f0d6"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:openssl",
+            "version": "3.0.13-1~deb12u1",
+            "location": {
+              "file": "openssl:3.0.13-1~deb12u1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "Medium",
+        "summary": "Out of bounds read in OpenSSL clients can lead to denial of service when using non-default TLS verification options and connecting to malicious TLS servers",
+        "severityReasons": [
+          {
+            "name": "The issue has an exploit published",
+            "description": "The fix commit contains PoC certificates that trigger the denial of service issue"
+          },
+          {
+            "name": "The prerequisites for exploiting the issue are extremely unlikely",
+            "description": "The attacker must make the victim client connect to their malicious TLS server, in order to serve the malformed TLS certificate. The victim client must use OpenSSL and must enable non-default certificate verification options, either -\n\n* DNS verification - by using `X509_VERIFY_PARAM_set1_host` or `X509_check_host`\n* Email verification - by using ` X509_VERIFY_PARAM_set1_email` or `X509_check_email`",
+            "isPositive": true
+          },
+          {
+            "name": "The issue cannot result in a severe impact (such as remote code execution)",
+            "description": "Denial of service of a TLS clients only. This out of bounds read cannot lead to data disclosure.",
+            "isPositive": true
+          }
+        ]
+      }
+    },
+    {
+      "severity": "Critical",
+      "impactedPackageName": "debian:bookworm:libexpat1",
+      "impactedPackageVersion": "2.5.0-1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+          }
+        }
+      ],
+      "summary": "An issue was discovered in libexpat before 2.6.3. xmlparse.c does not reject a negative length for XML_ParseBuffer.",
+      "applicable": "Not Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-45490",
+          "cvssV2": "",
+          "cvssV3": "9.8",
+          "applicability": {
+            "status": "Not Applicable",
+            "scannerDescription": "The scanner checks whether any of the following vulnerable functions are called:\n\n- `XML_Parse()`\n- `XML_ParseBuffer()`\n\nAn additional condition, which the scanner currently does not check, is that the `len` parameter which is passed to those functions is user-controlled."
+          }
+        }
+      ],
+      "issueId": "XRAY-632613",
+      "references": [
+        "https://github.com/libexpat/libexpat/issues/887",
+        "https://security-tracker.debian.org/tracker/CVE-2024-45490",
+        "https://github.com/libexpat/libexpat/pull/890"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:libexpat1",
+            "version": "2.5.0-1",
+            "location": {
+              "file": "libexpat1:2.5.0-1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Critical",
+      "impactedPackageName": "debian:bookworm:libexpat1",
+      "impactedPackageVersion": "2.5.0-1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+          }
+        }
+      ],
+      "summary": "An issue was discovered in libexpat before 2.6.3. nextScaffoldPart in xmlparse.c can have an integer overflow for m_groupSize on 32-bit platforms (where UINT_MAX equals SIZE_MAX).",
+      "applicable": "Not Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2024-45492",
+          "cvssV2": "",
+          "cvssV3": "9.8",
+          "applicability": {
+            "status": "Not Applicable",
+            "scannerDescription": "The scanner checks whether the current binary was compiled with 32-bit architecture and if any of the vulnerable functions are called:\n\n- `XML_ParseBuffer()`\n- `XML_Parse()`\n\nNote - the vulnerability occurs when certain inputs are passed to those functions."
+          }
+        }
+      ],
+      "issueId": "XRAY-632612",
+      "references": [
+        "https://github.com/libexpat/libexpat/issues/889",
+        "https://security-tracker.debian.org/tracker/CVE-2024-45492",
+        "https://github.com/libexpat/libexpat/pull/892"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:libexpat1",
+            "version": "2.5.0-1",
+            "location": {
+              "file": "libexpat1:2.5.0-1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": null
+    },
+    {
+      "severity": "Low",
+      "impactedPackageName": "debian:bookworm:apt",
+      "impactedPackageVersion": "2.6.1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+          }
+        }
+      ],
+      "summary": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+      "applicable": "Not Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2011-3374",
+          "cvssV2": "4.3",
+          "cvssV3": "3.7",
+          "applicability": {
+            "status": "Not Applicable",
+            "scannerDescription": "The scanner checks if the vulnerable variable `ARCHIVE_KEYRING_URI` in `/usr/bin/apt-key` is not empty and not commented out. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n\nThe below prerequisites are also crucial for exploitability but are not checked in the scanner:\n\n1. The command apt-key net-update should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the `python-apt` Python module should be called. This is for the malicious keys download.\n\n2. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine."
+          }
+        }
+      ],
+      "issueId": "XRAY-34417",
+      "references": [
+        "https://people.canonical.com/~ubuntu-security/cve/2011/CVE-2011-3374.html",
+        "https://seclists.org/fulldisclosure/2011/Sep/221",
+        "https://ubuntu.com/security/CVE-2011-3374",
+        "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=642480",
+        "https://access.redhat.com/security/cve/cve-2011-3374",
+        "https://snyk.io/vuln/SNYK-LINUX-APT-116518",
+        "https://security-tracker.debian.org/tracker/CVE-2011-3374"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:apt",
+            "version": "2.6.1",
+            "location": {
+              "file": "apt:2.6.1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "High",
+        "summary": "Improper signature validation in apt-key may enable Man-in-the-Middle attacks and result in code execution.",
+        "details": "`apt-key` is [`apt`](https://github.com/Debian/apt)'s key management utility, and is used to manage the keys that are used by `apt` to authenticate packages.\n\nA vulnerability in `apt-key`'s `net-update` function exists, in which [`GPG`](https://www.gnupg.org/) keys, that are used for signing packages and validating their authenticity, aren't validated correctly. The `net-update` function pulls the signing keys that should be added from an insecure location (`http://...`), exposing it to a Man-in-the-Middle attack in which malicious signing keys could be added to the system's keyring. This issue happens due to a vulnerability in the `add_keys_with_veirfy_against_master_keyring()` function, which allows adding signing keys without proper signature validation. \n\nThis vulnerability then potentially allows a malicious actor to perform a Man-in-the-Middle attack on a target, by making it validate malicious packages that were signed with the `GPG` signing key used by the attacker. Effectively, this means that `apt` can be duped to install malicious services and daemons with root privileges.\n\nThe conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man In The Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from [python-apt](https://pypi.org/project/python-apt/) Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.\n\nDo note that `apt-key` is **deprecated** and shouldn't be used, and in most Debian versions `ARCHIVE_KEYRING_URI` is not defined, making this vulnerability unexploitable in most Debian systems.",
+        "severityReasons": [
+          {
+            "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+            "description": "The conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the python-apt Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.",
+            "isPositive": true
+          },
+          {
+            "name": "The issue can be exploited by attackers over the network",
+            "description": "This vulnerability is remotely exploitable when the applicability conditions apply."
+          },
+          {
+            "name": "The issue results in a severe impact (such as remote code execution)",
+            "description": "Remote code execution is possible when the applicability conditions apply."
+          },
+          {
+            "name": "The issue has an exploit published",
+            "description": "The reporter of this issue has provided a GPG key that can be used for an actual attack, as well as a simple PoC example."
+          }
+        ],
+        "remediation": "##### Deployment mitigations\n\n* Dot not execute `apt-key` command, as it is deprecated.\n* Remove the URI configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`."
+      }
+    },
+    {
+      "severity": "Low",
+      "impactedPackageName": "debian:bookworm:libapt-pkg6.0",
+      "impactedPackageVersion": "2.6.1",
+      "impactedPackageType": "Debian",
+      "components": [
+        {
+          "name": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+          "version": "",
+          "location": {
+            "file": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+          }
+        }
+      ],
+      "summary": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+      "applicable": "Not Applicable",
+      "fixedVersions": null,
+      "cves": [
+        {
+          "id": "CVE-2011-3374",
+          "cvssV2": "4.3",
+          "cvssV3": "3.7",
+          "applicability": {
+            "status": "Not Applicable",
+            "scannerDescription": "The scanner checks if the vulnerable variable `ARCHIVE_KEYRING_URI` in `/usr/bin/apt-key` is not empty and not commented out. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n\nThe below prerequisites are also crucial for exploitability but are not checked in the scanner:\n\n1. The command apt-key net-update should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the `python-apt` Python module should be called. This is for the malicious keys download.\n\n2. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine."
+          }
+        }
+      ],
+      "issueId": "XRAY-34417",
+      "references": [
+        "https://people.canonical.com/~ubuntu-security/cve/2011/CVE-2011-3374.html",
+        "https://seclists.org/fulldisclosure/2011/Sep/221",
+        "https://ubuntu.com/security/CVE-2011-3374",
+        "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=642480",
+        "https://access.redhat.com/security/cve/cve-2011-3374",
+        "https://snyk.io/vuln/SNYK-LINUX-APT-116518",
+        "https://security-tracker.debian.org/tracker/CVE-2011-3374"
+      ],
+      "impactPaths": [
+        [
+          {
+            "name": "platform.jfrog.io/swamp-docker/swamp",
+            "version": "latest"
+          },
+          {
+            "name": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar",
+            "version": "",
+            "location": {
+              "file": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+            }
+          },
+          {
+            "name": "debian:bookworm:libapt-pkg6.0",
+            "version": "2.6.1",
+            "location": {
+              "file": "libapt-pkg6.0:2.6.1"
+            }
+          }
+        ]
+      ],
+      "jfrogResearchInformation": {
+        "severity": "High",
+        "summary": "Improper signature validation in apt-key may enable Man-in-the-Middle attacks and result in code execution.",
+        "details": "`apt-key` is [`apt`](https://github.com/Debian/apt)'s key management utility, and is used to manage the keys that are used by `apt` to authenticate packages.\n\nA vulnerability in `apt-key`'s `net-update` function exists, in which [`GPG`](https://www.gnupg.org/) keys, that are used for signing packages and validating their authenticity, aren't validated correctly. The `net-update` function pulls the signing keys that should be added from an insecure location (`http://...`), exposing it to a Man-in-the-Middle attack in which malicious signing keys could be added to the system's keyring. This issue happens due to a vulnerability in the `add_keys_with_veirfy_against_master_keyring()` function, which allows adding signing keys without proper signature validation. \n\nThis vulnerability then potentially allows a malicious actor to perform a Man-in-the-Middle attack on a target, by making it validate malicious packages that were signed with the `GPG` signing key used by the attacker. Effectively, this means that `apt` can be duped to install malicious services and daemons with root privileges.\n\nThe conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man In The Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from [python-apt](https://pypi.org/project/python-apt/) Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.\n\nDo note that `apt-key` is **deprecated** and shouldn't be used, and in most Debian versions `ARCHIVE_KEYRING_URI` is not defined, making this vulnerability unexploitable in most Debian systems.",
+        "severityReasons": [
+          {
+            "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
+            "description": "The conditions for this vulnerability to be applicable:\n \n1. A valid URI should be configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`. This is the URI that an attacker would need to target in a Man-in-the-Middle attack.\n2. The command `apt-key net-update` should be executed on the affected system, or alternatively `apt.auth.net_update()` function from the python-apt Python module should be called. This is for the malicious keys download.\n3. After the execution of `apt-key net-update`, APT packages should be installed or updated on the machine.",
+            "isPositive": true
+          },
+          {
+            "name": "The issue can be exploited by attackers over the network",
+            "description": "This vulnerability is remotely exploitable when the applicability conditions apply."
+          },
+          {
+            "name": "The issue results in a severe impact (such as remote code execution)",
+            "description": "Remote code execution is possible when the applicability conditions apply."
+          },
+          {
+            "name": "The issue has an exploit published",
+            "description": "The reporter of this issue has provided a GPG key that can be used for an actual attack, as well as a simple PoC example."
+          }
+        ],
+        "remediation": "##### Deployment mitigations\n\n* Dot not execute `apt-key` command, as it is deprecated.\n* Remove the URI configured in `ARCHIVE_KEYRING_URI` variable in the file `/usr/bin/apt-key`."
+      }
+    }
+  ],
+  "securityViolations": null,
+  "licensesViolations": null,
+  "licenses": null,
+  "operationalRiskViolations": null,
+  "secrets": [
+    {
+      "severity": "Medium",
+      "file": "usr/src/app/server/scripts/__pycache__/fetch_github_repo.cpython-311.pyc",
+      "snippet": "htt************",
+      "finding": "Hardcoded secrets were found",
+      "scannerDescription": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+    },
+    {
+      "severity": "Medium",
+      "file": "private/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/tmpsfyn_3d1/unpacked/filesystem/blobs/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js",
+      "startLine": 5,
+      "startColumn": 7,
+      "endLine": 5,
+      "endColumn": 57,
+      "snippet": "tok************",
+      "finding": "Hardcoded secrets were found",
+      "scannerDescription": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+    },
+    {
+      "severity": "Medium",
+      "file": "private/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/tmpsfyn_3d1/unpacked/filesystem/blobs/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js",
+      "startLine": 6,
+      "startColumn": 14,
+      "endLine": 6,
+      "endColumn": 24,
+      "snippet": "eyJ************",
+      "finding": "Secret keys were found",
+      "scannerDescription": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+    }
+  ],
+  "iacViolations": null,
+  "sastViolations": null,
+  "errors": null
+}

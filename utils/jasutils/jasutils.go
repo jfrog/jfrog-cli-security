@@ -4,18 +4,15 @@ import (
 	"strings"
 
 	"github.com/gookit/color"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 const (
-	ApplicabilityRuleIdPrefix = "applic_"
-)
+	ApplicabilityRuleIdPrefix     = "applic_"
+	ApplicabilitySarifPropertyKey = "applicability"
 
-const (
 	DynamicTokenValidationMinXrayVersion = "3.101.0"
-)
-
-const (
-	TokenValidationStatusForNonTokens = "Not a token"
+	TokenValidationStatusForNonTokens    = "Not a token"
 )
 
 const (
@@ -39,6 +36,10 @@ type JasScanType string
 
 func (jst JasScanType) String() string {
 	return string(jst)
+}
+
+func GetJasScanTypes() []JasScanType {
+	return []JasScanType{Applicability, Secrets, IaC, Sast}
 }
 
 func (tvs TokenValidationStatus) String() string { return string(tvs) }
@@ -83,6 +84,20 @@ func (as ApplicabilityStatus) ToString(pretty bool) string {
 	default:
 		return as.String()
 	}
+}
+
+func SubScanTypeToJasScanType(subScanType utils.SubScanType) JasScanType {
+	switch subScanType {
+	case utils.SastScan:
+		return Sast
+	case utils.IacScan:
+		return IaC
+	case utils.SecretsScan:
+		return Secrets
+	case utils.ContextualAnalysisScan:
+		return Applicability
+	}
+	return ""
 }
 
 func ConvertToApplicabilityStatus(status string) ApplicabilityStatus {
