@@ -393,8 +393,9 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 		Vulnerabilities: 35,
 		Applicable:      3,
 		Undetermined:    0,
-		NotCovered:      23,
+		NotCovered:      22,
 		NotApplicable:   2,
+		MissingContext:  1,
 	})
 }
 
