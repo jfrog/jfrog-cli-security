@@ -120,13 +120,16 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
 	}
-	err = getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().Run()
+	output, err := getPnpmCmd(pnpmExecPath, dirForDependenciesCalculation, "install", npm.IgnoreScriptsFlag).GetCmd().CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("failed to install project: %w\n%s", err, string(output))
+	}
 	return
 }
 
 // Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
 func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	lsArgs := append([]string{"--depth", "Infinity", "--json", "--long"}, params.Args()...)
+	lsArgs := append([]string{"--depth", params.MaxTreeDepth(), "--json", "--long"}, params.Args()...)
 	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()
 	if err != nil {
 		return

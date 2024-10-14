@@ -27,6 +27,8 @@ type AuditParams interface {
 	InstallCommandName() string
 	InstallCommandArgs() []string
 	SetNpmScope(depType string) *AuditBasicParams
+	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
+	MaxTreeDepth() string
 	OutputFormat() format.OutputFormat
 	DepsRepo() string
 	SetDepsRepo(depsRepo string) *AuditBasicParams
@@ -54,6 +56,7 @@ type AuditBasicParams struct {
 	ignoreConfigFile                 bool
 	isMavenDepTreeInstalled          bool
 	isCurationCmd                    bool
+	maxTreeDepth                     string
 	pipRequirementsFile              string
 	depsRepo                         string
 	installCommandName               string
@@ -113,6 +116,15 @@ func (abp *AuditBasicParams) SetAllowPartialResults(allowPartialResults bool) *A
 
 func (abp *AuditBasicParams) UseJas() bool {
 	return abp.useJas
+}
+
+func (abp *AuditBasicParams) MaxTreeDepth() string {
+	return abp.maxTreeDepth
+}
+
+func (abp *AuditBasicParams) SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams {
+	abp.maxTreeDepth = maxTreeDepth
+	return abp
 }
 
 func (abp *AuditBasicParams) PipRequirementsFile() string {
