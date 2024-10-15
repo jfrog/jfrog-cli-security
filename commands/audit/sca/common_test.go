@@ -36,7 +36,7 @@ func TestGetExcludePattern(t *testing.T) {
 		{
 			name:     "Test no exclude pattern recursive",
 			params:   func() *utils.AuditBasicParams { return (&utils.AuditBasicParams{}).SetIsRecursiveScan(true) },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^.*\\.vs.*$)",
 		},
 		{
 			name: "Test exclude pattern not recursive",
@@ -50,7 +50,7 @@ func TestGetExcludePattern(t *testing.T) {
 		{
 			name:     "Test no exclude pattern",
 			params:   func() *utils.AuditBasicParams { return &utils.AuditBasicParams{} },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^.*\\.vs.*$)",
 		},
 	}
 
