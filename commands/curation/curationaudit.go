@@ -67,7 +67,7 @@ const (
 	MinArtiPassThroughSupport = "7.82.0"
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
-	MinXrayPassTHroughSupport = "3.92.0"
+	MinXrayPassThroughSupport = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -94,17 +94,17 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	} else if err != nil {
 		log.Error(err)
 	}
-	artiVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
+	artiVersion, err := ca.getRtVersion(tech)
 	if err != nil {
 		return false, err
 	}
 
-	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	xrayVersion, err := ca.getXrayVersion()
 	if err != nil {
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassThroughSupport)
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
@@ -112,16 +112,32 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	return true, nil
 }
 
-func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech techutils.Technology) (string, *config.ServerDetails, error) {
-	rtManager, serveDetails, err := ca.getRtManagerAndAuth(tech)
+func (ca *CurationAuditCommand) getRtVersion(tech techutils.Technology) (string, error) {
+	rtManager, _, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	rtVersion, err := rtManager.GetVersion()
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return rtVersion, serveDetails, err
+	return rtVersion, err
+}
+
+func (ca *CurationAuditCommand) getXrayVersion() (string, error) {
+	serverDetails, err := ca.ServerDetails()
+	if err != nil {
+		return "", err
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return "", err
+	}
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	return xrayVersion, nil
 }
 
 type ErrorsResp struct {

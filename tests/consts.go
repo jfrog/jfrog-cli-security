@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +12,11 @@ const (
 	JvmLaunchEnvVar = "MAVEN_OPTS"
 	GoCacheEnvVar   = "GOMODCACHE"
 	PipCacheEnvVar  = "PIP_CACHE_DIR"
+
+	TestJfrogUrlEnvVar      = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
+	TestJfrogTokenEnvVar    = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
+	TestJfrogUserEnvVar     = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
+	TestJfrogPasswordEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
 
 	MavenCacheRedirectionVal = "-Dmaven.repo.local="
 )
@@ -90,11 +97,24 @@ var reposConfigMap = map[*string]string{
 	&PypiRemoteRepo:         PypiRemoteRepositoryConfig,
 }
 
+func GetTestResourcesPath() string {
+	dir, _ := os.Getwd()
+	return getTestResourcesPath(dir)
+}
+
+func GetTestResourcesPathFromPath(basePaths ...string) string {
+	return getTestResourcesPath(filepath.Join(basePaths...))
+}
+
+func getTestResourcesPath(basePath string) string {
+	return filepath.Join(basePath, "tests", "testdata")
+}
+
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
-		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
-		TestSecurity:   {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
+		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -102,8 +122,8 @@ func GetNonVirtualRepositories() map[*string]string {
 // Return virtual repositories for the test suites, respectfully
 func GetVirtualRepositories() map[*string]string {
 	virtualReposMap := map[*bool][]*string{
-		TestDockerScan: {&DockerVirtualRepo},
-		TestSecurity:   {&GoVirtualRepo, &MvnVirtualRepo},
+		TestDockerScan:  {&DockerVirtualRepo},
+		TestArtifactory: {&GoVirtualRepo, &MvnVirtualRepo},
 	}
 	return getNeededRepositories(virtualReposMap)
 }

@@ -1,7 +1,6 @@
 package audit
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -172,7 +171,7 @@ func TestDetectScansToPreform(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			results := results.NewCommandResults(utils.SourceCode, "", true, true)
+			results := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
 				for i := range results.Targets {
@@ -296,8 +295,8 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				})
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
-			auditResults, err := RunAudit(auditParams)
-			assert.NoError(t, err)
+			auditResults := RunAudit(auditParams)
+			assert.NoError(t, auditResults.GetErrors())
 
 			// Currently, the only supported scanners are Secrets and Sast, therefore if a config profile is utilized - all other scanners are disabled.
 			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
@@ -337,8 +336,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
 
-	_, err := RunAudit(auditParams)
-	assert.NoError(t, err)
+	auditResults := RunAudit(auditParams)
+	assert.NoError(t, auditResults.GetErrors())
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
@@ -431,72 +430,12 @@ func TestAuditWithPartialResults(t *testing.T) {
 				})
 			auditParams.SetIsRecursiveScan(true)
 
-			scanResults, err := RunAudit(auditParams)
+			auditResults := RunAudit(auditParams)
 			if testcase.allowPartialResults {
-				assert.NoError(t, scanResults.GetErrors())
-				assert.NoError(t, err)
+				assert.NoError(t, auditResults.GetErrors())
 			} else {
-				assert.Error(t, scanResults.GetErrors())
-				assert.NoError(t, err)
+				assert.Error(t, auditResults.GetErrors())
 			}
 		})
-	}
-}
-
-func TestCreateErrorIfPartialResultsDisabled(t *testing.T) {
-	testcases := []struct {
-		name                string
-		allowPartialResults bool
-		auditParallelRunner bool
-	}{
-		{
-			name:                "Allow partial results - no error expected",
-			allowPartialResults: true,
-			auditParallelRunner: true,
-		},
-		{
-			name:                "Partial results disabled with SecurityParallelRunner",
-			allowPartialResults: false,
-			auditParallelRunner: true,
-		},
-		{
-			name:                "Partial results disabled without SecurityParallelRunner",
-			allowPartialResults: false,
-			auditParallelRunner: false,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			auditBasicParams := (&utils.AuditBasicParams{}).SetAllowPartialResults(testcase.allowPartialResults)
-			auditParams := NewAuditParams().SetGraphBasicParams(auditBasicParams)
-
-			var auditParallelRunner *utils.SecurityParallelRunner
-			if testcase.auditParallelRunner {
-				auditParallelRunner = utils.CreateSecurityParallelRunner(1)
-			}
-
-			err := createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, "", errors.New("error"))
-			if testcase.allowPartialResults {
-				assert.NoError(t, err)
-			} else {
-				if testcase.auditParallelRunner {
-					assert.False(t, isErrorsQueueEmpty(auditParallelRunner))
-				} else {
-					assert.Error(t, err)
-				}
-			}
-		})
-	}
-}
-
-func isErrorsQueueEmpty(spr *utils.SecurityParallelRunner) bool {
-	select {
-	case <-spr.ErrorsQueue:
-		// Channel is not empty
-		return false
-	default:
-		// Channel is empty
-		return true
 	}
 }

@@ -125,7 +125,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		return false, err
 	}
 
-	// A patch for Xray issue where it returns Base URL from the API but it is somtimes not the URL that is configured in the CLI
+	// A patch for Xray issue where it returns Base URL from the API but it is sometimes not the URL that is configured in the CLI
 	// More info in https://jfrog-int.atlassian.net/browse/XRAY-77451
 
 	url, endpoint, trimerr := trimUrl(buildScanResults.MoreDetailsUrl)
@@ -145,7 +145,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(utils.Build, xrayVersion, false, false)
+	cmdResults := results.NewCommandResults(utils.Build).SetXrayVersion(xrayVersion)
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
 	scanResults.NewScaScanResults(services.ScanResponse{
 		Violations:      buildScanResults.Violations,

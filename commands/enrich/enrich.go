@@ -156,7 +156,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	log.Info("JFrog Xray version is:", xrayVersion)
 
-	scanResults := results.NewCommandResults(utils.SBOM, xrayVersion, false, false)
+	scanResults := results.NewCommandResults(utils.SBOM).SetXrayVersion(xrayVersion)
 
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
@@ -175,7 +175,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
 	if fileCollectingErr != nil {
-		scanResults.Error = errors.Join(scanResults.Error, fileCollectingErr)
+		scanResults.GeneralError = errors.Join(scanResults.GeneralError, fileCollectingErr)
 	}
 
 	isXml, err := isXML(scanResults.Targets)
@@ -233,12 +233,13 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 			// Add a new task to the second producer/consumer
 			// which will send the indexed binary to Xray and then will store the received result.
 			taskFunc := func(threadId int) (err error) {
+				logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 				// Create a scan target for the file.
 				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: filepath.Base(filePath)})
-				log.Debug(clientutils.GetLogMsgPrefix(threadId, false)+"enrich file:", targetResults.Target)
+				log.Debug(logPrefix, "enrich file:", targetResults.Target)
 				fileContent, err := os.ReadFile(targetResults.Target)
 				if err != nil {
-					targetResults.AddError(err)
+					targetResults.AddError(err, false)
 					return err
 				}
 				params := &services.XrayGraphImportParams{
@@ -251,13 +252,11 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SetXrayVersion(xrayVersion)
 				xrayManager, err := xray.CreateXrayServiceManager(importGraphParams.ServerDetails())
 				if err != nil {
-					targetResults.AddError(err)
-					return err
+					return targetResults.AddError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
 				}
 				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
-					targetResults.AddError(err)
-					return
+					return targetResults.AddError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
 				targetResults.NewScaScanResults(*scanResults)
 				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)

@@ -76,7 +76,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	return sc.current, nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
 	sc.current, err = sarifutils.NewReport()
 	if err != nil {
 		return
@@ -298,7 +298,7 @@ func parseScaToSarifFormat(cmdType utils.CommandType, xrayId, summary, markdownD
 	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
 	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
 	level := severityutils.SeverityToSarifSeverityLevel(severity)
-	// Add rule fpr the cve if not exists
+	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
 		cveImpactedComponentRuleId,
 		generateTitleFunc(impactedPackagesName, impactedPackagesVersion, issueId),

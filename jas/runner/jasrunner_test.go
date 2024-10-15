@@ -40,7 +40,7 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 func TestJasRunner(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
-	targetResults := results.NewCommandResults(utils.SourceCode, "", true, true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
+	targetResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
 
 	jasScanner, err := jas.CreateJasScanner(&jas.FakeServerDetails, false, "", jas.GetAnalyzerManagerXscEnvVars("", targetResults.GetTechnologies()...))
 	assert.NoError(t, err)
@@ -55,8 +55,7 @@ func TestJasRunner(t *testing.T) {
 		SecretsScanType:    secrets.SecretsScannerType,
 		DirectDependencies: &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"},
 	}
-	err = AddJasScannersTasks(testParams)
-	assert.NoError(t, err)
+	assert.NoError(t, AddJasScannersTasks(testParams))
 }
 
 func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
