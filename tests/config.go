@@ -45,6 +45,7 @@ var (
 	TestGit         *bool
 
 	TestAuditGeneral    *bool
+	TestAuditJas 	    *bool
 	TestAuditJavaScript *bool
 	TestAuditJava       *bool
 	TestAuditCTypes     *bool
@@ -94,7 +95,8 @@ func init() {
 	TestEnrich = flag.Bool("test.enrich", false, "Run Enrich command integration tests")
 	TestGit = flag.Bool("test.git", false, "Run Git commands integration tests")
 
-	TestAuditGeneral = flag.Bool("test.audit", false, "Run general (Jas, MultiTech...) audit integration tests")
+	TestAuditGeneral = flag.Bool("test.audit", false, "Run general (Detection, NoTech, MultiTech...) audit integration tests")
+	TestAuditJas = flag.Bool("test.audit.Jas", false, "Run Jas audit integration tests")
 	TestAuditJavaScript = flag.Bool("test.audit.JavaScript", false, "Run JavaScript technologies (Npm, Pnpm, Yarn) audit integration tests")
 	TestAuditJava = flag.Bool("test.audit.Java", false, "Run Java technologies (Maven, Gradle) audit integration tests")
 	TestAuditCTypes = flag.Bool("test.audit.C", false, "Run C/C++/C# technologies (Nuget/DotNet, Conan) audit integration tests")
@@ -115,7 +117,7 @@ func init() {
 func InitTestFlags() {
 	flag.Parse()
 	// If no test types flags were set, run all types
-	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestScan, TestDockerScan, TestCuration, TestEnrich, TestGit)
+	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestScan, TestDockerScan, TestCuration, TestEnrich, TestGit)
 	if shouldRunAllTests {
 		log.Info("Running all tests. To run only specific tests, please specify the desired test flags.")
 		*TestUnit = true
@@ -123,6 +125,7 @@ func InitTestFlags() {
 		*TestXray = true
 		*TestXsc = true
 		*TestAuditGeneral = true
+		*TestAuditJas = true
 		*TestAuditJavaScript = true
 		*TestAuditJava = true
 		*TestAuditCTypes = true

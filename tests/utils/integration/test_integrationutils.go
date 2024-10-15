@@ -89,6 +89,13 @@ func InitAuditGeneralTests(t *testing.T, minVersion string) {
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
+func InitAuditJasTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJas {
+		t.Skip(getSkipTestMsg("Audit command JFrog Artifactory Security integration", "--test.audit.Jas"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
 func InitAuditJavaScriptTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditJavaScript {
 		t.Skip(getSkipTestMsg("Audit command JavaScript technologies (Npm, Pnpm, Yarn) integration", "--test.audit.JavaScript"))

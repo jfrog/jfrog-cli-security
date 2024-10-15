@@ -83,8 +83,10 @@ jobs:
       matrix:
         os: [ ubuntu, windows, macos ]
         suite:
-          - name: 'General Suite (Jas, MultiTech, NoTech...)'
+          - name: 'General Suite (Detection, MultiTech, NoTech...)'
             testFlags: '--test.audit'
+          - name: 'JAS Suite'
+            testFlags: '--test.audit.Jas'
           - name: 'Java Script Suite (Npm, Pnpm, Yarn)'
             testFlags: '--test.audit.JavaScript'
           - name: 'Python Suite (Pip, Pipenv, Poetry)'
