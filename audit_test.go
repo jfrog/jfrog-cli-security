@@ -745,7 +745,7 @@ func TestAuditOnEmptyProject(t *testing.T) {
 func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	// Verify that scan results are printed
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	// Verify that JAS results are not printed
@@ -755,7 +755,7 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2, 0, 0)
 }
