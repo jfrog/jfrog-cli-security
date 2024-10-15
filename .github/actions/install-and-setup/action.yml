@@ -30,11 +30,11 @@ runs:
     - name: Install NuGet
       uses: nuget/setup-nuget@v2
       with:
-        nuget-version: 6.11.0
+        nuget-version: 6.11
     - name: Install dotnet
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: 6.0.425
+        dotnet-version: '6.x'
     
     - name: Setup Python3
       uses: actions/setup-python@v4
