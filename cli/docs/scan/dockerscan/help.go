@@ -1,18 +1,12 @@
 package dockerscan
 
-import "github.com/jfrog/jfrog-cli-core/v2/plugins/components"
-
-var Usage = []string{"docker scan <image tag>"}
+var Usage = []string{"docker scan <image tag> [command options]"}
 
 func GetDescription() string {
 	return "Scan local docker image using the docker client and Xray."
 }
 
-func GetArguments() []components.Argument {
-	return []components.Argument{
-		{
-			Name:        "image tag",
-			Description: "The docker image tag to scan.",
-		},
-	}
+func GetArguments() string {
+	return `	docker scan args
+		The docker scan args to run docker scan.`
 }
