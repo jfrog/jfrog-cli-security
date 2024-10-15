@@ -93,7 +93,7 @@ func testAuditConan(t *testing.T, format string, withVuln bool) string {
 	defer cleanUp()
 	// Run conan install before executing jfrog audit
 	assert.NoError(t, exec.Command("conan").Run())
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-curation-policy", "audit-curation-watch", xrayUtils.High)
 	defer deleteWatch()
 	args := []string{"audit", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
 	if withVuln {
@@ -374,12 +374,12 @@ func TestXrayAuditNoTech(t *testing.T) {
 
 func TestXrayAuditMultiProjects(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects"))
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects"))
 	defer cleanUp()
 	// Set working-dirs flag with multiple projects
 	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s, %s",
-		filepath.Join(tempDirPath, "package-managers", "maven", "maven"), filepath.Join(tempDirPath, "package-managers", "nuget", "single4.0"),
-		filepath.Join(tempDirPath, "package-managers", "python", "pip", "pip-project"), filepath.Join(tempDirPath, "jas", "jas"), filepath.Join(tempDirPath, "package-managers", "go", "missing-context"))
+		filepath.Join("package-managers", "maven", "maven"), filepath.Join("package-managers", "nuget", "single4.0"),
+		filepath.Join("package-managers", "python", "pip", "pip-project"), filepath.Join("jas", "jas"), filepath.Join("package-managers", "go", "missing-context"))
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()

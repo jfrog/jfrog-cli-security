@@ -76,7 +76,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	return sc.current, nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
 	sc.current, err = sarifutils.NewReport()
 	if err != nil {
 		return

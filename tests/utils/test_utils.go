@@ -24,6 +24,7 @@ import (
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
@@ -327,10 +328,11 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func()) {
 	// TODO: We are not using coreTests.CreateTempDirWithCallbackAndAssert(t) since the callback fails to remove the temp dir on Windows.
 	// (Unknown reason, should be investigated)
-	tempDirPath := t.TempDir()
-	maskedPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
-	assert.NoError(t, biutils.CopyDir(projectPath, maskedPath, true, nil))
-	return maskedPath, func() {}
+	// tempDirPath := t.TempDir()
+	tempDirPath, clean := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	// maskedPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
+	return tempDirPath, clean
 }
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
