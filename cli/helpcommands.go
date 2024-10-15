@@ -13,7 +13,7 @@ import (
 
 const (
 	// Security Commands Keys
-	Dockerscan = "dockerscan"
+	Dockerscan = "dockerscanhelp"
 
 	// Indexer Flags
 	BypassArchiveLimits = "bypass-archive-limits"
@@ -36,7 +36,7 @@ const (
 	ScanVuln    = scanPrefix + Vuln
 	Licenses    = "licenses"
 
-	//JAS Flags
+	// JAS Flags
 	Sca              = "sca"
 	Iac              = "iac"
 	Sast             = "sast"
@@ -96,7 +96,7 @@ var flagsMap = map[string]cliCommand.Flag{
 		Name:  OutputFormat,
 		Usage: "Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
 	},
-	//JAS Flags
+	// JAS Flags
 	Sca: cliCommand.BoolFlag{
 		Name:  Sca,
 		Usage: fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. By default, runs both SCA and Contextual Analysis. Can be combined with --%s, --%s, --%s, and --%s.", Secrets, Sast, Iac, WithoutCA),
