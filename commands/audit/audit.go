@@ -3,7 +3,6 @@ package audit
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -130,7 +129,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditResults := RunAudit(auditParams)
 	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
-	
+
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
 			return errors.Join(err, auditResults.GetErrors())
