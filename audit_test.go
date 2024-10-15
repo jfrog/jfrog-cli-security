@@ -740,10 +740,10 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
 }
 
-// xray-url only
+// xray-url only - the following tests check the case of adding "xray-url", instead of "url", which is the more common one
 
 func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommandWithXrayUrl)
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
 	// Verify that scan results are printed
@@ -752,24 +752,10 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 }
 
-func getNoJasAuditMockCommandWithXrayUrl() components.Command {
-	return components.Command{
-		Name:  docs.Audit,
-		Flags: docs.GetCommandFlags(docs.Audit),
-		Action: func(c *components.Context) error {
-			auditCmd, err := cli.CreateAuditCmd(c)
-			if err != nil {
-				return err
-			}
-			// Disable Jas for this test
-			auditCmd.SetUseJas(false)
-			return progressbar.ExecWithProgress(auditCmd)
-		},
-	}
-}
-
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false)
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
+	defer cleanUp()
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false)
 	securityTestUtils.VerifySimpleJsonScanResults(t, output, 0, 8, 0)
 	securityTestUtils.VerifySimpleJsonJasResults(t, output, 1, 9, 6, 3, 1, 1, 2, 0, 0)
 }
