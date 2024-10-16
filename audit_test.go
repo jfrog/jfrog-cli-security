@@ -753,9 +753,7 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
-	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Sast:    1,
