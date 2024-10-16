@@ -80,7 +80,7 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 	cmd.Env = utils.ToCommandEnvVars(envVars)
 	cmd.Dir = workingDir
 	output, err := cmd.CombinedOutput()
-	if isCI() || err != nil {
+	if utils.IsCI() || err != nil {
 		if len(output) > 0 {
 			log.Debug(fmt.Sprintf("%s %q output: %s", workingDir, strings.Join(cmd.Args, " "), string(output)))
 		}
@@ -123,8 +123,7 @@ func GetAnalyzerManagerExecutable() (analyzerManagerPath string, err error) {
 		return
 	}
 	if !exists {
-		log.Debug(fmt.Sprintf("The analyzer manager executable was not found at %s", analyzerManagerPath))
-		err = errors.New("unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
+		err = fmt.Errorf("unable to locate the analyzer manager package at %s. Advanced security scans cannot be performed without this package", analyzerManagerPath)
 	}
 	return analyzerManagerPath, err
 }
@@ -137,10 +136,6 @@ func GetAnalyzerManagerExecutableName() string {
 	return analyzerManager
 }
 
-func isCI() bool {
-	return strings.ToLower(os.Getenv(coreutils.CI)) == "true"
-}
-
 func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
 	envVars = map[string]string{
 		jfUserEnvVariable:        serverDetails.User,
@@ -148,7 +143,7 @@ func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVar
 		jfPlatformUrlEnvVariable: serverDetails.Url,
 		jfTokenEnvVariable:       serverDetails.AccessToken,
 	}
-	if !isCI() {
+	if !utils.IsCI() {
 		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
 		if err != nil {
 			return nil, err
