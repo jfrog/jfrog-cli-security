@@ -67,7 +67,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Preforming %d SCA scans:\n%s", len(scans), scanInfo))
+	log.Info(fmt.Sprintf("Performing %d SCA scans:\n%s", len(scans), scanInfo))
 
 	defer func() {
 		// Make sure to return to the original working directory, buildDependencyTree may change it
