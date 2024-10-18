@@ -753,8 +753,9 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 }
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getRealAuditCommand)
+	defer cleanUp()
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Sast:    1,
 		Iac:     9,
@@ -767,3 +768,20 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 		NotApplicable:   2,
 	})
 }
+
+func getRealAuditCommand() components.Command {
+	return components.Command{
+		Name:     docs.Audit,
+		Flags:    docs.GetCommandFlags(docs.Audit),
+		Category: "Security",
+		Action:   cli.AuditCmd,
+	}
+}
+
+//func getRealAuditCommand() []components.Command {
+//	var cmds []components.Command
+//	for i := range cli.GetJfrogCliSecurityApp().Subcommands {
+//		cmds = append(cmds, cli.GetJfrogCliSecurityApp().Subcommands[i].Commands...)
+//	}
+//	return cmds
+//}
