@@ -54,12 +54,13 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 	if len(serverDetails.Url) == 0 {
 		if len(serverDetails.XrayUrl) != 0 {
 			log.Debug("Xray URL provided without platform URL")
+		} else {
+			if len(serverDetails.ArtifactoryUrl) != 0 {
+				log.Debug("Artifactory URL provided without platform URL")
+			}
+			log.Warn(NoServerUrlWarn)
+			return
 		}
-		if len(serverDetails.ArtifactoryUrl) != 0 {
-			log.Debug("Artifactory URL provided without platform URL")
-		}
-		log.Warn(NoServerUrlWarn)
-		return
 	}
 	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {
@@ -81,6 +82,7 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 
 func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
+	log.Debug("Adding the following environment variables to the analyzer manager", amBasicVars)
 	if err != nil {
 		return nil, err
 	}
