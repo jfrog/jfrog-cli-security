@@ -55,12 +55,12 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 		if len(serverDetails.XrayUrl) != 0 {
 			log.Debug("Xray URL provided without platform URL")
 		} else {
+			if len(serverDetails.ArtifactoryUrl) != 0 {
+				log.Debug("Artifactory URL provided without platform URL")
+			}
 			log.Warn(NoServerUrlWarn)
+			return
 		}
-		if len(serverDetails.ArtifactoryUrl) != 0 {
-			log.Debug("Artifactory URL provided without platform URL")
-		}
-		return
 	}
 	scanner = &JasScanner{}
 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {

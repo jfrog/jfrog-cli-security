@@ -61,12 +61,13 @@ func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *core
 
 func authenticateXray(xrayUrlOnly bool) string {
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
+	cred := fmt.Sprintf("--url=%s", *configTests.JfrogUrl)
 	if xrayUrlOnly {
+		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
 		configTests.XrDetails = &config.ServerDetails{XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
 	} else {
 		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
 	}
-	cred := fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken
 		cred += fmt.Sprintf(" --access-token=%s", configTests.XrDetails.AccessToken)
