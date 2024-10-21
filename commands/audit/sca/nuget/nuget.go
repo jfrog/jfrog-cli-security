@@ -318,11 +318,10 @@ func getExcludedFoldersNames(wd string, exclusionPattern string) ([]string, erro
 	}
 
 	for _, file := range files {
-		match := re.FindStringSubmatch(file)
-		matchLen := len(match)
-		if matchLen > 1 {
+		match := re.FindString(file)
+		if match != "" {
 			// extract folder name from matched path
-			folderName := filepath.Base(match[matchLen-1])
+			folderName := filepath.Base(match)
 			excludedFolders = append(excludedFolders, folderName)
 		}
 	}
