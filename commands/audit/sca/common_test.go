@@ -50,7 +50,7 @@ func TestGetExcludePattern(t *testing.T) {
 		{
 			name:     "Test no exclude pattern",
 			params:   func() *utils.AuditBasicParams { return &utils.AuditBasicParams{} },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^.*\\.vs.*$)",
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
 		},
 	}
 
