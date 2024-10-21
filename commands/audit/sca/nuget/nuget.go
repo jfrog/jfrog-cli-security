@@ -304,6 +304,7 @@ func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils
 	return
 }
 
+// Returns the folder names to exclude based on the specified pattern, only at the root level of the working directory.
 func getExcludedFoldersNames(wd string, exclusionPattern string) ([]string, error) {
 	var excludedFolders []string
 	re, err := regexp.Compile(exclusionPattern)
