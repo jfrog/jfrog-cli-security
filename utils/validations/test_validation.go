@@ -28,6 +28,8 @@ type ValidationParams struct {
 	Expected interface{}
 	// If provided, the test will check exact values and not only the minimum values / existence.
 	ExactResultsMatch bool
+	// The Sast scanner addition to the description.
+	SastDescSuffix string
 	// Expected issues for each type to check if the content has the correct amount of issues.
 	Vulnerabilities       int
 	Licenses              int

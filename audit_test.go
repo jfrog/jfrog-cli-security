@@ -621,6 +621,8 @@ func TestXrayAuditJasSarif(t *testing.T) {
 		Undetermined:    1,
 		NotCovered:      1,
 		NotApplicable:   2,
+
+		SastDescSuffix: "JFrog SAST",
 	})
 }
 
