@@ -67,7 +67,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	}()
 
 	// Copy folders and projects that are not excluded
-	ignoreForCopy, err := getExcludedFoldersNames(wd, exclusionPattern)
+	ignoreForCopy, err := getExcludedItemsNames(wd, exclusionPattern)
 	if err != nil {
 		return
 	}
@@ -304,27 +304,27 @@ func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils
 	return
 }
 
-// Returns the folder names to exclude based on the specified pattern, only at the root level of the working directory.
-func getExcludedFoldersNames(wd string, exclusionPattern string) ([]string, error) {
-	var excludedFolders []string
+// Returns the folder or file names to exclude based on the specified pattern, only at the root level of the working directory.
+func getExcludedItemsNames(wd string, exclusionPattern string) ([]string, error) {
+	var excludedItems []string
 	re, err := regexp.Compile(exclusionPattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile exclusion pattern: %w", err)
 	}
 
-	files, err := fileutils.ListFiles(wd, true)
+	paths, err := fileutils.ListFiles(wd, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list files in directory %s: %w", wd, err)
 	}
 
-	for _, file := range files {
-		match := re.FindString(file)
+	for _, item := range paths {
+		// extract folder or file name from path
+		itemName := filepath.Base(item)
+		match := re.FindString(item)
 		if match != "" {
-			// extract folder name from matched path
-			folderName := filepath.Base(match)
-			excludedFolders = append(excludedFolders, folderName)
+			excludedItems = append(excludedItems, itemName)
 		}
 	}
 
-	return excludedFolders, nil
+	return excludedItems, nil
 }
