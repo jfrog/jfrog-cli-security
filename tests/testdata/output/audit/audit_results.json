@@ -2204,7 +2204,7 @@
             "tool": {
               "driver": {
                 "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sast",
-                "name": "USAF",
+                "name": "🐸 JFrog SAST",
                 "rules": [
                   {
                     "id": "js-express-without-helmet",

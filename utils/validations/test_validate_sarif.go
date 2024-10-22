@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	//TODO: Validate if we need a frog emoji before the name
+	//SastToolName has a 🐸 in the beginning - but the stdout of the IDE doesn't show it - so removed 🐸 for tests
 	SastToolName = " JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
@@ -93,9 +93,11 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 
 	for _, run := range sastRuns {
 		for _, rule := range run.Tool.Driver.Rules {
-			ValidateContent(t, false,
-				StringValidation{Expected: params.SastDescSuffix, Actual: *rule.ShortDescription.Text, Msg: "rule description does not contain expected substring"},
-			)
+			if params.SastDescSuffix != "" {
+				ValidateContent(t, false,
+					StringValidation{Expected: params.SastDescSuffix, Actual: *rule.ShortDescription.Text, Msg: "rule description does not contain expected substring"},
+				)
+			}
 		}
 	}
 	ValidateContent(t, params.ExactResultsMatch,
