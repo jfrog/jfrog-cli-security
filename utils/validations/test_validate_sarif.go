@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	//SastToolName has a 🐸 in the beginning - but the stdout of the IDE doesn't show it - so removed 🐸 for tests
+	// SastToolName has a 🐸 in the beginning - but the stdout of the IDE doesn't show it - so removed 🐸 for tests
 	SastToolName = " JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
