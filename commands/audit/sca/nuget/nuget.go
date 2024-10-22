@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/jfrog/gofrog/datastructures"
@@ -65,7 +66,13 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
 	}()
 
-	err = biutils.CopyDir(wd, tmpWd, true, nil)
+	// Copy folders and projects that are not excluded
+	ignoreForCopy, err := getExcludedItemsNames(wd, exclusionPattern)
+	if err != nil {
+		return
+	}
+
+	err = biutils.CopyDir(wd, tmpWd, true, ignoreForCopy)
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
@@ -295,4 +302,29 @@ func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils
 	}
 	allUniqueDeps = uniqueDepsSet.ToSlice()
 	return
+}
+
+// Returns the folder or file names to exclude based on the specified pattern, only at the root level of the working directory.
+func getExcludedItemsNames(wd string, exclusionPattern string) ([]string, error) {
+	var excludedItems []string
+	re, err := regexp.Compile(exclusionPattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile exclusion pattern: %w", err)
+	}
+
+	paths, err := fileutils.ListFiles(wd, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files in directory %s: %w", wd, err)
+	}
+
+	for _, item := range paths {
+		// extract folder or file name from path
+		itemName := filepath.Base(item)
+		match := re.FindString(itemName)
+		if match != "" {
+			excludedItems = append(excludedItems, itemName)
+		}
+	}
+
+	return excludedItems, nil
 }
