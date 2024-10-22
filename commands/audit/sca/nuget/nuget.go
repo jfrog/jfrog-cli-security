@@ -320,7 +320,7 @@ func getExcludedItemsNames(wd string, exclusionPattern string) ([]string, error)
 	for _, item := range paths {
 		// extract folder or file name from path
 		itemName := filepath.Base(item)
-		match := re.FindString(item)
+		match := re.FindString(itemName)
 		if match != "" {
 			excludedItems = append(excludedItems, itemName)
 		}
