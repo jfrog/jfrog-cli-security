@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	SastToolName = "USAF"
+	// SastToolName has a 🐸 in the beginning - but the stdout of the IDE doesn't show it - so removed 🐸 for tests
+	SastToolName = " JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
 	SecretsToolName = "JFrog Secrets scanner"
@@ -50,7 +51,9 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SecretsToolName)...)
 	secrets += sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, sarifparser.BinarySecretScannerToolName)...)
 	vulnerabilities += secrets
-	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SastToolName)...)
+
+	sastRuns := sarifutils.GetRunsByToolName(report, SastToolName)
+	sast := sarifutils.GetResultsLocationCount(sastRuns...)
 	vulnerabilities += sast
 
 	scaRuns := sarifutils.GetRunsByToolName(report, sarifparser.ScaScannerToolName)
@@ -88,6 +91,15 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 		}
 	}
 
+	for _, run := range sastRuns {
+		for _, rule := range run.Tool.Driver.Rules {
+			if params.SastDescSuffix != "" {
+				ValidateContent(t, false,
+					StringValidation{Expected: params.SastDescSuffix, Actual: *rule.ShortDescription.Text, Msg: "rule description does not contain expected substring"},
+				)
+			}
+		}
+	}
 	ValidateContent(t, params.ExactResultsMatch,
 		CountValidation[int]{Expected: params.Sast, Actual: sast, Msg: GetValidationCountErrMsg("sast", "sarif report", params.ExactResultsMatch, params.Sast, sast)},
 		CountValidation[int]{Expected: params.Iac, Actual: iac, Msg: GetValidationCountErrMsg("Iac", "sarif report", params.ExactResultsMatch, params.Iac, iac)},
