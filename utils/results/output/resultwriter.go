@@ -151,7 +151,9 @@ func (rw *ResultsWriter) printSarif() error {
 	if err != nil {
 		return err
 	}
+	callback := log.SetAllowEmojiFlagWithCallback(true)
 	log.Output(sarifFile)
+	callback()
 	return nil
 }
 

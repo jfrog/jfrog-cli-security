@@ -32,11 +32,14 @@ type JasRunnerParams struct {
 
 	ScansToPreform []utils.SubScanType
 
+	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
-
+	// Contextual Analysis scan flags
+	ApplicableScanType          applicability.ApplicabilityScanType
 	DirectDependencies          *[]string
 	ThirdPartyApplicabilityScan bool
-	ApplicableScanType          applicability.ApplicabilityScanType
+	// SAST scan flags
+	SignedDescriptions bool
 
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
@@ -68,7 +71,7 @@ func AddJasScannersTasks(params JasRunnerParams) (err error) {
 	if err = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); err != nil {
 		return
 	}
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir))
+	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir, params.SignedDescriptions))
 }
 
 func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (err error) {
@@ -157,12 +160,12 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 }
 
 func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResults,
-	module jfrogappsconfig.Module, scansOutputDir string) parallel.TaskFunc {
+	module jfrogappsconfig.Module, scansOutputDir string, signedDescriptions bool) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := sast.RunSastScan(scanner, module, threadId)
+		results, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
