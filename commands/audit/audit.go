@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -303,6 +304,7 @@ func downloadAnalyzerManagerAndRunScanners(auditParallelRunner *utils.SecurityPa
 			DirectDependencies:          auditParams.DirectDependencies(),
 			ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 			ApplicableScanType:          applicability.ApplicabilityScannerType,
+			SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
 			ScanResults:                 scan,
 			TargetOutputDir:             auditParams.scanResultsOutputDir,
 		}
