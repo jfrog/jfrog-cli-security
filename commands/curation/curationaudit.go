@@ -357,7 +357,6 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 	switch tech {
 	case techutils.Npm:
 		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
-			SetNpmIgnoreNodeModules(true). // TODO ERAN should I remove this along with the setter/getter and this filed in general from audit params?
 			SetNpmOverwritePackageLock(true)
 	case techutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)

@@ -90,7 +90,6 @@ func createTreeDepsParam(params utils.AuditParams) biutils.NpmTreeDepListParam {
 		InstallCommandArgs: params.InstallCommandArgs(),
 	}
 	if npmParams, ok := params.(utils.AuditNpmParams); ok {
-		npmTreeDepParam.IgnoreNodeModules = npmParams.NpmIgnoreNodeModules() // TODO ERAN this field is set only by curation as TRUE all the time
 		npmTreeDepParam.OverwritePackageLock = npmParams.NpmOverwritePackageLock()
 	}
 	return npmTreeDepParam
