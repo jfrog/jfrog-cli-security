@@ -3,7 +3,7 @@
         {
             "tool": {
                 "driver": {
-                    "name": "USAF",
+                    "name": "🐸 JFrog SAST",
                     "rules": [
                         {
                             "id": "python-command-injection",
