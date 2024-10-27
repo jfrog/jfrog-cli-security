@@ -2,7 +2,6 @@ package nuget
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -147,54 +146,4 @@ func TestRunDotnetRestoreAndLoadSolution(t *testing.T) {
 		assert.NotEmpty(t, sol.GetProjects())
 		assert.NotEmpty(t, sol.GetDependenciesSources())
 	}
-}
-
-func TestGetExcludedFoldersNames(t *testing.T) {
-	dotnetDir := filepath.Join(testDataDir, "dotnet")
-	tests := []struct {
-		name             string
-		wd               string
-		exclusionPattern string
-		expectedFolders  []string
-		expectedError    error
-	}{
-		{
-			name:             "Valid pattern with matching folders",
-			wd:               dotnetDir,
-			exclusionPattern: "(^.*single.*$)",
-			expectedFolders:  []string{"dotnet-single"},
-			expectedError:    nil,
-		},
-		{
-			name:             "Inalid exclusion pattern",
-			wd:               dotnetDir,
-			exclusionPattern: "(invalid pattern",
-			expectedFolders:  nil,
-			expectedError:    fmt.Errorf("failed to compile exclusion pattern:"),
-		},
-		{
-			name:             "Valid pattern with no matching folders",
-			wd:               dotnetDir,
-			exclusionPattern: "(^.*node.*$)",
-			expectedFolders:  nil,
-			expectedError:    nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			got, err := getExcludedItemsNames(tt.wd, tt.exclusionPattern)
-
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-
-			assert.Equal(t, got, tt.expectedFolders)
-		})
-	}
-
 }

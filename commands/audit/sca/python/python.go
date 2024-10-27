@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/jfrog/gofrog/version"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -94,7 +95,10 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 		)
 	}()
 
-	err = biutils.CopyDir(wd, tempDirPath, true, nil)
+	// Specifies files and direcrories to exclude when copying the project to a temporary directory.
+	excludeForCopy := []string{sca.ExcludeForCopyVS}
+
+	err = biutils.CopyDir(wd, tempDirPath, true, excludeForCopy)
 	if err != nil {
 		return
 	}
