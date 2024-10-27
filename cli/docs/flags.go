@@ -238,7 +238,7 @@ var flagsMap = map[string]components.Flag{
 	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
-		"List of exclusions separated by semicolons, utilized to skip sub-projects and folders from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
+		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
 		components.WithStrDefaultValue(strings.Join(utils.DefaultScaExcludePatterns, ";")),
 	),
 	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
