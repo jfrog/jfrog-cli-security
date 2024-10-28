@@ -97,12 +97,13 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		defer auditParallelRunner.ScaScansWg.Done()
+		// defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
 			_ = targetResult.AddTargetError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
 		if taskErr != nil {
 			_ = targetResult.AddTargetError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
+			auditParallelRunner.ScaScansWg.Done()
 		}
 	}
 	return
@@ -120,14 +121,8 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
 	scan *results.TargetResults, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		defer auditParallelRunner.ScaScansWg.Done()
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
-		var xrayErr error
-		defer func() {
-			if xrayErr == nil {
-				// We Sca waitGroup as done only when we have no errors. If we have errors we mark it done in the error's handler function
-				auditParallelRunner.ScaScansWg.Done()
-			}
-		}()
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
 		if xrayErr != nil {
