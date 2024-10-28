@@ -279,7 +279,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
-			ScanResults:                 targetResult,
+				ScanResults:                 targetResult,
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 			}
 			if generalError := runner.AddJasScannersTasks(params); generalError != nil {
