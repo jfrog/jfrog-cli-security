@@ -291,8 +291,8 @@ func (sr *TargetResults) HasFindings() bool {
 	}
 	return false
 }
-
-func (sr *TargetResults) AddError(err error, allowPartialResults bool) error {
+ 
+func (sr *TargetResults) AddTargetError(err error, allowPartialResults bool) error {
 	if allowPartialResults {
 		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
 		return nil

@@ -239,8 +239,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				log.Debug(logPrefix, "enrich file:", targetResults.Target)
 				fileContent, err := os.ReadFile(targetResults.Target)
 				if err != nil {
-					targetResults.AddError(err, false)
-					return err
+					return targetResults.AddTargetError(err, false)
 				}
 				params := &services.XrayGraphImportParams{
 					SBOMInput: fileContent,
@@ -252,11 +251,11 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SetXrayVersion(xrayVersion)
 				xrayManager, err := xray.CreateXrayServiceManager(importGraphParams.ServerDetails())
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
 				}
 				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
 				targetResults.NewScaScanResults(*scanResults)
 				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)

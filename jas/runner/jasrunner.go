@@ -116,7 +116,7 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
 	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
-		scanResults.AddError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), false)
+		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), false)
 	}); addTaskErr != nil {
 		generalError = fmt.Errorf("failed to create %s scan task: %s", scanType, addTaskErr.Error())
 	}

@@ -241,8 +241,8 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.JasWg.Add(1)
-	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTasks(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, jfrogAppsConfig), func(generalError error) {
-		generalError = errors.Join(generalError, fmt.Errorf("failed while adding JAS scan tasks: %s", generalError.Error()))
+	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTasks(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, jfrogAppsConfig), func(taskErr error) {
+		generalError = errors.Join(generalError, fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()))
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
 	}
@@ -264,7 +264,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 		for _, targetResult := range scanResults.Targets {
 			module := jas.GetModule(targetResult.Target, jfrogAppsConfig)
 			if module == nil {
-				targetResult.AddError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("can't find module for path %s", targetResult.Target), auditParams.AllowPartialResults())
 				continue
 			}
 			params := runner.JasRunnerParams{
@@ -283,7 +283,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 			}
 			if generalError := runner.AddJasScannersTasks(params); generalError != nil {
-				targetResult.AddError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
 			}
 		}
 		return

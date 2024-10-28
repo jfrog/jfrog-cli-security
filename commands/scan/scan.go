@@ -400,7 +400,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 			// Index the file and get the dependencies graph.
 			graph, err := scanCmd.indexFile(targetResults.Target)
 			if err != nil {
-				return targetResults.AddError(err, false)
+				return targetResults.AddTargetError(err, false)
 			}
 			// In case of empty graph returned by the indexer,
 			// for instance due to unsupported file format, continue without sending a
@@ -433,11 +433,11 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
 				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("%s failed to create Xray service manager: %s", scanLogPrefix, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", scanLogPrefix, err.Error()), false)
 				}
 				graphScanResults, err := scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
 					targetResults.NewScaScanResults(*graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
@@ -447,12 +447,12 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				module, err := getJasModule(targetResults)
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
 				}
 				// Run Jas scans
 				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails, cmdResults.SecretValidation, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(cmdResults.MultiScanId, targetResults.GetTechnologies()...))
 				if err != nil {
-					return targetResults.AddError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
 				} else if scanner == nil {
 					log.Debug("Jas scanner was not created, skipping advance security scans...")
 					return
@@ -469,7 +469,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ScanResults:        targetResults,
 				}
 				if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
-					return targetResults.AddError(fmt.Errorf("%s failed to add Jas scan tasks: %s", scanLogPrefix, generalError.Error()), false)
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to add Jas scan tasks: %s", scanLogPrefix, generalError.Error()), false)
 				}
 				return
 			}

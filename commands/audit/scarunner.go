@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
@@ -91,17 +92,17 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				log.Warn(bdtErr.Error())
 				continue
 			}
-			targetResult.AddError(fmt.Errorf("Failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
+		defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
-			targetResult.AddError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
-			// auditParallelRunner.ScaScansWg.Done()
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
 		if taskErr != nil {
-			targetResult.AddError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
 		}
 	}
 	return
@@ -122,10 +123,9 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
 		var xrayErr error
 		defer func() {
-			auditParallelRunner.ScaScansWg.Done()
 			if xrayErr == nil {
 				// We Sca waitGroup as done only when we have no errors. If we have errors we mark it done in the error's handler function
-
+				auditParallelRunner.ScaScansWg.Done()
 			}
 		}()
 		// Scan the dependency tree.
