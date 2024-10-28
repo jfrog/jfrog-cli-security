@@ -94,7 +94,7 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 		)
 	}()
 
-	// Copy the project to a temporary directory, excluding specific folder.
+	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition. 
 	err = biutils.CopyDir(wd, tempDirPath, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		return
