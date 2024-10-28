@@ -2,16 +2,15 @@ package nuget
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"testing"
-
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayUtils2 "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	"os"
+	"path/filepath"
+	"testing"
 
 	"github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"

@@ -117,9 +117,8 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 		}
 	}()
 
-	// Specifies files and direcrories to exclude when copying the project to a temporary directory.
-	excludeForCopy := []string{sca.ExcludeForCopyVS}
-	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, excludeForCopy)
+	// Copy the project to a temporary directory, excluding specific folder.
+	err = biutils.CopyDir(wd, tempDirPath, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return

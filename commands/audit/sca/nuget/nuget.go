@@ -65,9 +65,8 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
 	}()
 
-	// Specifies files and direcrories to exclude when copying the project to a temporary directory.
-	excludeForCopy := []string{sca.ExcludeForCopyVS}
-	err = biutils.CopyDir(wd, tmpWd, true, excludeForCopy)
+	// Copy the project to a temporary directory, excluding specific folder.
+	err = biutils.CopyDir(wd, tempDirPath, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return

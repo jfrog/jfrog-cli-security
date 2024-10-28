@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	// Visual Studio inner directory to exclude when copying the project to a temporary directory during the dependency tree build process.
-	ExcludeForCopyVS = ".vs"
+	// Visual Studio inner directory.
+	DotVsRepoSuffix = ".vs"
 )
 
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
