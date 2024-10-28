@@ -7,6 +7,7 @@ import (
 
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -277,7 +278,8 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
-				ScanResults:                 targetResult,
+				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
+			ScanResults:                 targetResult,
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 			}
 			if generalError := runner.AddJasScannersTasks(params); generalError != nil {
