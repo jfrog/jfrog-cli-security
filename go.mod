@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.23.2
+go 1.22.7
 
 require (
 	github.com/beevik/etree v1.4.0
