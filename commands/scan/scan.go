@@ -269,7 +269,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
-	xrayManager, cmdResults := initScanCmdResults(cmdType, scanCmd.serverDetails, scanCmd.analyticsMetricsService, scanCmd.bypassArchiveLimits)
+	xrayManager, cmdResults := initScanCmdResults(cmdType, scanCmd.serverDetails, scanCmd.analyticsMetricsService, scanCmd.bypassArchiveLimits, scanCmd.validateSecrets)
 	if cmdResults.GeneralError != nil {
 		return
 	}
@@ -309,7 +309,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	return
 }
 
-func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, analyticsMetricsService *xsc.AnalyticsMetricsService, bypassArchiveLimits bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
+func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, analyticsMetricsService *xsc.AnalyticsMetricsService, bypassArchiveLimits, validateSecrets bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(cmdType)
 	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
@@ -331,6 +331,9 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 		return xrayManager, cmdResults.AddGeneralError(err)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
+		if entitledForJas {
+			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, xrayVersion, validateSecrets))
+		}
 	}
 	if analyticsMetricsService != nil {
 		cmdResults.SetMultiScanId(analyticsMetricsService.GetMsi())
