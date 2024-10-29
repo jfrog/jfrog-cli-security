@@ -30,6 +30,7 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		SecurityVulnerabilitiesTable:   formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.Vulnerabilities),
 		SecurityViolationsTable:        formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.SecurityViolations),
 		LicenseViolationsTable:         formats.ConvertToLicenseViolationTableRow(simpleJsonFormat.LicensesViolations),
+		LicensesTable:                  formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
 		SecretsTable:                   formats.ConvertToSecretsTableRow(simpleJsonFormat.Secrets),
 		IacTable:                       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Iacs),
