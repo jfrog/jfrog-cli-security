@@ -43,6 +43,7 @@ const (
 // BuildDependencyTree generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
 // Additionally, re-loads the project's Solution so the dependencies sources will be identified
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+	// added a comment
 	wd, err := os.Getwd()
 	if err != nil {
 		return
@@ -65,7 +66,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
 	}()
 
-	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition. 
+	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition.
 	err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
