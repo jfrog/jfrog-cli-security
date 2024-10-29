@@ -326,13 +326,14 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 }
 
 func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func()) {
-	// TODO: We are not using coreTests.CreateTempDirWithCallbackAndAssert(t) since the callback fails to remove the temp dir on Windows.
-	// (Unknown reason, should be investigated)
-	// tempDirPath := t.TempDir()
-	tempDirPath, clean := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	// maskedPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
-	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
-	return tempDirPath, clean
+	tempDirPath, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	actualPath := filepath.Join(filepath.Dir(tempDirPath), filepath.Base(projectPath))
+	coreTests.RenamePath(tempDirPath, actualPath, t)
+	assert.NoError(t, biutils.CopyDir(projectPath, actualPath, true, nil))
+	return actualPath, func() {
+		assert.NoError(t, fileutils.RemoveTempDir(actualPath), "Couldn't remove temp dir")
+	}
 }
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
