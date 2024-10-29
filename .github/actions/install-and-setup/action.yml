@@ -30,7 +30,7 @@ runs:
     - name: Install NuGet
       uses: nuget/setup-nuget@v2
       with:
-        nuget-version: 6.11
+        nuget-version: 6.11.0
     - name: Install dotnet
       uses: actions/setup-dotnet@v4
       with:
