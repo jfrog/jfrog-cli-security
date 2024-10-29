@@ -5,10 +5,10 @@ runs:
   using: "composite"
   steps:
     # Install dependencies
-    - name: Install Go
-      uses: actions/setup-go@v3
+    - name: Setup Go
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.23.2
+        go-version: 1.23
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
 
