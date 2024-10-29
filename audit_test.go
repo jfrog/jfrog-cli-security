@@ -297,29 +297,10 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 	}
 }
 
-// func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech string) string {
-// 	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
-// 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName))
-// 	defer cleanUp()
-// 	// Add dummy descriptor file to check that we run only specific audit
-// 	addDummyPackageDescriptor(t, false)
-// 	// Run NuGet/Dotnet restore before executing jfrog xr audit (NuGet)
-// 	if restoreTech != "" {
-// 		output, err := exec.Command(restoreTech, "restore").CombinedOutput()
-// 		assert.NoError(t, err, string(output))
-// 	}
-// 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--nuget", "--format="+format, "--licenses")
-// }
-
 func testXrayAuditNuget(t *testing.T, projectName, format string, restoreTech string) string {
-	// securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName)
-
-	assert.NoError(t, biutils.CopyDir(projectPath, tempDirPath, true, nil))
-	prevWd := securityTestUtils.ChangeWD(t, tempDirPath)
-	defer clientTests.ChangeDirAndAssert(t, prevWd)
+	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "nuget", projectName))
+	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
 	// Run NuGet/Dotnet restore before executing jfrog xr audit (NuGet)
