@@ -32,12 +32,12 @@ runs:
       with:
         nuget-version: 6.11
     - name: Install dotnet
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
     
     - name: Setup Python3
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
     - name: Setup Pipenv
