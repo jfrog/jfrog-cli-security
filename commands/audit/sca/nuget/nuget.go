@@ -40,7 +40,7 @@ const (
 	globalPackagesNotFoundErrorMessage = "could not find global packages path at:"
 )
 
-// BuildDependencyTree generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
+// Generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
 // Additionally, re-loads the project's Solution so the dependencies sources will be identified
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	wd, err := os.Getwd()
@@ -55,24 +55,29 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return
 	}
 
-	// Creating a temporary copy of the project in order to run 'install' command without effecting the original directory + creating the jfrog config for artifactory resolution
-	tmpWd, err := fileutils.CreateTempDir()
+	installRequired, err := isInstallRequired(params, sol, params.SkipAutoInstall(), wd)
 	if err != nil {
-		err = fmt.Errorf("failed to create a temporary dir: %w", err)
-		return
-	}
-	defer func() {
-		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
-	}()
-
-	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition. 
-	err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
-	if err != nil {
-		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
 	}
 
-	if isInstallRequired(params, sol) {
+	if installRequired {
+		var tmpWd string
+		tmpWd, err = fileutils.CreateTempDir()
+		if err != nil {
+			err = fmt.Errorf("failed to create a temporary dir: %w", err)
+			return
+		}
+		defer func() {
+			err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
+		}()
+
+		// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
+		err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
+		if err != nil {
+			err = fmt.Errorf("failed copying project to temp dir: %w", err)
+			return
+		}
+
 		log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
 		sol, err = runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern)
 		if err != nil {
@@ -89,12 +94,19 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 }
 
 // Verifies whether the execution of an 'install' command is necessary, either because the project isn't installed or because the user has specified an 'install' command
-func isInstallRequired(params utils.AuditParams, sol solution.Solution) bool {
+func isInstallRequired(params utils.AuditParams, sol solution.Solution, skipAutoInstall bool, curWd string) (bool, error) {
 	// If the user has specified an 'install' command, we proceed with executing the 'restore' command even if the project is already installed
 	// Additionally, if dependency sources were not identified during the construction of the Solution struct, the project will necessitate an 'install'
 	solDependencySourcesExists := len(sol.GetDependenciesSources()) > 0
 	solProjectsExists := len(sol.GetProjects()) > 0
-	return len(params.InstallCommandArgs()) > 0 || !solDependencySourcesExists || !solProjectsExists || params.IsCurationCmd()
+	installRequired := !solDependencySourcesExists || !solProjectsExists || params.IsCurationCmd()
+
+	if len(params.InstallCommandArgs()) > 0 {
+		return true, nil
+	} else if installRequired && skipAutoInstall {
+		return false, &biutils.ErrProjectNotInstalled{UninstalledDir: curWd}
+	}
+	return installRequired, nil
 }
 
 func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionPattern string) (sol solution.Solution, err error) {
