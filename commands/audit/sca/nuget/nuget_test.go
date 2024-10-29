@@ -164,7 +164,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 		{
 			name:                        "nuget single 5.0  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single5.0"),
-			installCommand:              "dotnet restore", // todo test in ci with nuget restore
+			installCommand:              "nuget restore", // todo test in ci with nuget restore
 			successfulTreeBuiltExpected: true,
 		},
 		{
@@ -175,7 +175,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 		{
 			name:                        "nuget multi  - not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "nuget", "multi"),
-			installCommand:              "dotnet restore", // todo test in ci with nuget restore
+			installCommand:              "nuget restore", // todo test in ci with nuget restore
 			successfulTreeBuiltExpected: true,
 		},
 		{
