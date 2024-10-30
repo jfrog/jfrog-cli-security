@@ -361,6 +361,25 @@ func testXscAuditMaven(t *testing.T, format string) string {
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--mvn", "--licenses", "--format="+format)
 }
 
+func TestXrayAuditGoJson(t *testing.T) {
+	output := testXrayAuditGo(t, string(format.Json), "go-project")
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true})
+}
+
+func TestXrayAuditGoSimpleJson(t *testing.T) {
+	output := testXrayAuditGo(t, string(format.SimpleJson), "missing-context")
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true})
+}
+
+func testXrayAuditGo(t *testing.T, format, project string) string {
+	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "go", project))
+	defer cleanUp()
+	// Add dummy descriptor file to check that we run only specific audit
+	addDummyPackageDescriptor(t, false)
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
+}
+
 func TestXrayAuditNoTech(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
