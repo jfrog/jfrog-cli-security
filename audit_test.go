@@ -372,7 +372,7 @@ func TestXrayAuditGoSimpleJson(t *testing.T) {
 }
 
 func testXrayAuditGo(t *testing.T, format, project string) string {
-	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "go", project))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
