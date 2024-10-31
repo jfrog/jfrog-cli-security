@@ -50,19 +50,25 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = GetTestCli(testApplication)
+		configTests.PlatformCli = GetTestCli(testApplication, false)
 	}
 }
 
-func GetTestCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
-	creds := authenticateXray()
+func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
+	creds := authenticateXray(xrayUrlOnly)
 	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
-func authenticateXray() string {
+func authenticateXray(xrayUrlOnly bool) string {
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
-	configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
-	cred := fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	var cred string
+	if xrayUrlOnly {
+		configTests.XrDetails = &config.ServerDetails{XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
+	} else {
+		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	}
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken
 		cred += fmt.Sprintf(" --access-token=%s", configTests.XrDetails.AccessToken)

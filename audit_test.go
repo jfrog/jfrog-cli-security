@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
+	testsUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -566,7 +567,7 @@ func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
-	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, getNoJasAuditMockCommand)
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
@@ -738,4 +739,32 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
 	// No issues should be found in an empty project
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
+}
+
+// xray-url only - the following tests check the case of adding "xray-url", instead of "url", which is the more common one
+
+func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
+	cliToRun, cleanUp := securityTestUtils.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
+	defer cleanUp()
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
+	// Verify that scan results are printed
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
+	// Verify that JAS results are not printed
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
+}
+
+func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
+	cliToRun := testsUtils.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
+	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Sast:    1,
+		Iac:     9,
+		Secrets: 6,
+
+		Vulnerabilities: 8,
+		Applicable:      3,
+		Undetermined:    1,
+		NotCovered:      1,
+		NotApplicable:   2,
+	})
 }
