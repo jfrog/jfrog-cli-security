@@ -269,7 +269,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
-	xrayManager, cmdResults := initScanCmdResults(cmdType, scanCmd.serverDetails, scanCmd.analyticsMetricsService, scanCmd.bypassArchiveLimits, scanCmd.validateSecrets)
+	xrayManager, cmdResults := initScanCmdResults(cmdType, scanCmd.serverDetails, scanCmd.analyticsMetricsService, scanCmd.bypassArchiveLimits, scanCmd.validateSecrets, scanCmd.commandSupportsJAS)
 	if cmdResults.GeneralError != nil {
 		return
 	}
@@ -309,7 +309,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	return
 }
 
-func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, analyticsMetricsService *xsc.AnalyticsMetricsService, bypassArchiveLimits, validateSecrets bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
+func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, analyticsMetricsService *xsc.AnalyticsMetricsService, bypassArchiveLimits, validateSecrets, useJas bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(cmdType)
 	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
@@ -327,7 +327,7 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 			return xrayManager, cmdResults.AddGeneralError(err)
 		}
 	}
-	if entitledForJas, err := jas.IsEntitledForJas(xrayManager, xrayVersion); err != nil {
+	if entitledForJas, err := isEntitledForJas(xrayManager, xrayVersion, useJas); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
@@ -339,6 +339,14 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 		cmdResults.SetMultiScanId(analyticsMetricsService.GetMsi())
 	}
 	return
+}
+
+func isEntitledForJas(xrayManager *xrayClient.XrayServicesManager, xrayVersion string, useJas bool) (bool, error) {
+	if !useJas {
+		// No jas scans are needed
+		return false, nil
+	}
+	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }
 
 func initIndexer(xrayManager *xrayClient.XrayServicesManager, xrayVersion string) (indexerPath, indexerTempDir string, cleanUp func(), err error) {
