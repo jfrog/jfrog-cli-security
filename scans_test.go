@@ -162,7 +162,7 @@ func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cl
 	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
 		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
 	}
-	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
+	return securityTestUtils.InitTestWithMockCommandOrParams(t, false, cli.DockerScanMockCommand)
 }
 
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int, minInactives int, validateSecrets bool) {
