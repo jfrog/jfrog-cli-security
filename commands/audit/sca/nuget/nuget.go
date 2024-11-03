@@ -60,37 +60,44 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return
 	}
 
+	var buildInfo *entities.BuildInfo
 	if installRequired {
-		var tmpWd string
-		tmpWd, err = fileutils.CreateTempDir()
-		if err != nil {
-			err = fmt.Errorf("failed to create a temporary dir: %w", err)
-			return
-		}
-		defer func() {
-			err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
-		}()
-
-		// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
-		err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
-		if err != nil {
-			err = fmt.Errorf("failed copying project to temp dir: %w", err)
-			return
-		}
-
-		log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-		sol, err = runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern)
-		if err != nil {
-			return
-		}
+		buildInfo, err = restoreInTempDirAndGetBuildInfo(params, wd, exclusionPattern)
+	} else {
+		buildInfo, err = sol.BuildInfo("", log.Logger)
 	}
 
-	buildInfo, err := sol.BuildInfo("", log.Logger)
 	if err != nil {
 		return
 	}
 	dependencyTree, uniqueDeps = parseNugetDependencyTree(buildInfo)
 	return
+}
+
+func restoreInTempDirAndGetBuildInfo(params utils.AuditParams, wd string, exclusionPattern string) (buildInfo *entities.BuildInfo, err error) {
+	var tmpWd string
+	tmpWd, err = fileutils.CreateTempDir()
+	if err != nil {
+		err = fmt.Errorf("failed to create a temporary dir: %w", err)
+		return
+	}
+	defer func() {
+		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
+	}()
+
+	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
+	err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
+	if err != nil {
+		err = fmt.Errorf("failed copying project to temp dir: %w", err)
+		return
+	}
+
+	log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
+	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern)
+	if err != nil {
+		return
+	}
+	return sol.BuildInfo("", log.Logger)
 }
 
 // Verifies whether the execution of an 'install' command is necessary, either because the project isn't installed or because the user has specified an 'install' command
