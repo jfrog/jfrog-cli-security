@@ -142,7 +142,7 @@ func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp fu
 	if !*configTests.TestDockerScan {
 		t.Skip(getSkipTestMsg("Docker scan command integration (Ubuntu)", "--test.dockerScan"))
 	}
-	return InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
+	return InitTestWithMockCommandOrParams(t, false, cli.DockerScanMockCommand)
 }
 
 func InitCurationTest(t *testing.T) {
@@ -183,19 +183,25 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = GetTestCli(testApplication)
+		configTests.PlatformCli = GetTestCli(testApplication, false)
 	}
 }
 
-func GetTestCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
-	creds := authenticateXray()
+func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
+	creds := authenticateXray(xrayUrlOnly)
 	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
-func authenticateXray() string {
+func authenticateXray(xrayUrlOnly bool) string {
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
-	configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
-	cred := fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	var cred string
+	if xrayUrlOnly {
+		configTests.XrDetails = &config.ServerDetails{XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
+	} else {
+		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	}
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken
 		cred += fmt.Sprintf(" --access-token=%s", configTests.XrDetails.AccessToken)
@@ -391,7 +397,7 @@ func CreateRepos(repos map[*string]string) {
 	}
 }
 
-func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
 	// Create server config to use with the command.
 	CreateJfrogHomeConfig(t, true)
@@ -400,7 +406,7 @@ func InitTestWithMockCommandOrParams(t *testing.T, mockCommands ...func() compon
 	for _, mockCommand := range mockCommands {
 		commands = append(commands, mockCommand())
 	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands)), func() {
+	return GetTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
 		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
 	}
 }
