@@ -362,13 +362,13 @@ func testXscAuditMaven(t *testing.T, format string) string {
 }
 
 func TestXrayAuditGoJson(t *testing.T) {
-	output := testXrayAuditGo(t, string(format.Json), "go-project")
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true})
+	output := testXrayAuditGo(t, string(format.Json), "simple-project")
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Licenses: 1, Vulnerabilities: 4})
 }
 
 func TestXrayAuditGoSimpleJson(t *testing.T) {
-	output := testXrayAuditGo(t, string(format.SimpleJson), "missing-context")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true})
+	output := testXrayAuditGo(t, string(format.SimpleJson), "simple-project")
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCovered: 2, NotApplicable: 2})
 }
 
 func testXrayAuditGo(t *testing.T, format, project string) string {
@@ -377,7 +377,7 @@ func testXrayAuditGo(t *testing.T, format, project string) string {
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, false)
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
+	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
 }
 
 func TestXrayAuditNoTech(t *testing.T) {
@@ -396,9 +396,9 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects"))
 	defer cleanUp()
 	// Set working-dirs flag with multiple projects
-	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s, %s",
+	workingDirsFlag := fmt.Sprintf("--working-dirs=%s, %s ,%s, %s",
 		filepath.Join("package-managers", "maven", "maven"), filepath.Join("package-managers", "nuget", "single4.0"),
-		filepath.Join("package-managers", "python", "pip", "pip-project"), filepath.Join("jas", "jas"), filepath.Join("package-managers", "go", "missing-context"))
+		filepath.Join("package-managers", "python", "pip", "pip-project"), filepath.Join("jas", "jas"))
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
@@ -414,7 +414,6 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 		Undetermined:    0,
 		NotCovered:      22,
 		NotApplicable:   2,
-		MissingContext:  1,
 	})
 }
 
@@ -532,6 +531,11 @@ func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, false)
 	// verify no results for Sast
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
+}
+
+func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), "3", false, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{MissingContext: 1})
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
