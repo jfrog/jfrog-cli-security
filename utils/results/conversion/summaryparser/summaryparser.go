@@ -35,7 +35,7 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	return *sc.current, nil
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ error) (err error) {
 	sc.current = &formats.ResultsSummary{}
 	sc.entitledForJas = entitledForJas
 	return
