@@ -362,22 +362,31 @@ func testXscAuditMaven(t *testing.T, format string) string {
 }
 
 func TestXrayAuditGoJson(t *testing.T) {
-	output := testXrayAuditGo(t, securityTests.PlatformCli, string(format.Json), "simple-project")
+	output := testXrayAuditGo(t, false, string(format.Json), "simple-project")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{Licenses: 1, Vulnerabilities: 4})
 }
 
 func TestXrayAuditGoSimpleJson(t *testing.T) {
-	output := testXrayAuditGo(t, securityTests.PlatformCli.WithoutCredentials(), string(format.SimpleJson), "simple-project")
+	output := testXrayAuditGo(t, true, string(format.SimpleJson), "simple-project")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCovered: 2, NotApplicable: 2})
 }
 
-func testXrayAuditGo(t *testing.T, cli *coreTests.JfrogCli, format, project string) string {
+func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
 	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "go", project))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
+
 	addDummyPackageDescriptor(t, false)
-	return cli.RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
+
+	cliToRun := securityTests.PlatformCli
+	if noCreds {
+		cliToRun = securityTests.PlatformCli.WithoutCredentials()
+		// Configure a new server named "default"
+		securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+		defer securityTestUtils.CleanTestsHomeEnv()
+	}
+	return cliToRun.RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
 }
 
 func TestXrayAuditNoTech(t *testing.T) {
