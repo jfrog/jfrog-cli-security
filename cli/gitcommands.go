@@ -19,7 +19,7 @@ func getGitNameSpaceCommands() []components.Command {
 			Name: 	  "audit",
 			Aliases: []string{"a"},
 			Description: gitAuditDocs.GetDescription(),
-			Flags: flags.GetCommandFlags(flags.GitAudit),
+			Flags: flags.GetCommandFlags(flags.Audit),
 		},
 		{
 			Name:        "count-contributors",
