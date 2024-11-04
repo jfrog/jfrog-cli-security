@@ -58,7 +58,7 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 			cleanUp := clientTests.SetEnvWithCallbackAndAssert(t, coreUtils.SummaryOutputDirPathEnv, tempDir)
 			defer cleanUp()
 
-			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), true, true, utils.GetAllSupportedScans()...))
+			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), nil, true, true, utils.GetAllSupportedScans()...))
 			assert.Equal(t, testCase.isJasEntitled, hasFilesInDir(t, filepath.Join(tempDir, commandsummary.OutputDirName, "security", string(commandsummary.SarifReport))))
 		})
 	}
