@@ -18,6 +18,8 @@ import (
 	"strings"
 )
 
+// VersionForMainModule - We don't have information in cocoapods on the current package, or main module, we only have information on its
+// dependencies.
 const (
 	VersionForMainModule = "0.0.0"
 )
@@ -45,39 +47,46 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 		foundDependency := false
 		var tempIndex int
 		for i, line := range lines {
-			if strings.Contains(line, directDependencyName) {
-				startLine = i
-				startCol = strings.Index(line, directDependencyName)
-				foundDependency = true
-				tempIndex = i
-			}
-			// This means we are in a new dependency (we cannot find dependency name and version together)
-			if i > tempIndex && foundDependency && strings.Contains(line, "pod") {
-				foundDependency = false
-			} else if foundDependency && strings.Contains(line, directDependencyVersion) {
-				endLine = i
-				endCol = len(line)
-				var snippet string
-				if endLine == startLine {
-					snippet = lines[startLine][startCol:endCol]
-				} else {
-					for snippetLine := 1; snippetLine < endLine-startLine+1; snippetLine++ {
-						switch snippetLine {
-						case 0:
-							snippet += "\n" + lines[snippetLine][startLine:]
-						case endLine - startLine:
-							snippet += "\n" + lines[snippetLine][:endCol]
-						default:
-							snippet += "\n" + lines[snippetLine]
-						}
-					}
-				}
-				podPositions = append(podPositions, sarifutils.CreateLocation(descriptorPath, startLine, endLine, startCol, endCol, snippet))
-				foundDependency = false
-			}
+			foundDependency, tempIndex, startLine, startCol = parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath, i, tempIndex, startLine, startCol, endLine, endCol, lines, foundDependency, &podPositions)
 		}
 	}
 	return podPositions, nil
+}
+
+func parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath string, i, tempIndex, startLine, startCol, endLine, endCol int, lines []string, foundDependency bool, podPositions *[]*sarif.Location) (bool, int, int, int) {
+	if strings.Contains(line, directDependencyName) {
+		startLine = i
+		startCol = strings.Index(line, directDependencyName)
+		foundDependency = true
+		tempIndex = i
+	}
+	// This means we are in a new dependency (we cannot find dependency name and version together)
+	if i > tempIndex && foundDependency && strings.Contains(line, "pod") {
+		foundDependency = false
+	} else if foundDependency && strings.Contains(line, directDependencyVersion) {
+		endLine = i
+		endCol = len(line)
+		var snippet string
+		// if the tech dependency is a one-liner
+		if endLine == startLine {
+			snippet = lines[startLine][startCol:endCol]
+			// else it is more than one line, so we need to parse all lines
+		} else {
+			for snippetLine := 0; snippetLine < endLine-startLine+1; snippetLine++ {
+				switch snippetLine {
+				case 0:
+					snippet += "\n" + lines[snippetLine][startLine:]
+				case endLine - startLine:
+					snippet += "\n" + lines[snippetLine][:endCol]
+				default:
+					snippet += "\n" + lines[snippetLine]
+				}
+			}
+		}
+		*podPositions = append(*podPositions, sarifutils.CreateLocation(descriptorPath, startLine, endLine, startCol, endCol, snippet))
+		foundDependency = false
+	}
+	return foundDependency, tempIndex, startLine, startCol
 }
 
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {

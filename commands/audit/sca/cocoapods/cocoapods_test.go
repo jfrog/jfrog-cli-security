@@ -65,10 +65,14 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	locations, err := GetTechDependencyLocation("GoogleSignIn", "6.2.4", filepath.Join(currentDir, "Podfile"))
 	assert.NoError(t, err)
 	assert.Len(t, locations, 1)
+	assert.Equal(t, *locations[0].PhysicalLocation.Region.StartLine, 4)
+	assert.Equal(t, *locations[0].PhysicalLocation.Region.StartColumn, 4)
+	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndLine, 5)
+	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndColumn, 30)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "GoogleSignIn', '~> 6.2.4'")
 }
 
-func TestFixTechDependency(t *testing.T) {
+func TestFixTechDependencySingleLocation(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
@@ -79,4 +83,30 @@ func TestFixTechDependency(t *testing.T) {
 	assert.NoError(t, err)
 	lines := strings.Split(string(file), "\n")
 	assert.Contains(t, lines, "pod 'GoogleSignIn', '~> 6.2.5'")
+}
+
+func TestFixTechDependencyMultipleLocations(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("AppAuth", "1.7.5", "1.7.6", filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
+	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
+	numAppearances := strings.Count(string(file), "pod 'AppAuth', '~> 1.7.6'")
+	assert.Equal(t, numAppearances, 2)
+}
+
+func TestFixTechDependencyNoLocations(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("GoogleSignIn", "1.8.2", "1.8.3", filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
+	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
+	assert.NoError(t, err)
+	lines := strings.Split(string(file), "\n")
+	assert.Contains(t, lines, "pod 'GoogleSignIn', '~> 6.2.4'")
 }
