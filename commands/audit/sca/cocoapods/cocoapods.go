@@ -43,17 +43,17 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 			continue
 		}
 		lines := strings.Split(string(data), "\n")
-		var startLine, startCol, endLine, endCol int
+		var startLine, startCol int
 		foundDependency := false
 		var tempIndex int
 		for i, line := range lines {
-			foundDependency, tempIndex, startLine, startCol = parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath, i, tempIndex, startLine, startCol, endLine, endCol, lines, foundDependency, &podPositions)
+			foundDependency, tempIndex, startLine, startCol = parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath, i, tempIndex, startLine, startCol, lines, foundDependency, &podPositions)
 		}
 	}
 	return podPositions, nil
 }
 
-func parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath string, i, tempIndex, startLine, startCol, endLine, endCol int, lines []string, foundDependency bool, podPositions *[]*sarif.Location) (bool, int, int, int) {
+func parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath string, i, tempIndex, startLine, startCol int, lines []string, foundDependency bool, podPositions *[]*sarif.Location) (bool, int, int, int) {
 	if strings.Contains(line, directDependencyName) {
 		startLine = i
 		startCol = strings.Index(line, directDependencyName)
@@ -64,8 +64,8 @@ func parsePodLine(line, directDependencyName, directDependencyVersion, descripto
 	if i > tempIndex && foundDependency && strings.Contains(line, "pod") {
 		foundDependency = false
 	} else if foundDependency && strings.Contains(line, directDependencyVersion) {
-		endLine = i
-		endCol = len(line)
+		endLine := i
+		endCol := len(line)
 		var snippet string
 		// if the tech dependency is a one-liner
 		if endLine == startLine {

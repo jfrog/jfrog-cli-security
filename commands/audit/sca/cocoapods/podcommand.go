@@ -38,8 +38,8 @@ func getPodVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
 	}
 	log.Debug("Using pod executable:", podExecPath)
-	versionData, _, err := runPodCmd(podExecPath, "", []string{"--version"})
-	if err != nil {
+	versionData, stdErr, err := runPodCmd(podExecPath, "", []string{"--version"})
+	if err != nil || stdErr != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), podExecPath, nil

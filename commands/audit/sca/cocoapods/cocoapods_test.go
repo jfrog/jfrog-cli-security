@@ -75,7 +75,7 @@ func TestGetTechDependencyLocation(t *testing.T) {
 
 func TestPodLineParse(t *testing.T) {
 	var podPositions []*sarif.Location
-	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.4'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.4'"}, false, &podPositions)
+	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.4'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.4'"}, false, &podPositions)
 	assert.Equal(t, foundDependency, false)
 	assert.Equal(t, startLine, 0)
 	assert.Equal(t, startCol, 5)
@@ -83,7 +83,7 @@ func TestPodLineParse(t *testing.T) {
 
 func TestPodLineParseFoundOnlyDependencyName(t *testing.T) {
 	var podPositions []*sarif.Location
-	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.3'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.3'"}, false, &podPositions)
+	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.3'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.3'"}, false, &podPositions)
 	assert.Equal(t, foundDependency, true)
 	assert.Equal(t, startLine, 0)
 	assert.Equal(t, startCol, 5)
