@@ -110,6 +110,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 				tempIndex = index
 			}
 			// This means we are in a new dependency (we cannot find dependency name and version together)
+			//nolint:gocritic
 			if index > tempIndex && foundDependency && strings.Contains(line, "pod") {
 				foundDependency = false
 			} else if foundDependency && strings.Contains(line, dependencyVersion) {
