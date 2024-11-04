@@ -190,12 +190,12 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails
 	if err != nil || manager == nil {
 		return
 	}
-	extended, err := commandsummary.CheckExtendedSummaryEntitled(serverDetails.Url)
+	record, err := ifNoJasNoGHAS(cmdResults, serverDetails)
 	if err != nil {
 		return
 	}
-	if !cmdResults.EntitledForJas || !extended {
-		// If no JAS no GHAS
+	if !record {
+		// No JAS no GHAS
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
@@ -216,6 +216,13 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails
 		return errorutils.CheckError(err)
 	}
 	return manager.RecordWithIndex(out, commandsummary.SarifReport)
+}
+
+func ifNoJasNoGHAS(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails) (extended bool, err error) {
+	if !cmdResults.EntitledForJas {
+		return
+	}
+	return commandsummary.CheckExtendedSummaryEntitled(serverDetails.Url)
 }
 
 func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
