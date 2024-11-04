@@ -33,7 +33,7 @@ func getCommitsListForTest(t *testing.T) []vcsclient.CommitInfo {
 }
 
 func GetTestDataPath() string {
-	return filepath.Join("..", "..", "tests", "testdata", "git")
+	return filepath.Join("..", "..", "..", "tests", "testdata", "git")
 }
 
 func TestCountContributorsCommand_saveCommitsInfoInMaps_OneRepo(t *testing.T) {
