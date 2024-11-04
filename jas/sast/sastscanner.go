@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -23,16 +23,17 @@ const (
 type SastScanManager struct {
 	sastScannerResults []*sarif.Run
 	scanner            *jas.JasScanner
+	signedDescriptions bool
 	configFileName     string
 	resultsFileName    string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String()); err != nil {
 		return
 	}
-	sastScanManager := newSastScanManager(scanner, scannerTempDir)
+	sastScanManager := newSastScanManager(scanner, scannerTempDir, signedDescriptions)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running SAST scan...")
 	if err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
@@ -45,16 +46,17 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadI
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *SastScanManager) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool) (manager *SastScanManager) {
 	return &SastScanManager{
 		sastScannerResults: []*sarif.Run{},
 		scanner:            scanner,
+		signedDescriptions: signedDescriptions,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif")}
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
+	if err = ssm.createConfigFile(module, ssm.signedDescriptions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
@@ -74,14 +76,19 @@ type sastScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots           []string `yaml:"roots,omitempty"`
-	Type            string   `yaml:"type,omitempty"`
-	Language        string   `yaml:"language,omitempty"`
-	ExcludePatterns []string `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules   []string `yaml:"excluded-rules,omitempty"`
+	Roots           []string       `yaml:"roots,omitempty"`
+	Type            string         `yaml:"type,omitempty"`
+	Language        string         `yaml:"language,omitempty"`
+	ExcludePatterns []string       `yaml:"exclude_patterns,omitempty"`
+	ExcludedRules   []string       `yaml:"excluded-rules,omitempty"`
+	SastParameters  sastParameters `yaml:"sast_parameters,omitempty"`
 }
 
-func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
+type sastParameters struct {
+	SignedDescriptions bool `yaml:"signed_descriptions,omitempty"`
+}
+
+func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, signedDescriptions bool, exclusions ...string) error {
 	sastScanner := module.Scanners.Sast
 	if sastScanner == nil {
 		sastScanner = &jfrogappsconfig.SastScanner{}
@@ -93,10 +100,13 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
-				Type:            sastScannerType,
-				Roots:           roots,
-				Language:        sastScanner.Language,
-				ExcludedRules:   sastScanner.ExcludedRules,
+				Type:          sastScannerType,
+				Roots:         roots,
+				Language:      sastScanner.Language,
+				ExcludedRules: sastScanner.ExcludedRules,
+				SastParameters: sastParameters{
+					SignedDescriptions: signedDescriptions,
+				},
 				ExcludePatterns: jas.GetExcludePatterns(module, &sastScanner.Scanner, exclusions...),
 			},
 		},
@@ -139,13 +149,6 @@ func getResultLocationStr(result *sarif.Result) string {
 		sarifutils.GetLocationEndColumn(location))
 }
 
-func getResultRuleId(result *sarif.Result) string {
-	if result.RuleID == nil {
-		return ""
-	}
-	return *result.RuleID
-}
-
 func getResultId(result *sarif.Result) string {
-	return getResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
+	return sarifutils.GetResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
 }

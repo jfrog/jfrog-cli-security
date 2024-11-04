@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,11 +34,11 @@ func TestBuildGoDependencyList(t *testing.T) {
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
-		xrayutils.CocoapodsPackageTypeIdentifier + "AppAuth:1.7.5",
-		xrayutils.CocoapodsPackageTypeIdentifier + "GoogleSignIn:6.2.4",
-		xrayutils.CocoapodsPackageTypeIdentifier + "GTMAppAuth:1.3.1",
-		xrayutils.CocoapodsPackageTypeIdentifier + "GTMSessionFetcher:2.3.0",
-		xrayutils.CocoapodsPackageTypeIdentifier + packageInfo,
+		techutils.Cocoapods.GetPackageTypeId() + "AppAuth:1.7.5",
+		techutils.Cocoapods.GetPackageTypeId() + "GoogleSignIn:6.2.4",
+		techutils.Cocoapods.GetPackageTypeId() + "GTMAppAuth:1.3.1",
+		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher:2.3.0",
+		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
 
 	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
@@ -46,7 +47,7 @@ func TestBuildGoDependencyList(t *testing.T) {
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 	assert.NotEmpty(t, rootNode)
 
-	assert.Equal(t, rootNode[0].Id, xrayutils.CocoapodsPackageTypeIdentifier+packageInfo)
+	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetPackageTypeId()+packageInfo)
 	assert.Len(t, rootNode[0].Nodes, 4)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "GTMSessionFetcher:2.3.0")

@@ -477,7 +477,9 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
-		SetScansResultsOutputDir(scansOutputDir)
+		SetScansResultsOutputDir(scansOutputDir).
+		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
+		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))

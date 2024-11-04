@@ -13,8 +13,10 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -114,7 +116,9 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
 		}
 	}()
-	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, nil)
+
+	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition.
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
@@ -175,7 +179,7 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 
 // Return npm://<name>:<version> of a dependency
 func getDependencyId(depName, version string) string {
-	return utils.NpmPackageTypeIdentifier + depName + ":" + version
+	return techutils.Npm.GetPackageTypeId() + depName + ":" + version
 }
 
 func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]xray.DepTreeNode) {

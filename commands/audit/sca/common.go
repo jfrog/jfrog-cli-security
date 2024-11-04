@@ -21,6 +21,11 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
+const (
+	// Visual Studio inner directory.
+	DotVsRepoSuffix = ".vs"
+)
+
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 

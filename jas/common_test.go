@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -114,11 +114,13 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 	}
 }
 
-func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
+func TestGetJasEnvVars(t *testing.T) {
 	tests := []struct {
-		name           string
-		serverDetails  *config.ServerDetails
-		expectedOutput map[string]string
+		name            string
+		serverDetails   *config.ServerDetails
+		validateSecrets bool
+		extraEnvVars    map[string]string
+		expectedOutput  map[string]string
 	}{
 		{
 			name: "Valid server details",
@@ -129,16 +131,70 @@ func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
 				AccessToken: "token",
 			},
 			expectedOutput: map[string]string{
-				jfPlatformUrlEnvVariable: "url",
-				jfUserEnvVariable:        "user",
-				jfPasswordEnvVariable:    "password",
-				jfTokenEnvVariable:       "token",
+				jfPlatformUrlEnvVariable:      "url",
+				jfUserEnvVariable:             "user",
+				jfPasswordEnvVariable:         "password",
+				jfTokenEnvVariable:            "token",
+				JfSecretValidationEnvVariable: "false",
+			},
+		},
+		{
+			name: "With validate secrets",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			extraEnvVars:    map[string]string{"test": "testValue"},
+			validateSecrets: true,
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:      "url",
+				jfUserEnvVariable:             "user",
+				jfPasswordEnvVariable:         "password",
+				jfTokenEnvVariable:            "token",
+				JfSecretValidationEnvVariable: "true",
+				"test":                        "testValue",
+			},
+		},
+		{
+			name: "Valid server details xray only",
+			serverDetails: &config.ServerDetails{
+				Url:         "",
+				XrayUrl:     "url/xray",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:     "",
+				jfPlatformXrayUrlEnvVariable: "url/xray",
+				jfUserEnvVariable:            "user",
+				jfPasswordEnvVariable:        "password",
+				jfTokenEnvVariable:           "token",
+			},
+		},
+		{
+			name: "Valid server details both url and xray",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				XrayUrl:     "url/xray",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:     "url",
+				jfPlatformXrayUrlEnvVariable: "url/xray",
+				jfUserEnvVariable:            "user",
+				jfPasswordEnvVariable:        "password",
+				jfTokenEnvVariable:           "token",
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			envVars, err := GetAnalyzerManagerEnvVariables(test.serverDetails)
+			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.extraEnvVars)
 			assert.NoError(t, err)
 			for expectedKey, expectedValue := range test.expectedOutput {
 				assert.Equal(t, expectedValue, envVars[expectedKey])
@@ -149,55 +205,37 @@ func TestGetAnalyzerManagerEnvVariables(t *testing.T) {
 
 func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	tests := []struct {
-		name            string
-		msi             string
-		validateSecrets bool
-		technologies    []techutils.Technology
-		expectedOutput  map[string]string
+		name           string
+		msi            string
+		technologies   []techutils.Technology
+		expectedOutput map[string]string
 	}{
 		{
 			name:         "One valid technology",
 			msi:          "msi",
 			technologies: []techutils.Technology{techutils.Maven},
 			expectedOutput: map[string]string{
-				JfPackageManagerEnvVariable:   string(techutils.Maven),
-				JfLanguageEnvVariable:         string(techutils.Java),
-				JfSecretValidationEnvVariable: "false",
-				utils.JfMsiEnvVariable:        "msi",
+				JfPackageManagerEnvVariable: string(techutils.Maven),
+				JfLanguageEnvVariable:       string(techutils.Java),
+				utils.JfMsiEnvVariable:      "msi",
 			},
 		},
 		{
-			name:         "Multiple technologies",
-			msi:          "msi",
-			technologies: []techutils.Technology{techutils.Maven, techutils.Npm},
-			expectedOutput: map[string]string{
-				JfSecretValidationEnvVariable: "false",
-				utils.JfMsiEnvVariable:        "msi",
-			},
+			name:           "Multiple technologies",
+			msi:            "msi",
+			technologies:   []techutils.Technology{techutils.Maven, techutils.Npm},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi"},
 		},
 		{
-			name:         "Zero technologies",
-			msi:          "msi",
-			technologies: []techutils.Technology{},
-			expectedOutput: map[string]string{
-				utils.JfMsiEnvVariable:        "msi",
-				JfSecretValidationEnvVariable: "false",
-			},
-		},
-		{
-			name:            "with validate secrets",
-			msi:             "msi",
-			validateSecrets: true,
-			technologies:    []techutils.Technology{},
-			expectedOutput: map[string]string{
-				utils.JfMsiEnvVariable:        "msi",
-				JfSecretValidationEnvVariable: "true",
-			},
+			name:           "Zero technologies",
+			msi:            "msi",
+			technologies:   []techutils.Technology{},
+			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi"},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.validateSecrets, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.technologies...))
 		})
 	}
 }

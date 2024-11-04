@@ -1,0 +1,778 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
+          "name": "JFrog Binary Secrets Scanner",
+          "rules": [
+            {
+              "id": "REQ.SECRET.GENERIC.TEXT",
+              "name": "REQ.SECRET.GENERIC.TEXT",
+              "shortDescription": {
+                "text": "[Secret in Binary found] Scanner for REQ.SECRET.GENERIC.TEXT"
+              },
+              "fullDescription": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "help": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "properties": {
+                "applicability": "not_applicable",
+                "conclusion": "positive"
+              }
+            },
+            {
+              "id": "REQ.SECRET.GENERIC.CODE",
+              "name": "REQ.SECRET.GENERIC.CODE",
+              "shortDescription": {
+                "text": "[Secret in Binary found] Scanner for REQ.SECRET.GENERIC.CODE"
+              },
+              "fullDescription": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "help": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "properties": {
+                "applicability": "applicable",
+                "conclusion": "negative",
+                "security-severity": "6.9"
+              }
+            },
+            {
+              "id": "REQ.SECRET.KEYS",
+              "name": "REQ.SECRET.KEYS",
+              "shortDescription": {
+                "text": "[Secret in Binary found] Scanner for REQ.SECRET.KEYS"
+              },
+              "fullDescription": {
+                "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
+                "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+              },
+              "help": {
+                "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
+                "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+              },
+              "properties": {
+                "applicability": "applicable",
+                "conclusion": "negative",
+                "security-severity": "6.9"
+              }
+            },
+            {
+              "id": "REQ.CRED.PUBLIC-ONLY",
+              "name": "REQ.CRED.PUBLIC-ONLY",
+              "shortDescription": {
+                "text": "[Secret in Binary found] Scanner for REQ.CRED.PUBLIC-ONLY"
+              },
+              "fullDescription": {
+                "text": "",
+                "markdown": ""
+              },
+              "help": {
+                "text": "",
+                "markdown": ""
+              },
+              "properties": {
+                "applicability": "undetermined",
+                "conclusion": "private"
+              }
+            },
+            {
+              "id": "REQ.SECRET.GENERIC.URL",
+              "name": "REQ.SECRET.GENERIC.URL",
+              "shortDescription": {
+                "text": "[Secret in Binary found] Scanner for REQ.SECRET.GENERIC.URL"
+              },
+              "fullDescription": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "help": {
+                "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+              },
+              "properties": {
+                "applicability": "applicable",
+                "conclusion": "negative",
+                "security-severity": "6.9"
+              }
+            }
+          ],
+          "version": "1.0"
+        }
+      },
+      "invocations": [
+        {
+          "arguments": [
+            "/Users/user/.jfrog/dependencies/analyzerManager/jas_scanner/jas_scanner",
+            "scan",
+            "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210780-681556384/Secrets_1726210839/config.yaml"
+          ],
+          "executionSuccessful": true,
+          "workingDirectory": {
+            "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+          }
+        }
+      ],
+      "results": [
+        {
+          "properties": {
+            "metadata": "",
+            "tokenValidation": ""
+          },
+          "ruleId": "REQ.SECRET.GENERIC.CODE",
+          "message": {
+            "text": "Hardcoded secrets were found",
+            "markdown": "🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "usr/src/app/server/index.js"
+                },
+                "region": {
+                  "startLine": 5,
+                  "startColumn": 7,
+                  "endLine": 5,
+                  "endColumn": 57,
+                  "snippet": {
+                    "text": "tok************"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "00436fac1d19ea36302f14e892926efb"
+          }
+        },
+        {
+          "properties": {
+            "metadata": "",
+            "tokenValidation": ""
+          },
+          "ruleId": "REQ.SECRET.KEYS",
+          "message": {
+            "text": "Secret keys were found",
+            "markdown": "🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: eyJ************"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "usr/src/app/server/index.js"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 14,
+                  "endLine": 6,
+                  "endColumn": 24,
+                  "snippet": {
+                    "text": "eyJ************"
+                  }
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "2550dbdb124696ae8fcc5cfd6f2b65b8"
+          }
+        },
+        {
+          "properties": {
+            "metadata": "",
+            "tokenValidation": ""
+          },
+          "ruleId": "REQ.SECRET.GENERIC.URL",
+          "message": {
+            "text": "Hardcoded secrets were found",
+            "markdown": "🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nFilepath: usr/src/app/server/scripts/__pycache__/fetch_github_repo.cpython-311.pyc\nEvidence: htt************"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "usr/src/app/server/scripts/__pycache__/fetch_github_repo.cpython-311.pyc"
+                },
+                "region": {
+                  "snippet": {
+                    "text": "htt************"
+                  }
+                }
+              }
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "9164423e88bbec9d1216bc5600eb7f9b"
+          }
+        }
+      ]
+    },
+    {
+      "tool": {
+        "driver": {
+          "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sca",
+          "name": "JFrog Xray Scanner",
+          "rules": [
+            {
+              "id": "CVE-2024-45490_debian:bookworm:libexpat1_2.5.0-1",
+              "shortDescription": {
+                "text": "[CVE-2024-45490] debian:bookworm:libexpat1 2.5.0-1"
+              },
+              "help": {
+                "text": "An issue was discovered in libexpat before 2.6.3. xmlparse.c does not reject a negative length for XML_ParseBuffer.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Not Applicable       | `sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "9.8"
+              }
+            },
+            {
+              "id": "CVE-2011-3374_debian:bookworm:apt_2.6.1",
+              "shortDescription": {
+                "text": "[CVE-2011-3374] debian:bookworm:apt 2.6.1"
+              },
+              "help": {
+                "text": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.7      | Not Applicable       | `sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "3.7"
+              }
+            },
+            {
+              "id": "CVE-2024-38428_debian:bookworm:wget_1.21.3-1+b1",
+              "shortDescription": {
+                "text": "[CVE-2024-38428] debian:bookworm:wget 1.21.3-1+b1"
+              },
+              "help": {
+                "text": "url.c in GNU Wget through 1.24.5 mishandles semicolons in the userinfo subcomponent of a URI, and thus there may be insecure behavior in which data that was supposed to be in the userinfo subcomponent is misinterpreted to be part of the host subcomponent.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.1      | Undetermined       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "9.1"
+              }
+            },
+            {
+              "id": "XRAY-264729_cors.js_0.0.1-security",
+              "shortDescription": {
+                "text": "[XRAY-264729] cors.js 0.0.1-security"
+              },
+              "help": {
+                "text": "Malicious package cors.js for Node.js",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 10.0      | Not Covered       | `sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "10.0"
+              }
+            },
+            {
+              "id": "CVE-2024-45492_debian:bookworm:libexpat1_2.5.0-1",
+              "shortDescription": {
+                "text": "[CVE-2024-45492] debian:bookworm:libexpat1 2.5.0-1"
+              },
+              "help": {
+                "text": "An issue was discovered in libexpat before 2.6.3. nextScaffoldPart in xmlparse.c can have an integer overflow for m_groupSize on 32-bit platforms (where UINT_MAX equals SIZE_MAX).",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 9.8      | Not Applicable       | `sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "9.8"
+              }
+            },
+            {
+              "id": "CVE-2023-51767_debian:bookworm:openssh-client:1_9.2p1-2+deb12u3",
+              "shortDescription": {
+                "text": "[CVE-2023-51767] debian:bookworm:openssh-client:1 9.2p1-2+deb12u3"
+              },
+              "help": {
+                "text": "OpenSSH through 9.6, when common types of DRAM are used, might allow row hammer attacks (for authentication bypass) because the integer value of authenticated in mm_answer_authpassword does not resist flips of a single bit. NOTE: this is applicable to a certain threat model of attacker-victim co-location in which the attacker has user privileges.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 7.0      | Applicable       | `sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "7.0"
+              }
+            },
+            {
+              "id": "CVE-2011-3374_debian:bookworm:libapt-pkg6.0_2.6.1",
+              "shortDescription": {
+                "text": "[CVE-2011-3374] debian:bookworm:libapt-pkg6.0 2.6.1"
+              },
+              "help": {
+                "text": "It was found that apt-key in apt, all versions, do not correctly validate gpg keys with the master keyring, leading to a potential man-in-the-middle attack.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 3.7      | Not Applicable       | `sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "3.7"
+              }
+            },
+            {
+              "id": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
+              "shortDescription": {
+                "text": "[CVE-2024-4741] debian:bookworm:openssl 3.0.13-1~deb12u1"
+              },
+              "help": {
+                "text": "CVE-2024-4741",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u1]   |"
+              },
+              "properties": {
+                "security-severity": "0.0"
+              }
+            },
+            {
+              "id": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+              "shortDescription": {
+                "text": "[CVE-2024-6119] debian:bookworm:libssl3 3.0.13-1~deb12u1"
+              },
+              "help": {
+                "text": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "0.0"
+              }
+            },
+            {
+              "id": "CVE-2024-6119_debian:bookworm:openssl_3.0.13-1~deb12u1",
+              "shortDescription": {
+                "text": "[CVE-2024-6119] debian:bookworm:openssl 3.0.13-1~deb12u1"
+              },
+              "help": {
+                "text": "Issue summary: Applications performing certificate name checks (e.g., TLS\nclients checking server certificates) may attempt to read an invalid memory\naddress resulting in abnormal termination of the application process.\n\nImpact summary: Abnormal termination of an application can a cause a denial of\nservice.\n\nApplications performing certificate name checks (e.g., TLS clients checking\nserver certificates) may attempt to read an invalid memory address when\ncomparing the expected name with an `otherName` subject alternative name of an\nX.509 certificate. This may result in an exception that terminates the\napplication program.\n\nNote that basic certificate chain validation (signatures, dates, ...) is not\naffected, the denial of service can occur only when the application also\nspecifies an expected DNS name, Email address or IP address.\n\nTLS servers rarely solicit client certificates, and even when they do, they\ngenerally don't perform a name check against a reference identifier (expected\nidentity), but rather extract the presented identity after checking the\ncertificate chain.  So TLS servers are generally not affected and the severity\nof the issue is Moderate.\n\nThe FIPS modules in 3.3, 3.2, 3.1 and 3.0 are not affected by this issue.",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | [3.0.14-1~deb12u2]   |"
+              },
+              "properties": {
+                "security-severity": "0.0"
+              }
+            },
+            {
+              "id": "CVE-2024-4741_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+              "shortDescription": {
+                "text": "[CVE-2024-4741] debian:bookworm:libssl3 3.0.13-1~deb12u1"
+              },
+              "help": {
+                "text": "CVE-2024-4741",
+                "markdown": "| Severity Score | Contextual Analysis | Direct Dependencies | Fixed Versions     |\n|  :---:  |  :---:  |  :---:  |  :---:  |\n| 0.0      | Applicable       | `sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar `       | No fix available   |"
+              },
+              "properties": {
+                "security-severity": "0.0"
+              }
+            }
+          ],
+          "version": "3.104.8"
+        }
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "workingDirectory": {
+            "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+          }
+        }
+      ],
+      "results": [
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-6119_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+          "ruleIndex": 8,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "5b5d2ba57a2eddf58f4579b7ebe42599"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "[3.0.14-1~deb12u2]"
+          },
+          "ruleId": "CVE-2024-6119_debian:bookworm:openssl_3.0.13-1~deb12u1",
+          "ruleIndex": 9,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-6119] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "bd5908946de9c082f96e15217590eebc"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Undetermined",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-38428_debian:bookworm:wget_1.21.3-1+b1",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-38428] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "db89861310f80a270a0a81f48d7dc974"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Not Covered",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "XRAY-264729_cors.js_0.0.1-security",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "[XRAY-264729] sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar ",
+            "markdown": "[XRAY-264729] sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "ab1c0a95b2970fb44e2a4046c5c00f37a5b061e74d72b254a8975beb7d09f74f",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "d653c414ef56560432b122358961104a"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Not Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-45490_debian:bookworm:libexpat1_2.5.0-1",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "[CVE-2024-45490] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
+            "markdown": "[CVE-2024-45490] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "61be5170151428187e85ff7b27fd65b4"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Not Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-45492_debian:bookworm:libexpat1_2.5.0-1",
+          "ruleIndex": 4,
+          "level": "error",
+          "message": {
+            "text": "[CVE-2024-45492] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
+            "markdown": "[CVE-2024-45492] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "e47bb0a94451ed5111fabcf0ccaaeee6"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2023-51767_debian:bookworm:openssh-client:1_9.2p1-2+deb12u3",
+          "ruleIndex": 5,
+          "level": "note",
+          "message": {
+            "text": "[CVE-2023-51767] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar ",
+            "markdown": "[CVE-2023-51767] sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "20f026ae0a91ba4668a54b46f39853dd4c114a84cfedb4144ff24521d3e6dcb1",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "fe7c1c90b3e7d340890027344468b42d"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Not Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2011-3374_debian:bookworm:apt_2.6.1",
+          "ruleIndex": 1,
+          "level": "note",
+          "message": {
+            "text": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar ",
+            "markdown": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "81f98a6fd77d17d7647c0ae81410b506"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Not Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2011-3374_debian:bookworm:libapt-pkg6.0_2.6.1",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar ",
+            "markdown": "[CVE-2011-3374] sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "cedb364ef937c7e51179d8e514bdd98644bac5fdc82a45d784ef91afe4bc647e",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "7933bf1c7b4635012e7571e82e619db6"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "[3.0.14-1~deb12u1]"
+          },
+          "ruleId": "CVE-2024-4741_debian:bookworm:openssl_3.0.13-1~deb12u1",
+          "ruleIndex": 7,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "a374e04992f42ee827634927edd7e8d4"
+          }
+        },
+        {
+          "properties": {
+            "applicability": "Applicable",
+            "fixedVersion": "No fix available"
+          },
+          "ruleId": "CVE-2024-4741_debian:bookworm:libssl3_3.0.13-1~deb12u1",
+          "ruleIndex": 10,
+          "level": "none",
+          "message": {
+            "text": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar ",
+            "markdown": "[CVE-2024-4741] sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar \nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595",
+                  "kind": "layer",
+                  "properties": {
+                    "algorithm": "sha256"
+                  }
+                }
+              ]
+            }
+          ],
+          "fingerprints": {
+            "jfrogFingerprintHash": "2c34553d9c75460bf14243ff13ba84c8"
+          }
+        }
+      ]
+    }
+  ]
+}

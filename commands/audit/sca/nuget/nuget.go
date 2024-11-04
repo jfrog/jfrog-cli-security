@@ -65,7 +65,8 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		err = errors.Join(err, fileutils.RemoveTempDir(tmpWd))
 	}()
 
-	err = biutils.CopyDir(wd, tmpWd, true, nil)
+	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition.
+	err = biutils.CopyDir(wd, tmpWd, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
