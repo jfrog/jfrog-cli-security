@@ -6,7 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	gitDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git"
-	"github.com/jfrog/jfrog-cli-security/commands/git"
+	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
 	"strings"
@@ -25,12 +25,12 @@ func getGitNameSpaceCommands() []components.Command {
 	}
 }
 
-func GetCountContributorsParams(c *components.Context) (*git.CountContributorsParams, error) {
-	params := git.CountContributorsParams{}
+func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {
+	params := contributors.CountContributorsParams{}
 	params.InputFile = c.GetStringFlagValue(flags.InputFile)
 	if params.InputFile == "" {
 		// Mandatory flags in case no input file was provided.
-		scmTypes := git.NewScmType()
+		scmTypes := contributors.NewScmType()
 		// ScmType
 		scmType := c.GetStringFlagValue(flags.ScmType)
 		if scmType == "" {
@@ -48,22 +48,22 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 			var envVarToken string
 			switch params.ScmType {
 			case vcsutils.BitbucketServer:
-				envVarToken = os.Getenv(git.BitbucketTokenEnvVar)
+				envVarToken = os.Getenv(contributors.BitbucketTokenEnvVar)
 			case vcsutils.GitLab:
-				envVarToken = os.Getenv(git.GitlabTokenEnvVar)
+				envVarToken = os.Getenv(contributors.GitlabTokenEnvVar)
 			case vcsutils.GitHub:
-				envVarToken = os.Getenv(git.GithubTokenEnvVar)
+				envVarToken = os.Getenv(contributors.GithubTokenEnvVar)
 			default:
 				return nil, errorutils.CheckErrorf("Unsupported SCM type: %s, Possible values are: %v", scmType, scmTypes.GetValidScmTypeString())
 			}
 			if envVarToken != "" {
 				params.Token = envVarToken
 			} else {
-				envVarToken = os.Getenv(git.GenericGitTokenEnvVar)
+				envVarToken = os.Getenv(contributors.GenericGitTokenEnvVar)
 				if envVarToken != "" {
 					params.Token = envVarToken
 				} else {
-					return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token environment variable %s, or corresponding provider environment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
+					return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token environment variable %s, or corresponding provider environment variable %s.", flags.Token, contributors.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
 				}
 			}
 		}
@@ -84,7 +84,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 	// Optional flags
 	// Months
 	if !c.IsFlagSet(flags.Months) {
-		params.MonthsNum = git.DefaultContContributorsMonths
+		params.MonthsNum = contributors.DefaultContContributorsMonths
 	} else {
 		months, err := c.GetIntFlagValue(flags.Months)
 		if err != nil {
@@ -118,7 +118,7 @@ func GitCountContributorsCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	gitContributionCommand, err := git.NewCountContributorsCommand(gitContrParams)
+	gitContributionCommand, err := contributors.NewCountContributorsCommand(gitContrParams)
 	if err != nil {
 		return err
 	}
