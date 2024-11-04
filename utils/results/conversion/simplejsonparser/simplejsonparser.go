@@ -43,10 +43,13 @@ func (sjc *CmdResultsSimpleJsonConverter) Get() (formats.SimpleJsonResults, erro
 	return *sjc.current, nil
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, generalError error) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
 	sjc.multipleRoots = multipleTargets
+	if generalError != nil {
+		sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{ErrorMessage: generalError.Error()})
+	}
 	return
 }
 
