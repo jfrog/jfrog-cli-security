@@ -184,13 +184,17 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	return manager.Record(content)
 }
 
-func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulnerabilities, hasViolationContext bool, requestedScans ...utils.SubScanType) (err error) {
+func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, includeVulnerabilities, hasViolationContext bool, requestedScans ...utils.SubScanType) (err error) {
 	// Verify if we should record the results
 	manager, err := getRecordManager()
 	if err != nil || manager == nil {
 		return
 	}
-	if !cmdResults.EntitledForJas || !commandsummary.StaticMarkdownConfig.IsExtendedSummary() {
+	extended, err := commandsummary.CheckExtendedSummaryEntitled(serverDetails.Url)
+	if err != nil {
+		return
+	}
+	if !cmdResults.EntitledForJas || !extended {
 		// If no JAS no GHAS
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
