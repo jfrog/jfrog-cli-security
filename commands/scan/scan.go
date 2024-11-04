@@ -210,7 +210,7 @@ func (scanCmd *ScanCommand) Run() (err error) {
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
 	hasViolationContext := scanCmd.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
+	if err = output.RecordSarifOutput(scanResults, scanCmd.serverDetails, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
