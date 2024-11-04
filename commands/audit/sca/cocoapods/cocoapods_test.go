@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,22 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndLine, 5)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndColumn, 30)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "GoogleSignIn', '~> 6.2.4'")
+}
+
+func TestPodLineParse(t *testing.T) {
+	var podPositions []*sarif.Location
+	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.4'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.4'"}, false, &podPositions)
+	assert.Equal(t, foundDependency, false)
+	assert.Equal(t, startLine, 0)
+	assert.Equal(t, startCol, 5)
+}
+
+func TestPodLineParseFoundOnlyDependencyName(t *testing.T) {
+	var podPositions []*sarif.Location
+	foundDependency, _, startLine, startCol := parsePodLine("pod 'GoogleSignIn', '~> 6.2.3'", "GoogleSignIn", "6.2.4", "test", 0, 0, 0, 0, 0, 0, []string{"pod 'GoogleSignIn', '~> 6.2.3'"}, false, &podPositions)
+	assert.Equal(t, foundDependency, true)
+	assert.Equal(t, startLine, 0)
+	assert.Equal(t, startCol, 5)
 }
 
 func TestFixTechDependencySingleLocation(t *testing.T) {
