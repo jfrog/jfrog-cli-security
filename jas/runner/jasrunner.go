@@ -82,7 +82,6 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 	}
 	if len(params.ScansToPreform) > 0 && !slices.Contains(params.ScansToPreform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
-		// TODO fix bug where scan is not needed but we forgot to return
 		return
 	}
 	if params.ConfigProfile != nil {
