@@ -1,26 +1,30 @@
 package cli
 
 import (
+	"os"
+	"strings"
+
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
-	gitContributorsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/contributors"
 	gitAuditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/audit"
+	gitContributorsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/contributors"
+	"github.com/jfrog/jfrog-cli-security/commands/git/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"os"
-	"strings"
 )
 
 func getGitNameSpaceCommands() []components.Command {
 	return []components.Command{
 		{
-			Name: 	  "audit",
-			Aliases: []string{"a"},
+			Name:        "audit",
+			Aliases:     []string{"a"},
 			Description: gitAuditDocs.GetDescription(),
-			Flags: flags.GetCommandFlags(flags.Audit),
+			Flags:       flags.GetCommandFlags(flags.GitAudit),
+			Action:      GitAuditCmd,
 		},
+		// TODO: Move cc cmd to Frogbot/Script
 		{
 			Name:        "count-contributors",
 			Aliases:     []string{"cc"},
@@ -30,6 +34,16 @@ func getGitNameSpaceCommands() []components.Command {
 			Action:      GitCountContributorsCmd,
 		},
 	}
+}
+
+func GitAuditCmd(c *components.Context) error {
+	auditCmd, err := CreateAuditCmd(c)
+	if err != nil {
+		return err
+	}
+	gitAuditCmd := audit.NewGitAuditCommand(auditCmd)
+
+	return progressbar.ExecWithProgress(gitAuditCmd)
 }
 
 func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {

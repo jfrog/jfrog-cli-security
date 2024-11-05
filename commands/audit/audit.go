@@ -49,6 +49,10 @@ func NewGenericAuditCommand() *AuditCommand {
 	return &AuditCommand{AuditParams: *NewAuditParams()}
 }
 
+func (auditCmd *AuditCommand) CommandName() string {
+	return "generic_audit"
+}
+
 func (auditCmd *AuditCommand) SetWatches(watches []string) *AuditCommand {
 	auditCmd.watches = watches
 	return auditCmd
@@ -108,17 +112,15 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-	isRecursiveScan := len(auditCmd.workingDirs) == 0
-	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
-	if err != nil {
-		return
-	}
+	return auditCmd.ProcessResultsAndOutput(RunAudit(auditCmd.CreateAuditParams()))
+}
 
+func (auditCmd *AuditCommand) CreateAuditParams() *AuditParams {
 	// Should be called before creating the audit params, so the params will contain XSC information.
 	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	auditParams := NewAuditParams().
-		SetWorkingDirs(workingDirs).
+
+	return NewAuditParams().
+		SetWorkingDirs(auditCmd.workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
@@ -126,9 +128,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir)
-	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
+}
 
-	auditResults := RunAudit(auditParams)
+func (auditCmd *AuditCommand) ProcessResultsAndOutput(auditResults *results.SecurityCommandResults) (err error) {
+	// Update the general event with the final results.
 	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 
 	if auditCmd.Progress() != nil {
@@ -136,26 +139,15 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	var messages []string
-	if !auditResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
-	}
-	if err = output.NewResultsWriter(auditResults).
-		SetHasViolationContext(auditCmd.HasViolationContext()).
-		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
-		SetIncludeLicenses(auditCmd.IncludeLicenses).
-		SetOutputFormat(auditCmd.OutputFormat()).
-		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
-		SetExtraMessages(messages).
-		SetSubScansPreformed(auditCmd.ScansToPerform()).
-		PrintScanResults(); err != nil {
+
+	if err = auditCmd.getResultWriter(auditResults).PrintScanResults(); err != nil {
+		// Error printing the results, return the error and the scan results errors.
 		return errors.Join(err, auditResults.GetErrors())
 	}
-
 	if err = auditResults.GetErrors(); err != nil {
+		// Return the scan results errors.
 		return
 	}
-
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
 	if auditCmd.Fail && !auditCmd.IncludeVulnerabilities && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
 		err = results.NewFailBuildError()
@@ -163,8 +155,19 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	return
 }
 
-func (auditCmd *AuditCommand) CommandName() string {
-	return "generic_audit"
+func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
+	var messages []string
+	if !cmdResults.EntitledForJas {
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+	}
+	return output.NewResultsWriter(cmdResults).
+		SetHasViolationContext(auditCmd.HasViolationContext()).
+		SetIncludeVulnerabilities(auditCmd.IncludeVulnerabilities).
+		SetIncludeLicenses(auditCmd.IncludeLicenses).
+		SetOutputFormat(auditCmd.OutputFormat()).
+		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
+		SetExtraMessages(messages).
+		SetSubScansPreformed(auditCmd.ScansToPerform())
 }
 
 func (auditCmd *AuditCommand) HasViolationContext() bool {

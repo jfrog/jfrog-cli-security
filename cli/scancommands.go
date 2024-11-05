@@ -3,6 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -22,8 +25,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
-	"os"
-	"strings"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -373,6 +374,17 @@ func AuditCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	err = progressbar.ExecWithProgress(auditCmd)
+	// Reporting error if Xsc service is enabled
+	reportErrorIfExists(err, auditCmd)
+	return err
+}
+
+func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+	auditCmd, err := CreateGenericAuditCmd(c)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check if user used specific technologies flags
 	allTechnologies := techutils.GetAllTechnologiesList()
@@ -393,12 +405,12 @@ func AuditCmd(c *components.Context) error {
 
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+		return nil, pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
 	}
 
 	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
 		// No secrets flag but secret validation is provided, error
-		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
+		return nil, pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
 	allSubScans := utils.GetAllSupportedScans()
@@ -414,13 +426,19 @@ func AuditCmd(c *components.Context) error {
 
 	threads, err := pluginsCommon.GetThreadsCount(c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	auditCmd.SetThreads(threads)
-	err = progressbar.ExecWithProgress(auditCmd)
-	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+
+	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+	isRecursiveScan := len(auditCmd.WorkingDirs()) == 0
+	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.WorkingDirs())
+	if err != nil {
+		return nil, err
+	}
+	auditCmd.SetWorkingDirs(workingDirs).SetIsRecursiveScan(isRecursiveScan)
+
+	return auditCmd, nil
 }
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
@@ -443,7 +461,7 @@ func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
 	}
 }
 
-func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func CreateGenericAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
@@ -513,7 +531,7 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 
 func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := CreateAuditCmd(c)
+	auditCmd, err := CreateGenericAuditCmd(c)
 	if err != nil {
 		return err
 	}

@@ -21,6 +21,7 @@ const (
 	DockerScan           = "docker scan"
 	Audit                = "audit"
 	CurationAudit        = "curation-audit"
+	GitAudit             = "git-audit"
 	GitCountContributors = "count-contributors"
 	Enrich               = "sbom-enrich"
 
@@ -135,6 +136,15 @@ const (
 	DetailedSummary = "detailed-summary"
 )
 
+func getAuditFlags() []string {
+	return []string{
+		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
+		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
+		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults,
+	}
+}
+
 // Mapping between security commands (key) and their flags (key).
 var commandFlags = map[string][]string{
 	XrCurl:        {ServerId},
@@ -152,12 +162,8 @@ var commandFlags = map[string][]string{
 	DockerScan: {
 		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
-	Audit: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
-		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
-		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults,
-	},
+	Audit:    getAuditFlags(),
+	GitAudit: getAuditFlags(),
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
