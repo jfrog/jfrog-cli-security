@@ -242,7 +242,6 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	}
 	auditParallelRunner.JasWg.Add(1)
 	if _, jasErr := auditParallelRunner.Runner.AddTaskWithError(createJasScansTasks(auditParallelRunner, scanResults, serverDetails, auditParams, jasScanner, jfrogAppsConfig), func(taskErr error) {
-		// TODO this change was for capturing a missed error that is coming from the threads
 		scanResults.AddGeneralError(fmt.Errorf("failed while adding JAS scan tasks: %s", taskErr.Error()), auditParams.AllowPartialResults())
 	}); jasErr != nil {
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
@@ -285,7 +284,6 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				AllowPartialResults:         auditParams.AllowPartialResults(),
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
-				// TODO this fix was in order to avoid capturing the error twice when using partial-results. if this is disables the error is collected twice - once from the target error and once from general error
 				_ = targetResult.AddTargetError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
 				// We assign nil to 'generalError' after handling it to prevent it to propagate further, so it will not be captured twice - once here, and once in the error handling function of createJasScansTasks
 				generalError = nil
