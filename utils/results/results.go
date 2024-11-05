@@ -111,7 +111,7 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 
 // --- Aggregated results for all targets ---
 // Adds a general error to the command results in different phases of its execution.
-// Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurrs.
+// Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
 func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError bool) *SecurityCommandResults {
 	if allowSkippingError && err != nil {
 		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
