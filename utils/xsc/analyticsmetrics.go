@@ -92,7 +92,7 @@ func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.Produ
 	osAndArc, err := coreutils.GetOSAndArc()
 	curOs, curArch := "", ""
 	if err != nil {
-		log.Debug(fmt.Errorf("failed to get os and arcitucture for general event request to XSC service, error: %s ", err.Error()))
+		log.Debug(fmt.Errorf("failed to get os and architecture for general event request to XSC service, error: %s ", err.Error()))
 	} else {
 		splitOsAndArch := strings.Split(osAndArc, "-")
 		curOs = splitOsAndArch[0]
