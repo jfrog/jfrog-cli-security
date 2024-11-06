@@ -47,13 +47,14 @@ var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.Strin
 type CodeLanguage string
 
 const (
-	JavaScript    CodeLanguage = "javascript"
-	Python        CodeLanguage = "python"
-	GoLang        CodeLanguage = "go"
-	Java          CodeLanguage = "java"
-	CSharp        CodeLanguage = "C#"
-	CPP           CodeLanguage = "C++"
-	CocoapodsLang CodeLanguage = "any"
+	JavaScript CodeLanguage = "javascript"
+	Python     CodeLanguage = "python"
+	GoLang     CodeLanguage = "go"
+	Java       CodeLanguage = "java"
+	CSharp     CodeLanguage = "C#"
+	CPP        CodeLanguage = "C++"
+	// CocoapodsLang package can have multiple languages
+	CocoapodsLang CodeLanguage = "Any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
