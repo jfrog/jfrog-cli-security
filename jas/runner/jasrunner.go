@@ -120,7 +120,7 @@ func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner 
 	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
 		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), allowSkippingErrors)
 	}); addTaskErr != nil {
-		generalError = scanResults.AddTargetError(fmt.Errorf("error occurred while adding '%s' scan to parallel runner: %s", scanType, generalError.Error()), allowSkippingErrors)
+		generalError = scanResults.AddTargetError(fmt.Errorf("error occurred while adding '%s' scan to parallel runner: %s", scanType, addTaskErr.Error()), allowSkippingErrors)
 	}
 	return
 }
