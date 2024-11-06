@@ -11,10 +11,13 @@ runs:
         go-version: 1.22.x
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
-    - name: Install cocoapods
-      uses: maxim-lobanov/setup-cocoapods@v1
+    - name: install ruby
+      uses: ruby/setup-ruby@v1
       with:
-        version: "1.5.2"
+        ruby-version: 3.0.0
+    - name: Install cocoapods
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+      run: sudo gem install cocoapods sudo gem install -n /usr/local/bin cocoapods
 
     - name: Install npm
       uses: actions/setup-node@v4
