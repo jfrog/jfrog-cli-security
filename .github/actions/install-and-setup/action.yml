@@ -11,6 +11,7 @@ runs:
         go-version: 1.22.x
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
+
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
