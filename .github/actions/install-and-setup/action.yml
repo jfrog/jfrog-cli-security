@@ -17,7 +17,9 @@ runs:
         ruby-version: 3.0.0
     - name: Install cocoapods
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
-      run: sudo gem install cocoapods sudo gem install -n /usr/local/bin cocoapods
+      run: |
+        sudo gem install cocoapods  
+        sudo gem install -n /usr/local/bin cocoapods
 
     - name: Install npm
       uses: actions/setup-node@v4
