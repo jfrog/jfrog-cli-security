@@ -11,6 +11,10 @@ runs:
         go-version: 1.22.x
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
+    - name: Install cocoapods
+      uses: maxim-lobanov/setup-cocoapods@v1
+      with:
+        version: "1.5.2"
 
     - name: Install npm
       uses: actions/setup-node@v4
