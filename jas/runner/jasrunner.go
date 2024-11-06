@@ -27,8 +27,9 @@ type JasRunnerParams struct {
 	ServerDetails *config.ServerDetails
 	Scanner       *jas.JasScanner
 
-	Module        jfrogappsconfig.Module
-	ConfigProfile *services.ConfigProfile
+	Module              jfrogappsconfig.Module
+	ConfigProfile       *services.ConfigProfile
+	AllowPartialResults bool
 
 	ScansToPreform []utils.SubScanType
 
@@ -101,7 +102,7 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 			return
 		}
 		if enabled {
-			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults)
+			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 		} else {
 			log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, params.ConfigProfile.ProfileName))
 		}
@@ -111,15 +112,15 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", subScan))
 		return
 	}
-	return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults)
+	return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 }
 
-func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults) (generalError error) {
+func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
 	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
-		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), false)
+		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), allowSkippingErrors)
 	}); addTaskErr != nil {
-		generalError = fmt.Errorf("failed to create %s scan task: %s", scanType, addTaskErr.Error())
+		generalError = scanResults.AddTargetError(fmt.Errorf("error occurred while adding '%s' scan to parallel runner: %s", scanType, generalError.Error()), allowSkippingErrors)
 	}
 	return
 }

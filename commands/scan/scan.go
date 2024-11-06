@@ -252,7 +252,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	}
 
 	if err = recordResFunc(cmdResults); err != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("failed to record results: %s", err.Error()))
+		cmdResults.AddGeneralError(fmt.Errorf("failed to record results: %s", err.Error()), false)
 	}
 	if err = cmdResults.GetErrors(); err != nil {
 		return
@@ -283,7 +283,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	}
 	// Initialize the Xray Indexer
 	if indexerPath, indexerTempDir, cleanUp, err := initIndexer(xrayManager, cmdResults.XrayVersion); err != nil {
-		return cmdResults.AddGeneralError(err)
+		return cmdResults.AddGeneralError(err, false)
 	} else {
 		scanCmd.indexerPath = indexerPath
 		scanCmd.indexerTempDir = indexerTempDir
@@ -295,7 +295,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	}
 	// Wait for the Download of the AnalyzerManager to complete.
 	if err := errGroup.Wait(); err != nil {
-		cmdResults.AddGeneralError(errors.New("failed while trying to get Analyzer Manager: " + err.Error()))
+		cmdResults.AddGeneralError(errors.New("failed while trying to get Analyzer Manager: "+err.Error()), false)
 	}
 	fileProducerConsumer := parallel.NewRunner(threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(threads, 20000, false)
@@ -313,22 +313,22 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 	cmdResults = results.NewCommandResults(cmdType)
 	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
 	if err != nil {
-		return xrayManager, cmdResults.AddGeneralError(err)
+		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetXrayVersion(xrayVersion)
 	}
 	// Validate Xray minimum version for graph scan command
-	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
-		return xrayManager, cmdResults.AddGeneralError(err)
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
 	if bypassArchiveLimits {
 		// Validate Xray minimum version for BypassArchiveLimits flag for indexer
-		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
-			return xrayManager, cmdResults.AddGeneralError(err)
+		if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
+			return xrayManager, cmdResults.AddGeneralError(err, false)
 		}
 	}
 	if entitledForJas, err := isEntitledForJas(xrayManager, xrayVersion, useJas); err != nil {
-		return xrayManager, cmdResults.AddGeneralError(err)
+		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
@@ -386,7 +386,7 @@ func (scanCmd *ScanCommand) prepareScanTasks(fileProducer, indexedFileProducer p
 			taskHandler := getAddTaskToProducerFunc(fileProducer, artifactHandlerFunc)
 			if generalError := collectFilesForIndexing(specFiles[i], taskHandler); generalError != nil {
 				log.Error(generalError)
-				cmdResults.AddGeneralError(generalError)
+				cmdResults.AddGeneralError(generalError, false)
 			}
 		}
 	}()
