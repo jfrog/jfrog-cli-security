@@ -245,22 +245,17 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 	}
 }
 
-func createTempDirAndChangeWD(t *testing.T) (string, func()) {
+func TestAddNoTechIfNeeded(t *testing.T) {
 	tmpDir, err := fileutils.CreateTempDir()
 	assert.NoError(t, err, "Couldn't create temp dir")
-	fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder"))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder")))
 
 	prevWd, err := os.Getwd()
 	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
-	return tmpDir, func() {
+	defer func() {
 		clientTests.ChangeDirAndAssert(t, prevWd)
 		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't remove temp dir")
-	}
-}
-
-func TestAddNoTechIfNeeded(t *testing.T) {
-	tmpDir, cleanUp := createTempDirAndChangeWD(t)
-	defer cleanUp()
+	}()
 
 	tests := []struct {
 		name                 string
