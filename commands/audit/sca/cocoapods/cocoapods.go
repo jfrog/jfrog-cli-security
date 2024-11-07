@@ -65,7 +65,7 @@ func parsePodLine(line, directDependencyName, directDependencyVersion, descripto
 		foundDependency = false
 	} else if foundDependency && strings.Contains(line, directDependencyVersion) {
 		endLine := i
-		endCol := len(line)
+		endCol := strings.Index(line, directDependencyVersion) + len(directDependencyVersion) + 1
 		var snippet string
 		// if the tech dependency is a one-liner
 		if endLine == startLine {
@@ -244,13 +244,13 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, podExecutablePath, err := getPodVersionAndExecPath()
+	_, _, err = getPodVersionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		return
 	}
 	// Calculate pod dependencies
-	data, err := GetDependenciesData(podExecutablePath, currentDir)
+	data, err := GetDependenciesData("pod", currentDir)
 	if err != nil {
 		return nil, nil, err
 	}
