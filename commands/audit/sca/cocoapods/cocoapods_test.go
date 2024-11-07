@@ -99,8 +99,7 @@ func TestFixTechDependencySingleLocation(t *testing.T) {
 	assert.NoError(t, err)
 	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
 	assert.NoError(t, err)
-	lines := strings.Split(string(file), "\n")
-	assert.Contains(t, lines, "pod 'GoogleSignIn', '~> 6.2.5'")
+	assert.Contains(t, string(file), "pod 'GoogleSignIn', '~> 6.2.5'")
 }
 
 func TestFixTechDependencyMultipleLocations(t *testing.T) {
@@ -125,6 +124,5 @@ func TestFixTechDependencyNoLocations(t *testing.T) {
 	assert.NoError(t, err)
 	file, err := os.ReadFile(filepath.Join(currentDir, "Podfile"))
 	assert.NoError(t, err)
-	lines := strings.Split(string(file), "\n")
-	assert.Contains(t, lines, "pod 'GoogleSignIn', '~> 6.2.4'")
+	assert.Contains(t, string(file), "pod 'GoogleSignIn', '~> 6.2.4'")
 }
