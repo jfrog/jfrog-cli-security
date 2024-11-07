@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBuildGoDependencyList(t *testing.T) {
+func TestBuildCocoapodsDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
@@ -50,7 +50,7 @@ func TestBuildGoDependencyList(t *testing.T) {
 	assert.NotEmpty(t, rootNode)
 
 	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetPackageTypeId()+packageInfo)
-	assert.Len(t, rootNode[0].Nodes, 4)
+	assert.Len(t, rootNode[0].Nodes, 5)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "GTMSessionFetcher:2.3.0")
 	assert.Len(t, child1.Nodes, 0)
