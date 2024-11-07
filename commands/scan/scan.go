@@ -335,9 +335,16 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, xrayVersion, validateSecrets))
 		}
 	}
+	// XSC info
+	if _, xscVersion, err := xsc.CreateXscServiceManagerAndGetVersion(serverDetails); err != nil {
+		log.Debug(fmt.Sprintf("Failed to get XSC version. %s", err.Error()))
+	} else {
+		cmdResults.SetXscVersion(xscVersion)
+	}
 	if analyticsMetricsService != nil {
 		cmdResults.SetMultiScanId(analyticsMetricsService.GetMsi())
 	}
+
 	return
 }
 
@@ -431,8 +438,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					IncludeVulnerabilities: scanCmd.includeVulnerabilities,
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
+					MultiScanId:            cmdResults.MultiScanId,
+					XscVersion:             cmdResults.XscVersion,
 				}
-				params.MultiScanId, params.XscVersion = xsc.GetXscMsiAndVersion(scanCmd.analyticsMetricsService)
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}

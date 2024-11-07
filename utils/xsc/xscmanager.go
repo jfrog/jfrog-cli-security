@@ -1,12 +1,9 @@
 package xsc
 
 import (
-	"fmt"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc"
 )
 
@@ -32,19 +29,14 @@ func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServ
 	return xsc.New(serviceConfig)
 }
 
-func GetXscMsiAndVersion(analyticsMetricsService *AnalyticsMetricsService) (multiScanId, xscVersion string) {
-	var err error
-	if analyticsMetricsService != nil {
-		multiScanId = analyticsMetricsService.GetMsi()
+func CreateXscServiceManagerAndGetVersion(serviceDetails *config.ServerDetails) (*xsc.XscServicesManager, string, error) {
+	xscManager, err := CreateXscServiceManager(serviceDetails)
+	if err != nil {
+		return nil, "", err
 	}
-	if multiScanId != "" {
-		xscManager := analyticsMetricsService.XscManager()
-		if xscManager != nil {
-			xscVersion, err = xscManager.GetVersion()
-			if err != nil {
-				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-			}
-		}
+	xscVersion, err := xscManager.GetVersion()
+	if err != nil {
+		return nil, "", err
 	}
-	return
+	return xscManager, xscVersion, nil
 }

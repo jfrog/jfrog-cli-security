@@ -24,6 +24,7 @@ type SecurityCommandResults struct {
 	CmdType          utils.CommandType `json:"command_type"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
+	XscVersion  string `json:"xsc_version,omitempty"`
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
@@ -91,6 +92,11 @@ func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
 
 func (r *SecurityCommandResults) SetXrayVersion(xrayVersion string) *SecurityCommandResults {
 	r.XrayVersion = xrayVersion
+	return r
+}
+
+func (r *SecurityCommandResults) SetXscVersion(xscVersion string) *SecurityCommandResults {
+	r.XscVersion = xscVersion
 	return r
 }
 

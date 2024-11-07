@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -21,7 +22,8 @@ type AnalyticsMetricsService struct {
 	xscManager *xsc.XscServicesManager
 	// Should the CLI reports analytics metrics to XSC.
 	shouldReportEvents bool
-	msi                string
+	multiScanId        string
+	xscVersion         string
 	startTime          time.Time
 	// In the case of multiple scanning, aggregate all audit results into one finalize event.
 	finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize
@@ -46,11 +48,12 @@ func (ams *AnalyticsMetricsService) calcShouldReportEvents() bool {
 		return false
 	}
 	// Verify xsc version.
-	xscVersion, err := ams.xscManager.GetVersion()
+	var err error
+	ams.xscVersion, err = ams.xscManager.GetVersion()
 	if err != nil {
 		return false
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, xscservices.AnalyticsMetricsMinXscVersion); err != nil {
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xsc, ams.xscVersion, xscservices.AnalyticsMetricsMinXscVersion); err != nil {
 		return false
 	}
 	return true
@@ -61,11 +64,15 @@ func (ams *AnalyticsMetricsService) XscManager() *xsc.XscServicesManager {
 }
 
 func (ams *AnalyticsMetricsService) SetMsi(msi string) {
-	ams.msi = msi
+	ams.multiScanId = msi
 }
 
 func (ams *AnalyticsMetricsService) GetMsi() string {
-	return ams.msi
+	return ams.multiScanId
+}
+
+func (ams *AnalyticsMetricsService) GetXscVersion() string {
+	return ams.xscVersion
 }
 
 func (ams *AnalyticsMetricsService) SetStartTime() {
@@ -86,6 +93,15 @@ func (ams *AnalyticsMetricsService) FinalizeEvent() *xscservices.XscAnalyticsGen
 
 func (ams *AnalyticsMetricsService) SetFinalizeEvent(finalizeEvent *xscservices.XscAnalyticsGeneralEventFinalize) {
 	ams.finalizeEvent = finalizeEvent
+}
+
+func (ams *AnalyticsMetricsService) CreateGeneralEventWithGitContext(product xscservices.ProductName, eventType xscservices.EventType, gitInfoContext *services.XscGitInfoContext) *xscservices.XscAnalyticsGeneralEvent {
+	generalEvent := ams.CreateGeneralEvent(product, eventType)
+	if gitInfoContext != nil {
+		generalEvent.GitInfo = gitInfoContext
+		generalEvent.IsGitInfoFlow = true
+	}
+	return generalEvent
 }
 
 func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.ProductName, eventType xscservices.EventType) *xscservices.XscAnalyticsGeneralEvent {
@@ -113,20 +129,21 @@ func (ams *AnalyticsMetricsService) CreateGeneralEvent(product xscservices.Produ
 	return &event
 }
 
-func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyticsGeneralEvent) {
+func (ams *AnalyticsMetricsService) AddGeneralEvent(event *xscservices.XscAnalyticsGeneralEvent) string {
 	if !ams.ShouldReportEvents() {
 		log.Debug("Analytics metrics are disabled, skipping sending event request to XSC")
-		return
+		return ""
 	}
 	msi, err := ams.xscManager.AddAnalyticsGeneralEvent(*event)
 	if err != nil {
 		log.Debug(fmt.Errorf("failed sending general event request to XSC service, error: %s ", err.Error()))
-		return
+		return ""
 	}
 	log.Debug(fmt.Sprintf("New General event added successfully. multi_scan_id %s", msi))
 	// Set event's analytics data.
 	ams.SetMsi(msi)
 	ams.SetStartTime()
+	return msi
 }
 
 func (ams *AnalyticsMetricsService) UpdateGeneralEvent(event *xscservices.XscAnalyticsGeneralEventFinalize) {
@@ -134,7 +151,7 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(event *xscservices.XscAna
 		log.Debug("Analytics metrics are disabled, skipping sending update event request to XSC")
 		return
 	}
-	if ams.msi == "" {
+	if ams.multiScanId == "" {
 		log.Debug("MultiScanId is empty, skipping update general event.")
 		return
 	}
@@ -181,7 +198,7 @@ func (ams *AnalyticsMetricsService) CreateXscAnalyticsGeneralEventFinalizeFromAu
 		TotalScanDuration: totalDuration.String(),
 	}
 	return &xscservices.XscAnalyticsGeneralEventFinalize{
-		MultiScanId:                   ams.msi,
+		MultiScanId:                   auditResults.MultiScanId,
 		XscAnalyticsBasicGeneralEvent: basicEvent,
 	}
 }

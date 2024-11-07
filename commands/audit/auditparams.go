@@ -17,6 +17,8 @@ type AuditParams struct {
 	minSeverityFilter     severityutils.Severity
 	*xrayutils.AuditBasicParams
 	xrayVersion string
+	xscVersion  string
+	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
@@ -54,6 +56,11 @@ func (params *AuditParams) SetWorkingDirs(workingDirs []string) *AuditParams {
 
 func (params *AuditParams) SetInstallFunc(installFunc func(tech string) error) *AuditParams {
 	params.installFunc = installFunc
+	return params
+}
+
+func (params *AuditParams) SetMsi(msi string) *AuditParams {
+	params.multiScanId = msi
 	return params
 }
 
@@ -113,7 +120,7 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		ProjectKey:             params.commonGraphScanParams.ProjectKey,
 		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
 		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
-		XscVersion:             params.commonGraphScanParams.XscVersion,
-		MultiScanId:            params.commonGraphScanParams.MultiScanId,
+		XscVersion:             params.xscVersion,
+		MultiScanId:            params.multiScanId,
 	}
 }
