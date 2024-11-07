@@ -151,13 +151,13 @@ func (ams *AnalyticsMetricsService) UpdateGeneralEvent(event *xscservices.XscAna
 		log.Debug("Analytics metrics are disabled, skipping sending update event request to XSC")
 		return
 	}
-	if ams.multiScanId == "" {
+	if event.MultiScanId == "" {
 		log.Debug("MultiScanId is empty, skipping update general event.")
 		return
 	}
 	err := ams.xscManager.UpdateAnalyticsGeneralEvent(*event)
 	if err != nil {
-		log.Debug(fmt.Sprintf("failed updading general event request in XSC service for multi_scan_id %s, error: %s \"", ams.GetMsi(), err.Error()))
+		log.Debug(fmt.Sprintf("failed updating general event request in XSC service for multi_scan_id %s, error: %s \"", event.MultiScanId, err.Error()))
 	} else {
 		log.Debug(fmt.Sprintf("General event updated\n%v", *event))
 	}
