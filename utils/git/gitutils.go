@@ -10,16 +10,26 @@ import (
 )
 
 const (
-	Github         GitProvider = "github"
-	Gitlab         GitProvider = "gitlab"
-	Bitbucket      GitProvider = "bitbucket"
-	Azure 		   GitProvider = "azure"
-	Other          GitProvider = ""
+	Github    GitProvider = "github"
+	Gitlab    GitProvider = "gitlab"
+	Bitbucket GitProvider = "bitbucket"
+	Azure     GitProvider = "azure"
+	Unknown   GitProvider = ""
 )
+
 type GitProvider string
 
 func (gp GitProvider) String() string {
 	return string(gp)
+}
+
+func DetectGitInfo() (gitManager *GitManager, gitInfo *services.XscGitInfoContext, err error) {
+	gitManager, err = NewGitManager(".")
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to found local git repository at the current directory: %v", err)
+	}
+	gitInfo, err = GetGitContext(gitManager)
+	return
 }
 
 func NormalizeGitUrl(url string) string {
@@ -34,22 +44,22 @@ func GetGitContext(manager *GitManager) (gitInfo *services.XscGitInfoContext, er
 	if err != nil {
 		return nil, err
 	}
-    currentBranch, err := manager.localGitRepository.Head()
-    if err != nil {
-        return nil, err
-    }
-    lastCommit, err := manager.localGitRepository.CommitObject(currentBranch.Hash())
-    if err != nil {
-        return nil, err
-    }
+	currentBranch, err := manager.localGitRepository.Head()
+	if err != nil {
+		return nil, err
+	}
+	lastCommit, err := manager.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return nil, err
+	}
 	// Create the gitInfo object
 	gitInfo = &services.XscGitInfoContext{
-		GitRepoUrl: remoteUrl,
+		GitRepoUrl:  remoteUrl,
 		GitRepoName: getGitRepoName(remoteUrl),
-		GitProject: getGitProject(remoteUrl),
+		GitProject:  getGitProject(remoteUrl),
 		GitProvider: getGitProvider(remoteUrl).String(),
-		BranchName: currentBranch.Name().Short(),
-		LastCommit:   lastCommit.Hash.String(),
+		BranchName:  currentBranch.Name().Short(),
+		LastCommit:  lastCommit.Hash.String(),
 	}
 	isLocalRepoClean, err := manager.IsClean()
 	if err != nil {
@@ -97,10 +107,11 @@ func getGitProvider(url string) GitProvider {
 	if strings.Contains(url, "bitbucket") {
 		return Bitbucket
 	}
-	if strings.Contains(url, "dev.azure.com") {
+	if strings.Contains(url, "azure") {
 		return Azure
 	}
 
 	log.Warn(fmt.Sprintf("Unknown git provider for URL: %s", url))
-	return Other
+	// TODO: make sure UI can handle this case
+	return Unknown
 }
