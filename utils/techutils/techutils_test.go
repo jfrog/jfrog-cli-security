@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
 )
@@ -240,6 +241,55 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 					assert.ElementsMatch(t, innerValue, detectedTech[key][innerKey], "expected: %s, actual: %s", innerValue, detectedTech[key][innerKey])
 				}
 			}
+		})
+	}
+}
+
+func createTempDirAndChangeWD(t *testing.T) (string, func()) {
+	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder"))
+
+	prevWd, err := os.Getwd()
+	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
+	return tmpDir, func() {
+		clientTests.ChangeDirAndAssert(t, prevWd)
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't remove temp dir")
+	}
+}
+
+func TestAddNoTechIfNeeded(t *testing.T) {
+	tmpDir, cleanUp := createTempDirAndChangeWD(t)
+	defer cleanUp()
+
+	tests := []struct {
+		name                 string
+		path                 string
+		excludePathPattern   string
+		technologiesDetected map[Technology]map[string][]string
+		expected             map[Technology]map[string][]string
+	}{
+		{
+			name:                 "No tech detected with exclude pattern",
+			path:                 tmpDir,
+			excludePathPattern:   "(^.*folder.*$)",
+			technologiesDetected: map[Technology]map[string][]string{},
+			expected:             map[Technology]map[string][]string{NoTech: {}},
+		},
+		{
+			name:                 "No tech detected",
+			path:                 tmpDir,
+			excludePathPattern:   "",
+			technologiesDetected: map[Technology]map[string][]string{},
+			expected:             map[Technology]map[string][]string{NoTech: {filepath.Join(tmpDir, "folder"): {}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := addNoTechIfNeeded(test.technologiesDetected, test.path, test.excludePathPattern)
+			assert.NoError(t, err)
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }
