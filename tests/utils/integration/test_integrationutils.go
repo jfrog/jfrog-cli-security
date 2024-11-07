@@ -1,4 +1,4 @@
-package utils
+package integration
 
 import (
 	"errors"
@@ -10,7 +10,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -31,6 +34,136 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
+func getSkipTestMsg(testName, testFlag string) string {
+	return fmt.Sprintf("Skipping %s tests. To run them, add the '%s=true' option or don't supply any options.", testName, testFlag)
+}
+
+func InitUnitTest(t *testing.T) {
+	if !*configTests.TestUnit {
+		t.Skip(getSkipTestMsg("Unit", "--test.unit"))
+	}
+}
+
+func InitArtifactoryTest(t *testing.T) {
+	if !*configTests.TestArtifactory {
+		t.Skip(getSkipTestMsg("Artifactory integration", "--test.artifactory"))
+	}
+}
+
+func InitXrayTest(t *testing.T, minVersion string) {
+	if !*configTests.TestXray {
+		t.Skip(getSkipTestMsg("Xray commands", "--test.xray"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func GetTestServerDetails() *config.ServerDetails {
+	return configTests.RtDetails
+}
+
+func InitXscTest(t *testing.T, validations ...func()) func() {
+	if !*configTests.TestXsc {
+		t.Skip(getSkipTestMsg("XSC integration", "--test.xsc"))
+	}
+	// validate XSC is enabled at the given server
+	xscManager, err := xsc.CreateXscServiceManager(configTests.XscDetails)
+	assert.NoError(t, err)
+	_, err = xscManager.GetVersion()
+	if err != nil {
+		t.Skip("Skipping XSC integration tests. XSC is not enabled at the given server.")
+	}
+	for _, validation := range validations {
+		validation()
+	}
+	// Make sure the audit request will work with xsc and not xray
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
+	return func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
+	}
+}
+
+func InitAuditGeneralTests(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditGeneral {
+		t.Skip(getSkipTestMsg("Audit command general integration", "--test.audit"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditJasTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJas {
+		t.Skip(getSkipTestMsg("Audit command JFrog Artifactory Security integration", "--test.audit.Jas"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditJavaScriptTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJavaScript {
+		t.Skip(getSkipTestMsg("Audit command JavaScript technologies (Npm, Pnpm, Yarn) integration", "--test.audit.JavaScript"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditJavaTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditJava {
+		t.Skip(getSkipTestMsg("Audit command Java technologies (Maven, Gradle) integration", "--test.audit.Java"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditCTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditCTypes {
+		t.Skip(getSkipTestMsg("Audit command C/C++/C# technologies (Nuget/DotNet, Conan) integration", "--test.audit.C"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditGoTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditGo {
+		t.Skip(getSkipTestMsg("Audit command Go technologies (GoLang) integration", "--test.audit.Go"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditPythonTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditPython {
+		t.Skip(getSkipTestMsg("Audit command Python technologies (Pip, PipEnv, Poetry) integration", "--test.audit.Python"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitScanTest(t *testing.T, minVersion string) {
+	if !*configTests.TestScan {
+		t.Skip(getSkipTestMsg("Other scan commands integration", "--test.scan"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+	if !*configTests.TestDockerScan {
+		t.Skip(getSkipTestMsg("Docker scan command integration (Ubuntu)", "--test.dockerScan"))
+	}
+	return InitTestWithMockCommandOrParams(t, false, cli.DockerScanMockCommand)
+}
+
+func InitCurationTest(t *testing.T) {
+	if !*configTests.TestCuration {
+		t.Skip(getSkipTestMsg("Curation command integration", "--test.curation"))
+	}
+}
+
+func InitEnrichTest(t *testing.T, minVersion string) {
+	if !*configTests.TestEnrich {
+		t.Skip(getSkipTestMsg("Enrich command integration", "--test.enrich"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitGitTest(t *testing.T) {
+	if !*configTests.TestGit {
+		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))
+	}
+}
+
 func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err, "Failed to get current dir")
@@ -50,19 +183,25 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = GetTestCli(testApplication)
+		configTests.PlatformCli = GetTestCli(testApplication, false)
 	}
 }
 
-func GetTestCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
-	creds := authenticateXray()
+func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
+	creds := authenticateXray(xrayUrlOnly)
 	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
-func authenticateXray() string {
+func authenticateXray(xrayUrlOnly bool) string {
 	*configTests.JfrogUrl = clientUtils.AddTrailingSlashIfNeeded(*configTests.JfrogUrl)
-	configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
-	cred := fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	var cred string
+	if xrayUrlOnly {
+		configTests.XrDetails = &config.ServerDetails{XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--xray-url=%s", configTests.XrDetails.XrayUrl)
+	} else {
+		configTests.XrDetails = &config.ServerDetails{Url: *configTests.JfrogUrl, ArtifactoryUrl: *configTests.JfrogUrl + configTests.ArtifactoryEndpoint, XrayUrl: *configTests.JfrogUrl + configTests.XrayEndpoint}
+		cred = fmt.Sprintf("--url=%s", configTests.XrDetails.XrayUrl)
+	}
 	if *configTests.JfrogAccessToken != "" {
 		configTests.XrDetails.AccessToken = *configTests.JfrogAccessToken
 		cred += fmt.Sprintf(" --access-token=%s", configTests.XrDetails.AccessToken)
@@ -247,7 +386,7 @@ func DeleteRepos(repos map[*string]string) {
 func CreateRepos(repos map[*string]string) {
 	for repoName, configFile := range repos {
 		if !isRepoExist(*repoName) {
-			repoConfig := GetTestResourcesPath() + "artifactory-repo-configs/" + configFile
+			repoConfig := configTests.GetTestResourcesPath() + "/artifactory-repo-configs/" + configFile
 			repoConfig, err := commonTests.ReplaceTemplateVariables(repoConfig, "", configTests.GetSubstitutionMap())
 			if err != nil {
 				log.Error(err)
@@ -255,5 +394,19 @@ func CreateRepos(repos map[*string]string) {
 			}
 			execCreateRepoRest(repoConfig, *repoName)
 		}
+	}
+}
+
+func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+	oldHomeDir := os.Getenv(coreutils.HomeDir)
+	// Create server config to use with the command.
+	CreateJfrogHomeConfig(t, true)
+	// Create mock cli with the mock commands.
+	commands := []components.Command{}
+	for _, mockCommand := range mockCommands {
+		commands = append(commands, mockCommand())
+	}
+	return GetTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
+		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
 	}
 }

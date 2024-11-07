@@ -1,0 +1,7 @@
+[default.extend-words]
+testng = "testng"
+afe = "afe"
+Bouned = "Bouned"
+
+[files]
+extend-exclude = ["go.mod", "go.sum", "tests/testdata"]

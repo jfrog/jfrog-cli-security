@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -26,8 +27,9 @@ type SecurityCommandResults struct {
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
-	// Error that occurred during the command execution
-	Error error `json:"error,omitempty"`
+	// GeneralError that occurred during the command execution
+	GeneralError error      `json:"general_error,omitempty"`
+	errorsMutex  sync.Mutex `json:"-"`
 }
 
 type TargetResults struct {
@@ -79,8 +81,27 @@ func (st ScanTarget) String() (str string) {
 	return
 }
 
-func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas, secretValidation bool) *SecurityCommandResults {
-	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, SecretValidation: secretValidation, targetsMutex: sync.Mutex{}}
+// func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas, secretValidation bool) *SecurityCommandResults {
+// 	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, SecretValidation: secretValidation, targetsMutex: sync.Mutex{}}
+// }
+
+func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
+	return &SecurityCommandResults{CmdType: cmdType, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
+}
+
+func (r *SecurityCommandResults) SetXrayVersion(xrayVersion string) *SecurityCommandResults {
+	r.XrayVersion = xrayVersion
+	return r
+}
+
+func (r *SecurityCommandResults) SetEntitledForJas(entitledForJas bool) *SecurityCommandResults {
+	r.EntitledForJas = entitledForJas
+	return r
+}
+
+func (r *SecurityCommandResults) SetSecretValidation(secretValidation bool) *SecurityCommandResults {
+	r.SecretValidation = secretValidation
+	return r
 }
 
 func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCommandResults {
@@ -89,6 +110,16 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 }
 
 // --- Aggregated results for all targets ---
+// Adds a general error to the command results in different phases of its execution.
+// Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
+func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError bool) *SecurityCommandResults {
+	if allowSkippingError && err != nil {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
+		return r
+	}
+	r.GeneralError = errors.Join(r.GeneralError, err)
+	return r
+}
 
 func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {
 	for _, scan := range r.Targets {
@@ -115,7 +146,7 @@ func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanTyp
 }
 
 func (r *SecurityCommandResults) GetErrors() (err error) {
-	err = r.Error
+	err = r.GeneralError
 	for _, target := range r.Targets {
 		if targetErr := target.GetErrors(); targetErr != nil {
 			err = errors.Join(err, fmt.Errorf("target '%s' errors:\n%s", target.String(), targetErr))
@@ -266,10 +297,15 @@ func (sr *TargetResults) HasFindings() bool {
 	return false
 }
 
-func (sr *TargetResults) AddError(err error) {
+func (sr *TargetResults) AddTargetError(err error, allowSkippingError bool) error {
+	if allowSkippingError && err != nil {
+		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped in target '%s': %s", sr.String(), err.Error()))
+		return nil
+	}
 	sr.errorsMutex.Lock()
 	sr.Errors = append(sr.Errors, err)
 	sr.errorsMutex.Unlock()
+	return err
 }
 
 func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {

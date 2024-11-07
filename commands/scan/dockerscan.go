@@ -109,7 +109,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 
 func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
 	hasViolationContext := dsc.ScanCommand.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
+	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
