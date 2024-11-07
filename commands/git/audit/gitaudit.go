@@ -20,14 +20,13 @@ func (gaCmd *GitAuditCommand) CommandName() string {
 }
 
 func (gaCmd *GitAuditCommand) Run() (err error) {
-	return gaCmd.ProcessResultsAndOutput(RunGitAudit(gaCmd.CreateAuditParams()))
-}
-
-func RunGitAudit(params *sourceAudit.AuditParams) (cmdResults *results.SecurityCommandResults) {
-	_, _, err := git.DetectGitInfo()
+	_, gitInfo, err := git.DetectGitInfo()
 	if err != nil {
 		return
 	}
+	return gaCmd.ProcessResultsAndOutput(RunGitAudit(NewGitAuditParams(gaCmd.CreateAuditParams(gitInfo))))
+}
 
-	return sourceAudit.RunAudit(params)
+func RunGitAudit(params *GitAuditParams) (cmdResults *results.SecurityCommandResults) {
+	return sourceAudit.RunAudit(&params.AuditParams)
 }
