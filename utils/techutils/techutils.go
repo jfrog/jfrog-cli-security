@@ -392,9 +392,9 @@ func getDirectDirectories(path, excludePathPattern string) (directories []string
 	}
 	// Filter to directories only
 	for _, potentialDir := range filesOrDirsInPath {
-		isDir, err := fileutils.IsDirExists(potentialDir, true)
-		if err != nil {
-			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", potentialDir, err))
+		isDir, e := fileutils.IsDirExists(potentialDir, true)
+		if e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", potentialDir, e))
 			continue
 		}
 		if isDir {
