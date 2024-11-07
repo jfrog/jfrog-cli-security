@@ -353,7 +353,7 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 				continue
 			}
 			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators were not found, scan only requested directory for this technology.
+				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
 				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
