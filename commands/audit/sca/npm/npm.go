@@ -3,12 +3,12 @@ package npm
 import (
 	"errors"
 	"fmt"
-
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/npm"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -48,7 +48,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	}()
 
 	// Calculate npm dependencies
-	dependenciesMap, err := biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger)
+	dependenciesMap, err := biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall())
 	if err != nil {
 		log.Info("Used npm version:", npmVersion.GetVersion())
 		return
@@ -108,9 +108,9 @@ func addIgnoreScriptsFlag(npmArgs []string) []string {
 func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *biutils.PackageInfo) (*xrayUtils.GraphNode, []string) {
 	treeMap := make(map[string]xray.DepTreeNode)
 	for _, dependency := range dependencies {
-		dependencyId := utils.NpmPackageTypeIdentifier + dependency.Id
+		dependencyId := techutils.Npm.GetPackageTypeId() + dependency.Id
 		for _, requestedByNode := range dependency.RequestedBy {
-			parent := utils.NpmPackageTypeIdentifier + requestedByNode[0]
+			parent := techutils.Npm.GetPackageTypeId() + requestedByNode[0]
 			depTreeNode, ok := treeMap[parent]
 			if ok {
 				depTreeNode.Children = appendUniqueChild(depTreeNode.Children, dependencyId)
@@ -120,7 +120,7 @@ func parseNpmDependenciesList(dependencies []buildinfo.Dependency, packageInfo *
 			treeMap[parent] = depTreeNode
 		}
 	}
-	graph, nodeMapTypes := xray.BuildXrayDependencyTree(treeMap, utils.NpmPackageTypeIdentifier+packageInfo.BuildInfoModuleId())
+	graph, nodeMapTypes := xray.BuildXrayDependencyTree(treeMap, techutils.Npm.GetPackageTypeId()+packageInfo.BuildInfoModuleId())
 	return graph, maps.Keys(nodeMapTypes)
 }
 

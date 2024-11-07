@@ -63,7 +63,7 @@ func GetCountContributorsParams(c *components.Context) (*git.CountContributorsPa
 				if envVarToken != "" {
 					params.Token = envVarToken
 				} else {
-					return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token enviromment variable %s, or coresponding provider enviromment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
+					return nil, errorutils.CheckErrorf("Providing a token is mandatory. should use --%s flag, the token environment variable %s, or corresponding provider environment variable %s.", flags.Token, git.GenericGitTokenEnvVar, scmTypes.GetOptionalScmTypeTokenEnvVars())
 				}
 			}
 		}

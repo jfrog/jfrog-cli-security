@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
-	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-security/cli"
-	"github.com/jfrog/jfrog-cli-security/commands/curation"
-	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/formats"
-	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jfrog/jfrog-cli-security/commands/curation"
+	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	securityTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
@@ -43,31 +43,45 @@ import (
 
 func TestXrayBinaryScanJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
+	})
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.Json), false)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
-	securityTestUtils.VerifySimpleJsonScanResults(t, output, 1, 1, 1)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities:    1,
+		SecurityViolations: 1,
+		Licenses:           1,
+	})
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
-	securityTestUtils.InitSecurityTest(t, scangraph.GraphScanMinXrayVersion)
-	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
 	if withViolation {
 		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
@@ -79,10 +93,10 @@ func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string 
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, scan.BypassArchiveLimitsMinXrayVersion)
+	integration.InitScanTest(t, scan.BypassArchiveLimitsMinXrayVersion)
 	unsetEnv := clientTestUtils.SetEnvWithCallbackAndAssert(t, "JF_INDEXER_COMPRESS_MAXENTITIES", "10")
 	defer unsetEnv()
-	binariesPath := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "binaries", "*")
+	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	scanArgs := []string{"scan", binariesPath, "--format=json", "--licenses"}
 	// Run without bypass flag and expect scan to fail
 	err := securityTests.PlatformCli.Exec(scanArgs...)
@@ -92,7 +106,10 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 	// Run with bypass flag and expect it to find vulnerabilities
 	scanArgs = append(scanArgs, "--bypass-archive-limits")
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, scanArgs...)
-	securityTestUtils.VerifyJsonScanResults(t, output, 0, 1, 1)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+		Licenses:        1,
+	})
 }
 
 // Docker scan tests
@@ -104,8 +121,8 @@ func TestDockerScanWithProgressBar(t *testing.T) {
 }
 
 func TestDockerScanWithTokenValidation(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	testCli, cleanup := initNativeDockerWithXrayTest(t)
+	integration.InitScanTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
+	testCli, cleanup := integration.InitNativeDockerTest(t)
 	defer cleanup()
 	// #nosec G101 -- Image with dummy token for tests
 	tokensImageToScan := "srmishj/inactive_tokens:latest"
@@ -113,7 +130,8 @@ func TestDockerScanWithTokenValidation(t *testing.T) {
 }
 
 func TestDockerScan(t *testing.T) {
-	testCli, cleanup := initNativeDockerWithXrayTest(t)
+	integration.InitScanTest(t, "")
+	testCli, cleanup := integration.InitNativeDockerTest(t)
 	defer cleanup()
 
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
@@ -130,19 +148,8 @@ func TestDockerScan(t *testing.T) {
 		runDockerScan(t, testCli, imageName, watchName, 3, 3, 3, 0, false)
 	}
 
-	// On Xray 3.40.3 there is a bug whereby xray fails to scan docker image with 0 vulnerabilities,
-	// So we skip it for now till the next version will be released
-	securityTestUtils.ValidateXrayVersion(t, "3.41.0")
-
 	// Image with 0 vulnerabilities
 	runDockerScan(t, testCli, "busybox:1.35", "", 0, 0, 0, 0, false)
-}
-
-func initNativeDockerWithXrayTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	if !*securityTests.TestDockerScan || !*securityTests.TestSecurity {
-		t.Skip("Skipping Docker scan test. To run Xray Docker test add the '-test.dockerScan=true' and '-test.security=true' options.")
-	}
-	return securityTestUtils.InitTestWithMockCommandOrParams(t, cli.DockerScanMockCommand)
 }
 
 func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchName string, minViolations, minVulnerabilities, minLicenses int, minInactives int, validateSecrets bool) {
@@ -162,9 +169,9 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			if validateSecrets {
-				securityTestUtils.VerifySimpleJsonJasResults(t, output, 0, 0, 0, 0, 0, 0, 0, 0, minInactives)
+				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
 			} else {
-				securityTestUtils.VerifyJsonScanResults(t, output, 0, minVulnerabilities, minLicenses)
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
 			}
 		}
 		// Run docker scan on image with watch
@@ -174,7 +181,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			securityTestUtils.VerifyJsonScanResults(t, output, minViolations, 0, 0)
+			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations})
 		}
 	}
 }
@@ -182,7 +189,8 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 // JAS docker scan tests
 
 func TestAdvancedSecurityDockerScan(t *testing.T) {
-	testCli, cleanup := initNativeDockerWithXrayTest(t)
+	integration.InitScanTest(t, "")
+	testCli, cleanup := integration.InitNativeDockerTest(t)
 	defer cleanup()
 	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }
@@ -226,17 +234,10 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 // Curation tests
 
 func TestCurationAudit(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
-	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
-	defer createTempDirCallback()
-	multiProject := filepath.Join(filepath.FromSlash(securityTestUtils.GetTestResourcesPath()), "projects", "package-managers", "npm")
-	assert.NoError(t, biutils.CopyDir(multiProject, tempDirPath, true, nil))
-	rootDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, os.Chdir(rootDir))
-	}()
-	require.NoError(t, os.Chdir(filepath.Join(tempDirPath, "npm")))
+	integration.InitCurationTest(t)
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm"))
+	defer cleanUp()
+
 	expectedRequest := map[string]bool{
 		"/api/npm/npms/json/-/json-9.0.6.tgz": false,
 		"/api/npm/npms/xml/-/xml-1.0.1.tgz":   false,

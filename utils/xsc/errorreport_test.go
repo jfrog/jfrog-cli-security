@@ -7,14 +7,14 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 )
 
 const (
 	unsupportedXscVersionForErrorLogs = "1.6.0"
-	supportedXscVersionForErrorLogs   = minXscVersionForErrorReport
+	supportedXscVersionForErrorLogs   = MinXscVersionForErrorReport
 )
 
 func TestReportLogErrorEventPossible(t *testing.T) {
@@ -27,7 +27,7 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 	}{
 		{
 			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
-				serverMock, serverDetails, _ := utils.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+				serverMock, serverDetails, _ := validations.CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 					if r.RequestURI == "/xsc/api/v1/system/version" {
 						w.WriteHeader(http.StatusNotFound)
 						_, innerError := w.Write([]byte("Xsc service is not enabled"))
@@ -41,18 +41,18 @@ func TestReportLogErrorEventPossible(t *testing.T) {
 			expectedResponse: false,
 		},
 		{
-			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return utils.XscServer(t, "") },
+			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) { return validations.XscServer(t, "") },
 			expectedResponse:   false,
 		},
 		{
 			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
-				return utils.XscServer(t, unsupportedXscVersionForErrorLogs)
+				return validations.XscServer(t, unsupportedXscVersionForErrorLogs)
 			},
 			expectedResponse: false,
 		},
 		{
 			serverCreationFunc: func() (*httptest.Server, *config.ServerDetails) {
-				return utils.XscServer(t, supportedXscVersionForErrorLogs)
+				return validations.XscServer(t, supportedXscVersionForErrorLogs)
 			},
 			expectedResponse: true,
 		},

@@ -2,18 +2,19 @@ package xsc
 
 import (
 	"encoding/json"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/xsc/services"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/validations"
+	"github.com/jfrog/jfrog-client-go/xsc/services"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetConfigProfile_ValidRequest_SuccessExpected(t *testing.T) {
-	mockServer, serverDetails := utils.XscServer(t, services.ConfigProfileMinXscVersion)
+	mockServer, serverDetails := validations.XscServer(t, services.ConfigProfileMinXscVersion)
 	defer mockServer.Close()
 
-	configProfile, err := GetConfigProfile(serverDetails, utils.TestConfigProfileName)
+	configProfile, err := GetConfigProfile(serverDetails, validations.TestConfigProfileName)
 	assert.NoError(t, err)
 
 	profileFileContent, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
@@ -27,10 +28,10 @@ func TestGetConfigProfile_ValidRequest_SuccessExpected(t *testing.T) {
 }
 
 func TestGetConfigProfile_TooLowXscVersion_FailureExpected(t *testing.T) {
-	mockServer, serverDetails := utils.XscServer(t, "1.0.0")
+	mockServer, serverDetails := validations.XscServer(t, "1.0.0")
 	defer mockServer.Close()
 
-	configProfile, err := GetConfigProfile(serverDetails, utils.TestConfigProfileName)
+	configProfile, err := GetConfigProfile(serverDetails, validations.TestConfigProfileName)
 	assert.Error(t, err)
 	assert.Nil(t, configProfile)
 }

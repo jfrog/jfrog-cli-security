@@ -118,6 +118,8 @@ const (
 	RequirementsFile             = "requirements-file"
 	WorkingDirs                  = "working-dirs"
 	OutputDir                    = "output-dir"
+	SkipAutoInstall              = "skip-auto-install"
+	AllowPartialResults          = "allow-partial-results"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -154,7 +156,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -229,8 +231,10 @@ var flagsMap = map[string]components.Flag{
 		"Set to false if you wish to not use the gradle or maven wrapper.",
 		components.WithBoolDefaultValue(true),
 	),
-	WorkingDirs: components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
-	OutputDir:   components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
+	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated list of relative working directories, to determine audit targets locations."),
+	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
+	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
+	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
 		Exclusions,
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
@@ -265,7 +269,7 @@ var flagsMap = map[string]components.Flag{
 	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),
 	ScmType:         components.NewStringFlag(ScmType, fmt.Sprintf("SCM type. Possible values are: %s.", git.NewScmType().GetValidScmTypeString()), components.SetMandatory()),
 	ScmApiUrl:       components.NewStringFlag(ScmApiUrl, "SCM API URL. For example: 'https://api.github.com'.", components.SetMandatory()),
-	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s enviroment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars()), components.SetMandatory()),
+	Token:           components.NewStringFlag(Token, fmt.Sprintf("SCM API token. In the absence of a flag, tokens should be passed in the %s environment variable, or in the corresponding environment variables '%s'.", git.GenericGitTokenEnvVar, git.NewScmType().GetOptionalScmTypeTokenEnvVars()), components.SetMandatory()),
 	Owner:           components.NewStringFlag(Owner, "The format of the owner key depends on the Git provider: On GitHub and GitLab, the owner is typically an individual or an organization, On Bitbucket, the owner can also be a project. In the case of a private instance on Bitbucket, the individual or organization name should be prefixed with '~'.", components.SetMandatory()),
 	RepoName:        components.NewStringFlag(RepoName, "List of semicolon-separated(;) repositories names to analyze, If not provided all repositories related to the provided owner will be analyzed."),
 	Months:          components.NewStringFlag(Months, "Number of months to analyze.", components.WithIntDefaultValue(git.DefaultContContributorsMonths)),
