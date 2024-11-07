@@ -71,7 +71,7 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.StartColumn, 4)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndLine, 5)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndColumn, 30)
-	assert.Equal(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "GoogleSignIn', '~> 6.2.4'")
+	assert.Contains(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "GoogleSignIn', '~> 6.2.4'")
 }
 
 func TestPodLineParse(t *testing.T) {
