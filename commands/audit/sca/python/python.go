@@ -9,9 +9,9 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
+	utils "github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/python"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	utils "github.com/jfrog/jfrog-cli-core/v2/utils/python"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -94,7 +94,7 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 		)
 	}()
 
-	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition. 
+	// Exclude Visual Studio inner directorty since it is not neccessary for the scan process and may cause race condition.
 	err = biutils.CopyDir(wd, tempDirPath, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		return
