@@ -76,9 +76,11 @@ func (st ScanTarget) String() (str string) {
 	if st.Name != "" {
 		str = st.Name
 	}
-	if st.Technology != "" {
-		str += fmt.Sprintf(" [%s]", st.Technology)
+	tech := st.Technology.String()
+	if tech == techutils.NoTech.String() {
+		tech = "unknown"
 	}
+	str += fmt.Sprintf(" [%s]", tech)
 	return
 }
 

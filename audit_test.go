@@ -475,7 +475,6 @@ func runXrayAuditPip(t *testing.T, format, requirementsFile string) string {
 	args := []string{"audit", "--pip", "--licenses", "--format=" + format}
 	if requirementsFile != "" {
 		args = append(args, "--requirements-file="+requirementsFile)
-
 	}
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 }
