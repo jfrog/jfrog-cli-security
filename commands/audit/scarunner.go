@@ -46,7 +46,7 @@ func hasAtLeastOneTech(cmdResults *results.SecurityCommandResults) bool {
 		return false
 	}
 	for _, scan := range cmdResults.Targets {
-		if scan.Technology != "" {
+		if scan.Technology != techutils.NoTech {
 			return true
 		}
 	}
