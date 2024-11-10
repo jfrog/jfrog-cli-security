@@ -52,6 +52,23 @@ func TestDetectScansToPreform(t *testing.T) {
 			},
 			expected: []*results.TargetResults{
 				{
+					// We requested specific technologies, Nuget is not in the list but we want to run JAS on it
+					ScanTarget: results.ScanTarget{
+						Target: filepath.Join(dir, "Nuget"),
+					},
+					JasResults: &results.JasScansResults{},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Go,
+						Target:     filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+				{
 					ScanTarget: results.ScanTarget{
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
@@ -59,9 +76,9 @@ func TestDetectScansToPreform(t *testing.T) {
 					JasResults: &results.JasScansResults{},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
-							filepath.Join(dir, "dir", "maven", "pom.xml"),
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
 							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
 						},
 					},
 				},
@@ -76,14 +93,11 @@ func TestDetectScansToPreform(t *testing.T) {
 					},
 				},
 				{
+					// We requested specific technologies, yarn is not in the list but we want to run JAS on it
 					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
+						Target: filepath.Join(dir, "yarn"),
 					},
 					JasResults: &results.JasScansResults{},
-					ScaResults: &results.ScaScanResults{
-						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
-					},
 				},
 			},
 		},
@@ -98,15 +112,35 @@ func TestDetectScansToPreform(t *testing.T) {
 			expected: []*results.TargetResults{
 				{
 					ScanTarget: results.ScanTarget{
+						Technology: techutils.Nuget,
+						Target:     filepath.Join(dir, "Nuget"),
+					},
+					JasResults: &results.JasScansResults{},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj"), filepath.Join(dir, "Nuget", "project.sln")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Go,
+						Target:     filepath.Join(dir, "dir", "go"),
+					},
+					JasResults: &results.JasScansResults{},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
 					JasResults: &results.JasScansResults{},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
-							filepath.Join(dir, "dir", "maven", "pom.xml"),
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
 							filepath.Join(dir, "dir", "maven", "maven-sub2", "pom.xml"),
+							filepath.Join(dir, "dir", "maven", "pom.xml"),
 						},
 					},
 				},
@@ -118,16 +152,6 @@ func TestDetectScansToPreform(t *testing.T) {
 					JasResults: &results.JasScansResults{},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
-					},
-				},
-				{
-					ScanTarget: results.ScanTarget{
-						Technology: techutils.Go,
-						Target:     filepath.Join(dir, "dir", "go"),
-					},
-					JasResults: &results.JasScansResults{},
-					ScaResults: &results.ScaScanResults{
-						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
 				},
 				{
@@ -160,16 +184,6 @@ func TestDetectScansToPreform(t *testing.T) {
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
 					},
 				},
-				{
-					ScanTarget: results.ScanTarget{
-						Technology: techutils.Nuget,
-						Target:     filepath.Join(dir, "Nuget"),
-					},
-					JasResults: &results.JasScansResults{},
-					ScaResults: &results.ScaScanResults{
-						Descriptors: []string{filepath.Join(dir, "Nuget", "project.sln"), filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj")},
-					},
-				},
 			},
 		},
 	}
@@ -179,12 +193,12 @@ func TestDetectScansToPreform(t *testing.T) {
 			results := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
 			detectScanTargets(results, test.params())
 			if assert.Len(t, results.Targets, len(test.expected)) {
+				sort.Slice(results.Targets, func(i, j int) bool {
+					return results.Targets[i].ScanTarget.Target < results.Targets[j].ScanTarget.Target
+				})
 				for i := range results.Targets {
 					if results.Targets[i].ScaResults != nil {
 						sort.Strings(results.Targets[i].ScaResults.Descriptors)
-					}
-					if test.expected[i].ScaResults != nil {
-						sort.Strings(test.expected[i].ScaResults.Descriptors)
 					}
 				}
 			}

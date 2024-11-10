@@ -260,21 +260,21 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 	tests := []struct {
 		name                 string
 		path                 string
-		excludePathPattern   string
+		dirList              []string
 		technologiesDetected map[Technology]map[string][]string
 		expected             map[Technology]map[string][]string
 	}{
 		{
-			name:                 "No tech detected with exclude pattern",
+			name:                 "No tech detected",
 			path:                 tmpDir,
-			excludePathPattern:   "(^.*folder.*$)",
+			dirList:              []string{},
 			technologiesDetected: map[Technology]map[string][]string{},
 			expected:             map[Technology]map[string][]string{NoTech: {}},
 		},
 		{
-			name:                 "No tech detected",
+			name:                 "No tech detected, sub dir",
 			path:                 tmpDir,
-			excludePathPattern:   "",
+			dirList:              []string{filepath.Join(tmpDir, "folder")},
 			technologiesDetected: map[Technology]map[string][]string{},
 			expected:             map[Technology]map[string][]string{NoTech: {filepath.Join(tmpDir, "folder"): {}}},
 		},
@@ -282,7 +282,7 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := addNoTechIfNeeded(test.technologiesDetected, test.path, test.excludePathPattern)
+			actual, err := addNoTechIfNeeded(test.technologiesDetected, test.path, test.dirList)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, actual)
 		})
