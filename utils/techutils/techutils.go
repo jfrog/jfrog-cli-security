@@ -347,7 +347,7 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 	}
 	if recursive {
 		// If recursive search, we need to also make sure to include directories that do not have any technology indicators.
-		technologiesDetected, err = addNoTechIfNeeded(technologiesDetected, path, dirsList)
+		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
 	}
 	techCount := len(technologiesDetected)
 	if _, exist := technologiesDetected[NoTech]; exist {
@@ -377,7 +377,7 @@ func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, pre
 	return
 }
 
-func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, rootPath string, dirsList []string) (_ map[Technology]map[string][]string, err error) {
+func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, rootPath string, dirsList []string) (_ map[Technology]map[string][]string) {
 	noTechMap := map[string][]string{}
 	for _, dir := range getDirNoTechList(technologiesDetected, rootPath, dirsList) {
 		// Convert the directories
@@ -387,7 +387,7 @@ func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, 
 		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
 		technologiesDetected[NoTech] = noTechMap
 	}
-	return technologiesDetected, err
+	return technologiesDetected
 }
 
 func getDirNoTechList(technologiesDetected map[Technology]map[string][]string, dir string, dirsList []string) (noTechList []string) {

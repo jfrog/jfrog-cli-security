@@ -284,8 +284,7 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := addNoTechIfNeeded(test.technologiesDetected, test.path, test.dirList)
-			assert.NoError(t, err)
+			actual := addNoTechIfNeeded(test.technologiesDetected, test.path, test.dirList)
 			assert.Equal(t, test.expected, actual)
 		})
 	}
