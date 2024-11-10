@@ -252,6 +252,7 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "tech-folder")))
 
 	prevWd, err := os.Getwd()
+	assert.NoError(t, err, "Couldn't get working directory")
 	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
 	defer func() {
 		clientTests.ChangeDirAndAssert(t, prevWd)
