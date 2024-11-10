@@ -39,6 +39,7 @@ const (
 	Oci       Technology = "oci"
 	Conan     Technology = "conan"
 	Cocoapods Technology = "cocoapods"
+	Swift     Technology = "swift"
 )
 const Pypi = "pypi"
 
@@ -55,6 +56,7 @@ const (
 	CPP        CodeLanguage = "C++"
 	// CocoapodsLang package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
@@ -71,6 +73,7 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Nuget:     project.Nuget,
 	Dotnet:    project.Dotnet,
 	Cocoapods: project.Cocoapods,
+	Swift:     project.Swift,
 }
 
 var packageTypes = map[string]string{
@@ -204,6 +207,12 @@ var technologiesData = map[Technology]TechData{
 		formal:             "Cocoapods",
 		packageTypeId:      "cocoapods://",
 	},
+	Swift: {
+		indicators:         []string{"Package.swift", "Package.resolved"},
+		packageDescriptors: []string{"Package.swift", "Package.resolved"},
+		formal:             "swift",
+		packageTypeId:      "swift://",
+	},
 }
 
 var (
@@ -245,6 +254,7 @@ func TechnologyToLanguage(technology Technology) CodeLanguage {
 		Yarn:      JavaScript,
 		Pnpm:      JavaScript,
 		Cocoapods: CocoapodsLang,
+		Swift:     SwiftLang,
 	}
 	return languageMap[technology]
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -247,6 +248,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
+	case techutils.Swift:
+		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}

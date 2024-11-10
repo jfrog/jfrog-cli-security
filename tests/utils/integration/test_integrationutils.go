@@ -131,6 +131,13 @@ func InitAuditCocoapodsTest(t *testing.T, minVersion string) {
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
+func InitAuditSwiftTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditSwift {
+		t.Skip(getSkipTestMsg("Audit command Swift technologies integration", "--test.audit.Swift"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
 func InitAuditPythonTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditPython {
 		t.Skip(getSkipTestMsg("Audit command Python technologies (Pip, PipEnv, Poetry) integration", "--test.audit.Python"))

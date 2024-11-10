@@ -441,6 +441,13 @@ func TestXrayAuditCocoapods(t *testing.T) {
 	})
 }
 
+func TestXrayAuditSwift(t *testing.T) {
+	output := testXrayAuditSwift(t, string(format.Json))
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: 1,
+	})
+}
+
 func TestXrayAuditPipSimpleJson(t *testing.T) {
 	output := testXrayAuditPip(t, string(format.SimpleJson), "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
@@ -476,6 +483,15 @@ func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
 func testXrayAuditCocoapods(t *testing.T, format string) string {
 	integration.InitAuditCocoapodsTest(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "cocoapods"))
+	defer cleanUp()
+	// Add dummy descriptor file to check that we run only specific audit
+	args := []string{"audit", "--format=" + format}
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
+}
+
+func testXrayAuditSwift(t *testing.T, format string) string {
+	integration.InitAuditSwiftTest(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "swift"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
 	args := []string{"audit", "--format=" + format}
