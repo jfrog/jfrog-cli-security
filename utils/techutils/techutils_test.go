@@ -249,6 +249,7 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 	tmpDir, err := fileutils.CreateTempDir()
 	assert.NoError(t, err, "Couldn't create temp dir")
 	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder")))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "tech-folder")))
 
 	prevWd, err := os.Getwd()
 	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
@@ -269,14 +270,14 @@ func TestAddNoTechIfNeeded(t *testing.T) {
 			path:                 tmpDir,
 			dirList:              []string{},
 			technologiesDetected: map[Technology]map[string][]string{},
-			expected:             map[Technology]map[string][]string{NoTech: {}},
+			expected:             map[Technology]map[string][]string{NoTech: {tmpDir: {}}},
 		},
 		{
 			name:                 "No tech detected, sub dir",
 			path:                 tmpDir,
-			dirList:              []string{filepath.Join(tmpDir, "folder")},
-			technologiesDetected: map[Technology]map[string][]string{},
-			expected:             map[Technology]map[string][]string{NoTech: {filepath.Join(tmpDir, "folder"): {}}},
+			dirList:              []string{filepath.Join(tmpDir, "folder"), filepath.Join(tmpDir, "tech-folder")},
+			technologiesDetected: map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}},
+			expected:             map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}, NoTech: {filepath.Join(tmpDir, "folder"): {}}},
 		},
 	}
 

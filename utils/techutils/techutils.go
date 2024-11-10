@@ -379,12 +379,9 @@ func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, pre
 
 func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, rootPath string, dirsList []string) (_ map[Technology]map[string][]string, err error) {
 	noTechMap := map[string][]string{}
-	for _, dir := range getDirChildren(rootPath, dirsList) {
-		noTechDirs := getDirNoTechList(technologiesDetected, dir, dirsList)
+	for _, dir := range getDirNoTechList(technologiesDetected, rootPath, dirsList) {
 		// Convert the directories
-		for _, dir := range noTechDirs {
-			noTechMap[dir] = []string{}
-		}
+		noTechMap[dir] = []string{}
 	}
 	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
 		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
