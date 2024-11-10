@@ -38,6 +38,7 @@ const (
 	Docker Technology = "docker"
 	Oci    Technology = "oci"
 	Conan  Technology = "conan"
+	NoTech Technology = ""
 )
 const Pypi = "pypi"
 
@@ -322,10 +323,11 @@ func detectedTechnologiesListInPath(path string, recursive bool) (technologies [
 }
 
 // If recursive is true, the search will not be limited to files in the root path.
+// If recursive is true the search may return Technology.NoTech value
 // If requestedTechs is empty, all technologies will be checked.
 // If excludePathPattern is not empty, files/directories that match the wildcard pattern will be excluded from the search.
 func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs []string, requestedDescriptors map[Technology][]string, excludePathPattern string) (technologiesDetected map[Technology]map[string][]string, err error) {
-	filesList, err := fspatterns.ListFiles(path, recursive, false, true, true, excludePathPattern)
+	filesList, dirsList, err := listFilesAndDirs(path, recursive, true, true, excludePathPattern)
 	if err != nil {
 		return
 	}
@@ -340,11 +342,160 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 		log.Debug(fmt.Sprintf("mapped %d working directories with indicators/descriptors:\n%s", len(workingDirectoryToIndicators), strJson))
 	}
 	technologiesDetected, err = mapWorkingDirectoriesToTechnologies(workingDirectoryToIndicators, excludedTechAtWorkingDir, ToTechnologies(requestedTechs), requestedDescriptors)
-	if len(technologiesDetected) > 0 {
-		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", len(technologiesDetected), path, maps.Keys(technologiesDetected)))
+	if err != nil {
+		return
+	}
+	if recursive {
+		// If recursive search, we need to also make sure to include directories that do not have any technology indicators.
+		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
+	}
+	techCount := len(technologiesDetected)
+	if _, exist := technologiesDetected[NoTech]; exist {
+		techCount--
+	}
+	if techCount > 0 {
+		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
 	}
 	return
 }
+
+func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			dirs = append(dirs, path)
+		} else {
+			files = append(files, path)
+		}
+	}
+	return
+}
+
+func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, rootPath string, dirsList []string) (_ map[Technology]map[string][]string) {
+	noTechMap := map[string][]string{}
+	for _, dir := range getDirNoTechList(technologiesDetected, rootPath, dirsList) {
+		// Convert the directories
+		noTechMap[dir] = []string{}
+	}
+	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
+		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
+		technologiesDetected[NoTech] = noTechMap
+	}
+	return technologiesDetected
+}
+
+func getDirNoTechList(technologiesDetected map[Technology]map[string][]string, dir string, dirsList []string) (noTechList []string) {
+	for _, techDirs := range technologiesDetected {
+		if _, exist := techDirs[dir]; exist {
+			// The directory is already mapped to a technology, no need to add the dir or its sub directories to NoTech
+			return
+		}
+	}
+	children := getDirChildren(dir, dirsList)
+	childNoTechCount := 0
+	for _, child := range children {
+		childNoTechList := getDirNoTechList(technologiesDetected, child, dirsList)
+		if len(childNoTechList) > 0 {
+			childNoTechCount++
+		}
+		noTechList = append(noTechList, childNoTechList...)
+	}
+	if childNoTechCount == len(children) {
+		// If all children exists in childNoTechList, add only the parent directory to NoTech
+		noTechList = []string{dir}
+	}
+
+	// for _, techDirs := range technologiesDetected {
+	// 	if _, exist := techDirs[dir]; exist {
+	// 		// The directory is already mapped to a technology, no need to add the dir or its sub directories to NoTech
+	// 		break
+	// 	}
+	// 	for _, child := range children {
+	// 		childNoTechList := getDirNoTechList(technologiesDetected, child, dirsList)
+	// 	}
+
+	// 	if len(children) == 0 {
+	// 		// No children directories, add the directory to NoTech
+	// 		childNoTechList = append(childNoTechList, dir)
+	// 		break
+	// 	}
+	// 	for _, child := range children {
+	// 		childNoTechList = append(childNoTechList, getDirNoTechList(technologiesDetected, child, dirsList)...)
+	// 	}
+	// 	// If all children exists in childNoTechList, add only the parent directory to NoTech
+	// 	if len(children) == len(childNoTechList) {
+	// 		childNoTechList = []string{dir}
+	// 	}
+	// }
+	return
+}
+
+func getDirChildren(dir string, dirsList []string) (children []string) {
+	for _, dirPath := range dirsList {
+		if filepath.Dir(dirPath) == dir {
+			children = append(children, dirPath)
+		}
+	}
+	return
+}
+
+// func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, path, excludePathPattern string) (finalMap map[Technology]map[string][]string, err error) {
+// 	finalMap = technologiesDetected
+// 	noTechMap := map[string][]string{}
+// 	// TODO: not only direct, need to see if multiple levels of directories are missing technology indicators
+// 	// if all directories in are found no need for anything else,
+// 	// if one missing need to add it to NoTech
+// 	// if not one detected add only parent directory no need for each directory
+// 	directories, err := getDirectDirectories(path, excludePathPattern)
+// 	if err != nil {
+// 		return
+// 	}
+// 	for _, dir := range directories {
+// 		// Check if the directory is already mapped to a technology
+// 		isMapped := false
+// 		for _, techDirs := range finalMap {
+// 			if _, exist := techDirs[dir]; exist {
+// 				isMapped = true
+// 				break
+// 			}
+// 		}
+// 		if !isMapped {
+// 			// Add the directory to NoTech (no indicators/descriptors were found)
+// 			noTechMap[dir] = []string{}
+// 		}
+// 	}
+// 	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
+// 		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
+// 		finalMap[NoTech] = noTechMap
+// 	}
+// 	return
+// }
+
+// func getDirectDirectories(path, excludePathPattern string) (directories []string, err error) {
+// 	// Get all files and directories in the path, not recursive
+// 	filesOrDirsInPath, err := fspatterns.ListFiles(path, false, true, true, true, excludePathPattern)
+// 	if err != nil {
+// 		return
+// 	}
+// 	// Filter to directories only
+// 	for _, potentialDir := range filesOrDirsInPath {
+// 		isDir, e := fileutils.IsDirExists(potentialDir, true)
+// 		if e != nil {
+// 			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", potentialDir, e))
+// 			continue
+// 		}
+// 		if isDir {
+// 			directories = append(directories, potentialDir)
+// 		}
+// 	}
+// 	return
+// }
 
 // Map files to relevant working directories according to the technologies' indicators/descriptors and requested descriptors.
 // files: The file paths to map.
@@ -545,6 +696,9 @@ func hasCompletePathPrefix(root, wd string) bool {
 func DetectedTechnologiesToSlice(detected map[Technology]map[string][]string) []string {
 	keys := make([]string, 0, len(detected))
 	for tech := range detected {
+		if tech == NoTech {
+			continue
+		}
 		keys = append(keys, string(tech))
 	}
 	return keys

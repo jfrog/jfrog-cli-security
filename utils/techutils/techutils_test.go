@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
 )
@@ -240,6 +241,51 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 					assert.ElementsMatch(t, innerValue, detectedTech[key][innerKey], "expected: %s, actual: %s", innerValue, detectedTech[key][innerKey])
 				}
 			}
+		})
+	}
+}
+
+func TestAddNoTechIfNeeded(t *testing.T) {
+	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder")))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "tech-folder")))
+
+	prevWd, err := os.Getwd()
+	assert.NoError(t, err, "Couldn't get working directory")
+	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
+	defer func() {
+		clientTests.ChangeDirAndAssert(t, prevWd)
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't remove temp dir")
+	}()
+
+	tests := []struct {
+		name                 string
+		path                 string
+		dirList              []string
+		technologiesDetected map[Technology]map[string][]string
+		expected             map[Technology]map[string][]string
+	}{
+		{
+			name:                 "No tech detected",
+			path:                 tmpDir,
+			dirList:              []string{},
+			technologiesDetected: map[Technology]map[string][]string{},
+			expected:             map[Technology]map[string][]string{NoTech: {tmpDir: {}}},
+		},
+		{
+			name:                 "No tech detected, sub dir",
+			path:                 tmpDir,
+			dirList:              []string{filepath.Join(tmpDir, "folder"), filepath.Join(tmpDir, "tech-folder")},
+			technologiesDetected: map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}},
+			expected:             map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}, NoTech: {filepath.Join(tmpDir, "folder"): {}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := addNoTechIfNeeded(test.technologiesDetected, test.path, test.dirList)
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }
