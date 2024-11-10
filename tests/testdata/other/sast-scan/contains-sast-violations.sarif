@@ -3,7 +3,7 @@
         {
             "tool": {
                 "driver": {
-                    "name": "USAF",
+                    "name": "🐸 JFrog SAST",
                     "rules": [
                         {
                             "id": "python-command-injection",
@@ -165,12 +165,12 @@
                 {
                     "executionSuccessful": true,
                     "arguments": [
-                        "/Users/assafa/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
+                        "/users/user/.jfrog/dependencies/analyzerManager/zd_scanner/scanner",
                         "scan",
                         "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1693477603-3697552683/results.sarif"
                     ],
                     "workingDirectory": {
-                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat"
+                        "uri": "file:///Users/user/proj"
                     }
                 }
             ],
@@ -193,7 +193,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 28,
@@ -216,7 +216,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 32,
@@ -239,7 +239,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 44,
@@ -262,7 +262,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 13,
@@ -285,7 +285,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -308,7 +308,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -331,7 +331,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 10,
@@ -354,7 +354,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 39,
@@ -377,7 +377,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 19,
@@ -400,7 +400,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 49,
@@ -429,7 +429,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                    "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                 },
                                 "region": {
                                     "endColumn": 49,
@@ -463,7 +463,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 28,
@@ -486,7 +486,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 32,
@@ -509,7 +509,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 44,
@@ -532,7 +532,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 13,
@@ -555,7 +555,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -578,7 +578,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 31,
@@ -601,7 +601,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 10,
@@ -624,7 +624,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 39,
@@ -647,7 +647,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 19,
@@ -670,7 +670,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 49,
@@ -699,7 +699,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/__init__.py"
+                                    "uri": "file:///Users/user/proj/flask_webgoat/__init__.py"
                                 },
                                 "region": {
                                     "endColumn": 49,
@@ -733,7 +733,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 23,
@@ -756,7 +756,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 27,
@@ -779,7 +779,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 34,
@@ -802,7 +802,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 8,
@@ -825,7 +825,7 @@
                                                 ],
                                                 "physicalLocation": {
                                                     "artifactLocation": {
-                                                        "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                                        "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                                     },
                                                     "region": {
                                                         "endColumn": 29,
@@ -854,7 +854,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/flask-webgoat/flask_webgoat/auth.py"
+                                    "uri": "file:///Users/user/proj/flask_webgoat/auth.py"
                                 },
                                 "region": {
                                     "endColumn": 29,
@@ -883,7 +883,7 @@
                             ],
                             "physicalLocation": {
                                 "artifactLocation": {
-                                    "uri": "file:///Users/assafa/Documents/code/flask-webgoat/run.py"
+                                    "uri": "file:///Users/user/proj/run.py"
                                 },
                                 "region": {
                                     "endColumn": 24,

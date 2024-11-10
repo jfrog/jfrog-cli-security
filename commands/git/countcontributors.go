@@ -4,19 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/google/go-github/v56/github"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/froggit-go/vcsutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 	"os"
-	"sort"
-	"strings"
-	"time"
 )
 
 type scmTypeName string
@@ -159,6 +160,7 @@ func (vs *ScmType) GetOptionalScmTypeTokenEnvVars() string {
 }
 
 func (cc *CountContributorsCommand) Run() error {
+	log.Info("The CLI outputs may include an estimation of the contributing developers based on the input provided by the user. They may be based on third-party resources and databases and JFrog does not guarantee that the CLI outputs are accurate and/or complete. The CLI outputs are not legal advice and you are solely responsible for your use of it. CLI outputs are provided “as is” and any representation or warranty of or concerning any third-party technology is strictly between the user and the third-party owner or distributor of the third-party technology.")
 	if cc.Progress != nil {
 		cc.Progress.SetHeadlineMsg("Calculating Git contributors information")
 	}
@@ -191,7 +193,7 @@ func (cc *CountContributorsCommand) Run() error {
 	report.ScannedRepos = totalScannedRepos
 	report.SkippedRepos = totalSkippedRepos
 
-	return utils.PrintJson(report)
+	return output.PrintJson(report)
 }
 
 func (cc *CountContributorsCommand) getVcsCountContributors() ([]VcsCountContributors, error) {
@@ -277,7 +279,7 @@ func (cc *VcsCountContributors) getRepositoriesListToScan() ([]string, error) {
 	return cc.getOwnersMatchingRepos(reposMap)
 }
 
-// getOwnersMatchingRepos gets all projects and their repo map and look for thr specific owner.
+// getOwnersMatchingRepos gets all projects and their repo map and look for the specific owner.
 func (cc *VcsCountContributors) getOwnersMatchingRepos(reposMap map[string][]string) ([]string, error) {
 	repos := reposMap[cc.params.Owner]
 	if len(repos) == 0 {

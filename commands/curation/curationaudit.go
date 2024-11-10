@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,18 +17,6 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
-
-	"github.com/jfrog/jfrog-client-go/artifactory"
-	"github.com/jfrog/jfrog-client-go/auth"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayClient "github.com/jfrog/jfrog-client-go/xray"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-
-	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
-
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -38,10 +27,20 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/formats"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/artifactory"
+	"github.com/jfrog/jfrog-client-go/auth"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/httputils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayClient "github.com/jfrog/jfrog-client-go/xray"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
+	"github.com/jfrog/build-info-go/build/utils/dotnet/dependencies"
 )
 
 const (
@@ -68,7 +67,7 @@ const (
 	MinArtiPassThroughSupport = "7.82.0"
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
-	MinXrayPassTHroughSupport = "3.92.0"
+	MinXrayPassThroughSupport = "3.92.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -95,17 +94,17 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	} else if err != nil {
 		log.Error(err)
 	}
-	artiVersion, serverDetails, err := ca.getRtVersionAndServiceDetails(tech)
+	artiVersion, err := ca.getRtVersion(tech)
 	if err != nil {
 		return false, err
 	}
 
-	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
+	xrayVersion, err := ca.getXrayVersion()
 	if err != nil {
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassTHroughSupport)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassThroughSupport)
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
@@ -113,16 +112,32 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 	return true, nil
 }
 
-func (ca *CurationAuditCommand) getRtVersionAndServiceDetails(tech techutils.Technology) (string, *config.ServerDetails, error) {
-	rtManager, serveDetails, err := ca.getRtManagerAndAuth(tech)
+func (ca *CurationAuditCommand) getRtVersion(tech techutils.Technology) (string, error) {
+	rtManager, _, err := ca.getRtManagerAndAuth(tech)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	rtVersion, err := rtManager.GetVersion()
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return rtVersion, serveDetails, err
+	return rtVersion, err
+}
+
+func (ca *CurationAuditCommand) getXrayVersion() (string, error) {
+	serverDetails, err := ca.ServerDetails()
+	if err != nil {
+		return "", err
+	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return "", err
+	}
+	xrayVersion, err := xrayManager.GetVersion()
+	if err != nil {
+		return "", err
+	}
+	return xrayVersion, nil
 }
 
 type ErrorsResp struct {
@@ -253,7 +268,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 	}
-	err = errors.Join(err, utils.RecordSecurityCommandSummary(utils.NewCurationSummary(convertResultsToSummary(results))))
+	err = errors.Join(err, output.RecordSecurityCommandSummary(output.NewCurationSummary(convertResultsToSummary(results))))
 	return
 }
 
@@ -369,7 +384,7 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	params := ca.getAuditParamsByTech(tech)
-	serverDetails, err := audit.SetResolutionRepoIfExists(params, tech)
+	serverDetails, err := audit.SetResolutionRepoInAuditParamsIfExists(params, tech)
 	if err != nil {
 		return err
 	}
@@ -454,7 +469,7 @@ func printResult(format outFormat.OutputFormat, projectPath string, packagesStat
 	switch format {
 	case outFormat.Json:
 		if len(packagesStatus) > 0 {
-			err := utils.PrintJson(packagesStatus)
+			err := output.PrintJson(packagesStatus)
 			if err != nil {
 				return err
 			}
@@ -769,7 +784,7 @@ func toNugetDownloadUrl(artifactoryUrl, repo, compName, compVersion string) stri
 // input - repo: libs-release
 // output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
 func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
-	name, version, _ = utils.SplitComponentId(id)
+	name, version, _ = techutils.SplitComponentId(id)
 
 	downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, version))
 	for _, versionVariant := range dependencies.CreateAlternativeVersionForms(version) {

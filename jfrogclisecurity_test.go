@@ -1,12 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/log"
-	"github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/cli"
+	integrationUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 
@@ -35,17 +35,17 @@ func setupIntegrationTests() {
 		os.Exit(1)
 	}
 	// General
-	flag.Parse()
+	configTests.InitTestFlags()
 	log.SetDefaultLogger()
 	// Init
-	utils.InitTestCliDetails()
-	utils.AuthenticateArtifactory()
-	utils.AuthenticateXsc()
-	utils.CreateRequiredRepositories()
+	integrationUtils.InitTestCliDetails(cli.GetJfrogCliSecurityApp())
+	integrationUtils.AuthenticateArtifactory()
+	integrationUtils.AuthenticateXsc()
+	integrationUtils.CreateRequiredRepositories()
 }
 
 func tearDownIntegrationTests() {
 	// Important - Virtual repositories must be deleted first
-	utils.DeleteRepos(configTests.CreatedVirtualRepositories)
-	utils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
+	integrationUtils.DeleteRepos(configTests.CreatedVirtualRepositories)
+	integrationUtils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
 }

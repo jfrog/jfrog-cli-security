@@ -1,22 +1,25 @@
 package main
 
 import (
+	"testing"
+
 	"github.com/jfrog/jfrog-cli-security/commands/git"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestCountContributorsFlags(t *testing.T) {
+	integration.InitGitTest(t)
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("git", "count-contributors", "--token", "token", "--owner", "owner", "--scm-api-url", "url")
-	assert.EqualError(t, err, "The --scm-type option is mandatory")
+	assert.EqualError(t, err, "Mandatory flag 'scm-type' is missing")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "github", "--owner", "owner", "--scm-api-url", "url")
-	assert.ErrorContains(t, err, "Providing a token is mandatory.")
+	assert.ErrorContains(t, err, "Mandatory flag 'token' is missing")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "gitlab", "--token", "token", "--scm-api-url", "url")
-	assert.EqualError(t, err, "The --owner option is mandatory")
+	assert.EqualError(t, err, "Mandatory flag 'owner' is missing")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "cc", "--scm-type", "bitbucket", "--token", "token", "--owner", "owner")
-	assert.EqualError(t, err, "The --scm-api-url option is mandatory")
+	assert.EqualError(t, err, "Mandatory flag 'scm-api-url' is missing")
 
 	// Test token env variable
 	bitbucketCallback := tests.SetEnvWithCallbackAndAssert(t, git.BitbucketTokenEnvVar, "token")

@@ -7,8 +7,8 @@ import (
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -74,7 +74,7 @@ func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix)
+	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
@@ -127,7 +127,7 @@ func processSecretScanRuns(sarifRuns []*sarif.Run) []*sarif.Run {
 		// Hide discovered secrets value
 		for _, secretResult := range secretRun.Results {
 			for _, location := range secretResult.Locations {
-				sarifutils.SetLocationSnippet(location, maskSecret(sarifutils.GetLocationSnippet(location)))
+				sarifutils.SetLocationSnippet(location, maskSecret(sarifutils.GetLocationSnippetText(location)))
 			}
 		}
 	}
