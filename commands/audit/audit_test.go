@@ -196,9 +196,15 @@ func TestDetectScansToPreform(t *testing.T) {
 				sort.Slice(results.Targets, func(i, j int) bool {
 					return results.Targets[i].ScanTarget.Target < results.Targets[j].ScanTarget.Target
 				})
+				sort.Slice(test.expected, func(i, j int) bool {
+					return test.expected[i].ScanTarget.Target < test.expected[j].ScanTarget.Target
+				})
 				for i := range results.Targets {
 					if results.Targets[i].ScaResults != nil {
 						sort.Strings(results.Targets[i].ScaResults.Descriptors)
+					}
+					if test.expected[i].ScaResults != nil {
+						sort.Strings(test.expected[i].ScaResults.Descriptors)
 					}
 				}
 			}
