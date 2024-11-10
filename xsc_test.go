@@ -109,12 +109,12 @@ func TestXscAnalyticsGitAudit(t *testing.T) {
 	// scan a dirty git project and validate with XSC
 	output := runGitAudit(t, "dirty")
 	validateAnalyticsGitEvent(t, output, services.XscGitInfoContext{
-		GitRepoUrl:  "https://github.com/attiasas/test-security-git.git",
-		GitRepoName: "test-security-git",
-		GitProject:  "attiasas",
-		GitProvider: "github",
-		BranchName:  "dirty_branch",
-		LastCommit:  "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+		GitRepoUrl:    "https://github.com/attiasas/test-security-git.git",
+		GitRepoName:   "test-security-git",
+		GitProject:    "attiasas",
+		GitProvider:   "github",
+		BranchName:    "dirty_branch",
+		LastCommitUrl: "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
 	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,

@@ -54,21 +54,21 @@ func GetGitContext(manager *GitManager) (gitInfo *services.XscGitInfoContext, er
 	}
 	// Create the gitInfo object
 	gitInfo = &services.XscGitInfoContext{
-		GitRepoUrl:  remoteUrl,
-		GitRepoName: getGitRepoName(remoteUrl),
-		GitProject:  getGitProject(remoteUrl),
-		GitProvider: getGitProvider(remoteUrl).String(),
-		BranchName:  currentBranch.Name().Short(),
-		LastCommit:  lastCommit.Hash.String(),
+		GitRepoUrl:    remoteUrl,
+		GitRepoName:   getGitRepoName(remoteUrl),
+		GitProject:    getGitProject(remoteUrl),
+		GitProvider:   getGitProvider(remoteUrl).String(),
+		BranchName:    currentBranch.Name().Short(),
+		LastCommitUrl: lastCommit.Hash.String(),
 	}
 	isLocalRepoClean, err := manager.IsClean()
 	if err != nil {
 		return nil, err
 	}
 	if isLocalRepoClean {
-		gitInfo.CommitHash = lastCommit.Hash.String()
-		gitInfo.CommitMessage = strings.TrimSpace(lastCommit.Message)
-		gitInfo.CommitAuthor = lastCommit.Author.Name
+		gitInfo.LastCommitHash = lastCommit.Hash.String()
+		gitInfo.LastCommitMessage = strings.TrimSpace(lastCommit.Message)
+		gitInfo.LastCommitAuthor = lastCommit.Author.Name
 	}
 	log.Debug(fmt.Sprintf("Git Context: %+v", gitInfo))
 	return gitInfo, nil

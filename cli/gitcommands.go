@@ -22,6 +22,7 @@ func getGitNameSpaceCommands() []components.Command {
 			Aliases:     []string{"a"},
 			Description: gitAuditDocs.GetDescription(),
 			Flags:       flags.GetCommandFlags(flags.GitAudit),
+			Hidden:      true,
 			Action:      GitAuditCmd,
 		},
 		// TODO: Move cc cmd to Frogbot/Script
