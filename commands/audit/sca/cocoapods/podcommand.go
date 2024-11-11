@@ -38,8 +38,8 @@ func getPodVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
 	}
 	log.Debug("Using pod executable:", podExecPath)
-	versionData, stdErr, err := runPodCmd(podExecPath, "", []string{"--version"})
-	if err != nil || stdErr != nil {
+	versionData, _, err := runPodCmd(podExecPath, "", []string{"--version"})
+	if err != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), podExecPath, nil
@@ -172,6 +172,14 @@ func setArtifactoryAsResolutionServer(serverDetails *config.ServerDetails, depsR
 		return
 	}
 	clearResolutionServerFunc = podCmd.RestoreNetrcFunc()
+	_, execPath, err := getPodVersionAndExecPath()
+	if err != nil {
+		return nil, err
+	}
+	_, _, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo)})
+	if err != nil {
+		return nil, err
+	}
 	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
 	return
 }
