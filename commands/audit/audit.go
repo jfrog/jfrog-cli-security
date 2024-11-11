@@ -352,13 +352,17 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 				// We don't need to scan for both and get duplicate results.
 				continue
 			}
+			// No technology was detected, add scan without descriptors. (so no sca scan will be preformed and set at target level)
 			if len(workingDirs) == 0 {
-				// Requested technology (from params) descriptors/indicators were not found, scan only requested directory for this technology.
+				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
 				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})
 			}
 			for workingDir, descriptors := range workingDirs {
 				// Add scan for each detected working directory.
-				cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech}).SetDescriptors(descriptors...)
+				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: workingDir, Technology: tech})
+				if tech != techutils.NoTech {
+					targetResults.SetDescriptors(descriptors...)
+				}
 			}
 		}
 	}
