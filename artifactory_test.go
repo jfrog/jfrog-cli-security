@@ -103,6 +103,12 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			cacheRepoName:   securityTests.PypiRemoteRepo,
 			projectType:     project.Poetry,
 		},
+		{
+			testProjectPath: []string{"cocoapods"},
+			resolveRepoName: securityTests.CocoapodsVirtualRepo,
+			cacheRepoName:   securityTests.CocoapodsRemoteRepo,
+			projectType:     project.Cocoapods,
+		},
 	}
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
