@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +82,12 @@ func (pc *PodCommand) RestoreNetrcFunc() func() error {
 
 func (pc *PodCommand) GetData() ([]byte, error) {
 	var filteredConf []string
-	filteredConf = append(filteredConf, "machine ", pc.serverDetails.Url, "\n")
+	u, err := url.Parse(pc.serverDetails.Url)
+	if err != nil {
+		return nil, err
+	}
+	hostname := u.Hostname()
+	filteredConf = append(filteredConf, "machine ", hostname, "\n")
 	filteredConf = append(filteredConf, "login ", pc.serverDetails.User, "\n")
 	filteredConf = append(filteredConf, "password ", pc.serverDetails.AccessToken, "\n")
 
@@ -93,15 +99,23 @@ func (pc *PodCommand) CreateTempNetrc() error {
 	if err != nil {
 		return err
 	}
-	if err = removeNetrcIfExists(pc.workingDirectory); err != nil {
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if err = removeNetrcIfExists(dir); err != nil {
 		return err
 	}
 	log.Debug("Creating temporary .netrc file.")
-	return errorutils.CheckError(os.WriteFile(filepath.Join(pc.workingDirectory, podNetRcfileName), data, 0755))
+	return errorutils.CheckError(os.WriteFile(filepath.Join(dir, podNetRcfileName), data, 0755))
 }
 
 func (pc *PodCommand) setRestoreNetrcFunc() error {
-	restoreNetrcFunc, err := ioutils.BackupFile(filepath.Join(pc.workingDirectory, podNetRcfileName), podrcBackupFileName)
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	restoreNetrcFunc, err := ioutils.BackupFile(filepath.Join(dir, podNetRcfileName), podrcBackupFileName)
 	if err != nil {
 		return err
 	}
@@ -159,7 +173,7 @@ func removeNetrcIfExists(workingDirectory string) error {
 		return errorutils.CheckError(err)
 	}
 
-	log.Debug("Removing existing .npmrc file")
+	log.Debug("Removing existing .netrc file")
 	return errorutils.CheckError(os.Remove(filepath.Join(workingDirectory, podNetRcfileName)))
 }
 
