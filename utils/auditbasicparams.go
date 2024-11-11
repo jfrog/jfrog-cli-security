@@ -41,6 +41,7 @@ type AuditParams interface {
 	SetIsRecursiveScan(isRecursiveScan bool) *AuditBasicParams
 	IsRecursiveScan() bool
 	SkipAutoInstall() bool
+	AllowPartialResults() bool
 }
 
 type AuditBasicParams struct {
