@@ -79,21 +79,44 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	})
 }
 
-// This test verifies correctness for a use-case where a user provides the command's flags after providing its arguments, and there is a wrong flag.
-// Since the library that parses the command expects to get flags before args, when it is the other way around - it cannot recognize a wrong provided flag.
+// This test verifies the correctness of a use case in 'scan' command, where a user provides the command's arguments before the command's flags, and there is an incorrect flag.
+// Since the library that parses the command expects the flags to be provided before the arguments, it cannot recognize a wrongly provided flag when the order is reversed.
 // This test checks the fix for this issue.
 func TestXrayBinaryScanWithIncorrectFlagsAfterArgs(t *testing.T) {
+	testCases := []struct {
+		name            string
+		flagsBeforeArgs bool
+	}{
+		{
+			name:            "flags before args",
+			flagsBeforeArgs: true,
+		},
+		{
+			name:            "args before flags",
+			flagsBeforeArgs: false,
+		},
+	}
+
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
-	args := []string{"scan", binariesPath, "--watch=" + watchName}
-	// TODO fix test- I cannot find a way that allows me to run a CLI command that is suppose to fail and return an error. There is an assert.NoError check inside RunCliCmdWithOutput and also we get only a string output by the end and not the error itself
-	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
-	print(output)
 
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			var args []string
+			if test.flagsBeforeArgs {
+				args = []string{"scan", "--watch=" + watchName, binariesPath}
+			} else {
+				args = []string{"scan", binariesPath, "--watch=" + watchName}
+			}
+
+			err := securityTests.PlatformCli.Exec(args...)
+			assert.Error(t, err)
+		})
+	}
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
