@@ -72,7 +72,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 	}
 
 	// Calculate Yarn dependencies
-	dependenciesMap, root, err := bibuildutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger)
+	dependenciesMap, root, err := bibuildutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger, params.AllowPartialResults())
 	if err != nil {
 		return
 	}
