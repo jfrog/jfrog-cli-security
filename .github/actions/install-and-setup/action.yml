@@ -15,7 +15,7 @@ runs:
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
-        ruby-version: 3.0.0
+        ruby-version: 3.3.6
     - name: Install cocoapods
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
       run: gem install cocoapods
