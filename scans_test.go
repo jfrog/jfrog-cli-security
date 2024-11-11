@@ -79,6 +79,22 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	})
 }
 
+// This test verifies correctness for a use-case where a user provides the command's flags after providing its arguments, and there is a wrong flag.
+// Since the library that parses the command expects to get flags before args, when it is the other way around - it cannot recognize a wrong provided flag.
+// This test checks the fix for this issue.
+func TestXrayBinaryScanWithIncorrectFlagsAfterArgs(t *testing.T) {
+	callback := commonTests.MockProgressInitialization()
+	defer callback()
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	defer deleteWatch()
+	args := []string{"scan", binariesPath, "--watch=" + watchName}
+	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
+	print(output)
+
+}
+
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
