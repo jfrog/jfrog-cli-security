@@ -90,6 +90,7 @@ func TestXrayBinaryScanWithIncorrectFlagsAfterArgs(t *testing.T) {
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	args := []string{"scan", binariesPath, "--watch=" + watchName}
+	// TODO fix test- I cannot find a way that allows me to run a CLI command that is suppose to fail and return an error. There is an assert.NoError check inside RunCliCmdWithOutput and also we get only a string output by the end and not the error itself
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
 	print(output)
 
