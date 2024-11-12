@@ -39,14 +39,14 @@ func getPodVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
 	}
 	log.Debug("Using pod executable:", podExecPath)
-	versionData, _, err := runPodCmd(podExecPath, "", []string{"--version"})
+	versionData, err := runPodCmd(podExecPath, "", []string{"--version"})
 	if err != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), podExecPath, nil
 }
 
-func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult, errResult []byte, err error) {
+func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult []byte, err error) {
 	args := make([]string, 0)
 	for i := 0; i < len(podArgs); i++ {
 		if strings.TrimSpace(podArgs[i]) != "" {
@@ -61,7 +61,7 @@ func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult, err
 	errBuffer := bytes.NewBuffer([]byte{})
 	command.Stderr = errBuffer
 	err = command.Run()
-	errResult = errBuffer.Bytes()
+	errResult := errBuffer.Bytes()
 	stdResult = outBuffer.Bytes()
 	if err != nil {
 		err = fmt.Errorf("error while running '%s %s': %s\n%s", executablePath, strings.Join(args, " "), err.Error(), strings.TrimSpace(string(errResult)))
@@ -190,7 +190,7 @@ func setArtifactoryAsResolutionServer(serverDetails *config.ServerDetails, depsR
 	if err != nil {
 		return nil, err
 	}
-	_, _, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo)})
+	_, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo)})
 	if err != nil {
 		return nil, err
 	}
