@@ -22,7 +22,8 @@ runs:
     - name: Install cURL Headers
       run: |
         if [ ${{ runner.os }} == "Windows" ]; then
-            curl https://curl.se/download/curl-7.58.0.tar.gz | tar xz -C /usr --strip-components=1 curl-7.58.0/include
+            curl https://curl.se/windows/dl-8.11.0_1/curl-8.11.0_1-win64-mingw.zip | tar xz curl-8.11.0_1-win64-mingw.zip
+            mv curl-8.11.0_1-win64-mingw/bin/libcurl-x64.dll C:/hostedtoolcache/windows/Ruby/3.3.6/x64/bin/libcurl.dll
         fi
       shell: bash
 
