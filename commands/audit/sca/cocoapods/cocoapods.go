@@ -213,7 +213,7 @@ func GetDependenciesData(exePath, currentDir string) (string, error) {
 		return "", err
 	}
 	if runPodInstall {
-		_, _, err = runPodCmd(exePath, currentDir, []string{"install"})
+		_, err = runPodCmd(exePath, currentDir, []string{"install"})
 		if err != nil {
 			return "", err
 		}
