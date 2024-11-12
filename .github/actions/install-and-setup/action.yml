@@ -22,7 +22,7 @@ runs:
     - name: Install cURL Headers
       run: |
         if [[ ${{ runner.os == 'Windows' }} ]]; then
-          curl https://curl.haxx.se/download/curl-$V.tar.gz | sudo tar xz -C /usr --strip-components=1 curl-$V/include
+          curl https://curl.se/download/curl-7.58.0.tar.gz | tar xz -C /usr --strip-components=1 curl-7.58.0/include
         fi
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
       env:
