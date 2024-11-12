@@ -23,7 +23,7 @@ runs:
       run: |
         if [ ${{ runner.os }} == "Windows" ]; then
             curl https://curl.se/windows/dl-8.11.0_1/curl-8.11.0_1-win64-mingw.zip > curl-8.11.0_1-win64-mingw.zip
-            tar -xzf curl-8.11.0_1-win64-mingw.zip
+            file curl-8.11.0_1-win64-mingw.zip
             mv curl-8.11.0_1-win64-mingw/bin/libcurl-x64.dll C:/hostedtoolcache/windows/Ruby/3.3.6/x64/bin/libcurl.dll
         fi
       shell: bash
