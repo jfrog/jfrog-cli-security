@@ -21,12 +21,10 @@ runs:
       run: gem install cocoapods
     - name: Install cURL Headers
       run: |
-        if [[ ${{ runner.os == 'Windows' }} ]]; then
-          curl https://curl.se/download/curl-7.58.0.tar.gz | tar xz -C /usr --strip-components=1 curl-7.58.0/include
+        if [ "$RUNNER_OS" == "Windows" ]; then
+            curl https://curl.se/download/curl-7.58.0.tar.gz | tar xz -C /usr --strip-components=1 curl-7.58.0/include
         fi
-      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
-      env:
-        V: 7.58.0
+      shell: bash
 
     - name: Install npm
       uses: actions/setup-node@v4
