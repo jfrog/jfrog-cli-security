@@ -21,7 +21,7 @@ runs:
       run: gem install cocoapods
     - name: Install cURL Headers
       run: |
-        if [[ ${{ runner.os == 'Windows' }} ]]; then
+        if [[ ${{ runner.os == 'Windows' && 'powershell' || 'bash' }} ]]; then
           curl https://curl.haxx.se/download/curl-$V.tar.gz | sudo tar xz -C /usr --strip-components=1 curl-$V/include
         fi
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
