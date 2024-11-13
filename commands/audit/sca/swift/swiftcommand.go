@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -14,13 +13,10 @@ import (
 
 const (
 	minSupportedSwiftVersion = "5.7.0"
-	swiftNetRcfileName       = ".netrc"
-	swiftrcBackupFileName    = ".jfrog.netrc.backup"
 )
 
 type SwiftCommand struct {
 	cmdName          string
-	serverDetails    *config.ServerDetails
 	swiftVersion     *version.Version
 	workingDirectory string
 	executablePath   string
