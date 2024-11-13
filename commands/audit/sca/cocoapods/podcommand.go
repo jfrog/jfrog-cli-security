@@ -190,7 +190,7 @@ func setArtifactoryAsResolutionServer(serverDetails *config.ServerDetails, depsR
 	if err != nil {
 		return nil, err
 	}
-	_, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo)})
+	_, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo), "--verbose"})
 	if err != nil {
 		return nil, err
 	}
