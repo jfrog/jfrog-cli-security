@@ -2,7 +2,6 @@ package swift
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -166,17 +165,6 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return nil, nil, err
 	}
 
-	clearResolutionServerFunc, err := configSwiftResolutionServerIfNeeded(params)
-	if err != nil {
-		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
-		return nil, nil, err
-	}
-	defer func() {
-		if clearResolutionServerFunc != nil {
-			err = errors.Join(err, clearResolutionServerFunc())
-		}
-	}()
-
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	_, _, err = getSwiftVersionAndExecPath()
@@ -209,22 +197,6 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	parseSwiftDependenciesList(rootNode, dependencyMap, versionMap, uniqueDepsSet)
 	dependencyTree = []*xrayUtils.GraphNode{rootNode}
 	uniqueDeps = uniqueDepsSet.ToSlice()
-	return
-}
-
-// Generates a .netrc file to configure an Artifactory server as the resolver server.
-func configSwiftResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
-	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
-	if params.DepsRepo() == "" {
-		return
-	}
-
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
-
-	clearResolutionServerFunc, err = setArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
 	return
 }
 
