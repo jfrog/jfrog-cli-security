@@ -39,7 +39,6 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 		techutils.Cocoapods.GetPackageTypeId() + "GoogleSignIn:6.2.4",
 		techutils.Cocoapods.GetPackageTypeId() + "GTMAppAuth:1.3.1",
 		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher:2.3.0",
-		techutils.Cocoapods.GetPackageTypeId() + "nanopb:0.4.1",
 		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
 
@@ -50,7 +49,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	assert.NotEmpty(t, rootNode)
 
 	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetPackageTypeId()+packageInfo)
-	assert.Len(t, rootNode[0].Nodes, 5)
+	assert.Len(t, rootNode[0].Nodes, 4)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "GTMSessionFetcher:2.3.0")
 	assert.Len(t, child1.Nodes, 0)

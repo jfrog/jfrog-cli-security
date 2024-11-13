@@ -1,7 +1,6 @@
 package cocoapods
 
 import (
-	"errors"
 	"fmt"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -188,35 +187,10 @@ func extractPodsSection(filePath string) (string, error) {
 	return subContent, nil
 }
 
-func shouldRunPodInstall(currentDir string) (bool, error) {
-	podlockInfo, err := os.Stat(filepath.Join(currentDir, "Podfile.lock"))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// Lockfile doesn't exist, run install to generate it
-			return true, nil
-		}
-		return false, err
-	}
-
-	podfileInfo, err := os.Stat(filepath.Join(currentDir, "Podfile"))
-	if err != nil {
-		return false, err
-	}
-
-	// Run install if podfile newer than lockfile
-	return podfileInfo.ModTime().After(podlockInfo.ModTime()), nil
-}
-
-func GetDependenciesData(exePath, currentDir string) (string, error) {
-	runPodInstall, err := shouldRunPodInstall(currentDir)
+func GetDependenciesData(currentDir string) (string, error) {
+	_, err := os.Stat(filepath.Join(currentDir, "Podfile.lock"))
 	if err != nil {
 		return "", err
-	}
-	if runPodInstall {
-		_, err = runPodCmd(exePath, currentDir, []string{"install"})
-		if err != nil {
-			return "", err
-		}
 	}
 	result, err := extractPodsSection(filepath.Join(currentDir, "Podfile.lock"))
 	if err != nil {
@@ -231,26 +205,15 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 		return nil, nil, err
 	}
 
-	clearResolutionServerFunc, err := configPodResolutionServerIfNeeded(params)
-	if err != nil {
-		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
-		return nil, nil, err
-	}
-	defer func() {
-		if clearResolutionServerFunc != nil {
-			err = errors.Join(err, clearResolutionServerFunc())
-		}
-	}()
-
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, execPath, err := getPodVersionAndExecPath()
+	_, _, err = getPodVersionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		return
 	}
 	// Calculate pod dependencies
-	data, err := GetDependenciesData(execPath, currentDir)
+	data, err := GetDependenciesData(currentDir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -270,22 +233,6 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	parsePodDependenciesList(rootNode, dependenciesGraph, versionMap, uniqueDepsSet)
 	dependencyTree = []*xrayUtils.GraphNode{rootNode}
 	uniqueDeps = uniqueDepsSet.ToSlice()
-	return
-}
-
-// Generates a .netrc file to configure an Artifactory server as the resolver server.
-func configPodResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
-	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
-	if params.DepsRepo() == "" {
-		return
-	}
-
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
-
-	clearResolutionServerFunc, err = setArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
 	return
 }
 
