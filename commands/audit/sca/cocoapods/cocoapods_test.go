@@ -39,7 +39,6 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 		techutils.Cocoapods.GetPackageTypeId() + "GoogleSignIn:6.2.4",
 		techutils.Cocoapods.GetPackageTypeId() + "GTMAppAuth:1.3.1",
 		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher:2.3.0",
-		techutils.Cocoapods.GetPackageTypeId() + "nanopb:0.4.1",
 		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
 
