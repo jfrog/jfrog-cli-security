@@ -22,6 +22,8 @@ runs:
 
     - name: install swift
       uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: "5.1.0"
 
     - name: Install npm
       uses: actions/setup-node@v4
