@@ -4,31 +4,20 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
-	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"net/url"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
 const (
 	minSupportedPodVersion = "1.15.2"
-	podNetRcfileName       = ".netrc"
-	podrcBackupFileName    = ".jfrog.netrc.backup"
 )
 
 type PodCommand struct {
 	cmdName          string
-	serverDetails    *config.ServerDetails
 	podVersion       *version.Version
-	authArtDetails   auth.ServiceDetails
-	restoreNetrcFunc func() error
 	workingDirectory string
 	executablePath   string
 }
@@ -71,76 +60,6 @@ func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult []by
 	return
 }
 
-func (pc *PodCommand) SetServerDetails(serverDetails *config.ServerDetails) *PodCommand {
-	pc.serverDetails = serverDetails
-	return pc
-}
-
-func (pc *PodCommand) RestoreNetrcFunc() func() error {
-	return pc.restoreNetrcFunc
-}
-
-func (pc *PodCommand) GetData() ([]byte, error) {
-	var filteredConf []string
-	u, err := url.Parse(pc.serverDetails.Url)
-	if err != nil {
-		return nil, err
-	}
-	hostname := u.Hostname()
-	filteredConf = append(filteredConf, "machine ", hostname, "\n")
-	filteredConf = append(filteredConf, "login ", pc.serverDetails.User, "\n")
-	filteredConf = append(filteredConf, "password ", pc.serverDetails.AccessToken, "\n")
-
-	return []byte(strings.Join(filteredConf, "")), nil
-}
-
-func (pc *PodCommand) CreateTempNetrc() error {
-	data, err := pc.GetData()
-	if err != nil {
-		return err
-	}
-	dir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	if err = removeNetrcIfExists(dir); err != nil {
-		return err
-	}
-	log.Debug("Creating temporary .netrc file.")
-	return errorutils.CheckError(os.WriteFile(filepath.Join(dir, podNetRcfileName), data, 0755))
-}
-
-func (pc *PodCommand) setRestoreNetrcFunc() error {
-	dir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	restoreNetrcFunc, err := ioutils.BackupFile(filepath.Join(dir, podNetRcfileName), podrcBackupFileName)
-	if err != nil {
-		return err
-	}
-	pc.restoreNetrcFunc = func() error {
-		return restoreNetrcFunc()
-	}
-	return nil
-}
-
-func (pc *PodCommand) setArtifactoryAuth() error {
-	authArtDetails, err := pc.serverDetails.CreateArtAuthConfig()
-	if err != nil {
-		return err
-	}
-	if authArtDetails.GetSshAuthHeaders() != nil {
-		return errorutils.CheckErrorf("SSH authentication is not supported in this command")
-	}
-	pc.authArtDetails = authArtDetails
-	return nil
-}
-
-func newPodInstallCommand() *PodCommand {
-	return &PodCommand{cmdName: "install"}
-}
-
 func (pc *PodCommand) PreparePrerequisites() error {
 	log.Debug("Preparing prerequisites...")
 	var err error
@@ -158,42 +77,5 @@ func (pc *PodCommand) PreparePrerequisites() error {
 		return err
 	}
 	log.Debug("Working directory set to:", pc.workingDirectory)
-	if err = pc.setArtifactoryAuth(); err != nil {
-		return err
-	}
-
-	return pc.setRestoreNetrcFunc()
-}
-
-func removeNetrcIfExists(workingDirectory string) error {
-	if _, err := os.Stat(filepath.Join(workingDirectory, podNetRcfileName)); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return errorutils.CheckError(err)
-	}
-
-	log.Debug("Removing existing .netrc file")
-	return errorutils.CheckError(os.Remove(filepath.Join(workingDirectory, podNetRcfileName)))
-}
-
-func setArtifactoryAsResolutionServer(serverDetails *config.ServerDetails, depsRepo string) (clearResolutionServerFunc func() error, err error) {
-	podCmd := newPodInstallCommand().SetServerDetails(serverDetails)
-	if err = podCmd.PreparePrerequisites(); err != nil {
-		return
-	}
-	if err = podCmd.CreateTempNetrc(); err != nil {
-		return
-	}
-	clearResolutionServerFunc = podCmd.RestoreNetrcFunc()
-	_, execPath, err := getPodVersionAndExecPath()
-	if err != nil {
-		return nil, err
-	}
-	_, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo), "--verbose"})
-	if err != nil {
-		return nil, err
-	}
-	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
-	return
+	return nil
 }
