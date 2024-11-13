@@ -12,6 +12,14 @@ runs:
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
 
+    - name: install ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.3.6
+    - name: Install cocoapods
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+      run: gem install cocoapods
+
     - name: install swift
       uses: swift-actions/setup-swift@v2
       with:
