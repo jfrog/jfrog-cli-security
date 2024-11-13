@@ -1,0 +1,6 @@
+{
+  "key": "${COCOAPODS_REMOTE_REPO}",
+  "rclass": "remote",
+  "packageType": "cocoapods",
+  "url": "https://github.com/CocoaPods/cdn.cocoapods.org"
+}

@@ -213,7 +213,7 @@ func GetDependenciesData(exePath, currentDir string) (string, error) {
 		return "", err
 	}
 	if runPodInstall {
-		_, _, err = runPodCmd(exePath, currentDir, []string{"install"})
+		_, err = runPodCmd(exePath, currentDir, []string{"install"})
 		if err != nil {
 			return "", err
 		}
@@ -244,13 +244,13 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 
 	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, _, err = getPodVersionAndExecPath()
+	_, execPath, err := getPodVersionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving pod path: %s", err.Error())
 		return
 	}
 	// Calculate pod dependencies
-	data, err := GetDependenciesData("pod", currentDir)
+	data, err := GetDependenciesData(execPath, currentDir)
 	if err != nil {
 		return nil, nil, err
 	}

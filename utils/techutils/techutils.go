@@ -40,7 +40,7 @@ const (
 	Conan     Technology = "conan"
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
-  NoTech    Technology = ""
+	NoTech    Technology = ""
 )
 const Pypi = "pypi"
 

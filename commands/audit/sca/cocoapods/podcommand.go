@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/auth"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,14 +39,14 @@ func getPodVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'pod' executable in the system PATH %w", err)
 	}
 	log.Debug("Using pod executable:", podExecPath)
-	versionData, stdErr, err := runPodCmd(podExecPath, "", []string{"--version"})
-	if err != nil || stdErr != nil {
+	versionData, err := runPodCmd(podExecPath, "", []string{"--version"})
+	if err != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), podExecPath, nil
 }
 
-func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult, errResult []byte, err error) {
+func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult []byte, err error) {
 	args := make([]string, 0)
 	for i := 0; i < len(podArgs); i++ {
 		if strings.TrimSpace(podArgs[i]) != "" {
@@ -60,7 +61,7 @@ func runPodCmd(executablePath, srcPath string, podArgs []string) (stdResult, err
 	errBuffer := bytes.NewBuffer([]byte{})
 	command.Stderr = errBuffer
 	err = command.Run()
-	errResult = errBuffer.Bytes()
+	errResult := errBuffer.Bytes()
 	stdResult = outBuffer.Bytes()
 	if err != nil {
 		err = fmt.Errorf("error while running '%s %s': %s\n%s", executablePath, strings.Join(args, " "), err.Error(), strings.TrimSpace(string(errResult)))
@@ -81,7 +82,12 @@ func (pc *PodCommand) RestoreNetrcFunc() func() error {
 
 func (pc *PodCommand) GetData() ([]byte, error) {
 	var filteredConf []string
-	filteredConf = append(filteredConf, "machine ", pc.serverDetails.Url, "\n")
+	u, err := url.Parse(pc.serverDetails.Url)
+	if err != nil {
+		return nil, err
+	}
+	hostname := u.Hostname()
+	filteredConf = append(filteredConf, "machine ", hostname, "\n")
 	filteredConf = append(filteredConf, "login ", pc.serverDetails.User, "\n")
 	filteredConf = append(filteredConf, "password ", pc.serverDetails.AccessToken, "\n")
 
@@ -93,15 +99,23 @@ func (pc *PodCommand) CreateTempNetrc() error {
 	if err != nil {
 		return err
 	}
-	if err = removeNetrcIfExists(pc.workingDirectory); err != nil {
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if err = removeNetrcIfExists(dir); err != nil {
 		return err
 	}
 	log.Debug("Creating temporary .netrc file.")
-	return errorutils.CheckError(os.WriteFile(filepath.Join(pc.workingDirectory, podNetRcfileName), data, 0755))
+	return errorutils.CheckError(os.WriteFile(filepath.Join(dir, podNetRcfileName), data, 0755))
 }
 
 func (pc *PodCommand) setRestoreNetrcFunc() error {
-	restoreNetrcFunc, err := ioutils.BackupFile(filepath.Join(pc.workingDirectory, podNetRcfileName), podrcBackupFileName)
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	restoreNetrcFunc, err := ioutils.BackupFile(filepath.Join(dir, podNetRcfileName), podrcBackupFileName)
 	if err != nil {
 		return err
 	}
@@ -159,7 +173,7 @@ func removeNetrcIfExists(workingDirectory string) error {
 		return errorutils.CheckError(err)
 	}
 
-	log.Debug("Removing existing .npmrc file")
+	log.Debug("Removing existing .netrc file")
 	return errorutils.CheckError(os.Remove(filepath.Join(workingDirectory, podNetRcfileName)))
 }
 
@@ -172,6 +186,14 @@ func setArtifactoryAsResolutionServer(serverDetails *config.ServerDetails, depsR
 		return
 	}
 	clearResolutionServerFunc = podCmd.RestoreNetrcFunc()
+	_, execPath, err := getPodVersionAndExecPath()
+	if err != nil {
+		return nil, err
+	}
+	_, err = runPodCmd(execPath, podCmd.workingDirectory, []string{"repo", "add-cdn", depsRepo, fmt.Sprintf("%sapi/pods/%s", serverDetails.ArtifactoryUrl, depsRepo), "--verbose"})
+	if err != nil {
+		return nil, err
+	}
 	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
 	return
 }
