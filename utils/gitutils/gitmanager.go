@@ -1,9 +1,10 @@
-package git
+package gitutils
 
 import (
 	"fmt"
-
 	goGit "github.com/go-git/go-git/v5"
+	
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 type GitManager struct {
@@ -44,11 +45,20 @@ func NewGitManager(localRepositoryWorkingDir string) (gm *GitManager, err error)
 	return
 }
 
-func (gm *GitManager) getRootRemote() (root *goGit.Remote, err error) {
+func (gm *GitManager) getRootRemote(priorityNames ...string) (root *goGit.Remote, err error) {
 	remotes, err := gm.localGitRepository.Remotes()
 	if err != nil {
 		return
 	}
+	if len(remotes) == 0 {
+		err = fmt.Errorf("No remotes found")
+		return
+	}
+	if len(remotes) == 1 {
+		return remotes[0], nil
+	}
+	log.Info(fmt.Sprintf("Multiple remotes found: %v", remotes))
+
 	if len(remotes) != 1 {
 		// TODO: Forked repository remote is not supported yet. (how to handle multiple remotes?)
 		err = fmt.Errorf("Currently only one remote is supported, found %d remotes", len(remotes))

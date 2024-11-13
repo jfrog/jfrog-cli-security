@@ -22,8 +22,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuW
 github.com/apparentlymart/go-textseg/v13 v13.0.0/go.mod h1:ZK2fH7c4NqDTLtiYLvIkEghdlcqw7yxLeM89kiTRPUo=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
-github.com/attiasas/jfrog-client-go v0.0.0-20241110132932-d77023533161 h1:ziLb1gkwgMzb0lydK5taTztA6EnkiEBrNcASRW/gyYg=
-github.com/attiasas/jfrog-client-go v0.0.0-20241110132932-d77023533161/go.mod h1:0krZWJWiFMBr4f2BKeQvWF98UCxNFDiom+pEAPcCG+U=
+github.com/attiasas/jfrog-client-go v0.0.0-20241111093842-49f91b6bab5e h1:s95Zf2e8C3UGpAmv5cx+1VJqflArfKuNs0UiqnM4ECA=
+github.com/attiasas/jfrog-client-go v0.0.0-20241111093842-49f91b6bab5e/go.mod h1:0krZWJWiFMBr4f2BKeQvWF98UCxNFDiom+pEAPcCG+U=
 github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
 github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=

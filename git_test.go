@@ -59,14 +59,13 @@ func TestGitAuditNoXsc(t *testing.T) {
 	output := runGitAudit(t, "clean")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Iac:               1,
-		Sast:              1,
-
-		Vulnerabilities: 6,
+		Vulnerabilities:   6,
 
 		Applicable:    2,
 		NotApplicable: 1,
 		Undetermined:  1,
+		Iac:           1,
+		Sast:          1,
 	})
 }
 

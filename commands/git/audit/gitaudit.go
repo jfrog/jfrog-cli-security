@@ -2,17 +2,17 @@ package audit
 
 import (
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/utils/git"
+	"github.com/jfrog/jfrog-cli-security/utils/gitutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
 type GitAuditCommand struct {
 	sourceAudit.AuditCommand
-	gitManager *git.GitManager
+	gitManager *gitutils.GitManager
 }
 
 func NewGitAuditCommand(auditCmd *sourceAudit.AuditCommand) *GitAuditCommand {
-	return &GitAuditCommand{*auditCmd, &git.GitManager{}}
+	return &GitAuditCommand{*auditCmd, &gitutils.GitManager{}}
 }
 
 func (gaCmd *GitAuditCommand) CommandName() string {
@@ -20,7 +20,7 @@ func (gaCmd *GitAuditCommand) CommandName() string {
 }
 
 func (gaCmd *GitAuditCommand) Run() (err error) {
-	_, gitInfo, err := git.DetectGitInfo()
+	_, gitInfo, err := gitutils.DetectGitInfo()
 	if err != nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package git
+package gitutils
 
 import (
 	"fmt"
@@ -32,13 +32,6 @@ func DetectGitInfo() (gitManager *GitManager, gitInfo *services.XscGitInfoContex
 	return
 }
 
-func NormalizeGitUrl(url string) string {
-	// Normalize the URL by removing "http://", "https://", and any trailing ".git"
-	url = strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ".git")
-	url = strings.TrimSuffix(strings.TrimPrefix(url, "https://"), ".git")
-	return url
-}
-
 func GetGitContext(manager *GitManager) (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(manager.remote)
 	if err != nil {
@@ -52,24 +45,23 @@ func GetGitContext(manager *GitManager) (gitInfo *services.XscGitInfoContext, er
 	if err != nil {
 		return nil, err
 	}
-	// Create the gitInfo object
+	// Create the gitInfo object with known git information
 	gitInfo = &services.XscGitInfoContext{
-		GitRepoUrl:    remoteUrl,
-		GitRepoName:   getGitRepoName(remoteUrl),
-		GitProject:    getGitProject(remoteUrl),
-		GitProvider:   getGitProvider(remoteUrl).String(),
-		BranchName:    currentBranch.Name().Short(),
-		LastCommitUrl: lastCommit.Hash.String(),
+		// Use Clone URLs as Repo Url, on browsers it will redirect to repository URLS.
+		GitRepoUrl:        remoteUrl,
+		GitRepoName:       getGitRepoName(remoteUrl),
+		GitProject:        getGitProject(remoteUrl),
+		GitProvider:       getGitProvider(remoteUrl).String(),
+		BranchName:        currentBranch.Name().Short(),
+		LastCommitHash:    lastCommit.Hash.String(),
+		LastCommitMessage: strings.TrimSpace(lastCommit.Message),
+		LastCommitAuthor:  lastCommit.Author.Name,
 	}
-	isLocalRepoClean, err := manager.IsClean()
+	isClean, err := manager.IsClean()
 	if err != nil {
 		return nil, err
 	}
-	if isLocalRepoClean {
-		gitInfo.LastCommitHash = lastCommit.Hash.String()
-		gitInfo.LastCommitMessage = strings.TrimSpace(lastCommit.Message)
-		gitInfo.LastCommitAuthor = lastCommit.Author.Name
-	}
+	gitInfo.IsDirty = !isClean
 	log.Debug(fmt.Sprintf("Git Context: %+v", gitInfo))
 	return gitInfo, nil
 }
@@ -87,31 +79,41 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 	return remote.Config().URLs[0], nil
 }
 
+func NormalizeGitUrl(url string) string {
+	// Normalize the URL by removing "http://", "https://", and any trailing ".git"
+	url = strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ".git")
+	url = strings.TrimSuffix(strings.TrimPrefix(url, "https://"), ".git")
+	return url
+}
+
 func getGitRepoName(url string) string {
-	urlParts := strings.Split(url, "/")
-	return strings.TrimSuffix(urlParts[len(urlParts)-1], ".git")
+	urlParts := strings.Split(NormalizeGitUrl(url), "/")
+	return urlParts[len(urlParts)-1]
 }
 
 func getGitProject(url string) string {
+	// In some VCS providers, there are no git projects, fallback to the repository owner.
+	if gitProject == "" {
+		gitProject = sc.RepoOwner
+	}
 	urlParts := strings.Split(url, "/")
 	return urlParts[len(urlParts)-2]
 }
 
 func getGitProvider(url string) GitProvider {
-	if strings.Contains(url, "github") {
+	if strings.Contains(url, Github.String()) {
 		return Github
 	}
-	if strings.Contains(url, "gitlab") {
+	if strings.Contains(url, Gitlab.String()) {
 		return Gitlab
 	}
-	if strings.Contains(url, "bitbucket") {
+	if strings.Contains(url, Bitbucket.String()) {
 		return Bitbucket
 	}
-	if strings.Contains(url, "azure") {
+	if strings.Contains(url, Azure.String()) {
 		return Azure
 	}
-
-	log.Warn(fmt.Sprintf("Unknown git provider for URL: %s", url))
-	// TODO: make sure UI can handle this case
+	// Unknown for self-hosted git providers
+	log.Debug(fmt.Sprintf("Unknown git provider for URL: %s", url))
 	return Unknown
 }

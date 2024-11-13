@@ -114,7 +114,7 @@ require (
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20241110080000-d07b7149b5dd
 
 // attiasas:add_repo_context_scan_graph
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241110132932-d77023533161
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241111093842-49f91b6bab5e
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
