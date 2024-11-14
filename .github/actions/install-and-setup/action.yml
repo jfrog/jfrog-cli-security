@@ -20,9 +20,6 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
       run: gem install cocoapods
 
-    - name: install swift
-      uses: swift-actions/setup-swift@v2
-
 
     - name: Install npm
       uses: actions/setup-node@v4
@@ -67,3 +64,14 @@ runs:
         python -m pip install conan
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+
+    - name: Swift ${{ matrix.swift }} on ${{ matrix.os }}
+      runs-on: ${{ matrix.os }}
+      strategy:
+        matrix:
+          os: [ ubuntu-latest, macos-latest, windows-latest ]
+          swift: [ "5.9.2", "5.9.2", "5.6.3" ]
+      steps:
+        - uses: swift-actions/setup-swift@v2
+          with:
+            swift-version: ${{ matrix.swift }}
