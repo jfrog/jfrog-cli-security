@@ -54,8 +54,6 @@ var (
 	GoRemoteRepo           = "cli-go-remote"
 	GoRepo                 = "cli-go"
 	PypiRemoteRepo         = "cli-pypi-remote"
-	CocoapodsRemoteRepo    = "cli-cocoapods-remote"
-	CocoapodsVirtualRepo   = "cli-cocoapods-virtual"
 )
 
 // Integration tests - Artifactory repositories creation templates
@@ -74,8 +72,6 @@ const (
 	GoRemoteRepositoryConfig             = "go_remote_repository_config.json"
 	GoLocalRepositoryConfig              = "go_local_repository_config.json"
 	PypiRemoteRepositoryConfig           = "pypi_remote_repository_config.json"
-	CocoapodsRemoteRepoConfig            = "cocoapods_remote_repository_config.json"
-	CocoapodsVirtualRepositoryConfig     = "cocoapods_virtual_repository_config.json"
 
 	Repo1RepositoryConfig   = "repo1_repository_config.json"
 	VirtualRepositoryConfig = "specs_virtual_repository_config.json"
@@ -99,8 +95,6 @@ var reposConfigMap = map[*string]string{
 	&GoRemoteRepo:           GoRemoteRepositoryConfig,
 	&GoRepo:                 GoLocalRepositoryConfig,
 	&PypiRemoteRepo:         PypiRemoteRepositoryConfig,
-	&CocoapodsRemoteRepo:    CocoapodsRemoteRepoConfig,
-	&CocoapodsVirtualRepo:   CocoapodsVirtualRepositoryConfig,
 }
 
 func GetTestResourcesPath() string {
@@ -120,7 +114,7 @@ func getTestResourcesPath(basePath string) string {
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
 		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
-		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo, &CocoapodsRemoteRepo},
+		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
@@ -129,7 +123,7 @@ func GetNonVirtualRepositories() map[*string]string {
 func GetVirtualRepositories() map[*string]string {
 	virtualReposMap := map[*bool][]*string{
 		TestDockerScan:  {&DockerVirtualRepo},
-		TestArtifactory: {&GoVirtualRepo, &MvnVirtualRepo, &CocoapodsVirtualRepo},
+		TestArtifactory: {&GoVirtualRepo, &MvnVirtualRepo},
 	}
 	return getNeededRepositories(virtualReposMap)
 }
@@ -189,8 +183,6 @@ func AddTimestampToGlobalVars() {
 	NugetRemoteRepo += uniqueSuffix
 	YarnRemoteRepo += uniqueSuffix
 	PypiRemoteRepo += uniqueSuffix
-	CocoapodsRemoteRepo += uniqueSuffix
-	CocoapodsVirtualRepo += uniqueSuffix
 
 	timestampAdded = true
 }
@@ -217,7 +209,5 @@ func GetSubstitutionMap() map[string]string {
 		"${NUGET_REMOTE_REPO}":           NugetRemoteRepo,
 		"${PYPI_REMOTE_REPO}":            PypiRemoteRepo,
 		"${YARN_REMOTE_REPO}":            YarnRemoteRepo,
-		"${COCOAPODS_REMOTE_REPO}":       CocoapodsRemoteRepo,
-		"${COCOAPODS_VIRTUAL_REPO}":      CocoapodsVirtualRepo,
 	}
 }
