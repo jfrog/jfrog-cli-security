@@ -1,6 +1,0 @@
-{
-  "key": "${COCOAPODS_VIRTUAL_REPO}",
-  "rclass": "virtual",
-  "packageType": "cocoapods",
-  "repositories": ["${COCOAPODS_REMOTE_REPO}"]
-}
