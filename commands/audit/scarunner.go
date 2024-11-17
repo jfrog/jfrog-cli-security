@@ -58,9 +58,15 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
 	}
-	if auditParams.configProfile != nil && !auditParams.configProfile.Modules[0].ScanConfig.EnableScaScan {
-		log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", auditParams.configProfile.ProfileName))
-		return
+	if auditParams.configProfile != nil {
+		if len(auditParams.configProfile.Modules) < 1 {
+			// Verify Modules are not nil and contain at least one modules
+			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", auditParams.configProfile.ProfileName)
+		}
+		if !auditParams.configProfile.Modules[0].ScanConfig.EnableScaScan {
+			log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", auditParams.configProfile.ProfileName))
+			return
+		}
 	}
 	// Prepare
 	currentWorkingDir, generalError := os.Getwd()

@@ -87,6 +87,10 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 	if params.ConfigProfile != nil {
 		// This code section is related to CentralizedConfig integration in CI Next.
 		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
+		if len(params.ConfigProfile.Modules) < 1 {
+			// Verify Modules are not nil and contain at least one modules
+			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
+		}
 		// Currently, if config profile exists, the only possible scanners to run are: Secrets, Sast
 		enabled := false
 		switch jasType {
