@@ -111,7 +111,7 @@ jobs:
         uses: ./.github/actions/install-and-setup
 
       - name: Install Swift on Ubuntu
-        run: apt install swift
+        uses: swift-actions/setup-swift@v2
         if: ${{ matrix.os == 'ubuntu' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
       - name: Install Swift on MacOS
