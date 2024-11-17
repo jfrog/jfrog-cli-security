@@ -63,15 +63,18 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
+	// TODO eran - add support to violations parsing
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
 	if !runAllScanners {
 		return
 	}
+	// TODO eran - add support to violations parsing
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); generalError != nil {
 		return
 	}
+	// TODO eran - add support to violations parsing
 	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir, params.SignedDescriptions))
 }
 
