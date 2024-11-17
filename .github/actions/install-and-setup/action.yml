@@ -2,7 +2,7 @@ name: "Install and Setup Dependencies"
 description: "Install needed dependencies for this repository like Go, Node, Java, Python, etc."
 
 runs:
-  using: composite
+  using: "composite"
   steps:
     # Install dependencies
     - name: Setup Go
