@@ -71,7 +71,7 @@ func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
 
 func TestGetScaSecurityViolationSarifHeadline(t *testing.T) {
 	assert.Equal(t, "Security violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))
-	assert.NotEqual(t, "Security violation [CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
 }
 
 func TestGetXrayLicenseSarifHeadline(t *testing.T) {
@@ -416,7 +416,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 					},
 					Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))},
 					Results: []*sarif.Result{
-						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "93d660ebfd39b1220c42c0beb6e4e863",
+						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
 							sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
 						),
 					},
