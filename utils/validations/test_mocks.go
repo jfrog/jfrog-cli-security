@@ -101,7 +101,8 @@ func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.Ser
 				}
 			}
 		}
-		if strings.HasPrefix(r.RequestURI, "/xray/api/v1/scan/graph") {
+		// Scan graph with Xray or Xsc
+		if strings.Contains(r.RequestURI, "/xray/api/v1/scan/graph") || strings.Contains(r.RequestURI, "/xsc/api/v1/sca/scan/graph") {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))

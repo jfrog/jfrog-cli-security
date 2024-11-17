@@ -95,11 +95,9 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		case jasutils.Sast:
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
 		case jasutils.IaC:
-			log.Debug("Skipping Iac scan as it is not currently supported with a config profile...")
-			return
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
 		case jasutils.Applicability:
-			log.Debug("Skipping Contextual Analysis scan as it is not currently supported with a config profile...")
-			return
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.EnableContextualAnalysisScan
 		}
 		if enabled {
 			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)

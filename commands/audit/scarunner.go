@@ -57,8 +57,8 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
 	}
-	if auditParams.configProfile != nil {
-		log.Debug("Skipping SCA scan as a configuration profile is being utilized and currently only Secrets and Sast scanners are supported when utilizing a configuration profile")
+	if auditParams.configProfile != nil && !auditParams.configProfile.Modules[0].ScanConfig.EnableScaScan {
+		log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", auditParams.configProfile.ProfileName))
 		return
 	}
 	// Prepare
