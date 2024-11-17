@@ -111,12 +111,12 @@ jobs:
         uses: ./.github/actions/install-and-setup
 
       - name: Install Swift on Ubuntu
-        run: apt-get install swift
-        if: ${{ matrix.os == 'ubuntu' }} && ${{ matrix.suite.testFlags == '--test.audit.Swift' }}
+        run: apt install swift
+        if: ${{ matrix.os == 'ubuntu' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
       - name: Install Swift on MacOS
         run: brew install swift
-        if: ${{ matrix.os == 'macos' }} && ${{ matrix.suite.testFlags == '--test.audit.Swift' }}
+        if: ${{ matrix.os == 'macos' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
       # Test
       - name: Run tests
