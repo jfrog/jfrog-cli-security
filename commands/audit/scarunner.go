@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/cocoapods"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
@@ -244,6 +245,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		})
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+	case techutils.Cocoapods:
+		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
