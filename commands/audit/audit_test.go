@@ -221,6 +221,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 		name                    string
 		testDirPath             string
 		configProfile           services.ConfigProfile
+		expectedScaIssues       int
 		expectedCaApplicable    int
 		expectedCaUndetermined  int
 		expectedCaNotCovered    int
@@ -229,6 +230,33 @@ func TestAuditWithConfigProfile(t *testing.T) {
 		expectedSecretsIssues   int
 		expectedIacIssues       int
 	}{
+		{
+			name:        "Enable Sca scanner",
+			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
+			configProfile: services.ConfigProfile{
+				ProfileName: "Sca only",
+				Modules: []services.Module{{
+					ModuleId:     1,
+					ModuleName:   "only-sca-module",
+					PathFromRoot: ".",
+					ScanConfig: services.ScanConfig{
+						EnableScaScan:                true,
+						EnableContextualAnalysisScan: false,
+						SastScannerConfig: services.SastScannerConfig{
+							EnableSastScan: false,
+						},
+						SecretsScannerConfig: services.SecretsScannerConfig{
+							EnableSecretsScan: false,
+						},
+						IacScannerConfig: services.IacScannerConfig{
+							EnableIacScan: false,
+						},
+					},
+				}},
+				IsDefault: false,
+			},
+			expectedScaIssues: 15,
+		},
 		{
 			name:        "Enable Sca and Applicability scanners",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
@@ -408,8 +436,14 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
 			assert.NoError(t, err)
-			// Validate Sast and Secrets have the expected number of issues and that Iac and Sca did not run
-			ScaResultsCount := testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
+
+			var ScaResultsCount int
+			// When checking Applicability results with ExactResultsMatch = true, the sum of all statuses should equal total Sca results amount. Else, we check the provided Sca issues amount
+			if testcase.expectedCaApplicable > 0 || testcase.expectedCaNotApplicable > 0 || testcase.expectedCaNotCovered > 0 || testcase.expectedCaUndetermined > 0 {
+				ScaResultsCount = testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
+			} else {
+				ScaResultsCount = testcase.expectedScaIssues
+			}
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
