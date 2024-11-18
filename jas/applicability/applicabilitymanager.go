@@ -28,15 +28,16 @@ const (
 type ApplicabilityScanType string
 
 type ApplicabilityScanManager struct {
-	applicabilityScanResults []*sarif.Run
-	directDependenciesCves   []string
-	indirectDependenciesCves []string
-	xrayResults              []services.ScanResponse
-	scanner                  *jas.JasScanner
-	thirdPartyScan           bool
-	commandType              string
-	configFileName           string
-	resultsFileName          string
+	applicabilityScannerVulnerabilitiesResults []*sarif.Run
+	applicabilityScannerViolationsResults      []*sarif.Run
+	directDependenciesCves                     []string
+	indirectDependenciesCves                   []string
+	xrayResults                                []services.ScanResponse
+	scanner                                    *jas.JasScanner
+	thirdPartyScan                             bool
+	commandType                                string
+	configFileName                             string
+	resultsFileName                            string
 }
 
 // The getApplicabilityScanResults function runs the applicability scan flow, which includes the following steps:
@@ -64,7 +65,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
-	results = applicabilityScanManager.applicabilityScanResults
+	results = applicabilityScanManager.applicabilityScannerVulnerabilitiesResults
 	if len(results) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
 	}
@@ -74,15 +75,16 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
-		applicabilityScanResults: []*sarif.Run{},
-		directDependenciesCves:   directDependenciesCves,
-		indirectDependenciesCves: indirectDependenciesCves,
-		xrayResults:              xrayScanResults,
-		scanner:                  scanner,
-		thirdPartyScan:           thirdPartyScan,
-		commandType:              string(scanType),
-		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
+		applicabilityScannerVulnerabilitiesResults: []*sarif.Run{},
+		applicabilityScannerViolationsResults:      []*sarif.Run{},
+		directDependenciesCves:                     directDependenciesCves,
+		indirectDependenciesCves:                   indirectDependenciesCves,
+		xrayResults:                                xrayScanResults,
+		scanner:                                    scanner,
+		thirdPartyScan:                             thirdPartyScan,
+		commandType:                                string(scanType),
+		configFileName:                             filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:                            filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
@@ -129,17 +131,19 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
+	// TODO eran VERIFY - createConfigFile uses the value of the output file. how should we address it for violations? what is the role of this file at all?
 	if err = asm.createConfigFile(module, asm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(asm.resultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity)
+	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(asm.resultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
-	asm.applicabilityScanResults = append(asm.applicabilityScanResults, workingDirResults...)
+	asm.applicabilityScannerVulnerabilitiesResults = append(asm.applicabilityScannerVulnerabilitiesResults, workingDirVulnerabilitiesRuns...)
+	asm.applicabilityScannerViolationsResults = append(asm.applicabilityScannerViolationsResults, workingDirViolationsRuns...)
 	return
 }
 
