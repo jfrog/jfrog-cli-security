@@ -25,11 +25,12 @@ const (
 type SecretsScanType string
 
 type SecretScanManager struct {
-	secretsScannerResults []*sarif.Run
-	scanner               *jas.JasScanner
-	scanType              SecretsScanType
-	configFileName        string
-	resultsFileName       string
+	secretsScannerVulnerabilitiesResults []*sarif.Run
+	secretsScannerViolationsResults      []*sarif.Run
+	scanner                              *jas.JasScanner
+	scanType                             SecretsScanType
+	configFileName                       string
+	resultsFileName                      string
 }
 
 // The getSecretsScanResults function runs the secrets scan flow, which includes the following steps:
@@ -50,7 +51,7 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
-	results = secretScanManager.secretsScannerResults
+	results = secretScanManager.secretsScannerVulnerabilitiesResults
 	if len(results) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(results...), "secrets vulnerabilities")
 	}
@@ -59,11 +60,12 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 
 func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string) (manager *SecretScanManager) {
 	return &SecretScanManager{
-		secretsScannerResults: []*sarif.Run{},
-		scanner:               scanner,
-		scanType:              scanType,
-		configFileName:        filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:       filepath.Join(scannerTempDir, "results.sarif"),
+		secretsScannerVulnerabilitiesResults: []*sarif.Run{},
+		secretsScannerViolationsResults:      []*sarif.Run{},
+		scanner:                              scanner,
+		scanType:                             scanType,
+		configFileName:                       filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:                      filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
@@ -74,11 +76,12 @@ func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
+	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
-	ssm.secretsScannerResults = append(ssm.secretsScannerResults, processSecretScanRuns(workingDirRuns)...)
+	ssm.secretsScannerVulnerabilitiesResults = append(ssm.secretsScannerVulnerabilitiesResults, processSecretScanRuns(workingDirVulnerabilitiesRuns)...)
+	ssm.secretsScannerViolationsResults = append(ssm.secretsScannerViolationsResults, processSecretScanRuns(workingDirViolationsRuns)...)
 	return
 }
 
