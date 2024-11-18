@@ -110,8 +110,13 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
 	run := sarif.NewRunWithInformationURI(ScaScannerToolName, utils.BaseDocumentationURL+"sca")
 	run.Tool.Driver.Version = &sc.xrayVersion
+	wd := target.Target
+	if sc.currentCmdType.IsTargetBinary() {
+		// For binary, the target is a file and not a directory
+		wd = filepath.Dir(wd)
+	}
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(target.Target)).
+		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)).
 		WithExecutionSuccess(errorCount == 0),
 	)
 	return run
@@ -240,7 +245,7 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule := parseScaToSarifFormat(cmdType, vulnerability.IssueId, vulnerability.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
+		currentResults, currentRule := parseScaToSarifFormat(cmdType, vulnerability.IssueId, vulnerability.Summary, markdownDescription, maxCveScore, getScaVulnerabilitySarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, vulnerability.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -261,7 +266,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule := parseScaToSarifFormat(cmdType, violation.IssueId, violation.Summary, markdownDescription, maxCveScore, getScaIssueSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents, violation.WatchName)
+		currentResults, currentRule := parseScaToSarifFormat(cmdType, violation.IssueId, violation.Summary, markdownDescription, maxCveScore, getScaSecurityViolationSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents, violation.WatchName)
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -396,8 +401,12 @@ func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (
 	return strings.TrimSuffix(formattedDirectDependencies.String(), "<br/>"), nil
 }
 
-func getScaIssueSarifHeadline(depName, version, issueId string) string {
+func getScaVulnerabilitySarifHeadline(depName, version, issueId string) string {
 	return fmt.Sprintf("[%s] %s %s", issueId, depName, version)
+}
+
+func getScaSecurityViolationSarifHeadline(depName, version, key string) string {
+	return fmt.Sprintf("Security violation %s", getScaVulnerabilitySarifHeadline(depName, version, key))
 }
 
 func getXrayLicenseSarifHeadline(depName, version, key string) string {
@@ -417,21 +426,21 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 }
 
 func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
-	// Since we run in temp directories files should be relative
-	// Patch by converting the file paths to relative paths according to the invocations
-	convertPaths(cmdType, subScanType, runs...)
 	patchedRuns := []*sarif.Run{}
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
-		patched := sarifutils.CopyRunMetadata(run)
+		patched := sarifutils.CopyRun(run)
+		// Since we run in temp directories files should be relative
+		// Patch by converting the file paths to relative paths according to the invocations
+		convertPaths(cmdType, subScanType, patched)
 		if cmdType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the tool name in case of binary scan
 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
 		}
 		if patched.Tool.Driver != nil {
-			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, run.Tool.Driver.Rules...)
+			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, patched.Tool.Driver.Rules...)
 		}
-		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, target, run, run.Results...)
+		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, target, patched, patched.Results...)
 		patchedRuns = append(patchedRuns, patched)
 	}
 	return patchedRuns
@@ -470,28 +479,20 @@ func patchDockerSecretLocations(result *sarif.Result) {
 func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, rules ...*sarif.ReportingDescriptor) (patched []*sarif.ReportingDescriptor) {
 	patched = []*sarif.ReportingDescriptor{}
 	for _, rule := range rules {
-		cloned := sarif.NewRule(rule.ID)
 		if rule.Name != nil && rule.ID == *rule.Name {
 			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
-			cloned.Name = rule.Name
+			rule.Name = nil
 		}
-		cloned.ShortDescription = rule.ShortDescription
 		if commandType.IsTargetBinary() && subScanType == utils.SecretsScan {
 			// Patch the rule name in case of binary scan
-			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), cloned)
+			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Secret in Binary found] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
-		cloned.FullDescription = rule.FullDescription
-		cloned.Help = rule.Help
-		if cloned.Help == nil {
+		if rule.Help == nil {
 			// Github code scanning ingestion rules rejects rules without help content.
 			// Patch by transferring the full description to the help field.
-			cloned.Help = rule.FullDescription
+			rule.Help = rule.FullDescription
 		}
-		cloned.HelpURI = rule.HelpURI
-		cloned.Properties = rule.Properties
-		cloned.MessageStrings = rule.MessageStrings
-
-		patched = append(patched, cloned)
+		patched = append(patched, rule)
 	}
 	return
 }
@@ -734,7 +735,7 @@ func calculateResultFingerprints(resultType utils.CommandType, run *sarif.Run, r
 	if !resultType.IsTargetBinary() {
 		return nil
 	}
-	ids := []string{sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result)}
+	ids := []string{sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result), getResultWatches(result)}
 	for _, location := range sarifutils.GetResultFileLocations(result) {
 		ids = append(ids, strings.ReplaceAll(location, string(filepath.Separator), "/"))
 	}
@@ -746,4 +747,13 @@ func calculateResultFingerprints(resultType utils.CommandType, run *sarif.Run, r
 	}
 	sarifutils.SetResultFingerprint(jfrogFingerprintAlgorithmName, hashValue, result)
 	return nil
+}
+
+func getResultWatches(result *sarif.Result) (watches string) {
+	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
+		if watchesValue, ok := watchesProperty.(string); ok {
+			return watchesValue
+		}
+	}
+	return
 }
