@@ -616,7 +616,7 @@
                 ],
                 "executionSuccessful": true,
                 "workingDirectory": {
-                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017"
                 }
               }
             ],
@@ -815,7 +815,7 @@
                 ],
                 "executionSuccessful": true,
                 "workingDirectory": {
-                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017/image.tar"
+                  "uri": "/var/folders/xv/th4cksxn7jv9wjrdnn1h4tj00000gq/T/jfrog.cli.temp.-1726210535-1985298017"
                 }
               }
             ],

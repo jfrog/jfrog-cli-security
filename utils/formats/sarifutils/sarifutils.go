@@ -37,6 +37,17 @@ func GetToolVersion(run *sarif.Run) string {
 	return ""
 }
 
+func CopyRun(run *sarif.Run) *sarif.Run {
+	copy := CopyRunMetadata(run)
+	if copy.Tool.Driver != nil {
+		copy.Tool.Driver.Rules = CopyRules(run.Tool.Driver.Rules...)
+	}
+	for _, result := range run.Results {
+		copy.Results = append(copy.Results, CopyResult(result))
+	}
+	return copy
+}
+
 func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
 	if run == nil {
 		return
@@ -60,6 +71,21 @@ func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
 	}
 	if informationURI := GetRunToolInformationURI(run); informationURI != "" {
 		copied.Tool.Driver.InformationURI = &informationURI
+	}
+	return
+}
+
+func CopyRules(rules ...*sarif.ReportingDescriptor) (copied []*sarif.ReportingDescriptor) {
+	for _, rule := range rules {
+		cloned := sarif.NewRule(rule.ID)
+		cloned.HelpURI = copyStrAttribute(rule.HelpURI)
+		cloned.Name = copyStrAttribute(rule.Name)
+		cloned.ShortDescription = copyMultiMsgAttribute(rule.ShortDescription)
+		cloned.FullDescription = copyMultiMsgAttribute(rule.FullDescription)
+		cloned.Help = copyMultiMsgAttribute(rule.Help)
+		cloned.Properties = rule.Properties
+		cloned.MessageStrings = rule.MessageStrings
+		copied = append(copied, cloned)
 	}
 	return
 }
@@ -134,15 +160,56 @@ func CopyResult(result *sarif.Result) *sarif.Result {
 		RuleIndex:    result.RuleIndex,
 		Kind:         result.Kind,
 		Fingerprints: result.Fingerprints,
-		CodeFlows:    result.CodeFlows,
+		CodeFlows:    copyCodeFlows(result.CodeFlows...),
 		Level:        result.Level,
-		Message:      result.Message,
+		Message:      copyMsgAttribute(result.Message),
 		PropertyBag:  result.PropertyBag,
 	}
 	for _, location := range result.Locations {
 		copied.Locations = append(copied.Locations, CopyLocation(location))
 	}
 	return copied
+}
+
+func copyCodeFlows(flows ...*sarif.CodeFlow) []*sarif.CodeFlow {
+	var copied []*sarif.CodeFlow
+	for _, flow := range flows {
+		copied = append(copied, copyCodeFlow(flow))
+	}
+	return copied
+}
+
+func copyCodeFlow(flow *sarif.CodeFlow) *sarif.CodeFlow {
+	copied := &sarif.CodeFlow{}
+	for _, threadFlow := range flow.ThreadFlows {
+		copied.ThreadFlows = append(copied.ThreadFlows, copyThreadFlow(threadFlow))
+	}
+	return copied
+}
+
+func copyThreadFlow(threadFlow *sarif.ThreadFlow) *sarif.ThreadFlow {
+	copied := &sarif.ThreadFlow{}
+	for _, location := range threadFlow.Locations {
+		copied.Locations = append(copied.Locations, sarif.NewThreadFlowLocation().WithLocation(CopyLocation(location.Location)))
+	}
+	return copied
+}
+
+func copyMsgAttribute(attr sarif.Message) sarif.Message {
+	return sarif.Message{
+		Text:     copyStrAttribute(attr.Text),
+		Markdown: copyStrAttribute(attr.Markdown),
+	}
+}
+
+func copyMultiMsgAttribute(attr *sarif.MultiformatMessageString) *sarif.MultiformatMessageString {
+	if attr == nil {
+		return nil
+	}
+	return &sarif.MultiformatMessageString{
+		Text:     copyStrAttribute(attr.Text),
+		Markdown: copyStrAttribute(attr.Markdown),
+	}
 }
 
 func copyStrAttribute(attr *string) *string {
@@ -190,9 +257,9 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
 		copied.LogicalLocations = append(copied.LogicalLocations, &sarif.LogicalLocation{
-			Name:               logicalLocation.Name,
-			FullyQualifiedName: logicalLocation.FullyQualifiedName,
-			DecoratedName:      logicalLocation.DecoratedName,
+			Name:               copyStrAttribute(logicalLocation.Name),
+			FullyQualifiedName: copyStrAttribute(logicalLocation.FullyQualifiedName),
+			DecoratedName:      copyStrAttribute(logicalLocation.DecoratedName),
 			Kind:               logicalLocation.Kind,
 			PropertyBag:        logicalLocation.PropertyBag,
 		})
