@@ -116,7 +116,7 @@ require (
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
 // attiasas:transition_xsc_url
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241117124854-b288b48bed44
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241118081212-9e838b3f7685
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
