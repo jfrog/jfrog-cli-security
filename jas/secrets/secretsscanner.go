@@ -48,12 +48,10 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	}
 	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
-	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
-	vulnerabilitiesResults = secretScanManager.secretsScannerVulnerabilitiesResults
-	violationsResults = secretScanManager.secretsScannerViolationsResults
 	if len(vulnerabilitiesResults) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "secrets vulnerabilities")
 		if len(violationsResults) > 0 {
@@ -74,20 +72,14 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 	}
 }
 
-func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
+func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
-	if err != nil {
-		return
-	}
-	ssm.secretsScannerVulnerabilitiesResults = append(ssm.secretsScannerVulnerabilitiesResults, processSecretScanRuns(workingDirVulnerabilitiesRuns)...)
-	ssm.secretsScannerViolationsResults = append(ssm.secretsScannerViolationsResults, processSecretScanRuns(workingDirViolationsRuns)...)
-	return
+	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
 }
 
 type secretsScanConfig struct {

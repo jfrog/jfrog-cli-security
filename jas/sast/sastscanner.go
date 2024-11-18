@@ -36,12 +36,10 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	}
 	sastScanManager := newSastScanManager(scanner, scannerTempDir, signedDescriptions)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running SAST scan...")
-	if err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 		return
 	}
-	vulnerabilitiesResults = sastScanManager.sastScannerVulnerabilitiesResults
-	violationsResults = sastScanManager.sastScannerViolationsResults
 	if len(vulnerabilitiesResults) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "SAST vulnerabilities")
 		if len(violationsResults) > 0 {
@@ -61,7 +59,7 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 		resultsFileName:                   filepath.Join(scannerTempDir, "results.sarif")}
 }
 
-func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
+func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = ssm.createConfigFile(module, ssm.signedDescriptions, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
@@ -74,8 +72,6 @@ func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	}
 	groupResultsByLocation(workingDirVulnerabilitiesRuns)
 	groupResultsByLocation(workingDirViolationsRuns) // TODO eran VERIFY - check if we need this too
-	ssm.sastScannerVulnerabilitiesResults = append(ssm.sastScannerVulnerabilitiesResults, workingDirVulnerabilitiesRuns...)
-	ssm.sastScannerViolationsResults = append(ssm.sastScannerViolationsResults, workingDirViolationsRuns...)
 	return
 }
 

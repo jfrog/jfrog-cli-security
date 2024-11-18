@@ -42,12 +42,10 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
-	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
+	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
-	vulnerabilitiesResults = iacScanManager.iacScannerVulnerabilitiesResults
-	violationsResults = iacScanManager.iacScannerViolationsResults
 	if len(vulnerabilitiesResults) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "IaC vulnerabilities")
 		if len(violationsResults) > 0 {
@@ -66,20 +64,14 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager 
 		resultsFileName:                  filepath.Join(scannerTempDir, "results.sarif")}
 }
 
-func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
+func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if err = iac.createConfigFile(module, iac.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
-	if err != nil {
-		return
-	}
-	iac.iacScannerVulnerabilitiesResults = append(iac.iacScannerVulnerabilitiesResults, workingDirVulnerabilitiesRuns...)
-	iac.iacScannerViolationsResults = append(iac.iacScannerViolationsResults, workingDirViolationsRuns...)
-	return
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
 }
 
 type iacScanConfig struct {
