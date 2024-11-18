@@ -129,10 +129,28 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
-func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
-	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
+// TODO eran fix all function calls in test files to match the new signature
+func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if vulnerabilitiesSarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
+	processSarifRuns(vulnerabilitiesSarifRuns, wd, informationUrlSuffix, minSeverity)
+
+	var violationsSarifExists bool
+	violationsSarifFileName := fileName + "_violations"
+	if violationsSarifExists, err = fileutils.IsFileExists(violationsSarifFileName, false); err != nil || !violationsSarifExists {
+		return
+	}
+
+	if violationsSarifRuns, err = sarifutils.ReadScanRunsFromFile(violationsSarifFileName); err != nil {
+		return
+	}
+	processSarifRuns(violationsSarifRuns, wd, informationUrlSuffix, minSeverity) // TODO eran VERIFY - do we need to do this for violations as well
+	return
+}
+
+// This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
+func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {
 	for _, sarifRun := range sarifRuns {
 		// Jas reports has only one invocation
 		// Set the actual working directory to the invocation, not the analyzerManager directory
@@ -147,7 +165,6 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
 		addScoreToRunRules(sarifRun)
 	}
-	return
 }
 
 func fillMissingRequiredDriverInformation(defaultJasInformationUri, defaultVersion string, run *sarif.Run) {
