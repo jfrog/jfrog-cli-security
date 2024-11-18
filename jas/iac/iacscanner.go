@@ -20,10 +20,11 @@ const (
 )
 
 type IacScanManager struct {
-	iacScannerResults []*sarif.Run
-	scanner           *jas.JasScanner
-	configFileName    string
-	resultsFileName   string
+	iacScannerVulnerabilitiesResults []*sarif.Run
+	iacScannerViolationsResults      []*sarif.Run
+	scanner                          *jas.JasScanner
+	configFileName                   string
+	resultsFileName                  string
 }
 
 // The getIacScanResults function runs the iac scan flow, which includes the following steps:
@@ -45,19 +46,20 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
-	results = iacScanManager.iacScannerResults
+	results = iacScanManager.iacScannerVulnerabilitiesResults
 	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerVulnerabilitiesResults...), "IaC vulnerabilities")
 	}
 	return
 }
 
 func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *IacScanManager) {
 	return &IacScanManager{
-		iacScannerResults: []*sarif.Run{},
-		scanner:           scanner,
-		configFileName:    filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:   filepath.Join(scannerTempDir, "results.sarif")}
+		iacScannerVulnerabilitiesResults: []*sarif.Run{},
+		iacScannerViolationsResults:      []*sarif.Run{},
+		scanner:                          scanner,
+		configFileName:                   filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:                  filepath.Join(scannerTempDir, "results.sarif")}
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
@@ -67,11 +69,12 @@ func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
+	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
-	iac.iacScannerResults = append(iac.iacScannerResults, workingDirResults...)
+	iac.iacScannerVulnerabilitiesResults = append(iac.iacScannerVulnerabilitiesResults, workingDirVulnerabilitiesRuns...)
+	iac.iacScannerViolationsResults = append(iac.iacScannerViolationsResults, workingDirViolationsRuns...)
 	return
 }
 
