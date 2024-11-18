@@ -40,7 +40,8 @@ type SecretScanManager struct {
 // Return values:
 // []utils.IacOrSecretResult: a list of the secrets that were found.
 // error: An error object (if any).
-func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+// TODO eran fix test
+func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
 		return
@@ -51,9 +52,13 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
-	results = secretScanManager.secretsScannerVulnerabilitiesResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(results...), "secrets vulnerabilities")
+	vulnerabilitiesResults = secretScanManager.secretsScannerVulnerabilitiesResults
+	violationsResults = secretScanManager.secretsScannerViolationsResults
+	if len(vulnerabilitiesResults) > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "secrets vulnerabilities")
+		if len(violationsResults) > 0 {
+			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(violationsResults...), "secrets violations")
+		}
 	}
 	return
 }

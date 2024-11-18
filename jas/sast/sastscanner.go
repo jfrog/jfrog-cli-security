@@ -29,7 +29,7 @@ type SastScanManager struct {
 	resultsFileName                   string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int) (results []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String()); err != nil {
 		return
@@ -40,9 +40,13 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 		return
 	}
-	results = sastScanManager.sastScannerVulnerabilitiesResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(sastScanManager.sastScannerVulnerabilitiesResults...), "SAST vulnerabilities")
+	vulnerabilitiesResults = sastScanManager.sastScannerVulnerabilitiesResults
+	violationsResults = sastScanManager.sastScannerViolationsResults
+	if len(vulnerabilitiesResults) > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "SAST vulnerabilities")
+		if len(violationsResults) > 0 {
+			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(violationsResults...), "SAST violations")
+		}
 	}
 	return
 }

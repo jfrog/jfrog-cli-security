@@ -50,7 +50,7 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
 		return
@@ -65,9 +65,13 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
-	results = applicabilityScanManager.applicabilityScannerVulnerabilitiesResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
+	vulnerabilitiesResults = applicabilityScanManager.applicabilityScannerVulnerabilitiesResults
+	violationsResults = applicabilityScanManager.applicabilityScannerViolationsResults
+	if len(vulnerabilitiesResults) > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", vulnerabilitiesResults...), "applicable cves")
+		if len(violationsResults) > 0 {
+			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", violationsResults...), "applicable cves that incur violations")
+		}
 	}
 	return
 }

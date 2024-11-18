@@ -35,7 +35,7 @@ type IacScanManager struct {
 // []utils.SourceCodeScanResult: a list of the iac violations that were found.
 // bool: true if the user is entitled to iac scan, false otherwise.
 // error: An error object (if any).
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
 		return
@@ -46,9 +46,13 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
-	results = iacScanManager.iacScannerVulnerabilitiesResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerVulnerabilitiesResults...), "IaC vulnerabilities")
+	vulnerabilitiesResults = iacScanManager.iacScannerVulnerabilitiesResults
+	violationsResults = iacScanManager.iacScannerViolationsResults
+	if len(vulnerabilitiesResults) > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "IaC vulnerabilities")
+		if len(violationsResults) > 0 {
+			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(violationsResults...), "IaC violations")
+		}
 	}
 	return
 }
