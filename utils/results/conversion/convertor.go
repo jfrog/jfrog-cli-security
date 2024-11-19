@@ -83,7 +83,6 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityC
 }
 
 func parseCommandResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdResults *results.SecurityCommandResults) (converted T, err error) {
-	// TODO eran - in this function we need to parse the results from violations also
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
 	if params.IsMultipleRoots != nil {
@@ -101,23 +100,33 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 				return
 			}
 		}
-		if !jasEntitled || targetScansResults.JasResults == nil {
+		if !jasEntitled {
 			continue
 		}
-		if utils.IsScanRequested(cmdResults.CmdType, utils.SecretsScan, params.RequestedScans...) {
-			if err = parser.ParseSecrets(targetScansResults.ScanTarget, targetScansResults.JasResults.SecretsScanResults...); err != nil {
-				return
+
+		// TODO eran - consider making a single parsing func for JAS that will handle both vulnerabilities and violations, just like the SCA parsing.
+		// Parsing JAS vulnerabilities results
+		if targetScansResults.JasResultsNew != nil && targetScansResults.JasResultsNew.JasVulnerabilities != nil {
+			if utils.IsScanRequested(cmdResults.CmdType, utils.SecretsScan, params.RequestedScans...) {
+				if err = parser.ParseSecrets(targetScansResults.ScanTarget, targetScansResults.JasResultsNew.JasVulnerabilities.SecretsScanResults...); err != nil {
+					return
+				}
+			}
+			if utils.IsScanRequested(cmdResults.CmdType, utils.IacScan, params.RequestedScans...) {
+				if err = parser.ParseIacs(targetScansResults.ScanTarget, targetScansResults.JasResultsNew.JasVulnerabilities.IacScanResults...); err != nil {
+					return
+				}
+			}
+			if utils.IsScanRequested(cmdResults.CmdType, utils.SastScan, params.RequestedScans...) {
+				if err = parser.ParseSast(targetScansResults.ScanTarget, targetScansResults.JasResultsNew.JasVulnerabilities.SastScanResults...); err != nil {
+					return
+				}
 			}
 		}
-		if utils.IsScanRequested(cmdResults.CmdType, utils.IacScan, params.RequestedScans...) {
-			if err = parser.ParseIacs(targetScansResults.ScanTarget, targetScansResults.JasResults.IacScanResults...); err != nil {
-				return
-			}
-		}
-		if utils.IsScanRequested(cmdResults.CmdType, utils.SastScan, params.RequestedScans...) {
-			if err = parser.ParseSast(targetScansResults.ScanTarget, targetScansResults.JasResults.SastScanResults...); err != nil {
-				return
-			}
+
+		// Parsing JAS violations results
+		if targetScansResults.JasResultsNew != nil && targetScansResults.JasResultsNew.JasViolations != nil && params.HasViolationContext { // TODO eran VERIFY if the last condition is needed
+			// TODO eran complete after creating the new interface funcs
 		}
 	}
 	return parser.Get()
@@ -131,8 +140,8 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
 		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 		var applicableRuns []*sarif.Run
-		if jasEntitled && targetScansResults.JasResults != nil {
-			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
+		if jasEntitled && targetScansResults.JasResultsNew != nil && targetScansResults.JasResultsNew.JasVulnerabilities != nil {
+			applicableRuns = targetScansResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults
 		}
 		if params.IncludeVulnerabilities {
 			if err = parser.ParseVulnerabilities(actualTarget, scaResults, applicableRuns...); err != nil {
