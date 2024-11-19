@@ -47,7 +47,6 @@ type ApplicabilityScanManager struct {
 // map[string]string: A map containing the applicability result of each XRAY CVE.
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
-// TODO eran fix test
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
