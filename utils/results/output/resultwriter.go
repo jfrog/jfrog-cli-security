@@ -192,6 +192,7 @@ func (rw *ResultsWriter) printOrSaveRawResults(printMsg bool) (err error) {
 }
 
 func (rw *ResultsWriter) printTables() (err error) {
+	// TODO eran- in Tables we need to add the printing of the new tables
 	tableContent, err := rw.createResultsConvertor(isPrettyOutputSupported()).ConvertToTable(rw.commandResults)
 	if err != nil {
 		return
@@ -307,7 +308,7 @@ func PrintSecretsTable(tables formats.ResultsTables, entitledForJas, tokenValida
 	}
 	if err = PrintJasTable(tables, entitledForJas, jasutils.Secrets); err != nil {
 		return
-	}
+	} // TODO eran -add print to jas violation
 	if tokenValidationEnabled {
 		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 	}

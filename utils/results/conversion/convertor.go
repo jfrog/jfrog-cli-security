@@ -45,6 +45,7 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 
 // Parse a stream of results and convert them to the desired format T
 type ResultsStreamFormatParser[T interface{}] interface {
+	// TODO eran - add 3 new funcs for parsing violations: iac, secrets, sast
 	// Reset the convertor to start converting a new command results
 	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
@@ -82,6 +83,7 @@ func (c *CommandResultsConvertor) ConvertToSummary(cmdResults *results.SecurityC
 }
 
 func parseCommandResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], cmdResults *results.SecurityCommandResults) (converted T, err error) {
+	// TODO eran - in this function we need to parse the results from violations also
 	jasEntitled := cmdResults.EntitledForJas
 	multipleTargets := cmdResults.HasMultipleTargets()
 	if params.IsMultipleRoots != nil {
@@ -121,6 +123,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 	return parser.Get()
 }
 
+// TODO eran - create new func like this, just call the new parser funcs
 func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
 	if targetScansResults.ScaResults == nil {
 		return
