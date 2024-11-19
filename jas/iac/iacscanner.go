@@ -20,11 +20,9 @@ const (
 )
 
 type IacScanManager struct {
-	iacScannerVulnerabilitiesResults []*sarif.Run
-	iacScannerViolationsResults      []*sarif.Run
-	scanner                          *jas.JasScanner
-	configFileName                   string
-	resultsFileName                  string
+	scanner         *jas.JasScanner
+	configFileName  string
+	resultsFileName string
 }
 
 // The getIacScanResults function runs the iac scan flow, which includes the following steps:
@@ -57,11 +55,9 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 
 func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *IacScanManager) {
 	return &IacScanManager{
-		iacScannerVulnerabilitiesResults: []*sarif.Run{},
-		iacScannerViolationsResults:      []*sarif.Run{},
-		scanner:                          scanner,
-		configFileName:                   filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:                  filepath.Join(scannerTempDir, "results.sarif")}
+		scanner:         scanner,
+		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName: filepath.Join(scannerTempDir, "results.sarif")}
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {

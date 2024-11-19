@@ -68,10 +68,10 @@ func TestIacParseResults_EmptyResults(t *testing.T) {
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "no-violations.sarif")
 
 	// Act
-	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
-	if assert.NoError(t, err) && assert.NotNil(t, iacScanManager.iacScannerResults) {
-		assert.Len(t, iacScanManager.iacScannerResults, 1)
-		assert.Empty(t, iacScanManager.iacScannerResults[0].Results)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Empty(t, vulnerabilitiesResults[0].Results)
 	}
 }
 
@@ -85,9 +85,9 @@ func TestIacParseResults_ResultsContainIacViolations(t *testing.T) {
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "contains-iac-violations.sarif")
 
 	// Act
-	iacScanManager.iacScannerResults, err = jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
-	if assert.NoError(t, err) && assert.NotNil(t, iacScanManager.iacScannerResults) {
-		assert.Len(t, iacScanManager.iacScannerResults, 1)
-		assert.Len(t, iacScanManager.iacScannerResults[0].Results, 4)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(iacScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, iacDocsUrlSuffix, scanner.MinSeverity)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Len(t, vulnerabilitiesResults[0].Results, 4)
 	}
 }
