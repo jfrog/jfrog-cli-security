@@ -117,10 +117,10 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
-	scanResults, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
+	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "failed to run Secrets scan")
-	assert.Nil(t, scanResults)
+	assert.Nil(t, vulnerabilitiesResults)
 }
 
 func TestHideSecret(t *testing.T) {
