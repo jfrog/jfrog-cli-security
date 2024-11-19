@@ -35,8 +35,9 @@ type SecurityCommandResults struct {
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
-	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
-	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	ScaResults    *ScaScanResults     `json:"sca_scans,omitempty"`
+	JasResults    *JasScansResults    `json:"jas_scans,omitempty"` // TODO eran delete this at the end
+	JasResultsNew *JasScansResultsNew `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -50,7 +51,20 @@ type ScaScanResults struct {
 	XrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
 }
 
+// TODO eran - adjust all references/functions related to this struct to match the new structure
 type JasScansResults struct {
+	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
+	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
+	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
+	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
+}
+
+type JasScansResultsNew struct { // TODO eran change name at the end to JasScansResults
+	JasVulnerabilities *JasResponse `json:"jas_vulnerabilities,omitempty"`
+	JasViolations      *JasResponse `json:"jas_violations,omitempty"`
+}
+
+type JasResponse struct {
 	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
 	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
 	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
@@ -203,7 +217,8 @@ func (r *SecurityCommandResults) HasFindings() bool {
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
 	targetResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
 	if r.EntitledForJas {
-		targetResults.JasResults = &JasScansResults{}
+		targetResults.JasResults = &JasScansResults{} // TODO eran delete this
+		targetResults.JasResultsNew = &JasScansResultsNew{JasVulnerabilities: &JasResponse{}, JasViolations: &JasResponse{}}
 	}
 
 	r.targetsMutex.Lock()
@@ -347,6 +362,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 	return false
 }
 
+// TODO eran delete this and validate to replace all references (exclude Frogbot usages)
 func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Applicability:
@@ -361,6 +377,35 @@ func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results [
 	return
 }
 
+func (jsr *JasScansResultsNew) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+	switch scanType {
+	case jasutils.Applicability:
+		results = jsr.JasVulnerabilities.ApplicabilityScanResults
+	case jasutils.Secrets:
+		results = jsr.JasVulnerabilities.SecretsScanResults
+	case jasutils.IaC:
+		results = jsr.JasVulnerabilities.IacScanResults
+	case jasutils.Sast:
+		results = jsr.JasVulnerabilities.SastScanResults
+	}
+	return
+}
+
+func (jsr *JasScansResultsNew) GetViolationsResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+	switch scanType {
+	case jasutils.Applicability:
+		results = jsr.JasViolations.ApplicabilityScanResults
+	case jasutils.Secrets:
+		results = jsr.JasViolations.SecretsScanResults
+	case jasutils.IaC:
+		results = jsr.JasViolations.IacScanResults
+	case jasutils.Sast:
+		results = jsr.JasViolations.SastScanResults
+	}
+	return
+}
+
+// TODO eran delete this and validate to replace all references
 func (jsr *JasScansResults) HasFindings() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
 		if jsr.HasFindingsByType(scanType) {
@@ -370,6 +415,16 @@ func (jsr *JasScansResults) HasFindings() bool {
 	return false
 }
 
+func (jsr *JasScansResultsNew) HasFindingsNew() bool {
+	for _, scanType := range jasutils.GetJasScanTypes() {
+		if jsr.HasFindingsByTypeNew(scanType) {
+			return true
+		}
+	}
+	return false
+}
+
+// TODO eran delete this and validate to replace all references
 func (jsr *JasScansResults) HasFindingsByType(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetResults(scanType) {
 		for _, result := range run.Results {
@@ -381,6 +436,26 @@ func (jsr *JasScansResults) HasFindingsByType(scanType jasutils.JasScanType) boo
 	return false
 }
 
+func (jsr *JasScansResultsNew) HasFindingsByTypeNew(scanType jasutils.JasScanType) bool {
+	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
+		for _, result := range run.Results {
+			if len(result.Locations) > 0 {
+				return true
+			}
+		}
+	}
+
+	for _, run := range jsr.GetViolationsResults(scanType) {
+		for _, result := range run.Results {
+			if len(result.Locations) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TODO eran delete this and validate to replace all references
 func (jsr *JasScansResults) HasInformation() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
 		if jsr.HasInformationByType(scanType) {
@@ -390,8 +465,33 @@ func (jsr *JasScansResults) HasInformation() bool {
 	return false
 }
 
+func (jsr *JasScansResultsNew) HasInformationNew() bool {
+	for _, scanType := range jasutils.GetJasScanTypes() {
+		if jsr.HasInformationByTypeNew(scanType) {
+			return true
+		}
+	}
+	return false
+}
+
+// TODO eran delete this and validate to replace all references
 func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetResults(scanType) {
+		if len(run.Results) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (jsr *JasScansResultsNew) HasInformationByTypeNew(scanType jasutils.JasScanType) bool {
+	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
+		if len(run.Results) > 0 {
+			return true
+		}
+	}
+
+	for _, run := range jsr.GetViolationsResults(scanType) {
 		if len(run.Results) > 0 {
 			return true
 		}
