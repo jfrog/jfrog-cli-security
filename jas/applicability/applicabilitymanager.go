@@ -28,16 +28,14 @@ const (
 type ApplicabilityScanType string
 
 type ApplicabilityScanManager struct {
-	applicabilityScannerVulnerabilitiesResults []*sarif.Run
-	applicabilityScannerViolationsResults      []*sarif.Run
-	directDependenciesCves                     []string
-	indirectDependenciesCves                   []string
-	xrayResults                                []services.ScanResponse
-	scanner                                    *jas.JasScanner
-	thirdPartyScan                             bool
-	commandType                                string
-	configFileName                             string
-	resultsFileName                            string
+	directDependenciesCves   []string
+	indirectDependenciesCves []string
+	xrayResults              []services.ScanResponse
+	scanner                  *jas.JasScanner
+	thirdPartyScan           bool
+	commandType              string
+	configFileName           string
+	resultsFileName          string
 }
 
 // The getApplicabilityScanResults function runs the applicability scan flow, which includes the following steps:
@@ -77,16 +75,14 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
-		applicabilityScannerVulnerabilitiesResults: []*sarif.Run{},
-		applicabilityScannerViolationsResults:      []*sarif.Run{},
-		directDependenciesCves:                     directDependenciesCves,
-		indirectDependenciesCves:                   indirectDependenciesCves,
-		xrayResults:                                xrayScanResults,
-		scanner:                                    scanner,
-		thirdPartyScan:                             thirdPartyScan,
-		commandType:                                string(scanType),
-		configFileName:                             filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:                            filepath.Join(scannerTempDir, "results.sarif"),
+		directDependenciesCves:   directDependenciesCves,
+		indirectDependenciesCves: indirectDependenciesCves,
+		xrayResults:              xrayScanResults,
+		scanner:                  scanner,
+		thirdPartyScan:           thirdPartyScan,
+		commandType:              string(scanType),
+		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
