@@ -63,19 +63,16 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
-	// TODO eran - add support to violations parsing
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResultsNew, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
 	if !runAllScanners {
 		return
 	}
-	// TODO eran - add support to violations parsing
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); generalError != nil {
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResultsNew, params.Module, params.TargetOutputDir)); generalError != nil {
 		return
 	}
-	// TODO eran - add support to violations parsing
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir, params.SignedDescriptions))
+	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResultsNew, params.Module, params.TargetOutputDir, params.SignedDescriptions))
 }
 
 func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
@@ -128,56 +125,59 @@ func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner 
 	return
 }
 
-func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResults,
+func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResultsNew,
 	module jfrogappsconfig.Module, secretsScanType secrets.SecretsScanType, scansOutputDir string) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Secrets)
+		extendedScanResults.JasVulnerabilities.SecretsScanResults = append(extendedScanResults.JasVulnerabilities.SecretsScanResults, vulnerabilitiesResults...)
+		extendedScanResults.JasViolations.SecretsScanResults = append(extendedScanResults.JasViolations.SecretsScanResults, violationsResults...)
+		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Secrets)
 		return
 	}
 }
 
-func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResults,
+func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResultsNew,
 	module jfrogappsconfig.Module, scansOutputDir string) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := iac.RunIacScan(scanner, module, threadId)
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(scanner, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.IaC)
+		extendedScanResults.JasVulnerabilities.IacScanResults = append(extendedScanResults.JasVulnerabilities.IacScanResults, vulnerabilitiesResults...)
+		extendedScanResults.JasViolations.IacScanResults = append(extendedScanResults.JasViolations.IacScanResults, violationsResults...)
+		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.IaC)
 		return
 	}
 }
 
-func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResults,
+func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResultsNew,
 	module jfrogappsconfig.Module, scansOutputDir string, signedDescriptions bool) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Sast)
+		extendedScanResults.JasVulnerabilities.SastScanResults = append(extendedScanResults.JasVulnerabilities.SastScanResults, vulnerabilitiesResults...)
+		extendedScanResults.JasViolations.SastScanResults = append(extendedScanResults.JasViolations.SastScanResults, violationsResults...)
+		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Sast)
 		return
 	}
 }
@@ -190,14 +190,15 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
+		vulnerabilitiesResults, violationsResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Applicability)
+		scanResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults = append(scanResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults, vulnerabilitiesResults...)
+		scanResults.JasResultsNew.JasViolations.ApplicabilityScanResults = append(scanResults.JasResultsNew.JasViolations.ApplicabilityScanResults, violationsResults...)
+		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Applicability)
 		return
 	}
 }
