@@ -26,7 +26,6 @@ type SecretsScanType string
 
 type SecretScanManager struct {
 	secretsScannerVulnerabilitiesResults []*sarif.Run
-	secretsScannerViolationsResults      []*sarif.Run
 	scanner                              *jas.JasScanner
 	scanType                             SecretsScanType
 	configFileName                       string
@@ -64,7 +63,6 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string) (manager *SecretScanManager) {
 	return &SecretScanManager{
 		secretsScannerVulnerabilitiesResults: []*sarif.Run{},
-		secretsScannerViolationsResults:      []*sarif.Run{},
 		scanner:                              scanner,
 		scanType:                             scanType,
 		configFileName:                       filepath.Join(scannerTempDir, "config.yaml"),
