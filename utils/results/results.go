@@ -158,8 +158,8 @@ func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanTyp
 	if !r.EntitledForJas {
 		return
 	}
-	for _, scan := range r.Targets {
-		results = append(results, scan.GetJasScansResults(scanType)...)
+	for _, target := range r.Targets {
+		results = append(results, target.GetJasScansResults(scanType)...)
 	}
 	return
 }
@@ -198,8 +198,8 @@ func (r *SecurityCommandResults) HasMultipleTargets() bool {
 }
 
 func (r *SecurityCommandResults) HasInformation() bool {
-	for _, scan := range r.Targets {
-		if scan.HasInformation() {
+	for _, target := range r.Targets {
+		if target.HasInformation() {
 			return true
 		}
 	}
@@ -207,8 +207,8 @@ func (r *SecurityCommandResults) HasInformation() bool {
 }
 
 func (r *SecurityCommandResults) HasFindings() bool {
-	for _, scan := range r.Targets {
-		if scan.HasFindings() {
+	for _, target := range r.Targets {
+		if target.HasFindings() {
 			return true
 		}
 	}
@@ -220,7 +220,6 @@ func (r *SecurityCommandResults) HasFindings() bool {
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
 	targetResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
 	if r.EntitledForJas {
-		targetResults.JasResults = &JasScansResults{} // TODO eran delete this
 		targetResults.JasResultsNew = &JasScansResultsNew{JasVulnerabilities: &JasResponse{}, JasViolations: &JasResponse{}}
 	}
 
@@ -291,14 +290,14 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 }
 
 func (sr *TargetResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
-	if sr.JasResults == nil {
+	if sr.JasResultsNew == nil || sr.JasResultsNew.JasVulnerabilities == nil {
 		return
 	}
-	return sr.JasResults.GetResults(scanType)
+	return sr.JasResultsNew.GetVulnerabilitiesResults(scanType)
 }
 
 func (sr *TargetResults) HasInformation() bool {
-	if sr.JasResults != nil && sr.JasResults.HasInformation() {
+	if sr.JasResultsNew != nil && sr.JasResultsNew.HasInformationNew() {
 		return true
 	}
 	if sr.ScaResults != nil && sr.ScaResults.HasInformation() {
@@ -308,7 +307,7 @@ func (sr *TargetResults) HasInformation() bool {
 }
 
 func (sr *TargetResults) HasFindings() bool {
-	if sr.JasResults != nil && sr.JasResults.HasFindings() {
+	if sr.JasResultsNew != nil && sr.JasResultsNew.HasFindingsNew() {
 		return true
 	}
 	if sr.ScaResults != nil && sr.ScaResults.HasFindings() {
@@ -366,6 +365,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 }
 
 // TODO eran delete this and validate to replace all references (exclude Frogbot usages)
+/*
 func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Applicability:
@@ -379,6 +379,7 @@ func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results [
 	}
 	return
 }
+*/
 
 func (jsr *JasScansResultsNew) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
@@ -409,6 +410,7 @@ func (jsr *JasScansResultsNew) GetViolationsResults(scanType jasutils.JasScanTyp
 }
 
 // TODO eran delete this and validate to replace all references
+/*
 func (jsr *JasScansResults) HasFindings() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
 		if jsr.HasFindingsByType(scanType) {
@@ -417,6 +419,7 @@ func (jsr *JasScansResults) HasFindings() bool {
 	}
 	return false
 }
+*/
 
 func (jsr *JasScansResultsNew) HasFindingsNew() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
@@ -428,6 +431,7 @@ func (jsr *JasScansResultsNew) HasFindingsNew() bool {
 }
 
 // TODO eran delete this and validate to replace all references
+/*
 func (jsr *JasScansResults) HasFindingsByType(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetResults(scanType) {
 		for _, result := range run.Results {
@@ -438,6 +442,7 @@ func (jsr *JasScansResults) HasFindingsByType(scanType jasutils.JasScanType) boo
 	}
 	return false
 }
+*/
 
 func (jsr *JasScansResultsNew) HasFindingsByTypeNew(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
@@ -459,6 +464,7 @@ func (jsr *JasScansResultsNew) HasFindingsByTypeNew(scanType jasutils.JasScanTyp
 }
 
 // TODO eran delete this and validate to replace all references
+/*
 func (jsr *JasScansResults) HasInformation() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
 		if jsr.HasInformationByType(scanType) {
@@ -467,6 +473,7 @@ func (jsr *JasScansResults) HasInformation() bool {
 	}
 	return false
 }
+*/
 
 func (jsr *JasScansResultsNew) HasInformationNew() bool {
 	for _, scanType := range jasutils.GetJasScanTypes() {
@@ -478,6 +485,7 @@ func (jsr *JasScansResultsNew) HasInformationNew() bool {
 }
 
 // TODO eran delete this and validate to replace all references
+/*
 func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetResults(scanType) {
 		if len(run.Results) > 0 {
@@ -486,6 +494,7 @@ func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) 
 	}
 	return false
 }
+*/
 
 func (jsr *JasScansResultsNew) HasInformationByTypeNew(scanType jasutils.JasScanType) bool {
 	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
