@@ -192,14 +192,13 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-		vulnerabilitiesResults, violationsResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
+		vulnerabilitiesResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
 		scanResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults = append(scanResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults, vulnerabilitiesResults...)
-		scanResults.JasResultsNew.JasViolations.ApplicabilityScanResults = append(scanResults.JasResultsNew.JasViolations.ApplicabilityScanResults, violationsResults...)
 		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Applicability)
 		return
 	}

@@ -48,7 +48,7 @@ type ApplicabilityScanManager struct {
 // bool: true if the user is entitled to the applicability scan, false otherwise.
 // error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
 		return
@@ -59,15 +59,13 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		return
 	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
-	if vulnerabilitiesResults, violationsResults, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
+	// Applicability scanner cannot incur violations, therefore we ignore the empty violationsSarifRuns that are returned from Run and return only vulnerabilitiesResults from this function
+	if vulnerabilitiesResults, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
 	if len(vulnerabilitiesResults) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", vulnerabilitiesResults...), "applicable cves")
-		if len(violationsResults) > 0 {
-			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", violationsResults...), "applicable cves that incur violations")
-		}
 	}
 	return
 }
@@ -129,7 +127,6 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	// TODO eran VERIFY - createConfigFile uses the value of the output file. how should we address it for violations? what is the role of this file at all?
 	if err = asm.createConfigFile(module, asm.scanner.Exclusions...); err != nil {
 		return
 	}
