@@ -3,6 +3,7 @@ package jas
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -117,24 +118,29 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 }
 
 type ScannerCmd interface {
-	Run(module jfrogappsconfig.Module) (err error)
+	Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (err error) {
+func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	func() {
-		if err = scannerCmd.Run(module); err != nil {
+		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.Run(module); err != nil {
 			return
 		}
 	}()
 	return
 }
 
-// TODO eran fix all function calls in test files to match the new signature
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	if vulnerabilitiesSarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
 	processSarifRuns(vulnerabilitiesSarifRuns, wd, informationUrlSuffix, minSeverity)
+
+	// TODO eran delete
+	err = createViolationsFile(fileName)
+	if err != nil {
+		return
+	}
 
 	var violationsSarifExists bool
 	violationsSarifFileName := fileName + "_violations"
@@ -147,6 +153,34 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 	}
 	processSarifRuns(violationsSarifRuns, wd, informationUrlSuffix, minSeverity) // TODO eran VERIFY - do we need to do this for violations as well
 	return
+}
+
+// TODO eran delete this func
+func createViolationsFile(filePath string) (err error) {
+	// Open the original file for reading.
+	originalFile, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open original file: %w", err)
+	}
+	defer originalFile.Close() // Ensure the original file is closed
+
+	// Create a new file name by appending "_violations" to the original filename
+	newFileName := filePath + "_violations" // Simply append "_violations"
+
+	// Create the new file for writing
+	newFile, err := os.Create(newFileName)
+	if err != nil {
+		return fmt.Errorf("failed to create copy file: %w", err)
+	}
+	defer newFile.Close() // Ensure the new file is closed
+
+	// Copy the original file to the new file
+	_, err = io.Copy(newFile, originalFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file content: %w", err)
+	}
+
+	return nil
 }
 
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
