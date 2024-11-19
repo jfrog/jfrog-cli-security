@@ -35,8 +35,8 @@ type SecurityCommandResults struct {
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
-	ScaResults    *ScaScanResults     `json:"sca_scans,omitempty"`
-	JasResults    *JasScansResults    `json:"jas_scans,omitempty"` // TODO eran delete this at the end
+	ScaResults *ScaScanResults `json:"sca_scans,omitempty"`
+	//JasResults    *JasScansResults    `json:"jas_scans,omitempty"` // TODO eran delete this at the end
 	JasResultsNew *JasScansResultsNew `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
@@ -52,12 +52,15 @@ type ScaScanResults struct {
 }
 
 // TODO eran - adjust all references/functions related to this struct to match the new structure
+/*
 type JasScansResults struct {
 	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
 	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
 	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
 	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
 }
+
+*/
 
 type JasScansResultsNew struct { // TODO eran change name at the end to JasScansResults
 	JasVulnerabilities *JasResponse `json:"jas_vulnerabilities,omitempty"`
