@@ -34,7 +34,7 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
 		SecretsTable:                   formats.ConvertToSecretsTableRow(simpleJsonFormat.Secrets),
 		IacTable:                       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Iacs),
-		SastTable:                      formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Sast),
+		SastTable:                      formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
 	}, nil
 }
 

@@ -144,7 +144,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, sast .
 	if err != nil || len(sastSimpleJson) == 0 {
 		return
 	}
-	sjc.current.Sast = append(sjc.current.Sast, sastSimpleJson...)
+	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
 	return
 }
 
@@ -580,8 +580,8 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	if len(simpleJsonResults.Iacs) > 0 {
 		sortSourceCodeRow(simpleJsonResults.Iacs)
 	}
-	if len(simpleJsonResults.Sast) > 0 {
-		sortSourceCodeRow(simpleJsonResults.Sast)
+	if len(simpleJsonResults.SastVulnerabilities) > 0 {
+		sortSourceCodeRow(simpleJsonResults.SastVulnerabilities)
 	}
 }
 

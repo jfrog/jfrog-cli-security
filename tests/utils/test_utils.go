@@ -186,7 +186,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	for _, secret := range results.Secrets {
 		convertJasSimpleJsonPathsForOS(&secret)
 	}
-	for _, sast := range results.Sast {
+	for _, sast := range results.SastVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&sast)
 	}
 	for _, iac := range results.Iacs {
