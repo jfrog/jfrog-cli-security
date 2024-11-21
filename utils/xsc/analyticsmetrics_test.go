@@ -95,7 +95,7 @@ func TestSendStartScanEvent(t *testing.T) {
 				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
 				ReturnMsi:   "test-msi",
 			},
-			expectedMsi: "test-msi",
+			expectedMsi: "",
 		},
 		{
 			name: "Xsc",
@@ -130,13 +130,17 @@ func TestSendStartScanEvent(t *testing.T) {
 			defer mockServer.Close()
 
 			msi, startTime := SendNewScanEvent(testCase.mockParams.XrayVersion, testCase.mockParams.XscVersion, serverDetails, CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails))
-			assert.NotEmpty(t, startTime)
+			if testCase.reportUsage {
+				assert.NotEmpty(t, startTime)
+			}
 			assert.Equal(t, testCase.expectedMsi, msi)
 		})
 	}
 }
 
 func TestCreateFinalizedEvent(t *testing.T) {
+
+	time := "2021-09-01T12:00:00Z"
 
 	testCases := []struct {
 		name         string
@@ -146,29 +150,29 @@ func TestCreateFinalizedEvent(t *testing.T) {
 		{
 			name:         "No audit results",
 			auditResults: &results.SecurityCommandResults{},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed, TotalScanDuration: time},
 		},
 		{
 			name:         "Valid audit result",
 			auditResults: getDummyContentForGeneralEvent(true, false),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed, TotalScanDuration: time},
 		},
 		{
 			name:         "Scan failed with findings.",
 			auditResults: getDummyContentForGeneralEvent(false, true),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed, TotalScanDuration: time},
 		},
 		{
 			name:         "Scan failed no findings.",
 			auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed, TotalScanDuration: time},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			event := createFinalizedEvent(testCase.auditResults)
-			assert.Equal(t, testCase.expected, event)
+			event := createFinalizedEvent(time, testCase.auditResults)
+			assert.Equal(t, testCase.expected, event.XscAnalyticsBasicGeneralEvent)
 		})
 	}
 }

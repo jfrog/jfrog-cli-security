@@ -86,7 +86,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 				return
 			}
 		}
-		if r.RequestURI == "/xsc/"+apiUrlPart+"event" {
+		if strings.Contains(r.RequestURI, "/xsc/"+apiUrlPart+"event") {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				if params.ReturnMsi == "" {

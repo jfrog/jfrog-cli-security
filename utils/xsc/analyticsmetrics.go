@@ -67,7 +67,7 @@ func SendScanEndedEvent(serviceDetails *config.ServerDetails, cmdResults *result
 		return
 	}
 
-	event := createFinalizedEvent(cmdResults)
+	event := createFinalizedEvent(time.Since(cmdResults.StartTime).String(), cmdResults)
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
 		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", cmdResults.MultiScanId, err.Error()))
 		return
@@ -75,8 +75,7 @@ func SendScanEndedEvent(serviceDetails *config.ServerDetails, cmdResults *result
 	log.Debug(fmt.Sprintf("Command event:\n%v", event))
 }
 
-func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	totalDuration := time.Since(cmdResults.StartTime)
+func createFinalizedEvent(duration string, cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
 	eventStatus := getCommandStatus(cmdResults)
 	totalFindings := getTotalFindings(cmdResults)
 	return xscservices.XscAnalyticsGeneralEventFinalize{
@@ -84,7 +83,7 @@ func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservice
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
 			EventStatus:       eventStatus,
 			TotalFindings:     totalFindings,
-			TotalScanDuration: totalDuration.String(),
+			TotalScanDuration: duration,
 		},
 	}
 }
