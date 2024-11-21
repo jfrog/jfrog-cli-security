@@ -2,9 +2,9 @@ package xsc
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -40,31 +40,29 @@ func TestCalcShouldReportEvents(t *testing.T) {
 		{
 			name:                 "Minimum Xsc version",
 			mockParams:           validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: xscservices.AnalyticsMetricsMinXscVersion},
-			xscVersion:           xscservices.AnalyticsMetricsMinXscVersion,
 			expectedShouldReport: true,
 		},
 		{
 			name:                 "Lower Xsc version",
-			xscVersion:           lowerAnalyticsMetricsMinXscVersion,
+			mockParams:           validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: lowerAnalyticsMetricsMinXscVersion},
 			expectedShouldReport: false,
 		},
 		{
 			name:                 "Higher Xsc version",
-			xscVersion:           higherAnalyticsMetricsMinXscVersion,
+			mockParams:           validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: higherAnalyticsMetricsMinXscVersion},
 			expectedShouldReport: true,
 		},
 		{
 			name:                 "JFROG_CLI_REPORT_USAGE is false",
-			xscVersion:           higherAnalyticsMetricsMinXscVersion,
+			mockParams:           validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: higherAnalyticsMetricsMinXscVersion},
 			setEnvVarReportFalse: true,
 			expectedShouldReport: false,
 		},
 	}
 
-	xrayVersion := xscutils.MinXrayVersionXscTransitionToXray
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, _ := validations.XscServer(t, xrayVersion, testcase.xscVersion)
+			mockServer, _ := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			if testcase.setEnvVarReportFalse {
@@ -75,9 +73,9 @@ func TestCalcShouldReportEvents(t *testing.T) {
 			}
 
 			if testcase.expectedShouldReport {
-				assert.True(t, shouldReportEvents(testcase.xscVersion))
+				assert.True(t, shouldReportEvents(testcase.mockParams.XscVersion))
 			} else {
-				assert.False(t, shouldReportEvents(testcase.xscVersion))
+				assert.False(t, shouldReportEvents(testcase.mockParams.XscVersion))
 			}
 		})
 	}
@@ -85,90 +83,145 @@ func TestCalcShouldReportEvents(t *testing.T) {
 
 func TestSendStartScanEvent(t *testing.T) {
 	testCases := []struct {
-		name         string
-		auditResults *results.SecurityCommandResults
-		want         xscservices.XscAnalyticsBasicGeneralEvent
-	}{
-		{},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-
-		})
-	}
-}
-
-func TestSendScanEndedEvent(t *testing.T) {
-	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
-	defer msiCallback()
-	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-	defer usageCallback()
-
-	testCases := []struct {
 		name        string
-		xrayVersion string
-	}{}
+		mockParams  validations.MockServerParams
+		reportUsage bool
+		expectedMsi string
+	}{
+		{
+			name: "Don't report events",
+			mockParams: validations.MockServerParams{
+				XrayVersion: xscutils.MinXrayVersionXscTransitionToXray,
+				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
+				ReturnMsi:   "test-msi",
+			},
+			expectedMsi: "test-msi",
+		},
+		{
+			name: "Xsc",
+			mockParams: validations.MockServerParams{
+				XrayVersion: xscutils.MinXrayVersionXscTransitionToXray,
+				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
+				ReturnMsi:   "other-msi",
+			},
+			reportUsage: true,
+			expectedMsi: "other-msi",
+		},
+		{
+			name: "Deprecated Xsc version",
+			mockParams: validations.MockServerParams{
+				XrayVersion: "3.0.0",
+				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
+				ReturnMsi:   "diff-msi",
+			},
+			reportUsage: true,
+			expectedMsi: "diff-msi",
+		},
+	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XscServer(t, testCase.xrayVersion, xscservices.AnalyticsMetricsMinXscVersion)
+			msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
+			defer msiCallback()
+			usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, fmt.Sprintf("%t", testCase.reportUsage))
+			defer usageCallback()
+
+			mockServer, serverDetails := validations.XscServer(t, testCase.mockParams)
 			defer mockServer.Close()
 
-			xsc.SendNewScanEvent(testCase.xrayVersion, xscservices.AnalyticsMetricsMinXscVersion, "test-msi", serverDetails)
+			msi, startTime := SendNewScanEvent(testCase.mockParams.XrayVersion, testCase.mockParams.XscVersion, serverDetails, CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails))
+			assert.NotEmpty(t, startTime)
+			assert.Equal(t, testCase.expectedMsi, msi)
 		})
 	}
 }
 
-func TestAddGeneralEvent(t *testing.T) {
-	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
-	defer msiCallback()
-	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-	defer usageCallback()
-	// Successful flow.
-	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
-	am := NewAnalyticsMetricsService(serverDetails)
-	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, validations.TestMsi, am.GetMsi())
+func TestCreateFinalizedEvent(t *testing.T) {
 
-	// In case cli should not report analytics, verify that request won't be sent.
-	am.shouldReportEvents = false
-	am.SetMsi("test-msi")
-	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-	assert.Equal(t, "test-msi", am.GetMsi())
-}
-
-func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
-	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-	defer usageCallback()
-
-	testStruct := []struct {
+	testCases := []struct {
 		name         string
 		auditResults *results.SecurityCommandResults
-		want         xscservices.XscAnalyticsBasicGeneralEvent
+		expected     xscservices.XscAnalyticsBasicGeneralEvent
 	}{
-		{name: "No audit results", auditResults: &results.SecurityCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
-		{name: "Valid audit result", auditResults: getDummyContentForGeneralEvent(true, false), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-		{name: "Scan failed no findings.", auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+		{
+			name:         "No audit results",
+			auditResults: &results.SecurityCommandResults{},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
+		},
+		{
+			name:         "Valid audit result",
+			auditResults: getDummyContentForGeneralEvent(true, false),
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
+		},
+		{
+			name:         "Scan failed with findings.",
+			auditResults: getDummyContentForGeneralEvent(false, true),
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
+		},
+		{
+			name:         "Scan failed no findings.",
+			auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
+		},
 	}
-	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
-	am := NewAnalyticsMetricsService(serverDetails)
-	am.SetStartTime()
-	time.Sleep(time.Millisecond)
-	for _, tt := range testStruct {
-		t.Run(tt.name, func(t *testing.T) {
-			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
-			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
-			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
-			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
-			assert.NoError(t, err)
-			assert.True(t, totalDuration > 0)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			event := createFinalizedEvent(testCase.auditResults)
+			assert.Equal(t, testCase.expected, event)
 		})
 	}
 }
+
+// func TestAddGeneralEvent(t *testing.T) {
+// 	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
+// 	defer msiCallback()
+// 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+// 	defer usageCallback()
+// 	// Successful flow.
+// 	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+// 	defer mockServer.Close()
+// 	am := NewAnalyticsMetricsService(serverDetails)
+// 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+// 	assert.Equal(t, validations.TestMsi, am.GetMsi())
+
+// 	// In case cli should not report analytics, verify that request won't be sent.
+// 	am.shouldReportEvents = false
+// 	am.SetMsi("test-msi")
+// 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+// 	assert.Equal(t, "test-msi", am.GetMsi())
+// }
+
+// func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
+// 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+// 	defer usageCallback()
+
+// 	testStruct := []struct {
+// 		name         string
+// 		auditResults *results.SecurityCommandResults
+// 		want         xscservices.XscAnalyticsBasicGeneralEvent
+// 	}{
+// 		{name: "No audit results", auditResults: &results.SecurityCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
+// 		{name: "Valid audit result", auditResults: getDummyContentForGeneralEvent(true, false), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
+// 		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
+// 		{name: "Scan failed no findings.", auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
+// 	}
+// 	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
+// 	defer mockServer.Close()
+// 	am := NewAnalyticsMetricsService(serverDetails)
+// 	am.SetStartTime()
+// 	time.Sleep(time.Millisecond)
+// 	for _, tt := range testStruct {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
+// 			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
+// 			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
+// 			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
+// 			assert.NoError(t, err)
+// 			assert.True(t, totalDuration > 0)
+// 		})
+// 	}
+// }
 
 // Create a dummy content for general event. 1 SCA scan with 1 vulnerability
 // withJas - Add 2 JAS results for each scan type.

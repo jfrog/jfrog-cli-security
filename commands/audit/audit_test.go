@@ -293,7 +293,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
+			mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
 			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -335,7 +335,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
+	mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
