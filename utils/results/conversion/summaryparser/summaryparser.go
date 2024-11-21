@@ -69,7 +69,7 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
 		return
 	}
@@ -156,7 +156,7 @@ func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(pars
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}

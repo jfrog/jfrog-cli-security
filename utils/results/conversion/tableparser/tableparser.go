@@ -46,12 +46,12 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseScaViolations(target, scaResponse, applicabilityRuns...)
 }
 
-func (tc *CmdResultsTableConverter) ParseVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseVulnerabilities(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseScaVulnerabilities(target, scaResponse, applicabilityRuns...)
 }
 
 func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {

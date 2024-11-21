@@ -133,7 +133,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseScaViolations(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.scaCurrentRun == nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, s
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseVulnerabilities(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseScaVulnerabilities(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.scaCurrentRun == nil {
 		return
 	}

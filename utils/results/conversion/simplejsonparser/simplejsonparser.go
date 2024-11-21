@@ -65,7 +65,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -79,7 +79,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTar
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
