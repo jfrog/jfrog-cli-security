@@ -43,6 +43,7 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 // Actual content should be a formats.SimpleJsonResults in the validation params.
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
+// TODO eran do I need to change something in any test validations in the file or in other validation funcs?
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
 	var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, inactiveResults int
 	for _, vuln := range results.Vulnerabilities {
