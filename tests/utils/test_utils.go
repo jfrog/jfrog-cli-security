@@ -189,7 +189,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	for _, sast := range results.SastVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&sast)
 	}
-	for _, iac := range results.Iacs {
+	for _, iac := range results.IacsVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&iac)
 	}
 	return results

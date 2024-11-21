@@ -129,7 +129,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, iacs .
 	if err != nil || len(iacSimpleJson) == 0 {
 		return
 	}
-	sjc.current.Iacs = append(sjc.current.Iacs, iacSimpleJson...)
+	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
 	return
 }
 
@@ -577,8 +577,8 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	if len(simpleJsonResults.Secrets) > 0 {
 		sortSourceCodeRow(simpleJsonResults.Secrets)
 	}
-	if len(simpleJsonResults.Iacs) > 0 {
-		sortSourceCodeRow(simpleJsonResults.Iacs)
+	if len(simpleJsonResults.IacsVulnerabilities) > 0 {
+		sortSourceCodeRow(simpleJsonResults.IacsVulnerabilities)
 	}
 	if len(simpleJsonResults.SastVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.SastVulnerabilities)

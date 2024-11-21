@@ -14,7 +14,7 @@ type SimpleJsonResults struct {
 	Licenses                  []LicenseRow                  `json:"licenses"`
 	OperationalRiskViolations []OperationalRiskViolationRow `json:"operationalRiskViolations"`
 	Secrets                   []SourceCodeRow               `json:"secrets"`
-	Iacs                      []SourceCodeRow               `json:"iacViolations"`
+	IacsVulnerabilities       []SourceCodeRow               `json:"iacViolations"`
 	SastVulnerabilities       []SourceCodeRow               `json:"sastViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`
 	MultiScanId               string                        `json:"multiScanId,omitempty"`
