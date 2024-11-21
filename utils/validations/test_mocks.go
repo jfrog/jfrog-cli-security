@@ -98,7 +98,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 				}
 			}
 		}
-		if r.RequestURI == "/xsc/"+apiUrlPart+"profile/"+TestConfigProfileName {
+		if strings.Contains(r.RequestURI, "/xsc/"+apiUrlPart+"profile/"+TestConfigProfileName) {
 			if r.Method == http.MethodGet {
 				w.WriteHeader(http.StatusOK)
 				content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")

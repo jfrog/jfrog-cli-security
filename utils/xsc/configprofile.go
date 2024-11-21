@@ -13,7 +13,7 @@ func GetConfigProfile(xrayVersion, xscVersion string, serverDetails *config.Serv
 		log.Info("Minimal Xsc version required to utilize config profile is '%s'. All configurations will be induced from provided Env vars and files")
 		return nil, err
 	}
-	xscService, err := createXscService(serverDetails)
+	xscService, err := CreateXscService(xrayVersion, serverDetails)
 	if err != nil {
 		return nil, err
 	}

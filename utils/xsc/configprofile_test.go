@@ -19,7 +19,7 @@ func TestGetConfigProfile(t *testing.T) {
 	}{
 		{
 			name:       "Deprecated service",
-			mockParams: validations.MockServerParams{XrayVersion: "3.1.0", XscVersion: services.ConfigProfileMinXscVersion},
+			mockParams: validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: services.ConfigProfileMinXscVersion},
 		},
 		{
 			name:       "Xsc as inner service in Xray",
