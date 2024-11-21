@@ -425,7 +425,7 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err, auditCmd)
+	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
 	return err
 }
 
@@ -434,7 +434,7 @@ func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
-func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error, auditCmd *audit.AuditCommand) {
+func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) {
 	if err == nil || !usage.ShouldReportUsage() {
 		return
 	}
@@ -526,7 +526,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	err = progressbar.ExecWithProgress(auditCmd)
 
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err, auditCmd)
+	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
 	return err
 }
 
@@ -714,6 +714,9 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
 	containerScanCommand := scan.NewDockerScanCommand()
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
