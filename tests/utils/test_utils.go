@@ -127,11 +127,11 @@ func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResul
 				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
 			}
 		}
-		if targetResults.JasResults != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SecretsScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.IacScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SastScanResults...)
+		if targetResults.JasResultsNew.JasVulnerabilities != nil {
+			convertSarifRunPathsForOS(targetResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResultsNew.JasVulnerabilities.SecretsScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResultsNew.JasVulnerabilities.IacScanResults...)
+			convertSarifRunPathsForOS(targetResults.JasResultsNew.JasVulnerabilities.SastScanResults...)
 		}
 	}
 	return cmdResults
