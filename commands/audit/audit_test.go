@@ -32,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
+// TODO eran fix test
 func TestDetectScansToPreform(t *testing.T) {
 
 	dir, cleanUp := createTestDir(t)
