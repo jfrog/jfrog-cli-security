@@ -227,7 +227,7 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 	assert.True(t, applicableStatusExists)
 
 	// Verify that secretes detection succeeded.
-	assert.NotEqual(t, 0, len(results.Secrets))
+	assert.NotEqual(t, 0, len(results.SecretsVulnerabilities))
 
 }
 

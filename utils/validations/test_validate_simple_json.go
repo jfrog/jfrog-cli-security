@@ -60,20 +60,20 @@ func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, result
 			missingContextResults++
 		}
 	}
-	for _, result := range results.Secrets {
+	for _, result := range results.SecretsVulnerabilities {
 		if result.Applicability != nil {
 			if result.Applicability.Status == jasutils.Inactive.String() {
 				inactiveResults += 1
 			}
 		}
 	}
-	vulnerabilitiesCount := len(results.Vulnerabilities) + len(results.Secrets) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities)
+	vulnerabilitiesCount := len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities)
 
 	ValidateContent(t, params.ExactResultsMatch,
 		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilitiesCount, Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilitiesCount)},
 		CountValidation[int]{Expected: params.Sast, Actual: len(results.SastVulnerabilities), Msg: GetValidationCountErrMsg("sast", "simple-json", params.ExactResultsMatch, params.Sast, len(results.SastVulnerabilities))},
 		CountValidation[int]{Expected: params.Iac, Actual: len(results.IacsVulnerabilities), Msg: GetValidationCountErrMsg("IaC", "simple-json", params.ExactResultsMatch, params.Iac, len(results.IacsVulnerabilities))},
-		CountValidation[int]{Expected: params.Secrets, Actual: len(results.Secrets), Msg: GetValidationCountErrMsg("secrets", "simple-json", params.ExactResultsMatch, params.Secrets, len(results.Secrets))},
+		CountValidation[int]{Expected: params.Secrets, Actual: len(results.SecretsVulnerabilities), Msg: GetValidationCountErrMsg("secrets", "simple-json", params.ExactResultsMatch, params.Secrets, len(results.SecretsVulnerabilities))},
 		CountValidation[int]{Expected: params.Inactive, Actual: inactiveResults, Msg: GetValidationCountErrMsg("inactive secrets", "simple-json", params.ExactResultsMatch, params.Inactive, inactiveResults)},
 
 		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.Applicable, applicableResults)},

@@ -114,7 +114,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, sec
 	if err != nil || len(secretsSimpleJson) == 0 {
 		return
 	}
-	sjc.current.Secrets = append(sjc.current.Secrets, secretsSimpleJson...)
+	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
 	return
 }
 
@@ -574,8 +574,8 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 			return simpleJsonResults.OperationalRiskViolations[i].SeverityNumValue > simpleJsonResults.OperationalRiskViolations[j].SeverityNumValue
 		})
 	}
-	if len(simpleJsonResults.Secrets) > 0 {
-		sortSourceCodeRow(simpleJsonResults.Secrets)
+	if len(simpleJsonResults.SecretsVulnerabilities) > 0 {
+		sortSourceCodeRow(simpleJsonResults.SecretsVulnerabilities)
 	}
 	if len(simpleJsonResults.IacsVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.IacsVulnerabilities)

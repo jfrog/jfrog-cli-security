@@ -13,7 +13,7 @@ type SimpleJsonResults struct {
 	LicensesViolations        []LicenseRow                  `json:"licensesViolations"`
 	Licenses                  []LicenseRow                  `json:"licenses"`
 	OperationalRiskViolations []OperationalRiskViolationRow `json:"operationalRiskViolations"`
-	Secrets                   []SourceCodeRow               `json:"secrets"` // TODO ERAN first: change this to SecretsVulnerabilities and add the new fields for vio + keep adjusting all other parsers
+	SecretsVulnerabilities    []SourceCodeRow               `json:"secrets"`
 	IacsVulnerabilities       []SourceCodeRow               `json:"iacViolations"`
 	SastVulnerabilities       []SourceCodeRow               `json:"sastViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`

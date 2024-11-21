@@ -183,7 +183,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	for _, orViolation := range results.OperationalRiskViolations {
 		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails, nil)
 	}
-	for _, secret := range results.Secrets {
+	for _, secret := range results.SecretsVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&secret)
 	}
 	for _, sast := range results.SastVulnerabilities {
