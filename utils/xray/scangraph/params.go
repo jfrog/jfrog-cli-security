@@ -20,8 +20,8 @@ type CommonGraphScanParams struct {
 	ScanType               services.ScanType
 	IncludeVulnerabilities bool
 	IncludeLicenses        bool
-	XscVersion             string
-	MultiScanId            string
+	// XscVersion             string
+	// MultiScanId            string
 }
 
 func NewScanGraphParams() *ScanGraphParams {

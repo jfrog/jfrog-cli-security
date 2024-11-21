@@ -3,17 +3,18 @@ package scan
 import (
 	"bytes"
 	"fmt"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -47,11 +48,7 @@ func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanComm
 
 func (dsc *DockerScanCommand) Run() (err error) {
 	// Validate Xray minimum version
-	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
-	if err != nil {
-		return err
-	}
-	err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, DockerScanMinXrayVersion)
+	err = clientutils.ValidateMinimumVersion(clientutils.Xray, dsc.xrayVersion, DockerScanMinXrayVersion)
 	if err != nil {
 		return err
 	}
@@ -81,8 +78,16 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		return fmt.Errorf("failed running command: '%s' with error: %s - %s", strings.Join(dockerSaveCmd.Args, " "), err.Error(), stderr.String())
 	}
 
+	// dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+
 	// Perform scan on image.tar
-	dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+	dsc.multiScanId, dsc.startTime = xsc.SendNewScanEvent(
+		dsc.xrayVersion,
+		dsc.xscVersion,
+		dsc.serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, dsc.serverDetails),
+	)
+
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
 		Target(dsc.targetRepoPath).
@@ -102,7 +107,8 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		if scanResults == nil {
 			return
 		}
-		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
+		xsc.SendScanEndedEvent(dsc.serverDetails, scanResults)
+		// dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 		return dsc.recordResults(scanResults)
 	})
 }

@@ -70,25 +70,24 @@ func TestXscAuditMavenSimpleJson(t *testing.T) {
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	// Scan npm project and verify that analytics general event were sent to XSC.
 	output := testAuditNpm(t, string(format.SimpleJson), false)
-	validateAnalyticsBasicEvent(t, output)
+	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
 }
 
-func validateAnalyticsBasicEvent(t *testing.T, output string) {
+func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output string) {
 	// Get MSI.
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(output), &results)
 	assert.NoError(t, err)
 
 	// Verify analytics metrics.
-	am := xsc.NewAnalyticsMetricsService(tests.XscDetails)
-	assert.NotNil(t, am)
-	assert.NotEmpty(t, results.MultiScanId)
-	event, err := am.GetGeneralEvent(results.MultiScanId)
+	event, err := xsc.GetScanEvent(xrayVersion, xscVersion, results.MultiScanId, tests.XscDetails)
 	assert.NoError(t, err)
+	assert.NotNil(t, event)
+	assert.NotEmpty(t, results.MultiScanId)
 
 	// Event creation and addition information.
 	assert.Equal(t, xscservices.CliProduct, event.Product)

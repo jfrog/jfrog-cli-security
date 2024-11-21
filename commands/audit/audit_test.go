@@ -303,20 +303,21 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
+				SetXrayVersion(utils.EntitlementsMinVersion).
+				SetXscVersion(services.ConfigProfileMinXscVersion).
 				SetOutputFormat(format.Table).
 				SetUseJas(true)
 
 			configProfile := testcase.configProfile
 			auditParams := NewAuditParams().
 				SetWorkingDirs([]string{tempDirPath}).
+				SetMultiScanId("random-msi").
 				SetGraphBasicParams(auditBasicParams).
 				SetConfigProfile(&configProfile).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					RepoPath:               "",
 					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
-					XscVersion:             services.ConfigProfileMinXscVersion,
-					MultiScanId:            "random-msi",
 				})
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
@@ -348,15 +349,16 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	auditBasicParams := (&utils.AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
+		SetXrayVersion(utils.EntitlementsMinVersion).
 		SetUseJas(true)
 
 	auditParams := NewAuditParams().
 		SetWorkingDirs([]string{tempDirPath}).
+		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 			ScanType:               scanservices.Dependency,
 			IncludeVulnerabilities: true,
-			MultiScanId:            validations.TestScaScanId,
 		}).
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
@@ -484,17 +486,18 @@ func TestAuditWithPartialResults(t *testing.T) {
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat(format.Table).
+				SetXrayVersion("3.108.0").
 				SetUseJas(testcase.useJas).
 				SetAllowPartialResults(testcase.allowPartialResults).
 				SetPipRequirementsFile(testcase.pipRequirementsFile)
 
 			auditParams := NewAuditParams().
 				SetWorkingDirs([]string{tempDirPath}).
+				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
-					MultiScanId:            validations.TestScaScanId,
 				})
 			auditParams.SetIsRecursiveScan(true)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
@@ -30,30 +31,93 @@ func TestCalcShouldReportEvents(t *testing.T) {
 	reportUsageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "")
 	defer reportUsageCallback()
 
-	// Minimum Xsc version.
-	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
-	defer mockServer.Close()
-	am := NewAnalyticsMetricsService(serverDetails)
-	assert.True(t, am.calcShouldReportEvents())
+	testCases := []struct {
+		name                 string
+		mockParams           validations.MockServerParams
+		setEnvVarReportFalse bool
+		expectedShouldReport bool
+	}{
+		{
+			name:                 "Minimum Xsc version",
+			mockParams:           validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: xscservices.AnalyticsMetricsMinXscVersion},
+			xscVersion:           xscservices.AnalyticsMetricsMinXscVersion,
+			expectedShouldReport: true,
+		},
+		{
+			name:                 "Lower Xsc version",
+			xscVersion:           lowerAnalyticsMetricsMinXscVersion,
+			expectedShouldReport: false,
+		},
+		{
+			name:                 "Higher Xsc version",
+			xscVersion:           higherAnalyticsMetricsMinXscVersion,
+			expectedShouldReport: true,
+		},
+		{
+			name:                 "JFROG_CLI_REPORT_USAGE is false",
+			xscVersion:           higherAnalyticsMetricsMinXscVersion,
+			setEnvVarReportFalse: true,
+			expectedShouldReport: false,
+		},
+	}
 
-	// Lower Xsc version.
-	mockServerLowerVersion, serverDetails := validations.XscServer(t, lowerAnalyticsMetricsMinXscVersion)
-	defer mockServerLowerVersion.Close()
-	am = NewAnalyticsMetricsService(serverDetails)
-	assert.False(t, am.calcShouldReportEvents())
+	xrayVersion := xscutils.MinXrayVersionXscTransitionToXray
+	for _, testcase := range testCases {
+		t.Run(testcase.name, func(t *testing.T) {
+			mockServer, _ := validations.XscServer(t, xrayVersion, testcase.xscVersion)
+			defer mockServer.Close()
 
-	// Higher Xsc version.
-	mockServerHigherVersion, serverDetails := validations.XscServer(t, higherAnalyticsMetricsMinXscVersion)
-	defer mockServerHigherVersion.Close()
-	am = NewAnalyticsMetricsService(serverDetails)
-	assert.True(t, am.calcShouldReportEvents())
+			if testcase.setEnvVarReportFalse {
+				err := os.Setenv(utils.JfMsiEnvVariable, "")
+				assert.NoError(t, err)
+				err = os.Setenv(coreutils.ReportUsage, "false")
+				assert.NoError(t, err)
+			}
 
-	// JFROG_CLI_REPORT_USAGE is false.
-	err := os.Setenv(utils.JfMsiEnvVariable, "")
-	assert.NoError(t, err)
-	err = os.Setenv(coreutils.ReportUsage, "false")
-	assert.NoError(t, err)
-	assert.False(t, am.calcShouldReportEvents())
+			if testcase.expectedShouldReport {
+				assert.True(t, shouldReportEvents(testcase.xscVersion))
+			} else {
+				assert.False(t, shouldReportEvents(testcase.xscVersion))
+			}
+		})
+	}
+}
+
+func TestSendStartScanEvent(t *testing.T) {
+	testCases := []struct {
+		name         string
+		auditResults *results.SecurityCommandResults
+		want         xscservices.XscAnalyticsBasicGeneralEvent
+	}{
+		{},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+
+		})
+	}
+}
+
+func TestSendScanEndedEvent(t *testing.T) {
+	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
+	defer msiCallback()
+	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
+	defer usageCallback()
+
+	testCases := []struct {
+		name        string
+		xrayVersion string
+	}{}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockServer, serverDetails := validations.XscServer(t, testCase.xrayVersion, xscservices.AnalyticsMetricsMinXscVersion)
+			defer mockServer.Close()
+
+			xsc.SendNewScanEvent(testCase.xrayVersion, xscservices.AnalyticsMetricsMinXscVersion, "test-msi", serverDetails)
+		})
+	}
 }
 
 func TestAddGeneralEvent(t *testing.T) {
