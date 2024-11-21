@@ -97,6 +97,8 @@ jobs:
             testFlags: '--test.audit.Go'
           - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
             testFlags: '--test.audit.C'
+          - name: 'Cocoapods Suite'
+            testFlags: '--test.audit.Cocoapods'
         
     steps:
       # Prepare the environment
