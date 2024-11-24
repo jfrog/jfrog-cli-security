@@ -66,6 +66,6 @@ func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViola
 	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs...)
 }
 
-func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSast(target, sast...)
+func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast...)
 }
