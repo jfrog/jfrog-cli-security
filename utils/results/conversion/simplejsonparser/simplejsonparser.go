@@ -122,7 +122,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isV
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, iacs ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
@@ -133,7 +133,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, iacs .
 	if err != nil || len(iacSimpleJson) == 0 {
 		return
 	}
-	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
+	if isViolationsResults {
+		sjc.current.IacsViolations = append(sjc.current.IacsViolations, iacSimpleJson...)
+	} else {
+		sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
+	}
 	return
 }
 
