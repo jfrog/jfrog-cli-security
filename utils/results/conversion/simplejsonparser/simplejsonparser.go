@@ -141,7 +141,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, sast ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
@@ -152,7 +152,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, sast .
 	if err != nil || len(sastSimpleJson) == 0 {
 		return
 	}
-	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
+	if isViolationsResults {
+		sjc.current.SastViolations = append(sjc.current.SastViolations, sastSimpleJson...)
+	} else {
+		sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
+	}
 	return
 }
 
