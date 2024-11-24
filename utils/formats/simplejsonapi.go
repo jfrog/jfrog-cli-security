@@ -7,7 +7,6 @@ import "github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 // This struct holds the sorted results of the simple-json output.
 type SimpleJsonResults struct {
-	// TODO eran - in the new violations parser we enter the new violations results here (create new fields) and they will be printed at the end
 	Vulnerabilities           []VulnerabilityOrViolationRow `json:"vulnerabilities"`
 	SecurityViolations        []VulnerabilityOrViolationRow `json:"securityViolations"`
 	LicensesViolations        []LicenseRow                  `json:"licensesViolations"`

@@ -54,7 +54,6 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) error
 	ParseLicenses(target results.ScanTarget, licenses []services.License) error
 	// Parse JAS content to the current scan target
-	// TODO eran first - add new arg to all interface implementation and start making adjustments between vulnerabilities and violations
 	ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) error
 	ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) error
 	ParseSast(target results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) error
