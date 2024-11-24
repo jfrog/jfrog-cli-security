@@ -45,7 +45,6 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 
 // Parse a stream of results and convert them to the desired format T
 type ResultsStreamFormatParser[T interface{}] interface {
-	// TODO eran - add 3 new funcs for parsing violations: iac, secrets, sast
 	// Reset the convertor to start converting a new command results
 	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
@@ -55,7 +54,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) error
 	ParseLicenses(target results.ScanTarget, licenses []services.License) error
 	// Parse JAS content to the current scan target
-	ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) error
+	// TODO eran first - add new arg to all interface implementation and start making adjustments between vulnerabilities and violations
+	ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) error
 	ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) error
 	ParseSast(target results.ScanTarget, sast ...*sarif.Run) error
 	// When done parsing the stream results, get the converted content
@@ -114,7 +114,7 @@ func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser R
 	// Parsing JAS vulnerabilities results
 	if targetResults.JasResultsNew != nil && targetResults.JasResultsNew.JasVulnerabilities != nil {
 		if utils.IsScanRequested(cmdType, utils.SecretsScan, params.RequestedScans...) {
-			if err = parser.ParseSecrets(targetResults.ScanTarget, targetResults.JasResultsNew.JasVulnerabilities.SecretsScanResults...); err != nil {
+			if err = parser.ParseSecrets(targetResults.ScanTarget, false, targetResults.JasResultsNew.JasVulnerabilities.SecretsScanResults...); err != nil {
 				return
 			}
 		}
@@ -133,7 +133,7 @@ func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser R
 	// Parsing JAS violations results
 	if targetResults.JasResultsNew != nil && targetResults.JasResultsNew.JasViolations != nil && params.HasViolationContext { // TODO eran VERIFY if the last condition is needed
 		if utils.IsScanRequested(cmdType, utils.SecretsScan, params.RequestedScans...) {
-			if err = parser.ParseSecrets(targetResults.ScanTarget, targetResults.JasResultsNew.JasViolations.SecretsScanResults...); err != nil {
+			if err = parser.ParseSecrets(targetResults.ScanTarget, true, targetResults.JasResultsNew.JasViolations.SecretsScanResults...); err != nil {
 				return
 			}
 		}
@@ -151,7 +151,6 @@ func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser R
 	return
 }
 
-// TODO eran - create new func like this, just call the new parser funcs
 func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetScansResults *results.TargetResults, jasEntitled bool) (err error) {
 	if targetScansResults.ScaResults == nil {
 		return
