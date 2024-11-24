@@ -163,7 +163,7 @@ func (sc *CmdResultsSarifConverter) ParseLicenses(target results.ScanTarget, lic
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, _ bool, secrets ...*sarif.Run) (err error) {
 	if !sc.entitledForJas {
 		return
 	}
