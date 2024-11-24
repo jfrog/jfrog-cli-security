@@ -57,7 +57,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// TODO eran first - add new arg to all interface implementation and start making adjustments between vulnerabilities and violations
 	ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) error
 	ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) error
-	ParseSast(target results.ScanTarget, sast ...*sarif.Run) error
+	ParseSast(target results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }
@@ -124,7 +124,7 @@ func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser R
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.SastScan, params.RequestedScans...) {
-			if err = parser.ParseSast(targetResults.ScanTarget, targetResults.JasResultsNew.JasVulnerabilities.SastScanResults...); err != nil {
+			if err = parser.ParseSast(targetResults.ScanTarget, false, targetResults.JasResultsNew.JasVulnerabilities.SastScanResults...); err != nil {
 				return
 			}
 		}
@@ -143,7 +143,7 @@ func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser R
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.SastScan, params.RequestedScans...) {
-			if err = parser.ParseSast(targetResults.ScanTarget, targetResults.JasResultsNew.JasViolations.SastScanResults...); err != nil {
+			if err = parser.ParseSast(targetResults.ScanTarget, true, targetResults.JasResultsNew.JasViolations.SastScanResults...); err != nil {
 				return
 			}
 		}
