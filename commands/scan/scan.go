@@ -180,11 +180,6 @@ func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
 	return scanCmd
 }
 
-// func (scanCmd *ScanCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *ScanCommand {
-// 	scanCmd.analyticsMetricsService = analyticsMetricsService
-// 	return scanCmd
-// }
-
 func (scanCmd *ScanCommand) hasViolationContext() bool {
 	return len(scanCmd.watches) > 0 || scanCmd.projectKey != ""
 }
@@ -458,7 +453,6 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				params.MultiScanId = cmdResults.MultiScanId
 				params.XscVersion = cmdResults.XscVersion
-				// params.MultiScanId, params.XscVersion = xsc.GetXscMsiAndVersion(scanCmd.analyticsMetricsService)
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}

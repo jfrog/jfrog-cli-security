@@ -4,9 +4,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
-	// "github.com/jfrog/jfrog-client-go/utils/log"
-
-	// "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xray/services/xsc"
 	"github.com/jfrog/jfrog-client-go/xsc"
 	xscservicesutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
@@ -50,20 +47,3 @@ func createDeprecatedXscServiceManager(serviceDetails *config.ServerDetails) (*x
 	}
 	return xsc.New(serviceConfig)
 }
-
-// func GetXscMsiAndVersion(analyticsMetricsService *AnalyticsMetricsService) (multiScanId, xscVersion string) {
-// 	var err error
-// 	if analyticsMetricsService != nil {
-// 		multiScanId = analyticsMetricsService.GetMsi()
-// 	}
-// 	if multiScanId != "" {
-// 		xscManager := analyticsMetricsService.XscManager()
-// 		if xscManager != nil {
-// 			xscVersion, err = xscManager.GetVersion()
-// 			if err != nil {
-// 				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-// 			}
-// 		}
-// 	}
-// 	return
-// }

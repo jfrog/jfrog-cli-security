@@ -78,8 +78,6 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		return fmt.Errorf("failed running command: '%s' with error: %s - %s", strings.Join(dockerSaveCmd.Args, " "), err.Error(), stderr.String())
 	}
 
-	// dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-
 	// Perform scan on image.tar
 	dsc.multiScanId, dsc.startTime = xsc.SendNewScanEvent(
 		dsc.xrayVersion,
@@ -108,7 +106,6 @@ func (dsc *DockerScanCommand) Run() (err error) {
 			return
 		}
 		xsc.SendScanEndedWithResults(dsc.serverDetails, scanResults)
-		// dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 		return dsc.recordResults(scanResults)
 	})
 }

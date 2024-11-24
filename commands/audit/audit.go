@@ -40,8 +40,7 @@ type AuditCommand struct {
 	IncludeLicenses        bool
 	Fail                   bool
 	PrintExtendedTable     bool
-	// analyticsMetricsService *xsc.AnalyticsMetricsService
-	Threads int
+	Threads                int
 	AuditParams
 }
 
@@ -84,11 +83,6 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
-// func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *AuditCommand {
-// 	auditCmd.analyticsMetricsService = analyticsMetricsService
-// 	return auditCmd
-// }
-
 func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 	auditCmd.Threads = threads
 	return auditCmd
@@ -124,7 +118,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		serverDetails,
 		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
 	)
-	// auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
 
 	auditParams := NewAuditParams().
 		SetWorkingDirs(workingDirs).
@@ -140,8 +133,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	auditResults := RunAudit(auditParams)
 
 	xsc.SendScanEndedWithResults(serverDetails, auditResults)
-
-	// auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {

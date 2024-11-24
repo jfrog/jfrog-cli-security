@@ -181,56 +181,6 @@ func TestCreateFinalizedEvent(t *testing.T) {
 	}
 }
 
-// func TestAddGeneralEvent(t *testing.T) {
-// 	msiCallback := tests.SetEnvWithCallbackAndAssert(t, utils.JfMsiEnvVariable, "")
-// 	defer msiCallback()
-// 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-// 	defer usageCallback()
-// 	// Successful flow.
-// 	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
-// 	defer mockServer.Close()
-// 	am := NewAnalyticsMetricsService(serverDetails)
-// 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-// 	assert.Equal(t, validations.TestMsi, am.GetMsi())
-
-// 	// In case cli should not report analytics, verify that request won't be sent.
-// 	am.shouldReportEvents = false
-// 	am.SetMsi("test-msi")
-// 	am.AddGeneralEvent(am.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
-// 	assert.Equal(t, "test-msi", am.GetMsi())
-// }
-
-// func TestAnalyticsMetricsService_createAuditResultsFromXscAnalyticsBasicGeneralEvent(t *testing.T) {
-// 	usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, "true")
-// 	defer usageCallback()
-
-// 	testStruct := []struct {
-// 		name         string
-// 		auditResults *results.SecurityCommandResults
-// 		want         xscservices.XscAnalyticsBasicGeneralEvent
-// 	}{
-// 		{name: "No audit results", auditResults: &results.SecurityCommandResults{}, want: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed}},
-// 		{name: "Valid audit result", auditResults: getDummyContentForGeneralEvent(true, false), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed}},
-// 		{name: "Scan failed with findings.", auditResults: getDummyContentForGeneralEvent(false, true), want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed}},
-// 		{name: "Scan failed no findings.", auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}}, want: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed}},
-// 	}
-// 	mockServer, serverDetails := validations.XscServer(t, xscservices.AnalyticsMetricsMinXscVersion)
-// 	defer mockServer.Close()
-// 	am := NewAnalyticsMetricsService(serverDetails)
-// 	am.SetStartTime()
-// 	time.Sleep(time.Millisecond)
-// 	for _, tt := range testStruct {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			event := am.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(tt.auditResults)
-// 			assert.Equal(t, tt.want.TotalFindings, event.TotalFindings)
-// 			assert.Equal(t, tt.want.EventStatus, event.EventStatus)
-// 			totalDuration, err := time.ParseDuration(event.TotalScanDuration)
-// 			assert.NoError(t, err)
-// 			assert.True(t, totalDuration > 0)
-// 		})
-// 	}
-// }
-
 // Create a dummy content for general event. 1 SCA scan with 1 vulnerability
 // withJas - Add 2 JAS results for each scan type.
 // withErr - Add an error to the results.
