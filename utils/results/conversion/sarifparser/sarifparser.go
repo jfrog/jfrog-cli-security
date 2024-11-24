@@ -185,7 +185,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, _ bool,
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, _ bool, sast ...*sarif.Run) (err error) {
 	if !sc.entitledForJas {
 		return
 	}
