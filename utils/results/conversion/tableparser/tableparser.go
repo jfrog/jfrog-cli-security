@@ -62,8 +62,8 @@ func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isVi
 	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets...)
 }
 
-func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseIacs(target, iacs...)
+func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs...)
 }
 
 func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
