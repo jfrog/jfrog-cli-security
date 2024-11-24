@@ -260,7 +260,7 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 	return results.ApplyHandlerToJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, sast ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -268,10 +268,13 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, sast ...*s
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if sc.currentScan.Vulnerabilities.SastResults == nil {
+	if !isViolationsResults && sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	return results.ApplyHandlerToJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false)) // TODO eran change 'false' to the value from isViolationsResults
+	if isViolationsResults && sc.currentScan.Violations.SastResults == nil {
+		sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
+	}
+	return results.ApplyHandlerToJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, isViolationsResults bool) results.ParseJasFunc {
