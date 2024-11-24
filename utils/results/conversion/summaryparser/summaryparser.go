@@ -226,7 +226,7 @@ func (sc *CmdResultsSummaryConverter) ParseLicenses(target results.ScanTarget, l
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, secrets ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -234,10 +234,13 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, secrets
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
+	if !isViolationsResults && sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(secrets, sc.entitledForJas, sc.getJasHandler(jasutils.Secrets))
+	if isViolationsResults && sc.currentScan.Violations.SecretsResults == nil {
+		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
+	}
+	return results.ApplyHandlerToJasIssues(secrets, sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, iacs ...*sarif.Run) (err error) {
@@ -251,7 +254,7 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, iacs ...*s
 	if sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC))
+	return results.ApplyHandlerToJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false)) // TODO eran change 'false' to the value from isViolationsResults
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, sast ...*sarif.Run) (err error) {
@@ -265,10 +268,10 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, sast ...*s
 	if sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	return results.PrepareJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast))
+	return results.ApplyHandlerToJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false)) // TODO eran change 'false' to the value from isViolationsResults
 }
 
-func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType) results.ParseJasFunc {
+func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, isViolationsResults bool) results.ParseJasFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		if location == nil {
 			// Only count the issue if it has a location
@@ -276,18 +279,30 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 		}
 		// Get the scanType count
 		var count *formats.ResultSummary
-		switch scanType {
-		case jasutils.Secrets:
-			count = sc.currentScan.Vulnerabilities.SecretsResults
-		case jasutils.IaC:
-			count = sc.currentScan.Vulnerabilities.IacResults
-		case jasutils.Sast:
-			count = sc.currentScan.Vulnerabilities.SastResults
+		if isViolationsResults {
+			switch scanType {
+			case jasutils.Secrets:
+				count = sc.currentScan.Violations.SecretsResults
+			case jasutils.IaC:
+				count = sc.currentScan.Violations.IacResults
+			case jasutils.Sast:
+				count = sc.currentScan.Violations.SastResults
+			}
+		} else {
+			switch scanType {
+			case jasutils.Secrets:
+				count = sc.currentScan.Vulnerabilities.SecretsResults
+			case jasutils.IaC:
+				count = sc.currentScan.Vulnerabilities.IacResults
+			case jasutils.Sast:
+				count = sc.currentScan.Vulnerabilities.SastResults
+			}
 		}
+
 		if count == nil {
 			return
 		}
-		// PrepareJasIssues calls the handler for each issue (location)
+		// Calls the handler for each issue (location)
 		if _, ok := (*count)[severity.String()]; !ok {
 			(*count)[severity.String()] = map[string]int{}
 		}
