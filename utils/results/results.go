@@ -36,7 +36,7 @@ type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
 	ScaResults *ScaScanResults `json:"sca_scans,omitempty"`
-	//JasResults    *JasScansResults    `json:"jas_scans,omitempty"` // TODO eran delete this at the end
+	// JasResults    *JasScansResults    `json:"jas_scans,omitempty"` // TODO eran delete this at the end
 	JasResultsNew *JasScansResultsNew `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
