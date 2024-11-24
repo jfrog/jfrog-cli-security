@@ -5,7 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
@@ -20,8 +20,10 @@ type AuditParams struct {
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
-	configProfile               *clientservices.ConfigProfile
+	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
+	// Git params
+	gitInfoContext *services.XscGitInfoContext
 }
 
 func NewAuditParams() *AuditParams {
@@ -95,7 +97,7 @@ func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.Comm
 	return params
 }
 
-func (params *AuditParams) SetConfigProfile(configProfile *clientservices.ConfigProfile) *AuditParams {
+func (params *AuditParams) SetConfigProfile(configProfile *xscservices.ConfigProfile) *AuditParams {
 	params.configProfile = configProfile
 	return params
 }
@@ -103,6 +105,15 @@ func (params *AuditParams) SetConfigProfile(configProfile *clientservices.Config
 func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditParams {
 	params.scanResultsOutputDir = outputDir
 	return params
+}
+
+func (params *AuditParams) SetGitInfoContext(gitInfoContext *services.XscGitInfoContext) *AuditParams {
+	params.gitInfoContext = gitInfoContext
+	return params
+}
+
+func (params *AuditParams) GetGitInfoContext() *services.XscGitInfoContext {
+	return params.gitInfoContext
 }
 
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
@@ -113,6 +124,7 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		ProjectKey:             params.commonGraphScanParams.ProjectKey,
 		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
 		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
+		XscGitInfoContext:      params.gitInfoContext,
 		XscVersion:             params.commonGraphScanParams.XscVersion,
 		MultiScanId:            params.commonGraphScanParams.MultiScanId,
 	}

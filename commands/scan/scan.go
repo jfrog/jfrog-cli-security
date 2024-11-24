@@ -461,7 +461,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
 				}
 				// Run Jas scans
-				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails, cmdResults.SecretValidation, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(cmdResults.MultiScanId, targetResults.GetTechnologies()...))
+				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails, cmdResults.SecretValidation, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(cmdResults.MultiScanId, "", scanCmd.watches, targetResults.GetTechnologies()...))
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
 				} else if scanner == nil {

@@ -303,7 +303,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars("", "", []string{}))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -387,8 +387,14 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl string, watches []string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	if gitRepoUrl != "" {
+		envVars[gitRepoEnvVariable] = gitRepoUrl
+	}
+	if len(watches) > 0 {
+		envVars[watchesEnvVariable] = strings.Join(watches, ",")
+	}
 	if len(technologies) != 1 {
 		return envVars
 	}

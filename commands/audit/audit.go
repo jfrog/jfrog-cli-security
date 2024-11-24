@@ -30,6 +30,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
 type AuditCommand struct {
@@ -189,14 +190,14 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 	var jasScanner *jas.JasScanner
 	var generalJasScanErr error
 	if jasScanner, generalJasScanErr = RunJasScans(auditParallelRunner, auditParams, cmdResults, jfrogAppsConfig); generalJasScanErr != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("An error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
 	}
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
 	if generalScaScanError := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("An error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
@@ -231,7 +232,18 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	jasScanner, err = jas.CreateJasScanner(serverDetails, scanResults.SecretValidation, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
+	jasScanner, err = jas.CreateJasScanner(
+		serverDetails,
+		scanResults.SecretValidation,
+		auditParams.minSeverityFilter,
+		jas.GetAnalyzerManagerXscEnvVars(
+			auditParams.commonGraphScanParams.MultiScanId,
+			getGitRepoUrlKey(auditParams.gitInfoContext),
+			auditParams.commonGraphScanParams.Watches,
+			scanResults.GetTechnologies()...,
+		),
+		auditParams.Exclusions()...,
+	)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
@@ -247,6 +259,13 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
 	}
 	return
+}
+
+func getGitRepoUrlKey(gitInfoContext *services.XscGitInfoContext) string {
+	if gitInfoContext == nil {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitInfoContext.GitRepoUrl)
 }
 
 func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scanResults *results.SecurityCommandResults,
