@@ -251,8 +251,11 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if sc.currentScan.Vulnerabilities.IacResults == nil {
+	if !isViolationsResults && sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
+	}
+	if isViolationsResults && sc.currentScan.Violations.IacResults == nil {
+		sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
 	}
 	return results.ApplyHandlerToJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
