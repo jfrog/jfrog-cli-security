@@ -58,8 +58,8 @@ func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, lic
 	return tc.simpleJsonConvertor.ParseLicenses(target, licenses)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSecrets(target, secrets...)
+func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) (err error) {
+	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets...)
 }
 
 func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) (err error) {
