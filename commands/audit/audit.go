@@ -139,7 +139,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditResults := RunAudit(auditParams)
 
-	xsc.SendScanEndedEvent(serverDetails, auditResults)
+	xsc.SendScanEndedWithResults(serverDetails, auditResults)
 
 	// auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
 

@@ -52,40 +52,63 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	return
 }
 
-func SendScanEndedEvent(serviceDetails *config.ServerDetails, cmdResults *results.SecurityCommandResults) {
-	if cmdResults == nil || !shouldReportEvents(cmdResults.XscVersion) {
+func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, scanError error) {
+	if !shouldReportEvents(xscVersion) {
 		return
 	}
-	if cmdResults.MultiScanId == "" {
+	if multiScanId == "" {
 		log.Debug("MultiScanId is empty, skip sending command finalize event.")
 		return
 	}
 	// Generate the finalize event.
-	xscService, err := CreateXscService(cmdResults.XrayVersion, serviceDetails)
+	xscService, err := CreateXscService(xrayVersion, serviceDetails)
 	if err != nil {
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, skip sending command finalize event, error: %s ", err.Error()))
 		return
 	}
 
-	event := createFinalizedEvent(time.Since(cmdResults.StartTime).String(), cmdResults)
+	event := CreateFinalizedEvent(multiScanId, startTime, totalFindings, scanError)
+
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
-		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", cmdResults.MultiScanId, err.Error()))
+		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
 		return
 	}
 	log.Debug(fmt.Sprintf("Command event:\n%v", event))
 }
 
-func createFinalizedEvent(duration string, cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	eventStatus := getCommandStatus(cmdResults)
-	totalFindings := getTotalFindings(cmdResults)
+func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *results.SecurityCommandResults) {
+	if cmdResults == nil || serviceDetails == nil {
+		return
+	}
+	SendScanEndedEvent(
+		cmdResults.XrayVersion,
+		cmdResults.XscVersion,
+		serviceDetails,
+		cmdResults.MultiScanId,
+		cmdResults.StartTime,
+		getTotalFindings(cmdResults),
+		cmdResults.GetErrors(),
+	)
+}
+
+func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings int, err error) xscservices.XscAnalyticsGeneralEventFinalize {
+	totalDuration := time.Since(startTime)
+	eventStatus := xscservices.Completed
+	if err != nil {
+		eventStatus = xscservices.Failed
+	}
 	return xscservices.XscAnalyticsGeneralEventFinalize{
-		MultiScanId: cmdResults.MultiScanId,
+		MultiScanId: multiScanId,
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
 			EventStatus:       eventStatus,
 			TotalFindings:     totalFindings,
-			TotalScanDuration: duration,
+			TotalScanDuration: totalDuration.String(),
 		},
 	}
+}
+
+func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
+	return CreateFinalizedEvent(cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), cmdResults.GetErrors())
 }
 
 func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails) (*xscservices.XscAnalyticsGeneralEvent, error) {
@@ -128,6 +151,9 @@ func getOsAndArch() (os, arch string) {
 }
 
 func getTotalFindings(cmdResults *results.SecurityCommandResults) (totalFindings int) {
+	if cmdResults == nil {
+		return
+	}
 	summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(cmdResults)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to convert command results to summary. %s", err.Error()))
@@ -139,13 +165,6 @@ func getTotalFindings(cmdResults *results.SecurityCommandResults) (totalFindings
 		totalFindings = summary.GetTotalVulnerabilities()
 	}
 	return
-}
-
-func getCommandStatus(cmdResults *results.SecurityCommandResults) xscservices.EventStatus {
-	if cmdResults.GetErrors() != nil {
-		return xscservices.Failed
-	}
-	return xscservices.Completed
 }
 
 // type AnalyticsMetricsService struct {

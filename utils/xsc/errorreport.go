@@ -20,7 +20,7 @@ func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDet
 	log.Debug("Sending an error report to JFrog analytics...")
 	xscService, err := CreateXscService(xrayVersion, serverDetails)
 	if err != nil {
-		return fmt.Errorf("failed to create an HTTP client: %s.\nReporting to JFrog analytics is skipped...", err.Error())
+		return fmt.Errorf("failed to create an HTTP client: %s.\nReporting to JFrog analytics is skipped", err.Error())
 	}
 	errorLog := &services.ExternalErrorLog{
 		Log_level: "error",
@@ -31,14 +31,14 @@ func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDet
 }
 
 func sendXscLogMessageIfEnabled(xscVersion string, errorLog *services.ExternalErrorLog, xscService xsc.XscService) error {
-	if !IsReportLogErrorEventPossible(xscVersion, xscService) {
+	if !IsReportLogErrorEventPossible(xscVersion) {
 		return nil
 	}
 	return xscService.SendXscLogErrorRequest(errorLog)
 }
 
 // Determines if reporting the error is feasible.
-func IsReportLogErrorEventPossible(xscVersion string, xscService xsc.XscService) bool {
+func IsReportLogErrorEventPossible(xscVersion string) bool {
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, MinXscVersionForErrorReport); err != nil {
 		log.Debug(err.Error())
 		return false

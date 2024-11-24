@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -140,7 +141,7 @@ func TestSendStartScanEvent(t *testing.T) {
 
 func TestCreateFinalizedEvent(t *testing.T) {
 
-	time := "2021-09-01T12:00:00Z"
+	time := time.Now()
 
 	testCases := []struct {
 		name         string
@@ -149,30 +150,33 @@ func TestCreateFinalizedEvent(t *testing.T) {
 	}{
 		{
 			name:         "No audit results",
-			auditResults: &results.SecurityCommandResults{},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed, TotalScanDuration: time},
+			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
 		},
 		{
 			name:         "Valid audit result",
 			auditResults: getDummyContentForGeneralEvent(true, false),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed, TotalScanDuration: time},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
 		},
 		{
 			name:         "Scan failed with findings.",
 			auditResults: getDummyContentForGeneralEvent(false, true),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed, TotalScanDuration: time},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
 		},
 		{
 			name:         "Scan failed no findings.",
-			auditResults: &results.SecurityCommandResults{Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed, TotalScanDuration: time},
+			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
+			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			event := createFinalizedEvent(time, testCase.auditResults)
-			assert.Equal(t, testCase.expected, event.XscAnalyticsBasicGeneralEvent)
+			event := createFinalizedEvent(testCase.auditResults)
+			assert.Equal(t, testCase.expected.TotalFindings, event.TotalFindings)
+			assert.Equal(t, testCase.expected.EventStatus, event.EventStatus)
+			assert.Equal(t, testCase.auditResults.MultiScanId, event.MultiScanId)
+			assert.NotEmpty(t, event.TotalScanDuration)
 		})
 	}
 }
@@ -234,6 +238,8 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
 	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	cmdResults.StartTime = time.Now()
+	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
 	scanResults.NewScaScanResults(services.ScanResponse{Vulnerabilities: vulnerabilities})
 

@@ -107,7 +107,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		if scanResults == nil {
 			return
 		}
-		xsc.SendScanEndedEvent(dsc.serverDetails, scanResults)
+		xsc.SendScanEndedWithResults(dsc.serverDetails, scanResults)
 		// dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
 		return dsc.recordResults(scanResults)
 	})
