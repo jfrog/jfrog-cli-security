@@ -56,7 +56,7 @@ type ParseScaViolationFunc func(violation services.Violation, cves []formats.Cve
 type ParseLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
-// PrepareJasIssues allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
+// Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
