@@ -103,7 +103,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseLicenses(target results.ScanTarge
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, secrets ...*sarif.Run) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
@@ -114,7 +114,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, sec
 	if err != nil || len(secretsSimpleJson) == 0 {
 		return
 	}
-	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
+	if isViolationsResults {
+		sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, secretsSimpleJson...)
+	} else {
+		sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
+	}
 	return
 }
 
@@ -299,7 +303,7 @@ func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow) results.P
 
 func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif.Run) ([]formats.SourceCodeRow, error) {
 	var rows []formats.SourceCodeRow
-	err := results.PrepareJasIssues(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
+	err := results.ApplyHandlerToJasIssues(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
 		scannerDescription := ""
 		if rule != nil {
 			scannerDescription = sarifutils.GetRuleFullDescription(rule)
