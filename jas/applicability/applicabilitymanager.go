@@ -65,6 +65,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		return
 	}
 	results = applicabilityScanManager.applicabilityScanResults
+
 	if len(results) > 0 {
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
 	}

@@ -370,7 +370,7 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, e
 	return scannerTempDir, nil
 }
 
-func FilterSkipNonApplicable(results *results.SecurityCommandResults) {
+func FilterSkipNotApplicable(results *results.SecurityCommandResults) {
 	for _, target := range results.Targets {
 		filterScaResultsFromJas(target.ScaResults, target.JasResults)
 	}

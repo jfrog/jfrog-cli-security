@@ -72,7 +72,7 @@ type ScanCommand struct {
 	validateSecrets        bool
 	bypassArchiveLimits    bool
 	fixableOnly            bool
-	skipNonApplicableCves  bool
+	skipNotApplicableCves  bool
 	progress               ioUtils.ProgressMgr
 	// JAS is only supported for Docker images.
 	commandSupportsJAS      bool
@@ -95,8 +95,8 @@ func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetSkipNonApplicableCves(skip bool) *ScanCommand {
-	scanCmd.skipNonApplicableCves = skip
+func (scanCmd *ScanCommand) SetSkipNotApplicableCves(skip bool) *ScanCommand {
+	scanCmd.skipNotApplicableCves = skip
 	return scanCmd
 }
 
@@ -244,6 +244,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 		if err = scanCmd.progress.Quit(); err != nil {
 			return errors.Join(err, cmdResults.GetErrors())
 		}
+	}
+
+	if scanCmd.skipNotApplicableCves {
+		jas.FilterSkipNotApplicable(cmdResults)
 	}
 
 	if err = output.NewResultsWriter(cmdResults).
@@ -447,7 +451,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(cmdResults.XrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
-					SetSkipNonApplicableCves(scanCmd.skipNonApplicableCves).
+					SetSkipNotApplicableCves(scanCmd.skipNotApplicableCves).
 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
 				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {

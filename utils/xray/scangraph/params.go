@@ -9,7 +9,7 @@ type ScanGraphParams struct {
 	serverDetails         *config.ServerDetails
 	xrayGraphScanParams   *services.XrayGraphScanParams
 	fixableOnly           bool
-	skipNonApplicableCves bool
+	skipNotApplicableCves bool
 	xrayVersion           string
 	severityLevel         int
 }
@@ -70,11 +70,11 @@ func (sgp *ScanGraphParams) SetFixableOnly(fixable bool) *ScanGraphParams {
 	return sgp
 }
 
-func (sgp *ScanGraphParams) SkipNonApplicableCves() bool {
-	return sgp.skipNonApplicableCves
+func (sgp *ScanGraphParams) SkipNotApplicableCves() bool {
+	return sgp.skipNotApplicableCves
 }
 
-func (sgp *ScanGraphParams) SetSkipNonApplicableCves(skip bool) *ScanGraphParams {
-	sgp.skipNonApplicableCves = skip
+func (sgp *ScanGraphParams) SetSkipNotApplicableCves(skip bool) *ScanGraphParams {
+	sgp.skipNotApplicableCves = skip
 	return sgp
 }

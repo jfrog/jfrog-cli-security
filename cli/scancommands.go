@@ -245,7 +245,7 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
+		SetSkipNotApplicableCves(c.GetBoolFlagValue(flags.SkipNotApplicableCves)).
 		SetMinSeverityFilter(minSeverity)
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -478,7 +478,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
+		SetSkipNotApplicableCves(c.GetBoolFlagValue(flags.SkipNotApplicableCves)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
 		SetScansResultsOutputDir(scansOutputDir).
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
@@ -732,7 +732,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
-		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
+		SetSkipNotApplicableCves(c.GetBoolFlagValue(flags.SkipNotApplicableCves)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
 		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails)).

@@ -102,7 +102,7 @@ const (
 	ExtendedTable         = "extended-table"
 	MinSeverity           = "min-severity"
 	FixableOnly           = "fixable-only"
-	SkipNonApplicableCves = "skip-non-applicable-cves"
+	SkipNotApplicableCves = "skip-non-applicable-cves"
 	Rescan                = "rescan"
 	Vuln                  = "vuln"
 	buildPrefix           = "build-"
@@ -143,7 +143,7 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SkipAutoInstall,
+		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
@@ -152,13 +152,13 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, SkipNonApplicableCves,
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, SkipNotApplicableCves,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, SkipNonApplicableCves,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, SkipNotApplicableCves,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -223,7 +223,7 @@ var flagsMap = map[string]components.Flag{
 	BypassArchiveLimits:   components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
 	MinSeverity:           components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
 	FixableOnly:           components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fixed version only."),
-	SkipNonApplicableCves: components.NewBoolFlag(SkipNonApplicableCves, "Set to true if you wish to not display issues with non-applicable CVEs"),
+	SkipNotApplicableCves: components.NewBoolFlag(SkipNotApplicableCves, "Set to true if you wish to not display issues with Not Applicable CVEs"),
 	Rescan:                components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
 	BuildVuln:             components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
 	ScanVuln:              components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray."),
