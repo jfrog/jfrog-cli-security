@@ -38,6 +38,7 @@ func GetExcludePattern(params utils.AuditParams) string {
 }
 
 func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+	scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
 	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {
