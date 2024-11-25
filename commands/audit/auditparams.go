@@ -1,6 +1,8 @@
 package audit
 
 import (
+	"time"
+
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -17,12 +19,13 @@ type AuditParams struct {
 	skipNotApplicableCves bool
 	minSeverityFilter     severityutils.Severity
 	*xrayutils.AuditBasicParams
-	xrayVersion string
+	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
 	configProfile               *clientservices.ConfigProfile
 	scanResultsOutputDir        string
+	startTime                   time.Time
 }
 
 func NewAuditParams() *AuditParams {
@@ -39,8 +42,22 @@ func (params *AuditParams) WorkingDirs() []string {
 	return params.workingDirs
 }
 
-func (params *AuditParams) XrayVersion() string {
-	return params.xrayVersion
+func (params *AuditParams) SetMultiScanId(msi string) *AuditParams {
+	params.multiScanId = msi
+	return params
+}
+
+func (params *AuditParams) GetMultiScanId() string {
+	return params.multiScanId
+}
+
+func (params *AuditParams) SetStartTime(startTime time.Time) *AuditParams {
+	params.startTime = startTime
+	return params
+}
+
+func (params *AuditParams) StartTime() time.Time {
+	return params.startTime
 }
 
 func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
@@ -123,7 +140,5 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		ProjectKey:             params.commonGraphScanParams.ProjectKey,
 		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
 		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
-		XscVersion:             params.commonGraphScanParams.XscVersion,
-		MultiScanId:            params.commonGraphScanParams.MultiScanId,
 	}
 }
