@@ -35,7 +35,7 @@ type SecurityCommandResults struct {
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
-	ScaResults *ScaScanResults `json:"sca_scans,omitempty"`
+	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
