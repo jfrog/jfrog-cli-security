@@ -169,7 +169,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 }
 
 func (auditCmd *AuditCommand) HasViolationContext() bool {
-	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != "" || (auditCmd.gitInfoContext != nil && auditCmd.gitInfoContext.GitRepoUrl != "")
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != "" || (auditCmd.gitInfoContext != nil && auditCmd.gitInfoContext.GitRepoHttpsCloneUrl != "")
 }
 
 // Runs an audit scan based on the provided auditParams.
@@ -265,7 +265,7 @@ func getGitRepoUrlKey(gitInfoContext *services.XscGitInfoContext) string {
 	if gitInfoContext == nil {
 		return ""
 	}
-	return xscutils.GetGitRepoUrlKey(gitInfoContext.GitRepoUrl)
+	return xscutils.GetGitRepoUrlKey(gitInfoContext.GitRepoHttpsCloneUrl)
 }
 
 func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scanResults *results.SecurityCommandResults,
