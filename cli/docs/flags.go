@@ -102,7 +102,7 @@ const (
 	ExtendedTable         = "extended-table"
 	MinSeverity           = "min-severity"
 	FixableOnly           = "fixable-only"
-	SkipNotApplicableCves = "skip-non-applicable-cves"
+	SkipNotApplicableCves = "skip-not-applicable-cves"
 	Rescan                = "rescan"
 	Vuln                  = "vuln"
 	buildPrefix           = "build-"
