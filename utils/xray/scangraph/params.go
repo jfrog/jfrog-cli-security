@@ -6,11 +6,12 @@ import (
 )
 
 type ScanGraphParams struct {
-	serverDetails       *config.ServerDetails
-	xrayGraphScanParams *services.XrayGraphScanParams
-	fixableOnly         bool
-	xrayVersion         string
-	severityLevel       int
+	serverDetails         *config.ServerDetails
+	xrayGraphScanParams   *services.XrayGraphScanParams
+	fixableOnly           bool
+	skipNonApplicableCves bool
+	xrayVersion           string
+	severityLevel         int
 }
 
 type CommonGraphScanParams struct {
@@ -66,5 +67,14 @@ func (sgp *ScanGraphParams) FixableOnly() bool {
 
 func (sgp *ScanGraphParams) SetFixableOnly(fixable bool) *ScanGraphParams {
 	sgp.fixableOnly = fixable
+	return sgp
+}
+
+func (sgp *ScanGraphParams) SkipNonApplicableCves() bool {
+	return sgp.skipNonApplicableCves
+}
+
+func (sgp *ScanGraphParams) SetSkipNonApplicableCves(skip bool) *ScanGraphParams {
+	sgp.skipNonApplicableCves = skip
 	return sgp
 }

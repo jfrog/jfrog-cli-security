@@ -2,9 +2,10 @@ package sarifutils
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -648,4 +649,15 @@ func GetResultFingerprint(result *sarif.Result) string {
 		}
 	}
 	return ""
+}
+
+func IsRuleNameHasProperty(property, name string, value string, runs ...*sarif.Run) bool {
+	for _, run := range runs {
+		for _, rule := range run.Tool.Driver.Rules {
+			if rule.Name != nil && *rule.Name == name {
+				return rule.Properties[property] != nil && rule.Properties[property] == value
+			}
+		}
+	}
+	return false
 }

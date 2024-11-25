@@ -72,6 +72,7 @@ type ScanCommand struct {
 	validateSecrets        bool
 	bypassArchiveLimits    bool
 	fixableOnly            bool
+	skipNonApplicableCves  bool
 	progress               ioUtils.ProgressMgr
 	// JAS is only supported for Docker images.
 	commandSupportsJAS      bool
@@ -91,6 +92,11 @@ func (scanCmd *ScanCommand) SetSecretValidation(validateSecrets bool) *ScanComma
 
 func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 	scanCmd.fixableOnly = fixable
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetSkipNonApplicableCves(skip bool) *ScanCommand {
+	scanCmd.skipNonApplicableCves = skip
 	return scanCmd
 }
 
@@ -441,6 +447,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					SetXrayGraphScanParams(params).
 					SetXrayVersion(cmdResults.XrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
+					SetSkipNonApplicableCves(scanCmd.skipNonApplicableCves).
 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
 				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 				if err != nil {

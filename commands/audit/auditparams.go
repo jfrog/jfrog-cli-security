@@ -14,6 +14,7 @@ type AuditParams struct {
 	workingDirs           []string
 	installFunc           func(tech string) error
 	fixableOnly           bool
+	skipNonApplicableCves bool
 	minSeverityFilter     severityutils.Severity
 	*xrayutils.AuditBasicParams
 	xrayVersion string
@@ -63,6 +64,15 @@ func (params *AuditParams) FixableOnly() bool {
 
 func (params *AuditParams) SetFixableOnly(fixable bool) *AuditParams {
 	params.fixableOnly = fixable
+	return params
+}
+
+func (params *AuditParams) SkipNonApplicableCves() bool {
+	return params.skipNonApplicableCves
+}
+
+func (params *AuditParams) SetSkipNonApplicableCves(skip bool) *AuditParams {
+	params.skipNonApplicableCves = skip
 	return params
 }
 

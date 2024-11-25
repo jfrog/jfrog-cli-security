@@ -121,6 +121,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
+		SetSkipNonApplicableCves(auditCmd.skipNonApplicableCves).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
@@ -209,6 +210,11 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		auditParallelRunner.Runner.Done()
 	}()
 	auditParallelRunner.Runner.Run()
+
+	/*Filter out non-applicative results after getting the applicability results*/
+	if auditParams.skipNonApplicableCves {
+		jas.FilterSkipNonApplicable(cmdResults)
+	}
 	return
 }
 

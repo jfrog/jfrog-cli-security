@@ -2,8 +2,9 @@ package docs
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/commands/git"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
@@ -88,25 +89,26 @@ const (
 	Periodic  = "periodic"
 
 	// Unique scan and audit flags
-	scanPrefix          = "scan-"
-	scanRecursive       = scanPrefix + Recursive
-	scanRegexp          = scanPrefix + RegexpFlag
-	scanAnt             = scanPrefix + AntFlag
-	OutputFormat        = "format"
-	BypassArchiveLimits = "bypass-archive-limits"
-	Watches             = "watches"
-	RepoPath            = "repo-path"
-	Licenses            = "licenses"
-	Fail                = "fail"
-	ExtendedTable       = "extended-table"
-	MinSeverity         = "min-severity"
-	FixableOnly         = "fixable-only"
-	Rescan              = "rescan"
-	Vuln                = "vuln"
-	buildPrefix         = "build-"
-	BuildVuln           = buildPrefix + Vuln
-	ScanVuln            = scanPrefix + Vuln
-	SecretValidation    = "validate-secrets"
+	scanPrefix            = "scan-"
+	scanRecursive         = scanPrefix + Recursive
+	scanRegexp            = scanPrefix + RegexpFlag
+	scanAnt               = scanPrefix + AntFlag
+	OutputFormat          = "format"
+	BypassArchiveLimits   = "bypass-archive-limits"
+	Watches               = "watches"
+	RepoPath              = "repo-path"
+	Licenses              = "licenses"
+	Fail                  = "fail"
+	ExtendedTable         = "extended-table"
+	MinSeverity           = "min-severity"
+	FixableOnly           = "fixable-only"
+	SkipNonApplicableCves = "skip-non-applicable-cves"
+	Rescan                = "rescan"
+	Vuln                  = "vuln"
+	buildPrefix           = "build-"
+	BuildVuln             = buildPrefix + Vuln
+	ScanVuln              = scanPrefix + Vuln
+	SecretValidation      = "validate-secrets"
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -141,7 +143,7 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SkipAutoInstall,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
@@ -150,13 +152,13 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
+		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation, SkipNonApplicableCves,
 	},
 	Audit: {
 		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
-		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults,
+		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, SkipNonApplicableCves,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -216,16 +218,17 @@ var flagsMap = map[string]components.Flag{
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
 		components.WithStrDefaultValue("table"),
 	),
-	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
-	ExtendedTable:       components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
-	BypassArchiveLimits: components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
-	MinSeverity:         components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
-	FixableOnly:         components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fixed version only."),
-	Rescan:              components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
-	BuildVuln:           components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
-	ScanVuln:            components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray."),
-	InsecureTls:         components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
-	ExcludeTestDeps:     components.NewBoolFlag(ExcludeTestDeps, "[Gradle] Set to true if you'd like to exclude Gradle test dependencies from Xray scanning."),
+	Fail:                  components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),
+	ExtendedTable:         components.NewBoolFlag(ExtendedTable, "Set to true if you'd like the table to include extended fields such as 'CVSS' & 'Xray Issue Id'. Ignored if provided 'format' is not 'table'."),
+	BypassArchiveLimits:   components.NewBoolFlag(BypassArchiveLimits, "Set to true to bypass the indexer-app archive limits."),
+	MinSeverity:           components.NewStringFlag(MinSeverity, "Set the minimum severity of issues to display. The following values are accepted: Low, Medium, High or Critical."),
+	FixableOnly:           components.NewBoolFlag(FixableOnly, "Set to true if you wish to display issues that have a fixed version only."),
+	SkipNonApplicableCves: components.NewBoolFlag(SkipNonApplicableCves, "Set to true if you wish to not display issues with non-applicable CVEs"),
+	Rescan:                components.NewBoolFlag(Rescan, "Set to true when scanning an already successfully scanned build, for example after adding an ignore rule."),
+	BuildVuln:             components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray. Ignored if provided 'format' is 'sarif'."),
+	ScanVuln:              components.NewBoolFlag(Vuln, "Set to true if you'd like to receive an additional view of all vulnerabilities, regardless of the policy configured in Xray."),
+	InsecureTls:           components.NewBoolFlag(InsecureTls, "Set to true to skip TLS certificates verification."),
+	ExcludeTestDeps:       components.NewBoolFlag(ExcludeTestDeps, "[Gradle] Set to true if you'd like to exclude Gradle test dependencies from Xray scanning."),
 	useWrapperAudit: components.NewBoolFlag(
 		UseWrapper,
 		"Set to false if you wish to not use the gradle or maven wrapper.",

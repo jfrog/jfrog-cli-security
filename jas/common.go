@@ -17,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -367,4 +368,24 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, e
 		return "", err
 	}
 	return scannerTempDir, nil
+}
+
+func FilterSkipNonApplicable(results *results.SecurityCommandResults) {
+	for _, target := range results.Targets {
+		filterScaResultsFromJas(target.ScaResults, target.JasResults)
+	}
+}
+
+func filterScaResultsFromJas(scaResults *results.ScaScanResults, jasResults *results.JasScansResults) {
+	filteredViolations := []services.Violation{}
+	for i := range scaResults.XrayResults {
+		xrayResult := &scaResults.XrayResults[i]
+		for _, violation := range xrayResult.Violations {
+			if !sarifutils.IsRuleNameHasProperty("applicability", violation.Cves[0].Id, "not_applicable", jasResults.ApplicabilityScanResults...) {
+				filteredViolations = append(filteredViolations, violation)
+				xrayResult.Violations = append(xrayResult.Violations, violation)
+			}
+		}
+		xrayResult.Violations = filteredViolations
+	}
 }

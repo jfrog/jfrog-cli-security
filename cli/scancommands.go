@@ -3,6 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -22,8 +25,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
-	"os"
-	"strings"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
@@ -244,6 +245,7 @@ func ScanCmd(c *components.Context) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
+		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
 		SetMinSeverityFilter(minSeverity)
 	if c.IsFlagSet(flags.Watches) {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
@@ -476,6 +478,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
+		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
 		SetScansResultsOutputDir(scansOutputDir).
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
@@ -729,6 +732,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
+		SetSkipNonApplicableCves(c.GetBoolFlagValue(flags.SkipNonApplicableCves)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
 		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails)).
