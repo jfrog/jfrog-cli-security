@@ -575,7 +575,7 @@ func getNoJasAuditMockCommand() components.Command {
 		Name:  docs.Audit,
 		Flags: docs.GetCommandFlags(docs.Audit),
 		Action: func(c *components.Context) error {
-			auditCmd, err := cli.CreateAuditCmd(c)
+			_, _, _, auditCmd, err := cli.CreateAuditCmd(c)
 			if err != nil {
 				return err
 			}

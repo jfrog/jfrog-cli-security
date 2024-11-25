@@ -405,7 +405,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
+			mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
 			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -414,20 +414,21 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
+				SetXrayVersion(utils.EntitlementsMinVersion).
+				SetXscVersion(services.ConfigProfileMinXscVersion).
 				SetOutputFormat(format.Table).
 				SetUseJas(true)
 
 			configProfile := testcase.configProfile
 			auditParams := NewAuditParams().
 				SetWorkingDirs([]string{tempDirPath}).
+				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetConfigProfile(&configProfile).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					RepoPath:               "",
 					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
-					XscVersion:             services.ConfigProfileMinXscVersion,
-					MultiScanId:            validations.TestMsi,
 				})
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
@@ -462,7 +463,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := validations.XrayServer(t, utils.EntitlementsMinVersion)
+	mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -476,15 +477,16 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	auditBasicParams := (&utils.AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
+		SetXrayVersion(utils.EntitlementsMinVersion).
 		SetUseJas(true)
 
 	auditParams := NewAuditParams().
 		SetWorkingDirs([]string{tempDirPath}).
+		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 			ScanType:               scanservices.Dependency,
 			IncludeVulnerabilities: true,
-			MultiScanId:            validations.TestScaScanId,
 		}).
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
@@ -612,17 +614,18 @@ func TestAuditWithPartialResults(t *testing.T) {
 			auditBasicParams := (&utils.AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat(format.Table).
+				SetXrayVersion("3.108.0").
 				SetUseJas(testcase.useJas).
 				SetAllowPartialResults(testcase.allowPartialResults).
 				SetPipRequirementsFile(testcase.pipRequirementsFile)
 
 			auditParams := NewAuditParams().
 				SetWorkingDirs([]string{tempDirPath}).
+				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
 					ScanType:               scanservices.Dependency,
 					IncludeVulnerabilities: true,
-					MultiScanId:            validations.TestScaScanId,
 				})
 			auditParams.SetIsRecursiveScan(true)
 

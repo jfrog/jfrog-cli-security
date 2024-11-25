@@ -33,15 +33,14 @@ import (
 )
 
 type AuditCommand struct {
-	watches                 []string
-	projectKey              string
-	targetRepoPath          string
-	IncludeVulnerabilities  bool
-	IncludeLicenses         bool
-	Fail                    bool
-	PrintExtendedTable      bool
-	analyticsMetricsService *xsc.AnalyticsMetricsService
-	Threads                 int
+	watches                []string
+	projectKey             string
+	targetRepoPath         string
+	IncludeVulnerabilities bool
+	IncludeLicenses        bool
+	Fail                   bool
+	PrintExtendedTable     bool
+	Threads                int
 	AuditParams
 }
 
@@ -84,11 +83,6 @@ func (auditCmd *AuditCommand) SetPrintExtendedTable(printExtendedTable bool) *Au
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *AuditCommand {
-	auditCmd.analyticsMetricsService = analyticsMetricsService
-	return auditCmd
-}
-
 func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 	auditCmd.Threads = threads
 	return auditCmd
@@ -103,7 +97,6 @@ func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGra
 	commonParams.ProjectKey = auditCmd.projectKey
 	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
 	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
-	commonParams.MultiScanId, commonParams.XscVersion = xsc.GetXscMsiAndVersion(auditCmd.analyticsMetricsService)
 	return commonParams
 }
 
@@ -114,9 +107,18 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
+	serverDetails, err := auditCmd.ServerDetails()
+	if err != nil {
+		return
+	}
 
-	// Should be called before creating the audit params, so the params will contain XSC information.
-	auditCmd.analyticsMetricsService.AddGeneralEvent(auditCmd.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+	multiScanId, startTime := xsc.SendNewScanEvent(
+		auditCmd.GetXrayVersion(),
+		auditCmd.GetXscVersion(),
+		serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
+	)
+
 	auditParams := NewAuditParams().
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
@@ -125,11 +127,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
-		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir)
+		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
 	auditParams.SetIsRecursiveScan(isRecursiveScan).SetExclusions(auditCmd.Exclusions())
 
 	auditResults := RunAudit(auditParams)
-	auditCmd.analyticsMetricsService.UpdateGeneralEvent(auditCmd.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(auditResults))
+
+	xsc.SendScanEndedWithResults(serverDetails, auditResults)
 
 	if auditCmd.Progress() != nil {
 		if err = auditCmd.Progress().Quit(); err != nil {
@@ -217,7 +220,7 @@ func isEntitledForJas(xrayManager *xray.XrayServicesManager, auditParams *AuditP
 		// Dry run without JAS
 		return false, nil
 	}
-	return jas.IsEntitledForJas(xrayManager, auditParams.xrayVersion)
+	return jas.IsEntitledForJas(xrayManager, auditParams.GetXrayVersion())
 }
 
 func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults, jfrogAppsConfig *jfrogappsconfig.JFrogAppsConfig) (jasScanner *jas.JasScanner, generalError error) {
@@ -231,7 +234,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	jasScanner, err = jas.CreateJasScanner(serverDetails, scanResults.SecretValidation, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.commonGraphScanParams.MultiScanId, scanResults.GetTechnologies()...), auditParams.Exclusions()...)
+	jasScanner, err = jas.CreateJasScanner(serverDetails, scanResults.SecretValidation, auditParams.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(auditParams.GetMultiScanId(), scanResults.GetTechnologies()...), auditParams.Exclusions()...)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
@@ -300,13 +303,16 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
-	var xrayManager *xray.XrayServicesManager
-	if xrayManager, params.xrayVersion, err = xrayutils.CreateXrayServiceManagerAndGetVersion(serverDetails); err != nil {
+	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
 		return cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetXrayVersion(params.xrayVersion)
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+	cmdResults.SetXrayVersion(params.GetXrayVersion())
+	cmdResults.SetXscVersion(params.GetXscVersion())
+	cmdResults.SetMultiScanId(params.GetMultiScanId())
+	cmdResults.SetStartTime(params.StartTime())
+	// Send entitlement requests
+	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails)
+	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
 	entitledForJas, err := isEntitledForJas(xrayManager, params)
@@ -316,9 +322,8 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		cmdResults.SetEntitledForJas(entitledForJas)
 	}
 	if entitledForJas {
-		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.xrayVersion, slices.Contains(params.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan)))
+		cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, params.GetXrayVersion(), slices.Contains(params.AuditBasicParams.ScansToPerform(), utils.SecretTokenValidationScan)))
 	}
-	cmdResults.SetMultiScanId(params.commonGraphScanParams.MultiScanId)
 	// Initialize targets
 	detectScanTargets(cmdResults, params)
 	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
