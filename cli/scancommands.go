@@ -755,10 +755,10 @@ func GetJfrogServicesVersion(serverDetails *coreConfig.ServerDetails) (xrayVersi
 		return
 	}
 	xrayVersion, err = xrayManager.GetVersion()
-	log.Debug("Xray version: " + xrayVersion)
 	if err != nil {
 		return
 	}
+	log.Debug("Xray version: " + xrayVersion)
 	xscService, err := xsc.CreateXscService(xrayVersion, serverDetails)
 	if err != nil {
 		return

@@ -90,7 +90,7 @@ func TestSendStartScanEvent(t *testing.T) {
 		expectedMsi string
 	}{
 		{
-			name: "Don't report events",
+			name: "Don't report events - user disabled feature",
 			mockParams: validations.MockServerParams{
 				XrayVersion: xscutils.MinXrayVersionXscTransitionToXray,
 				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
@@ -99,7 +99,7 @@ func TestSendStartScanEvent(t *testing.T) {
 			expectedMsi: "",
 		},
 		{
-			name: "Xsc",
+			name: "Xsc service in xray",
 			mockParams: validations.MockServerParams{
 				XrayVersion: xscutils.MinXrayVersionXscTransitionToXray,
 				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,

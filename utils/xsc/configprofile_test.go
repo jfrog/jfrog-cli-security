@@ -18,7 +18,7 @@ func TestGetConfigProfile(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:       "Deprecated service",
+			name:       "Deprecated XSC service",
 			mockParams: validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: services.ConfigProfileMinXscVersion},
 		},
 		{
