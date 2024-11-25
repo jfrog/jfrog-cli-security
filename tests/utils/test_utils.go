@@ -49,7 +49,7 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 }
 
 func ValidateXrayVersion(t *testing.T, minVersion string) {
-	xrayVersion, err := getTestsXrayVersion()
+	xrayVersion, err := GetTestsXrayVersion()
 	if err != nil {
 		assert.NoError(t, err)
 		return
@@ -95,7 +95,7 @@ func removeDirs(dirs ...string) {
 	}
 }
 
-func getTestsXrayVersion() (version.Version, error) {
+func GetTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -19,9 +20,11 @@ import (
 type SecurityCommandResults struct {
 	// General fields describing the command metadata
 	XrayVersion      string            `json:"xray_version"`
+	XscVersion       string            `json:"xsc_version,omitempty"`
 	EntitledForJas   bool              `json:"jas_entitled"`
 	SecretValidation bool              `json:"secret_validation,omitempty"`
 	CmdType          utils.CommandType `json:"command_type"`
+	StartTime        time.Time         `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
@@ -92,8 +95,18 @@ func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
 	return &SecurityCommandResults{CmdType: cmdType, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
 }
 
+func (r *SecurityCommandResults) SetStartTime(startTime time.Time) *SecurityCommandResults {
+	r.StartTime = startTime
+	return r
+}
+
 func (r *SecurityCommandResults) SetXrayVersion(xrayVersion string) *SecurityCommandResults {
 	r.XrayVersion = xrayVersion
+	return r
+}
+
+func (r *SecurityCommandResults) SetXscVersion(xscVersion string) *SecurityCommandResults {
+	r.XscVersion = xscVersion
 	return r
 }
 

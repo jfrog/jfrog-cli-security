@@ -146,10 +146,14 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
 	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	xrayScanGraphParams := params.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
-		SetXrayVersion(params.xrayVersion).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetXrayVersion(params.GetXrayVersion()).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)

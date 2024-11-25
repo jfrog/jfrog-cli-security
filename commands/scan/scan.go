@@ -9,8 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"time"
 
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -74,9 +73,13 @@ type ScanCommand struct {
 	fixableOnly            bool
 	progress               ioUtils.ProgressMgr
 	// JAS is only supported for Docker images.
-	commandSupportsJAS      bool
-	targetNameOverride      string
-	analyticsMetricsService *xsc.AnalyticsMetricsService
+	commandSupportsJAS bool
+	targetNameOverride string
+
+	xrayVersion string
+	xscVersion  string
+	multiScanId string
+	startTime   time.Time
 }
 
 func (scanCmd *ScanCommand) SetMinSeverityFilter(minSeverityFilter severityutils.Severity) *ScanCommand {
@@ -167,8 +170,13 @@ func (scanCmd *ScanCommand) SetBypassArchiveLimits(bypassArchiveLimits bool) *Sc
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetAnalyticsMetricsService(analyticsMetricsService *xsc.AnalyticsMetricsService) *ScanCommand {
-	scanCmd.analyticsMetricsService = analyticsMetricsService
+func (scanCmd *ScanCommand) SetXrayVersion(xrayVersion string) *ScanCommand {
+	scanCmd.xrayVersion = xrayVersion
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
+	scanCmd.xscVersion = xscVersion
 	return scanCmd
 }
 
@@ -269,7 +277,17 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
-	xrayManager, cmdResults := initScanCmdResults(cmdType, scanCmd.serverDetails, scanCmd.analyticsMetricsService, scanCmd.bypassArchiveLimits, scanCmd.validateSecrets, scanCmd.commandSupportsJAS)
+	xrayManager, cmdResults := initScanCmdResults(
+		cmdType,
+		scanCmd.serverDetails,
+		scanCmd.xrayVersion,
+		scanCmd.xscVersion,
+		scanCmd.multiScanId,
+		scanCmd.startTime,
+		scanCmd.bypassArchiveLimits,
+		scanCmd.validateSecrets,
+		scanCmd.commandSupportsJAS,
+	)
 	if cmdResults.GeneralError != nil {
 		return
 	}
@@ -309,24 +327,28 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	return
 }
 
-func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, analyticsMetricsService *xsc.AnalyticsMetricsService, bypassArchiveLimits, validateSecrets, useJas bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
+func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, xrayVersion, xscVersion, msi string, startTime time.Time, bypassArchiveLimits, validateSecrets, useJas bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(cmdType)
-	xrayManager, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(serverDetails)
-	if err != nil {
-		return xrayManager, cmdResults.AddGeneralError(err, false)
-	} else {
-		cmdResults.SetXrayVersion(xrayVersion)
-	}
 	// Validate Xray minimum version for graph scan command
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
 	if bypassArchiveLimits {
 		// Validate Xray minimum version for BypassArchiveLimits flag for indexer
-		if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
+		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
 			return xrayManager, cmdResults.AddGeneralError(err, false)
 		}
 	}
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return xrayManager, cmdResults.AddGeneralError(err, false)
+	}
+	// Initialize general information
+	cmdResults.SetXrayVersion(xrayVersion)
+	cmdResults.SetXscVersion(xscVersion)
+	cmdResults.SetMultiScanId(msi)
+	cmdResults.SetStartTime(startTime)
+	// Send entitlement request
 	if entitledForJas, err := isEntitledForJas(xrayManager, xrayVersion, useJas); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
@@ -334,9 +356,6 @@ func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerD
 		if entitledForJas {
 			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, xrayVersion, validateSecrets))
 		}
-	}
-	if analyticsMetricsService != nil {
-		cmdResults.SetMultiScanId(analyticsMetricsService.GetMsi())
 	}
 	return
 }
@@ -432,7 +451,8 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
 				}
-				params.MultiScanId, params.XscVersion = xsc.GetXscMsiAndVersion(scanCmd.analyticsMetricsService)
+				params.MultiScanId = cmdResults.MultiScanId
+				params.XscVersion = cmdResults.XscVersion
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
