@@ -169,7 +169,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 }
 
 func (auditCmd *AuditCommand) HasViolationContext() bool {
-	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
+	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != "" || (auditCmd.gitInfoContext != nil && auditCmd.gitInfoContext.GitRepoUrl != "")
 }
 
 // Runs an audit scan based on the provided auditParams.

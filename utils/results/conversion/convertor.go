@@ -111,38 +111,38 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 
 func parseRequiredJasResults[T interface{}](params ResultConvertParams, parser ResultsStreamFormatParser[T], targetResults *results.TargetResults, cmdType utils.CommandType) (err error) {
 	// Parsing JAS vulnerabilities results
-	if targetResults.JasResultsNew != nil && targetResults.JasResultsNew.JasVulnerabilities != nil {
+	if targetResults.JasResults != nil && targetResults.JasResults.JasVulnerabilities != nil {
 		if utils.IsScanRequested(cmdType, utils.SecretsScan, params.RequestedScans...) {
-			if err = parser.ParseSecrets(targetResults.ScanTarget, false, targetResults.JasResultsNew.JasVulnerabilities.SecretsScanResults...); err != nil {
+			if err = parser.ParseSecrets(targetResults.ScanTarget, false, targetResults.JasResults.JasVulnerabilities.SecretsScanResults...); err != nil {
 				return
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.IacScan, params.RequestedScans...) {
-			if err = parser.ParseIacs(targetResults.ScanTarget, false, targetResults.JasResultsNew.JasVulnerabilities.IacScanResults...); err != nil {
+			if err = parser.ParseIacs(targetResults.ScanTarget, false, targetResults.JasResults.JasVulnerabilities.IacScanResults...); err != nil {
 				return
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.SastScan, params.RequestedScans...) {
-			if err = parser.ParseSast(targetResults.ScanTarget, false, targetResults.JasResultsNew.JasVulnerabilities.SastScanResults...); err != nil {
+			if err = parser.ParseSast(targetResults.ScanTarget, false, targetResults.JasResults.JasVulnerabilities.SastScanResults...); err != nil {
 				return
 			}
 		}
 	}
 
 	// Parsing JAS violations results
-	if targetResults.JasResultsNew != nil && targetResults.JasResultsNew.JasViolations != nil && params.HasViolationContext { // TODO eran VERIFY if the last condition is needed
+	if targetResults.JasResults != nil && targetResults.JasResults.JasViolations != nil && params.HasViolationContext { // TODO eran VERIFY if the last condition is needed
 		if utils.IsScanRequested(cmdType, utils.SecretsScan, params.RequestedScans...) {
-			if err = parser.ParseSecrets(targetResults.ScanTarget, true, targetResults.JasResultsNew.JasViolations.SecretsScanResults...); err != nil {
+			if err = parser.ParseSecrets(targetResults.ScanTarget, true, targetResults.JasResults.JasViolations.SecretsScanResults...); err != nil {
 				return
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.IacScan, params.RequestedScans...) {
-			if err = parser.ParseIacs(targetResults.ScanTarget, true, targetResults.JasResultsNew.JasViolations.IacScanResults...); err != nil {
+			if err = parser.ParseIacs(targetResults.ScanTarget, true, targetResults.JasResults.JasViolations.IacScanResults...); err != nil {
 				return
 			}
 		}
 		if utils.IsScanRequested(cmdType, utils.SastScan, params.RequestedScans...) {
-			if err = parser.ParseSast(targetResults.ScanTarget, true, targetResults.JasResultsNew.JasViolations.SastScanResults...); err != nil {
+			if err = parser.ParseSast(targetResults.ScanTarget, true, targetResults.JasResults.JasViolations.SastScanResults...); err != nil {
 				return
 			}
 		}
@@ -157,8 +157,8 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
 		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 		var applicableRuns []*sarif.Run
-		if jasEntitled && targetScansResults.JasResultsNew != nil && targetScansResults.JasResultsNew.JasVulnerabilities != nil {
-			applicableRuns = targetScansResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults
+		if jasEntitled && targetScansResults.JasResults != nil && targetScansResults.JasResults.JasVulnerabilities != nil {
+			applicableRuns = targetScansResults.JasResults.JasVulnerabilities.ApplicabilityScanResults
 		}
 		if params.IncludeVulnerabilities {
 			if err = parser.ParseScaVulnerabilities(actualTarget, scaResults, applicableRuns...); err != nil {

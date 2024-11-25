@@ -3,7 +3,6 @@ package jas
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -137,10 +136,10 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 	processSarifRuns(vulnerabilitiesSarifRuns, wd, informationUrlSuffix, minSeverity)
 
 	// TODO eran delete
-	err = createViolationsFile(fileName)
-	if err != nil {
-		return
-	}
+	// err = createViolationsFile(fileName)
+	// if err != nil {
+	// 	return
+	// }
 
 	var violationsSarifExists bool
 	violationsSarifFileName := fileName + "_violations"
@@ -156,32 +155,32 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 }
 
 // TODO eran delete this func
-func createViolationsFile(filePath string) (err error) {
-	// Open the original file for reading.
-	originalFile, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open original file: %w", err)
-	}
-	defer originalFile.Close() // Ensure the original file is closed
+// func createViolationsFile(filePath string) (err error) {
+// 	// Open the original file for reading.
+// 	originalFile, err := os.Open(filePath)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to open original file: %w", err)
+// 	}
+// 	defer originalFile.Close() // Ensure the original file is closed
 
-	// Create a new file name by appending "_violations" to the original filename
-	newFileName := filePath + "_violations" // Simply append "_violations"
+// 	// Create a new file name by appending "_violations" to the original filename
+// 	newFileName := filePath + "_violations" // Simply append "_violations"
 
-	// Create the new file for writing
-	newFile, err := os.Create(newFileName)
-	if err != nil {
-		return fmt.Errorf("failed to create copy file: %w", err)
-	}
-	defer newFile.Close() // Ensure the new file is closed
+// 	// Create the new file for writing
+// 	newFile, err := os.Create(newFileName)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create copy file: %w", err)
+// 	}
+// 	defer newFile.Close() // Ensure the new file is closed
 
-	// Copy the original file to the new file
-	_, err = io.Copy(newFile, originalFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
-	}
+// 	// Copy the original file to the new file
+// 	_, err = io.Copy(newFile, originalFile)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to copy file content: %w", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
 func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {

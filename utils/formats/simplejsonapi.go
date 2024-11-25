@@ -1,6 +1,10 @@
 package formats
 
-import "github.com/jfrog/jfrog-cli-security/utils/techutils"
+import (
+	"fmt"
+
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+)
 
 // Structs in this file should NOT be changed!
 // The structs are used as an API for the simple-json format, thus changing their structure or the 'json' annotation will break the API.
@@ -84,6 +88,10 @@ type Location struct {
 	EndLine     int    `json:"endLine,omitempty"`
 	EndColumn   int    `json:"endColumn,omitempty"`
 	Snippet     string `json:"snippet,omitempty"`
+}
+
+func (l Location) ToString() string {
+	return fmt.Sprintf("%s|%d|%d|%d|%d|%s", l.File, l.StartLine, l.StartColumn, l.EndLine, l.EndColumn, l.Snippet)
 }
 
 type ComponentRow struct {

@@ -117,16 +117,16 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 	scanResults.NewScaScanResults(services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
-		scanResults.JasResultsNew.JasVulnerabilities.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
-		scanResults.JasResultsNew.JasVulnerabilities.SecretsScanResults = []*sarif.Run{
+		scanResults.JasResults.JasVulnerabilities.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
+		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 		}
-		scanResults.JasResultsNew.JasVulnerabilities.IacScanResults = []*sarif.Run{
+		scanResults.JasResults.JasVulnerabilities.IacScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 		}
-		scanResults.JasResultsNew.JasVulnerabilities.SastScanResults = []*sarif.Run{
+		scanResults.JasResults.JasVulnerabilities.SastScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
 		}
