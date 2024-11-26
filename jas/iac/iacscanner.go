@@ -44,12 +44,7 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 		return
 	}
-	if len(vulnerabilitiesResults) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "IaC vulnerabilities")
-		if len(violationsResults) > 0 {
-			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(violationsResults...), "IaC violations")
-		}
-	}
+	jas.LogJasScanFindings(jasutils.IaC, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId)
 	return
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -86,6 +87,7 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, va
 		return nil, err
 	}
 	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
+	log.Debug("Analyzer Manager extra env vars:\n", vars)
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
@@ -129,58 +131,65 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
+func LogJasScanFindings(scanType jasutils.JasScanType, vulnerabilitiesCount, violationsCount, threadId int) {
+	if vulnerabilitiesCount == 0 && violationsCount == 0 {
+		log.Info(fmt.Sprintf("%sNo %s findings", clientutils.GetLogMsgPrefix(threadId, false), scanType.String()))
+		return
+	}
+	msg := fmt.Sprintf("%sFound", clientutils.GetLogMsgPrefix(threadId, false))
+	hasVulnerabilities := vulnerabilitiesCount > 0
+	if hasVulnerabilities {
+		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+	}
+	if violationsCount > 0 {
+		if hasVulnerabilities {
+			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
+		} else {
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+		}
+	}
+	log.Info(msg)
+}
+
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if vulnerabilitiesSarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
+	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
+	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
+	if err != nil {
 		return
 	}
-	processSarifRuns(vulnerabilitiesSarifRuns, wd, informationUrlSuffix, minSeverity)
-
-	// TODO eran delete
-	// err = createViolationsFile(fileName)
-	// if err != nil {
-	// 	return
-	// }
-
-	var violationsSarifExists bool
-	violationsSarifFileName := fileName + "_violations"
-	if violationsSarifExists, err = fileutils.IsFileExists(violationsSarifFileName, false); err != nil || !violationsSarifExists {
+	if !vulnFileExist && !violationsFileExist {
+		err = fmt.Errorf("Analyzer-Manager did not generate results files at: %s", filepath.Base(fileName))
 		return
 	}
-
-	if violationsSarifRuns, err = sarifutils.ReadScanRunsFromFile(violationsSarifFileName); err != nil {
-		return
+	if vulnFileExist {
+		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, wd, informationUrlSuffix, minSeverity)
+		if err != nil {
+			return
+		}
 	}
-	processSarifRuns(violationsSarifRuns, wd, informationUrlSuffix, minSeverity) // TODO eran VERIFY - do we need to do this for violations as well
+	if violationsFileExist {
+		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, wd, informationUrlSuffix, minSeverity)
+	}
 	return
 }
 
-// TODO eran delete this func
-// func createViolationsFile(filePath string) (err error) {
-// 	// Open the original file for reading.
-// 	originalFile, err := os.Open(filePath)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to open original file: %w", err)
-// 	}
-// 	defer originalFile.Close() // Ensure the original file is closed
+func checkJasResultsFilesExist(vulnFileName, violationsFileName string) (vulnFileExist, violationsFileExist bool, err error) {
+	if vulnFileExist, err = fileutils.IsFileExists(vulnFileName, false); err != nil {
+		return
+	}
+	if violationsFileExist, err = fileutils.IsFileExists(violationsFileName, false); err != nil {
+		return
+	}
+	return
+}
 
-// 	// Create a new file name by appending "_violations" to the original filename
-// 	newFileName := filePath + "_violations" // Simply append "_violations"
-
-// 	// Create the new file for writing
-// 	newFile, err := os.Create(newFileName)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create copy file: %w", err)
-// 	}
-// 	defer newFile.Close() // Ensure the new file is closed
-
-// 	// Copy the original file to the new file
-// 	_, err = io.Copy(newFile, originalFile)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to copy file content: %w", err)
-// 	}
-
-// 	return nil
-// }
+func readJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
+	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
+		return
+	}
+	processSarifRuns(sarifRuns, wd, informationUrlSuffix, minSeverity)
+	return
+}
 
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
 func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {

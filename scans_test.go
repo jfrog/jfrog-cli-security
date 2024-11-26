@@ -169,7 +169,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			if validateSecrets {
-				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
+				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{InactiveVulnerabilities: minInactives})
 			} else {
 				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
 			}

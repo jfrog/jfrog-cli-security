@@ -45,47 +45,98 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 // TODO eran do I need to change something in any test validations in the file or in other validation funcs?
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
-	var applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, inactiveResults int
-	for _, vuln := range results.Vulnerabilities {
-		switch vuln.Applicable {
-		case jasutils.NotApplicable.String():
-			notApplicableResults++
-		case jasutils.Applicable.String():
-			applicableResults++
-		case jasutils.NotCovered.String():
-			notCoveredResults++
-		case jasutils.ApplicabilityUndetermined.String():
-			undeterminedResults++
-		case jasutils.MissingContext.String():
-			missingContextResults++
-		}
-	}
+	var applicableVulnerabilitiesResults, undeterminedVulnerabilitiesResults, notCoveredVulnerabilitiesResults, notApplicableVulnerabilitiesResults, missingContextVulnerabilitiesResults, inactiveSecretsVulnerabilities int
+	var applicableViolationsResults, undeterminedViolationsResults, notCoveredViolationsResults, notApplicableViolationsResults, missingContextViolationsResults, inactiveSecretsViolations int
+	// Licenses
+	licenses := len(results.Licenses)
+	// Total
+	vulnerabilities := len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities)
+	violations := len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations)
+	// Jas
+	sastVulnerabilities := len(results.SastVulnerabilities)
+	secretsVulnerabilities := len(results.SecretsVulnerabilities)
+	iacVulnerabilities := len(results.IacsVulnerabilities)
+	sastViolations := len(results.SastViolations)
+	secretsViolations := len(results.SecretsViolations)
+	iacViolations := len(results.IacsViolations)
 	for _, result := range results.SecretsVulnerabilities {
 		if result.Applicability != nil {
 			if result.Applicability.Status == jasutils.Inactive.String() {
-				inactiveResults += 1
+				inactiveSecretsVulnerabilities += 1
 			}
 		}
 	}
-	vulnerabilitiesCount := len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities)
+	for _, result := range results.SecretsViolations {
+		if result.Applicability != nil {
+			if result.Applicability.Status == jasutils.Inactive.String() {
+				inactiveSecretsViolations += 1
+			}
+		}
+	}
+	// Sca
+	securityViolations := len(results.SecurityViolations)
+	licenseViolations := len(results.LicensesViolations)
+	opRiskViolations := len(results.OperationalRiskViolations)
+	for _, vuln := range results.Vulnerabilities {
+		switch vuln.Applicable {
+		case jasutils.NotApplicable.String():
+			notApplicableVulnerabilitiesResults++
+		case jasutils.Applicable.String():
+			applicableVulnerabilitiesResults++
+		case jasutils.NotCovered.String():
+			notCoveredVulnerabilitiesResults++
+		case jasutils.ApplicabilityUndetermined.String():
+			undeterminedVulnerabilitiesResults++
+		case jasutils.MissingContext.String():
+			missingContextVulnerabilitiesResults++
+		}
+	}
+	for _, vuln := range results.SecurityViolations {
+		switch vuln.Applicable {
+		case jasutils.NotApplicable.String():
+			notApplicableViolationsResults++
+		case jasutils.Applicable.String():
+			applicableViolationsResults++
+		case jasutils.NotCovered.String():
+			notCoveredViolationsResults++
+		case jasutils.ApplicabilityUndetermined.String():
+			undeterminedViolationsResults++
+		case jasutils.MissingContext.String():
+			missingContextViolationsResults++
+		}
+	}
 
 	ValidateContent(t, params.ExactResultsMatch,
-		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilitiesCount, Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilitiesCount)},
-		CountValidation[int]{Expected: params.Sast, Actual: len(results.SastVulnerabilities), Msg: GetValidationCountErrMsg("sast", "simple-json", params.ExactResultsMatch, params.Sast, len(results.SastVulnerabilities))},
-		CountValidation[int]{Expected: params.Iac, Actual: len(results.IacsVulnerabilities), Msg: GetValidationCountErrMsg("IaC", "simple-json", params.ExactResultsMatch, params.Iac, len(results.IacsVulnerabilities))},
-		CountValidation[int]{Expected: params.Secrets, Actual: len(results.SecretsVulnerabilities), Msg: GetValidationCountErrMsg("secrets", "simple-json", params.ExactResultsMatch, params.Secrets, len(results.SecretsVulnerabilities))},
-		CountValidation[int]{Expected: params.Inactive, Actual: inactiveResults, Msg: GetValidationCountErrMsg("inactive secrets", "simple-json", params.ExactResultsMatch, params.Inactive, inactiveResults)},
-
-		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.Applicable, applicableResults)},
-		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "simple-json", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
-		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
-		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
-		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "simple-json", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
-
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: len(results.SecurityViolations), Msg: GetValidationCountErrMsg("security violations", "simple-json", params.ExactResultsMatch, params.SecurityViolations, len(results.SecurityViolations))},
-		CountValidation[int]{Expected: params.LicenseViolations, Actual: len(results.LicensesViolations), Msg: GetValidationCountErrMsg("license violations", "simple-json", params.ExactResultsMatch, params.LicenseViolations, len(results.LicensesViolations))},
-		CountValidation[int]{Expected: params.OperationalViolations, Actual: len(results.OperationalRiskViolations), Msg: GetValidationCountErrMsg("operational risk violations", "simple-json", params.ExactResultsMatch, params.OperationalViolations, len(results.OperationalRiskViolations))},
-		CountValidation[int]{Expected: params.Licenses, Actual: len(results.Licenses), Msg: GetValidationCountErrMsg("Licenses", "simple-json", params.ExactResultsMatch, params.Licenses, len(results.Licenses))},
+		// Licenses
+		CountValidation[int]{Expected: params.Licenses, Actual: licenses, Msg: GetValidationCountErrMsg("licenses", "simple-json", params.ExactResultsMatch, params.Licenses, licenses)},
+		// Total
+		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "simple-json", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
+		CountValidation[int]{Expected: params.Violations, Actual: violations, Msg: GetValidationCountErrMsg("violations", "simple-json", params.ExactResultsMatch, params.Violations, violations)},
+		// Jas Vulnerabilities
+		CountValidation[int]{Expected: params.SastVulnerabilities, Actual: sastVulnerabilities, Msg: GetValidationCountErrMsg("sast vulnerabilities", "simple-json", params.ExactResultsMatch, params.SastVulnerabilities, sastVulnerabilities)},
+		CountValidation[int]{Expected: params.SecretsVulnerabilities, Actual: secretsVulnerabilities, Msg: GetValidationCountErrMsg("secrets vulnerabilities", "simple-json", params.ExactResultsMatch, params.SecretsVulnerabilities, secretsVulnerabilities)},
+		CountValidation[int]{Expected: params.IacVulnerabilities, Actual: iacVulnerabilities, Msg: GetValidationCountErrMsg("IaC vulnerabilities", "simple-json", params.ExactResultsMatch, params.IacVulnerabilities, iacVulnerabilities)},
+		CountValidation[int]{Expected: params.InactiveVulnerabilities, Actual: inactiveSecretsVulnerabilities, Msg: GetValidationCountErrMsg("inactive secrets vulnerabilities", "simple-json", params.ExactResultsMatch, params.InactiveVulnerabilities, inactiveSecretsVulnerabilities)},
+		// Jas Violation
+		CountValidation[int]{Expected: params.SastViolations, Actual: sastViolations, Msg: GetValidationCountErrMsg("sast violations", "simple-json", params.ExactResultsMatch, params.SastViolations, sastViolations)},
+		CountValidation[int]{Expected: params.SecretsViolations, Actual: secretsViolations, Msg: GetValidationCountErrMsg("secrets violations", "simple-json", params.ExactResultsMatch, params.SecretsViolations, secretsViolations)},
+		CountValidation[int]{Expected: params.IacViolations, Actual: iacViolations, Msg: GetValidationCountErrMsg("IaC violations", "simple-json", params.ExactResultsMatch, params.IacViolations, iacViolations)},
+		CountValidation[int]{Expected: params.InactiveViolations, Actual: inactiveSecretsViolations, Msg: GetValidationCountErrMsg("inactive secrets violations", "simple-json", params.ExactResultsMatch, params.InactiveViolations, inactiveSecretsViolations)},
+		// Sca Vulnerabilities
+		CountValidation[int]{Expected: params.ApplicableVulnerabilities, Actual: applicableVulnerabilitiesResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.ApplicableVulnerabilities, applicableVulnerabilitiesResults)},
+		CountValidation[int]{Expected: params.UndeterminedVulnerabilities, Actual: undeterminedVulnerabilitiesResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "simple-json", params.ExactResultsMatch, params.UndeterminedVulnerabilities, undeterminedVulnerabilitiesResults)},
+		CountValidation[int]{Expected: params.NotCoveredVulnerabilities, Actual: notCoveredVulnerabilitiesResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotCoveredVulnerabilities, notCoveredVulnerabilitiesResults)},
+		CountValidation[int]{Expected: params.NotApplicableVulnerabilities, Actual: notApplicableVulnerabilitiesResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "simple-json", params.ExactResultsMatch, params.NotApplicableVulnerabilities, notApplicableVulnerabilitiesResults)},
+		CountValidation[int]{Expected: params.MissingContextVulnerabilities, Actual: missingContextVulnerabilitiesResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "simple-json", params.ExactResultsMatch, params.MissingContextVulnerabilities, missingContextVulnerabilitiesResults)},
+		// Sca Violations
+		CountValidation[int]{Expected: params.ApplicableViolations, Actual: applicableViolationsResults, Msg: GetValidationCountErrMsg("applicable violations", "simple-json", params.ExactResultsMatch, params.ApplicableViolations, applicableViolationsResults)},
+		CountValidation[int]{Expected: params.UndeterminedViolations, Actual: undeterminedViolationsResults, Msg: GetValidationCountErrMsg("undetermined violations", "simple-json", params.ExactResultsMatch, params.UndeterminedViolations, undeterminedViolationsResults)},
+		CountValidation[int]{Expected: params.NotCoveredViolations, Actual: notCoveredViolationsResults, Msg: GetValidationCountErrMsg("not covered violations", "simple-json", params.ExactResultsMatch, params.NotCoveredViolations, notCoveredViolationsResults)},
+		CountValidation[int]{Expected: params.NotApplicableViolations, Actual: notApplicableViolationsResults, Msg: GetValidationCountErrMsg("not applicable violations", "simple-json", params.ExactResultsMatch, params.NotApplicableViolations, notApplicableViolationsResults)},
+		CountValidation[int]{Expected: params.MissingContextViolations, Actual: missingContextViolationsResults, Msg: GetValidationCountErrMsg("missing context violations", "simple-json", params.ExactResultsMatch, params.MissingContextViolations, missingContextViolationsResults)},
+		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "simple-json", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "simple-json", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
+		CountValidation[int]{Expected: params.OperationalViolations, Actual: opRiskViolations, Msg: GetValidationCountErrMsg("operational risk violations", "simple-json", params.ExactResultsMatch, params.OperationalViolations, opRiskViolations)},
 	)
 }
 
@@ -108,6 +159,7 @@ func ValidateSimpleJsonResults(t *testing.T, exactMatch bool, expected, actual f
 		}
 		validateVulnerabilityOrViolationRow(t, exactMatch, expectedViolation, *violation)
 	}
+
 }
 
 func getVulnerabilityOrViolationByIssueId(issueId, impactedDependencyName, impactedDependencyVersion string, content []formats.VulnerabilityOrViolationRow) *formats.VulnerabilityOrViolationRow {

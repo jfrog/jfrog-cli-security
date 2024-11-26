@@ -127,11 +127,18 @@ func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResul
 				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
 			}
 		}
-		if targetResults.JasResults.JasVulnerabilities != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.ApplicabilityScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SecretsScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.IacScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SastScanResults...)
+		if targetResults.JasResults != nil {
+			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
+			if targetResults.JasResults.JasVulnerabilities != nil {
+				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SecretsScanResults...)
+				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.IacScanResults...)
+				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SastScanResults...)
+			}
+			if targetResults.JasResults.JasViolations != nil {
+				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.SecretsScanResults...)
+				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.IacScanResults...)
+				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.SastScanResults...)
+			}
 		}
 	}
 	return cmdResults
@@ -190,6 +197,15 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 		convertJasSimpleJsonPathsForOS(&sast)
 	}
 	for _, iac := range results.IacsVulnerabilities {
+		convertJasSimpleJsonPathsForOS(&iac)
+	}
+	for _, secret := range results.SecretsViolations {
+		convertJasSimpleJsonPathsForOS(&secret)
+	}
+	for _, sast := range results.SastViolations {
+		convertJasSimpleJsonPathsForOS(&sast)
+	}
+	for _, iac := range results.IacsViolations {
 		convertJasSimpleJsonPathsForOS(&iac)
 	}
 	return results

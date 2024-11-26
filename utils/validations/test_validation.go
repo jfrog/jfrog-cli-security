@@ -28,21 +28,54 @@ type ValidationParams struct {
 	Expected interface{}
 	// If provided, the test will check exact values and not only the minimum values / existence.
 	ExactResultsMatch bool
-	// Expected issues for each type to check if the content has the correct amount of issues.
-	Vulnerabilities       int
-	Licenses              int
-	SecurityViolations    int
-	LicenseViolations     int
+	// Expected number of licenses
+	Licenses int
+	// Expected number of total vulnerabilities (sca + sast + iac + secrets)
+	Vulnerabilities int
+	// Expected number of total violations (sca security + sca license + sca operational + sast + iac + secrets)
+	Violations int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	ApplicableVulnerabilities int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	UndeterminedVulnerabilities int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	NotCoveredVulnerabilities int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	NotApplicableVulnerabilities int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	MissingContextVulnerabilities int
+	// Expected number of contextual statuses for vulnerabilities (sca/secrets)
+	InactiveVulnerabilities int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	ApplicableViolations int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	UndeterminedViolations int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	NotCoveredViolations int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	NotApplicableViolations int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	MissingContextViolations int
+	// Expected number of contextual statuses for violations (sca/secrets)
+	InactiveViolations int
+	// Expected number of sca violations by type
+	SecurityViolations int
+	// Expected number of sca violations by type
+	LicenseViolations int
+	// Expected number of sca violations by type
 	OperationalViolations int
-	Applicable            int
-	Undetermined          int
-	NotCovered            int
-	NotApplicable         int
-	MissingContext        int
-	Inactive              int
-	Sast                  int
-	Iac                   int
-	Secrets               int
+	// Expected number of Jas vulnerabilities
+	SastVulnerabilities int
+	// Expected number of Jas vulnerabilities
+	IacVulnerabilities int
+	// Expected number of Jas vulnerabilities
+	SecretsVulnerabilities int
+	// Expected number of Jas violations
+	SastViolations int
+	// Expected number of Jas violations
+	IacViolations int
+	// Expected number of Jas violations
+	SecretsViolations int
 }
 
 // Validation allows to validate/assert a content with expected values.

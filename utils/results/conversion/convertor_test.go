@@ -30,14 +30,14 @@ type conversionFormat string
 
 func getAuditValidationParams() validations.ValidationParams {
 	return validations.ValidationParams{
-		ExactResultsMatch:  true,
-		SecurityViolations: 11,
-		Vulnerabilities:    19,
-		Applicable:         1,
-		NotApplicable:      7,
-		NotCovered:         4,
-		Sast:               4,
-		Secrets:            3,
+		ExactResultsMatch:            true,
+		SecurityViolations:           11,
+		Vulnerabilities:              19,
+		ApplicableVulnerabilities:    1,
+		NotApplicableVulnerabilities: 7,
+		NotCoveredVulnerabilities:    4,
+		SastVulnerabilities:          4,
+		SecretsVulnerabilities:       3,
 	}
 }
 
@@ -45,21 +45,21 @@ func getAuditValidationParams() validations.ValidationParams {
 // We have in the result 2 CVE with 2 impacted components each
 func getDockerScanValidationParams(unique bool) validations.ValidationParams {
 	params := validations.ValidationParams{
-		ExactResultsMatch: true,
-		Secrets:           3,
+		ExactResultsMatch:      true,
+		SecretsVulnerabilities: 3,
 	}
 	if unique {
 		params.Vulnerabilities = 11
-		params.Applicable = 3
-		params.NotApplicable = 3
-		params.NotCovered = 1
-		params.Undetermined = 1
+		params.ApplicableVulnerabilities = 3
+		params.NotApplicableVulnerabilities = 3
+		params.NotCoveredVulnerabilities = 1
+		params.UndeterminedVulnerabilities = 1
 	} else {
 		params.Vulnerabilities = 14
-		params.Applicable = 5
-		params.NotApplicable = 4
-		params.NotCovered = 1
-		params.Undetermined = 1
+		params.ApplicableVulnerabilities = 5
+		params.NotApplicableVulnerabilities = 4
+		params.NotCoveredVulnerabilities = 1
+		params.UndeterminedVulnerabilities = 1
 	}
 	return params
 }

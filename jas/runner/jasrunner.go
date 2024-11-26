@@ -48,9 +48,13 @@ type JasRunnerParams struct {
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
-	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
-		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
-	}
+	// if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+	// 	return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
+	// }
+	params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
+	// if exists, err := fileutils.IsFileExists(params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, false); err != nil || !exists {
+	// 	return fmt.Errorf("failed to find analyzer manager executable at %s", params.Scanner.AnalyzerManager.AnalyzerManagerFullPath)
+	// }
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
@@ -192,14 +196,14 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-		vulnerabilitiesResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
+		caScanResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		scanResults.JasResults.JasVulnerabilities.ApplicabilityScanResults = append(scanResults.JasResults.JasVulnerabilities.ApplicabilityScanResults, vulnerabilitiesResults...)
-		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Applicability)
+		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, caScanResults...)
+		err = dumpSarifRunToFileIfNeeded(caScanResults, scansOutputDir, jasutils.Applicability)
 		return
 	}
 }

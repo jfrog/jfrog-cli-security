@@ -21,6 +21,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/urfave/cli"
 	"os"
 	"strings"
@@ -406,6 +407,8 @@ func AuditCmd(c *components.Context) error {
 		// No secrets flag but secret validation is provided, error
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
+
+	auditCmd.SetGitInfoContext(&services.XscGitInfoContext{GitRepoHttpsCloneUrl: "github.com/jfrog/jfrog-cli-security.git"})
 
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}

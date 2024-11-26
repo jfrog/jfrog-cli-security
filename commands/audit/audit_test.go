@@ -33,7 +33,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-// TODO eran fix test - test is compiling but not passing
 func TestDetectScansToPreform(t *testing.T) {
 
 	dir, cleanUp := createTestDir(t)
@@ -58,14 +57,14 @@ func TestDetectScansToPreform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 				},
 				{
 					ScanTarget: results.ScanTarget{
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -75,7 +74,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -89,7 +88,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -99,7 +98,7 @@ func TestDetectScansToPreform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 				},
 			},
 		},
@@ -117,7 +116,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Nuget,
 						Target:     filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj"), filepath.Join(dir, "Nuget", "project.sln")},
 					},
@@ -127,7 +126,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -137,7 +136,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -151,7 +150,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -161,7 +160,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Yarn,
 						Target:     filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
 					},
@@ -171,7 +170,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Pip,
 						Target:     filepath.Join(dir, "yarn", "Pip"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
 					},
@@ -181,7 +180,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Pipenv,
 						Target:     filepath.Join(dir, "yarn", "Pipenv"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
 					},
@@ -448,16 +447,16 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				ScaResultsCount = testcase.expectedScaIssues
 			}
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
-				Actual:            summary,
-				ExactResultsMatch: true,
-				Vulnerabilities:   testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + ScaResultsCount,
-				Sast:              testcase.expectedSastIssues,
-				Secrets:           testcase.expectedSecretsIssues,
-				Iac:               testcase.expectedIacIssues,
-				Applicable:        testcase.expectedCaApplicable,
-				NotApplicable:     testcase.expectedCaNotApplicable,
-				NotCovered:        testcase.expectedCaNotCovered,
-				Undetermined:      testcase.expectedCaUndetermined,
+				Actual:                       summary,
+				ExactResultsMatch:            true,
+				Vulnerabilities:              testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + ScaResultsCount,
+				SastVulnerabilities:          testcase.expectedSastIssues,
+				SecretsVulnerabilities:       testcase.expectedSecretsIssues,
+				IacVulnerabilities:           testcase.expectedIacIssues,
+				ApplicableVulnerabilities:    testcase.expectedCaApplicable,
+				NotApplicableVulnerabilities: testcase.expectedCaNotApplicable,
+				NotCoveredVulnerabilities:    testcase.expectedCaNotCovered,
+				UndeterminedVulnerabilities:  testcase.expectedCaUndetermined,
 			})
 		})
 	}

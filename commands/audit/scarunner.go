@@ -160,6 +160,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 	if err != nil {
 		return
 	}
+	log.Debug(fmt.Sprintf("Finished '%s' dependency tree scan. Found %d vulnerabilities. %d violations.", tech.ToFormal(), len(techResults[0].Vulnerabilities), len(techResults[0].Violations)))
 	techResults = sca.BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
 	return
 }

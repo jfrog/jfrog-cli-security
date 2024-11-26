@@ -38,12 +38,7 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 		return
 	}
-	if len(vulnerabilitiesResults) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), "SAST vulnerabilities")
-		if len(violationsResults) > 0 {
-			log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(violationsResults...), "SAST violations")
-		}
-	}
+	jas.LogJasScanFindings(jasutils.Sast, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId)
 	return
 }
 
@@ -67,7 +62,7 @@ func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesS
 		return
 	}
 	groupResultsByLocation(workingDirVulnerabilitiesRuns)
-	groupResultsByLocation(workingDirViolationsRuns) // TODO eran VERIFY - check if we need this too
+	groupResultsByLocation(workingDirViolationsRuns)
 	return
 }
 

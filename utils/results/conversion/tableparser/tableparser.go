@@ -27,14 +27,17 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		return formats.ResultsTables{}, err
 	}
 	return formats.ResultsTables{
+		LicensesTable:                  formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
 		SecurityVulnerabilitiesTable:   formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.Vulnerabilities),
 		SecurityViolationsTable:        formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.SecurityViolations),
 		LicenseViolationsTable:         formats.ConvertToLicenseViolationTableRow(simpleJsonFormat.LicensesViolations),
-		LicensesTable:                  formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
-		SecretsTable:                   formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsVulnerabilities),
-		IacTable:                       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsVulnerabilities),
-		SastTable:                      formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
+		SecretsVulnerabilitiesTable:    formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsVulnerabilities),
+		SecretsViolationsTable:         formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsViolations),
+		IacVulnerabilitiesTable:        formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsVulnerabilities),
+		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
+		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
+		SastViolationsTable:            formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastViolations),
 	}, nil
 }
 

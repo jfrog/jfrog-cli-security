@@ -368,7 +368,7 @@ func TestXrayAuditGoJson(t *testing.T) {
 
 func TestXrayAuditGoSimpleJson(t *testing.T) {
 	output := testXrayAuditGo(t, true, string(format.SimpleJson), "simple-project")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCovered: 2, NotApplicable: 2})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCoveredVulnerabilities: 2, NotApplicableVulnerabilities: 2})
 }
 
 func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
@@ -414,15 +414,15 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    1,
-		Iac:     9,
-		Secrets: 6,
+		SastVulnerabilities:    1,
+		IacVulnerabilities:     9,
+		SecretsVulnerabilities: 6,
 
-		Vulnerabilities: 35,
-		Applicable:      3,
-		Undetermined:    0,
-		NotCovered:      22,
-		NotApplicable:   2,
+		Vulnerabilities:              35,
+		ApplicableVulnerabilities:    3,
+		UndeterminedVulnerabilities:  0,
+		NotCoveredVulnerabilities:    22,
+		NotApplicableVulnerabilities: 2,
 	})
 }
 
@@ -546,8 +546,8 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Sast:            1,
+		Vulnerabilities:     1,
+		SastVulnerabilities: 1,
 	})
 }
 
@@ -559,7 +559,7 @@ func TestXrayAuditWithoutSastCppFlagSimpleJson(t *testing.T) {
 
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), "3", false, false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{MissingContext: 1})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{MissingContextVulnerabilities: 1})
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
@@ -589,55 +589,55 @@ func getNoJasAuditMockCommand() components.Command {
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    1,
-		Iac:     9,
-		Secrets: 6,
+		SastVulnerabilities:    1,
+		IacVulnerabilities:     9,
+		SecretsVulnerabilities: 6,
 
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
+		Vulnerabilities:              8,
+		ApplicableVulnerabilities:    3,
+		UndeterminedVulnerabilities:  1,
+		NotCoveredVulnerabilities:    1,
+		NotApplicableVulnerabilities: 2,
 	})
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 5, Inactive: 5})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 5, InactiveVulnerabilities: 5})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    1,
-		Iac:     9,
-		Secrets: 6,
+		SastVulnerabilities:    1,
+		IacVulnerabilities:     9,
+		SecretsVulnerabilities: 6,
 
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
+		Vulnerabilities:              8,
+		ApplicableVulnerabilities:    3,
+		UndeterminedVulnerabilities:  1,
+		NotCoveredVulnerabilities:    1,
+		NotApplicableVulnerabilities: 2,
 	})
 }
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Secrets: 1,
+		SecretsVulnerabilities: 1,
 
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
+		Vulnerabilities:              8,
+		ApplicableVulnerabilities:    3,
+		UndeterminedVulnerabilities:  1,
+		NotCoveredVulnerabilities:    1,
+		NotApplicableVulnerabilities: 2,
 	})
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false, false)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicable: 1})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicableVulnerabilities: 1})
 }
 
 func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets, validateSastCpp bool) string {
@@ -725,14 +725,14 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    1,
-		Iac:     9,
-		Secrets: 6,
+		SastVulnerabilities:    1,
+		IacVulnerabilities:     9,
+		SecretsVulnerabilities: 6,
 
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
+		Vulnerabilities:              8,
+		ApplicableVulnerabilities:    3,
+		UndeterminedVulnerabilities:  1,
+		NotCoveredVulnerabilities:    1,
+		NotApplicableVulnerabilities: 2,
 	})
 }

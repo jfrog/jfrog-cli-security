@@ -194,7 +194,7 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 	scanResults.NewScaScanResults(services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
-		scanResults.JasResults.JasVulnerabilities.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
+		scanResults.JasResults.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
 		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = []*sarif.Run{
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),

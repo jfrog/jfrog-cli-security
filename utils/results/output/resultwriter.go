@@ -323,13 +323,13 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 	log.Output()
 	switch scanType {
 	case jasutils.Secrets:
-		return coreutils.PrintTable(tables.SecretsTable, "Secret Detection",
+		return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secret Detection",
 			"✨ No secrets were found ✨", false)
 	case jasutils.IaC:
-		return coreutils.PrintTable(tables.IacTable, "Infrastructure as Code Vulnerabilities",
+		return coreutils.PrintTable(tables.IacVulnerabilitiesTable, "Infrastructure as Code Vulnerabilities",
 			"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
 	case jasutils.Sast:
-		return coreutils.PrintTable(tables.SastTable, "Static Application Security Testing (SAST)",
+		return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
 			"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
 	}
 	return nil

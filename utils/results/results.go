@@ -54,15 +54,15 @@ type ScaScanResults struct {
 }
 
 type JasScansResults struct {
-	JasVulnerabilities *JasScanResults `json:"jas_vulnerabilities,omitempty"`
-	JasViolations      *JasScanResults `json:"jas_violations,omitempty"`
+	JasVulnerabilities       *JasScanResults `json:"jas_vulnerabilities,omitempty"`
+	JasViolations            *JasScanResults `json:"jas_violations,omitempty"`
+	ApplicabilityScanResults []*sarif.Run    `json:"contextual_analysis,omitempty"`
 }
 
 type JasScanResults struct {
-	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
-	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
-	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
-	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
+	SecretsScanResults []*sarif.Run `json:"secrets,omitempty"`
+	IacScanResults     []*sarif.Run `json:"iac,omitempty"`
+	SastScanResults    []*sarif.Run `json:"sast,omitempty"`
 }
 
 type ScanTarget struct {
@@ -373,7 +373,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Applicability:
-		results = jsr.JasVulnerabilities.ApplicabilityScanResults
+		results = jsr.ApplicabilityScanResults
 	case jasutils.Secrets:
 		results = jsr.JasVulnerabilities.SecretsScanResults
 	case jasutils.IaC:
@@ -387,7 +387,7 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
 	case jasutils.Applicability:
-		results = jsr.JasViolations.ApplicabilityScanResults
+		results = jsr.ApplicabilityScanResults
 	case jasutils.Secrets:
 		results = jsr.JasViolations.SecretsScanResults
 	case jasutils.IaC:

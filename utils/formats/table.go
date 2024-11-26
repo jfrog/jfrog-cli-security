@@ -5,15 +5,22 @@ package formats
 // Use the conversion methods in this package to convert from the API structs to the table structs.
 
 type ResultsTables struct {
+	// Licenses
+	LicensesTable []licenseTableRow
+	// Sca tables
 	SecurityVulnerabilitiesTable   []vulnerabilityTableRow
 	SecurityViolationsTable        []vulnerabilityTableRow
-	LicensesTable                  []licenseTableRow
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow
-	IacTable                       []iacOrSastTableRow
-	SastTable                      []iacOrSastTableRow
-	SecretsTable                   []secretsTableRow
-	Errors                         []error
+	// Iac tables
+	IacVulnerabilitiesTable []iacOrSastTableRow
+	IacViolationsTable      []iacOrSastTableRow
+	// Sast tables
+	SastVulnerabilitiesTable []iacOrSastTableRow
+	SastViolationsTable      []iacOrSastTableRow
+	// Secrets
+	SecretsVulnerabilitiesTable []secretsTableRow
+	SecretsViolationsTable      []secretsTableRow
 }
 
 // Used for vulnerabilities and security violations

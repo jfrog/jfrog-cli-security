@@ -300,6 +300,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 		subScan         utils.SubScanType
 		withEnvVars     bool
 		withDockerfile  bool
+		isJasViolations bool
 		input           []*sarif.Run
 		expectedResults []*sarif.Run
 	}{
@@ -475,6 +476,25 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 		},
+		{
+			name:            "Audit scan - Secrets violations",
+			target:          results.ScanTarget{Target: wd},
+			cmdType:         utils.SourceCode,
+			subScan:         utils.SecretsScan,
+			isJasViolations: true,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+					// No location, should be removed in the output
+					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
+				),
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -494,7 +514,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchedRuns := patchRunsToPassIngestionRules(tc.cmdType, tc.subScan, true, tc.target, tc.input...)
+			patchedRuns := patchRunsToPassIngestionRules(tc.cmdType, tc.subScan, true, tc.isJasViolations, tc.target, tc.input...)
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}

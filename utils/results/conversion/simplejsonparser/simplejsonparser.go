@@ -565,16 +565,19 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	if simpleJsonResults == nil {
 		return
 	}
-	if len(simpleJsonResults.SecurityViolations) > 0 {
-		sortVulnerabilityOrViolationRows(simpleJsonResults.SecurityViolations)
-	}
-	if len(simpleJsonResults.Vulnerabilities) > 0 {
-		sortVulnerabilityOrViolationRows(simpleJsonResults.Vulnerabilities)
-	}
+	// Licenses
 	if len(simpleJsonResults.Licenses) > 0 {
 		sort.Slice(simpleJsonResults.Licenses, func(i, j int) bool {
 			return simpleJsonResults.Licenses[i].LicenseKey < simpleJsonResults.Licenses[j].LicenseKey
 		})
+	}
+	// Sca Vulnerabilities
+	if len(simpleJsonResults.Vulnerabilities) > 0 {
+		sortVulnerabilityOrViolationRows(simpleJsonResults.Vulnerabilities)
+	}
+	// Sca Violations
+	if len(simpleJsonResults.SecurityViolations) > 0 {
+		sortVulnerabilityOrViolationRows(simpleJsonResults.SecurityViolations)
 	}
 	if len(simpleJsonResults.LicensesViolations) > 0 {
 		sort.Slice(simpleJsonResults.LicensesViolations, func(i, j int) bool {
@@ -586,6 +589,7 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 			return simpleJsonResults.OperationalRiskViolations[i].SeverityNumValue > simpleJsonResults.OperationalRiskViolations[j].SeverityNumValue
 		})
 	}
+	// Jas Vulnerabilities
 	if len(simpleJsonResults.SecretsVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.SecretsVulnerabilities)
 	}
@@ -594,6 +598,16 @@ func sortResults(simpleJsonResults *formats.SimpleJsonResults) {
 	}
 	if len(simpleJsonResults.SastVulnerabilities) > 0 {
 		sortSourceCodeRow(simpleJsonResults.SastVulnerabilities)
+	}
+	// Jas Violations
+	if len(simpleJsonResults.SecretsViolations) > 0 {
+		sortSourceCodeRow(simpleJsonResults.SecretsViolations)
+	}
+	if len(simpleJsonResults.IacsViolations) > 0 {
+		sortSourceCodeRow(simpleJsonResults.IacsViolations)
+	}
+	if len(simpleJsonResults.SastViolations) > 0 {
+		sortSourceCodeRow(simpleJsonResults.SastViolations)
 	}
 }
 
