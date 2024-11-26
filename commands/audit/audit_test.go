@@ -436,7 +436,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
 
-			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
+			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true}).ConvertToSummary(auditResults)
 			assert.NoError(t, err)
 
 			var ScaResultsCount int

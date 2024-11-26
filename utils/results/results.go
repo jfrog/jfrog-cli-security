@@ -133,7 +133,9 @@ func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError b
 		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
 		return r
 	}
+	r.errorsMutex.Lock()
 	r.GeneralError = errors.Join(r.GeneralError, err)
+	r.errorsMutex.Unlock()
 	return r
 }
 

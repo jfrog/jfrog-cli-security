@@ -57,12 +57,12 @@ func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesS
 	if err = ssm.runAnalyzerManager(filepath.Dir(ssm.scanner.AnalyzerManager.AnalyzerManagerFullPath)); err != nil {
 		return
 	}
-	workingDirVulnerabilitiesRuns, workingDirViolationsRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, sastDocsUrlSuffix, ssm.scanner.MinSeverity)
+	vulnerabilitiesSarifRuns, violationsSarifRuns, err = jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, sastDocsUrlSuffix, ssm.scanner.MinSeverity)
 	if err != nil {
 		return
 	}
-	groupResultsByLocation(workingDirVulnerabilitiesRuns)
-	groupResultsByLocation(workingDirViolationsRuns)
+	groupResultsByLocation(vulnerabilitiesSarifRuns)
+	groupResultsByLocation(violationsSarifRuns)
 	return
 }
 
