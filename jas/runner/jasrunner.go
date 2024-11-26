@@ -48,10 +48,10 @@ type JasRunnerParams struct {
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
-	// if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
-	// 	return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
-	// }
-	params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
+	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
+	}
+	// params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
 	// if exists, err := fileutils.IsFileExists(params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, false); err != nil || !exists {
 	// 	return fmt.Errorf("failed to find analyzer manager executable at %s", params.Scanner.AnalyzerManager.AnalyzerManagerFullPath)
 	// }
