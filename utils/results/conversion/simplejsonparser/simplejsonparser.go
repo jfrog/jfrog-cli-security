@@ -244,7 +244,7 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseRow, 
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		*licenseViolationsRows = append(*licenseViolationsRows,
 			formats.LicenseRow{
-				LicenseKey: violation.LicenseKey,
+				LicenseKey: getLicenseKey(violation.LicenseKey, violation.IssueId),
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
 					ImpactedDependencyName:    impactedPackagesName,
@@ -256,6 +256,13 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseRow, 
 		)
 		return nil
 	}
+}
+
+func getLicenseKey(licenseKey, issueId string) string {
+	if licenseKey == "" {
+		return issueId
+	}
+	return licenseKey
 }
 
 func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) results.ParseScaViolationFunc {

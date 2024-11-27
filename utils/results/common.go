@@ -161,6 +161,10 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 				continue
 			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
+				if impactedPackagesNames[compIndex] == "root" {
+					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
+					continue
+				}
 				if e := licenseHandler(
 					violation, cves, applicabilityStatus, severity,
 					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
