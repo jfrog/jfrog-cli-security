@@ -753,7 +753,7 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	})
 }
 
-//custom excluded folders
+// custom excluded folders
 
 func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
