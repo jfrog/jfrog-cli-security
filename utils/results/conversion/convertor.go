@@ -171,19 +171,31 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parsing JAS Secrets results
 	if err = parseJasScanResults(params, targetResults, cmdType, utils.SecretsScan, func(violations bool) error {
-		return parser.ParseSecrets(targetResults.ScanTarget, violations, targetResults.JasResults.JasVulnerabilities.SecretsScanResults...)
+		runs := targetResults.JasResults.JasVulnerabilities.SecretsScanResults
+		if violations {
+			runs = targetResults.JasResults.JasViolations.SecretsScanResults
+		}
+		return parser.ParseSecrets(targetResults.ScanTarget, violations, runs...)
 	}); err != nil {
 		return
 	}
 	// Parsing JAS IAC results
 	if err = parseJasScanResults(params, targetResults, cmdType, utils.IacScan, func(violations bool) error {
-		return parser.ParseIacs(targetResults.ScanTarget, violations, targetResults.JasResults.JasVulnerabilities.IacScanResults...)
+		runs := targetResults.JasResults.JasVulnerabilities.IacScanResults
+		if violations {
+			runs = targetResults.JasResults.JasViolations.IacScanResults
+		}
+		return parser.ParseIacs(targetResults.ScanTarget, violations, runs...)
 	}); err != nil {
 		return
 	}
 	// Parsing JAS SAST results
 	return parseJasScanResults(params, targetResults, cmdType, utils.SastScan, func(violations bool) error {
-		return parser.ParseSast(targetResults.ScanTarget, violations, targetResults.JasResults.JasVulnerabilities.SastScanResults...)
+		runs := targetResults.JasResults.JasVulnerabilities.SastScanResults
+		if violations {
+			runs = targetResults.JasResults.JasViolations.SastScanResults
+		}
+		return parser.ParseSast(targetResults.ScanTarget, violations, runs...)
 	})
 }
 
