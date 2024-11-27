@@ -758,31 +758,14 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    2,
-		Iac:     9,
-		Secrets: 6,
+		SastVulnerabilities:    2,
+		IacVulnerabilities:     9,
+		SecretsVulnerabilities: 6,
 
 		Vulnerabilities:              8,
 		ApplicableVulnerabilities:    3,
 		UndeterminedVulnerabilities:  1,
 		NotCoveredVulnerabilities:    1,
 		NotApplicableVulnerabilities: 2,
-	})
-}
-
-// custom excluded folders
-
-func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    2,
-		Iac:     9,
-		Secrets: 6,
-
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
 	})
 }
