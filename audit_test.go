@@ -551,7 +551,7 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	})
 }
 func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
-	//Placeholder until C# Sast is implemented
+	// Placeholder until C# Sast is implemented
 	t.Skip()
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), "3", false, false, true, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
