@@ -756,9 +756,7 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 // custom excluded folders
 
 func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
-	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
-
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
+	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Sast:    2,
 		Iac:     9,
