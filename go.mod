@@ -11,7 +11,7 @@ require (
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-core/v2 v2.57.0
-	github.com/jfrog/jfrog-client-go v1.48.1
+	github.com/jfrog/jfrog-client-go v1.48.2
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
@@ -111,12 +111,11 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
+// attiasas:add_repo_context_scan_graph
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241125121151-c243bb1fe709
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
-
-// attiasas:add_repo_context_scan_graph
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241125121151-c243bb1fe709
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
