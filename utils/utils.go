@@ -17,6 +17,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -85,6 +86,29 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
+	threadPrefix := ""
+	if threadId >= 0 {
+		threadPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	if vulnerabilitiesCount == 0 && violationsCount == 0 {
+		return fmt.Sprintf("%sNo %s findings", threadPrefix, scanType.String())
+	}
+	msg := fmt.Sprintf("%sFound", threadPrefix)
+	hasVulnerabilities := vulnerabilitiesCount > 0
+	if hasVulnerabilities {
+		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+	}
+	if violationsCount > 0 {
+		if hasVulnerabilities {
+			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
+		} else {
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+		}
+	}
+	return msg
 }
 
 func IsCI() bool {

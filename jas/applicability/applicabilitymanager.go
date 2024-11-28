@@ -64,8 +64,9 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
+	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
+	if applicableCveCount > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", applicableCveCount, "applicable cves")
 	}
 	return
 }

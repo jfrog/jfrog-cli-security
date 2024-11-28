@@ -156,19 +156,18 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		xrayScanGraphParams.XscGitInfoContext.Technologies = []string{tech.String()}
 	}
 	xrayScanGraphParams.DependenciesGraph = &flatTree
-
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
 		SetXrayGraphScanParams(xrayScanGraphParams).
-		SetXrayVersion(params.GetXrayVersion()).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 
-	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
+	log.Info(fmt.Sprintf("Scanning %d %s dependencies", len(flatTree.Nodes), tech) + "...")
+	techResults, err = sca.RunXrayDependenciesTreeScanGraph(scanGraphParams)
 	if err != nil {
 		return
 	}
-	log.Debug(fmt.Sprintf("Finished '%s' dependency tree scan. Found %d vulnerabilities. %d violations.", tech.ToFormal(), len(techResults[0].Vulnerabilities), len(techResults[0].Violations)))
+	log.Debug(fmt.Sprintf("Finished '%s' dependency tree scan. %s", tech.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations), -1)))
 	techResults = sca.BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
 	return
 }

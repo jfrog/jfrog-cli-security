@@ -37,16 +37,16 @@ func GetExcludePattern(params utils.AuditParams) string {
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
-	log.Info(fmt.Sprintf("Scanning %d %s dependencies", len(dependencyTree.Nodes), technology) + "...")
+func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
+	technology := scanGraphParams.Technology()
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 	if err != nil {
 		return nil, err
 	}
 	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 	if err != nil {
-		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", string(technology), err.Error())
+		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", technology.ToFormal(), err.Error())
 		return
 	}
 	for i := range scanResults.Vulnerabilities {
