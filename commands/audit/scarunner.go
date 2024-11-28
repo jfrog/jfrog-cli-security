@@ -146,9 +146,16 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
 	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	// Create the scan graph parameters.
 	xrayScanGraphParams := params.createXrayGraphScanParams()
-	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XrayVersion = params.GetXrayVersion()
 	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+
+	if xrayScanGraphParams.XscGitInfoContext != nil {
+		xrayScanGraphParams.XscGitInfoContext.Technologies = []string{tech.String()}
+	}
+	xrayScanGraphParams.DependenciesGraph = &flatTree
 
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
@@ -157,11 +164,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 
-		scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
-	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
-	if scanGraphParams.XrayGraphScanParams().XscGitInfoContext != nil {
-		scanGraphParams.XrayGraphScanParams().XscGitInfoContext.Technologies = []string{tech.String()}
-	}
+	scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
 
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
 	if err != nil {
