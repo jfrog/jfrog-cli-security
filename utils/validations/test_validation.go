@@ -237,10 +237,11 @@ func errMsg(expected, actual string, msg string) []string {
 // If exactMatch is true, the content must match exactly.
 // If at least one validation fails, the function returns false and stops validating the rest of the pairs.
 func ValidateContent(t *testing.T, exactMatch bool, validations ...Validation) bool {
+	validationSuccess := true
 	for _, validation := range validations {
 		if !validation.Validate(t, exactMatch) {
-			return false
+			validationSuccess = false
 		}
 	}
-	return true
+	return validationSuccess
 }
