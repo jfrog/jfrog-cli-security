@@ -1,5 +1,6 @@
 {
-  "xray_version": "3.104.8",
+  "xray_version": "3.107.13",
+  "xsc_version": "1.12.5",
   "jas_entitled": true,
   "command_type": "source_code",
   "multi_scan_id": "7d5e4733-3f93-11ef-8147-e610d09d7daa",
@@ -1985,520 +1986,883 @@
             ]
           }
         ],
-        "secrets": [
-          {
-            "tool": {
-              "driver": {
-                "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
-                "name": "JFrog Secrets scanner",
-                "rules": [
-                  {
-                    "id": "REQ.SECRET.GENERIC.TEXT",
-                    "name": "REQ.SECRET.GENERIC.TEXT",
-                    "shortDescription": {
-                      "text": "Scanner for REQ.SECRET.GENERIC.TEXT"
-                    },
-                    "fullDescription": {
-                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
-                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
-                    },
-                    "properties": {
-                      "applicability": "not_applicable",
-                      "conclusion": "positive"
-                    }
-                  },
-                  {
-                    "id": "REQ.SECRET.GENERIC.CODE",
-                    "name": "REQ.SECRET.GENERIC.CODE",
-                    "shortDescription": {
-                      "text": "Scanner for REQ.SECRET.GENERIC.CODE"
-                    },
-                    "fullDescription": {
-                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
-                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
-                    },
-                    "properties": {
-                      "applicability": "not_applicable",
-                      "conclusion": "positive"
-                    }
-                  },
-                  {
-                    "id": "REQ.SECRET.KEYS",
-                    "name": "REQ.SECRET.KEYS",
-                    "shortDescription": {
-                      "text": "Scanner for REQ.SECRET.KEYS"
-                    },
-                    "fullDescription": {
-                      "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
-                      "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
-                    },
-                    "properties": {
-                      "applicability": "applicable",
-                      "conclusion": "negative",
-                      "security-severity": "6.9"
-                    }
-                  },
-                  {
-                    "id": "REQ.CRED.PUBLIC-ONLY",
-                    "name": "REQ.CRED.PUBLIC-ONLY",
-                    "shortDescription": {
-                      "text": "Scanner for REQ.CRED.PUBLIC-ONLY"
-                    },
-                    "fullDescription": {
-                      "text": "",
-                      "markdown": ""
-                    },
-                    "properties": {
-                      "applicability": "undetermined",
-                      "conclusion": "private"
-                    }
-                  },
-                  {
-                    "id": "REQ.SECRET.GENERIC.URL-TEXT",
-                    "name": "REQ.SECRET.GENERIC.URL-TEXT",
-                    "shortDescription": {
-                      "text": "Scanner for REQ.SECRET.GENERIC.URL-TEXT"
-                    },
-                    "fullDescription": {
-                      "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
-                      "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
-                    },
-                    "properties": {
-                      "applicability": "not_applicable",
-                      "conclusion": "positive"
-                    }
-                  }
-                ],
-                "version": "1.0"
-              }
-            },
-            "invocations": [
-              {
-                "arguments": [
-                  "analyzerManager/jas_scanner/jas_scanner",
-                  "scan",
-                  "/Secrets_1725803029/config.yaml"
-                ],
-                "executionSuccessful": true,
-                "workingDirectory": {
-                  "uri": "/Users/user/ejs-frog-demo"
-                }
-              }
-            ],
-            "results": [
-              {
-                "properties": {
-                  "metadata": "",
-                  "tokenValidation": ""
-                },
-                "ruleId": "REQ.SECRET.KEYS",
-                "message": {
-                  "text": "Secret keys were found"
-                },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/fake-creds.txt"
+        "jas_vulnerabilities": {
+          "secrets": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
+                  "name": "JFrog Secrets scanner",
+                  "rules": [
+                    {
+                      "id": "REQ.SECRET.GENERIC.TEXT",
+                      "name": "REQ.SECRET.GENERIC.TEXT",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.TEXT"
                       },
-                      "region": {
-                        "startLine": 2,
-                        "startColumn": 1,
-                        "endLine": 2,
-                        "endColumn": 11,
-                        "snippet": {
-                          "text": "Sqc************"
-                        }
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.GENERIC.CODE",
+                      "name": "REQ.SECRET.GENERIC.CODE",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.CODE"
+                      },
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.KEYS",
+                      "name": "REQ.SECRET.KEYS",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.KEYS"
+                      },
+                      "fullDescription": {
+                        "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
+                        "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+                      },
+                      "properties": {
+                        "applicability": "applicable",
+                        "conclusion": "negative",
+                        "security-severity": "6.9"
+                      }
+                    },
+                    {
+                      "id": "REQ.CRED.PUBLIC-ONLY",
+                      "name": "REQ.CRED.PUBLIC-ONLY",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.CRED.PUBLIC-ONLY"
+                      },
+                      "fullDescription": {
+                        "text": "",
+                        "markdown": ""
+                      },
+                      "properties": {
+                        "applicability": "undetermined",
+                        "conclusion": "private"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.GENERIC.URL-TEXT",
+                      "name": "REQ.SECRET.GENERIC.URL-TEXT",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.URL-TEXT"
+                      },
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
                       }
                     }
-                  }
-                ]
+                  ],
+                  "version": "1.0"
+                }
               },
-              {
-                "properties": {
-                  "metadata": "",
-                  "tokenValidation": ""
-                },
-                "ruleId": "REQ.SECRET.KEYS",
-                "message": {
-                  "text": "Secret keys were found"
-                },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/fake-creds.txt"
-                      },
-                      "region": {
-                        "startLine": 3,
-                        "startColumn": 1,
-                        "endLine": 3,
-                        "endColumn": 11,
-                        "snippet": {
-                          "text": "gho************"
-                        }
-                      }
-                    }
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/jas_scanner/jas_scanner",
+                    "scan",
+                    "/Secrets_1725803029/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
                   }
-                ]
-              },
-              {
-                "properties": {
-                  "metadata": "",
-                  "tokenValidation": ""
-                },
-                "ruleId": "REQ.SECRET.KEYS",
-                "message": {
-                  "text": "Secret keys were found"
-                },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                      },
-                      "region": {
-                        "startLine": 11,
-                        "startColumn": 14,
-                        "endLine": 11,
-                        "endColumn": 24,
-                        "snippet": {
-                          "text": "Sqc************"
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        "iac": [
-          {
-            "tool": {
-              "driver": {
-                "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/infrastructure-as-code-iac",
-                "name": "JFrog Terraform scanner",
-                "rules": [],
-                "version": "1.8.14"
-              }
-            },
-            "invocations": [
-              {
-                "arguments": [
-                  "analyzerManager/iac_scanner/tf_scanner",
-                  "scan",
-                  "/IaC_1725803037/config.yaml"
-                ],
-                "executionSuccessful": true,
-                "workingDirectory": {
-                  "uri": "/Users/user/ejs-frog-demo"
                 }
-              }
-            ],
-            "results": []
-          }
-        ],
-        "sast": [
-          {
-            "tool": {
-              "driver": {
-                "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sast",
-                "name": "🐸 JFrog SAST",
-                "rules": [
-                  {
-                    "id": "js-express-without-helmet",
-                    "shortDescription": {
-                      "text": "Express Not Using Helmet"
-                    },
-                    "fullDescription": {
-                      "text": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n",
-                      "markdown": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n"
-                    },
-                    "defaultConfiguration": {
-                      "parameters": {
-                        "properties": {
-                          "CWE": "693"
-                        }
-                      }
-                    },
-                    "properties": {
-                      "security-severity": "3.9"
-                    }
+              ],
+              "results": [
+                {
+                  "properties": {
+                    "metadata": "",
+                    "tokenValidation": ""
                   },
-                  {
-                    "id": "js-insecure-random",
-                    "shortDescription": {
-                      "text": "Use of Insecure Random"
-                    },
-                    "fullDescription": {
-                      "text": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n",
-                      "markdown": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n"
-                    },
-                    "defaultConfiguration": {
-                      "parameters": {
-                        "properties": {
-                          "CWE": "338"
-                        }
-                      }
-                    },
-                    "properties": {
-                      "security-severity": "3.9"
-                    }
+                  "ruleId": "REQ.SECRET.KEYS",
+                  "message": {
+                    "text": "Secret keys were found"
                   },
-                  {
-                    "id": "js-template-injection",
-                    "shortDescription": {
-                      "text": "Template Object Injection"
-                    },
-                    "fullDescription": {
-                      "text": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n",
-                      "markdown": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n"
-                    },
-                    "defaultConfiguration": {
-                      "parameters": {
-                        "properties": {
-                          "CWE": "73"
-                        }
-                      }
-                    },
-                    "properties": {
-                      "security-severity": "8.9"
-                    }
-                  }
-                ],
-                "version": "1.8.14"
-              }
-            },
-            "invocations": [
-              {
-                "arguments": [
-                  "analyzerManager/zd_scanner/scanner",
-                  "scan",
-                  "/Sast_1725803040/results.sarif",
-                  "/Sast_1725803040/config.yaml"
-                ],
-                "executionSuccessful": true,
-                "workingDirectory": {
-                  "uri": "/Users/user/ejs-frog-demo"
-                }
-              }
-            ],
-            "results": [
-              {
-                "ruleId": "js-template-injection",
-                "level": "error",
-                "message": {
-                  "text": "Template Object Injection"
-                },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                      },
-                      "region": {
-                        "startLine": 26,
-                        "startColumn": 28,
-                        "endLine": 26,
-                        "endColumn": 37,
-                        "snippet": {
-                          "text": "req.query"
-                        }
-                      }
-                    },
-                    "logicalLocations": [
-                      {
-                        "fullyQualifiedName": "server.^_4"
-                      }
-                    ]
-                  }
-                ],
-                "fingerprints": {
-                  "precise_sink_and_sink_function": "a549106dc43cdc0d36b0f81d0465a5d2"
-                },
-                "codeFlows": [
-                  {
-                    "threadFlows": [
-                      {
-                        "locations": [
-                          {
-                            "location": {
-                              "physicalLocation": {
-                                "artifactLocation": {
-                                  "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                                },
-                                "region": {
-                                  "startLine": 21,
-                                  "startColumn": 23,
-                                  "endLine": 21,
-                                  "endColumn": 26,
-                                  "snippet": {
-                                    "text": "req"
-                                  }
-                                }
-                              },
-                              "logicalLocations": [
-                                {
-                                  "fullyQualifiedName": "server.^_4"
-                                }
-                              ]
-                            }
-                          },
-                          {
-                            "location": {
-                              "physicalLocation": {
-                                "artifactLocation": {
-                                  "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                                },
-                                "region": {
-                                  "startLine": 26,
-                                  "startColumn": 28,
-                                  "endLine": 26,
-                                  "endColumn": 31,
-                                  "snippet": {
-                                    "text": "req"
-                                  }
-                                }
-                              },
-                              "logicalLocations": [
-                                {
-                                  "fullyQualifiedName": "server.^_4"
-                                }
-                              ]
-                            }
-                          },
-                          {
-                            "location": {
-                              "physicalLocation": {
-                                "artifactLocation": {
-                                  "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                                },
-                                "region": {
-                                  "startLine": 26,
-                                  "startColumn": 28,
-                                  "endLine": 26,
-                                  "endColumn": 37,
-                                  "snippet": {
-                                    "text": "req.query"
-                                  }
-                                }
-                              },
-                              "logicalLocations": [
-                                {
-                                  "fullyQualifiedName": "server.^_4"
-                                }
-                              ]
-                            }
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/fake-creds.txt"
+                        },
+                        "region": {
+                          "startLine": 2,
+                          "startColumn": 1,
+                          "endLine": 2,
+                          "endColumn": 11,
+                          "snippet": {
+                            "text": "Sqc************"
                           }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "ruleId": "js-insecure-random",
-                "level": "note",
-                "message": {
-                  "text": "Use of Insecure Random"
-                },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.js"
-                      },
-                      "region": {
-                        "startLine": 136,
-                        "startColumn": 22,
-                        "endLine": 136,
-                        "endColumn": 35,
-                        "snippet": {
-                          "text": "Math.random()"
                         }
                       }
-                    },
-                    "logicalLocations": [
-                      {
-                        "fullyQualifiedName": "public.js.bootstrap.^_0.Util.getUID"
-                      }
-                    ]
-                  }
-                ],
-                "fingerprints": {
-                  "precise_sink_and_sink_function": "34331455b0d5edf4c232dd288225780e"
-                }
-              },
-              {
-                "ruleId": "js-insecure-random",
-                "level": "note",
-                "message": {
-                  "text": "Use of Insecure Random"
+                    }
+                  ]
                 },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
-                      },
-                      "region": {
-                        "startLine": 135,
-                        "startColumn": 22,
-                        "endLine": 135,
-                        "endColumn": 35,
-                        "snippet": {
-                          "text": "Math.random()"
+                {
+                  "properties": {
+                    "metadata": "",
+                    "tokenValidation": ""
+                  },
+                  "ruleId": "REQ.SECRET.KEYS",
+                  "message": {
+                    "text": "Secret keys were found"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/fake-creds.txt"
+                        },
+                        "region": {
+                          "startLine": 3,
+                          "startColumn": 1,
+                          "endLine": 3,
+                          "endColumn": 11,
+                          "snippet": {
+                            "text": "gho************"
+                          }
                         }
                       }
-                    },
-                    "logicalLocations": [
-                      {
-                        "fullyQualifiedName": "public.js.bootstrap\u003cdot\u003ebundle.^_0.Util.getUID"
-                      }
-                    ]
-                  }
-                ],
-                "fingerprints": {
-                  "precise_sink_and_sink_function": "281a027677521fa64de4ce1fe14e01ab"
-                }
-              },
-              {
-                "ruleId": "js-express-without-helmet",
-                "level": "note",
-                "message": {
-                  "text": "Express Not Using Helmet"
+                    }
+                  ]
                 },
-                "locations": [
-                  {
-                    "physicalLocation": {
-                      "artifactLocation": {
-                        "uri": "file:///Users/user/ejs-frog-demo/server.js"
-                      },
-                      "region": {
-                        "startLine": 8,
-                        "startColumn": 11,
-                        "endLine": 8,
-                        "endColumn": 20,
-                        "snippet": {
-                          "text": "express()"
+                {
+                  "properties": {
+                    "metadata": "",
+                    "tokenValidation": ""
+                  },
+                  "ruleId": "REQ.SECRET.KEYS",
+                  "message": {
+                    "text": "Secret keys were found"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                        },
+                        "region": {
+                          "startLine": 11,
+                          "startColumn": 14,
+                          "endLine": 11,
+                          "endColumn": 24,
+                          "snippet": {
+                            "text": "Sqc************"
+                          }
                         }
                       }
-                    },
-                    "logicalLocations": [
-                      {
-                        "fullyQualifiedName": "server"
-                      }
-                    ]
-                  }
-                ],
-                "fingerprints": {
-                  "precise_sink_and_sink_function": "f8caf6a43a2c1eb41369843ca3c7d94c"
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ]
+              ]
+            }
+          ],
+          "iac": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/infrastructure-as-code-iac",
+                  "name": "JFrog Terraform scanner",
+                  "rules": [],
+                  "version": "1.8.14"
+                }
+              },
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/iac_scanner/tf_scanner",
+                    "scan",
+                    "/IaC_1725803037/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
+                  }
+                }
+              ],
+              "results": []
+            }
+          ],
+          "sast": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sast",
+                  "name": "🐸 JFrog SAST",
+                  "rules": [
+                    {
+                      "id": "js-express-without-helmet",
+                      "shortDescription": {
+                        "text": "Express Not Using Helmet"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n",
+                        "markdown": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "693"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "3.9"
+                      }
+                    },
+                    {
+                      "id": "js-insecure-random",
+                      "shortDescription": {
+                        "text": "Use of Insecure Random"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n",
+                        "markdown": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "338"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "3.9"
+                      }
+                    },
+                    {
+                      "id": "js-template-injection",
+                      "shortDescription": {
+                        "text": "Template Object Injection"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n",
+                        "markdown": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "73"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "8.9"
+                      }
+                    }
+                  ],
+                  "version": "1.8.14"
+                }
+              },
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/zd_scanner/scanner",
+                    "scan",
+                    "/Sast_1725803040/results.sarif",
+                    "/Sast_1725803040/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
+                  }
+                }
+              ],
+              "results": [
+                {
+                  "ruleId": "js-template-injection",
+                  "level": "error",
+                  "message": {
+                    "text": "Template Object Injection"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                        },
+                        "region": {
+                          "startLine": 26,
+                          "startColumn": 28,
+                          "endLine": 26,
+                          "endColumn": 37,
+                          "snippet": {
+                            "text": "req.query"
+                          }
+                        }
+                      },
+                      "logicalLocations": [
+                        {
+                          "fullyQualifiedName": "server.^_4"
+                        }
+                      ]
+                    }
+                  ],
+                  "fingerprints": {
+                    "precise_sink_and_sink_function": "a549106dc43cdc0d36b0f81d0465a5d2"
+                  },
+                  "codeFlows": [
+                    {
+                      "threadFlows": [
+                        {
+                          "locations": [
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 21,
+                                    "startColumn": 23,
+                                    "endLine": 21,
+                                    "endColumn": 26,
+                                    "snippet": {
+                                      "text": "req"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 26,
+                                    "startColumn": 28,
+                                    "endLine": 26,
+                                    "endColumn": 31,
+                                    "snippet": {
+                                      "text": "req"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 26,
+                                    "startColumn": 28,
+                                    "endLine": 26,
+                                    "endColumn": 37,
+                                    "snippet": {
+                                      "text": "req.query"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "ruleId": "js-insecure-random",
+                  "level": "note",
+                  "message": {
+                    "text": "Use of Insecure Random"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.js"
+                        },
+                        "region": {
+                          "startLine": 136,
+                          "startColumn": 22,
+                          "endLine": 136,
+                          "endColumn": 35,
+                          "snippet": {
+                            "text": "Math.random()"
+                          }
+                        }
+                      },
+                      "logicalLocations": [
+                        {
+                          "fullyQualifiedName": "public.js.bootstrap.^_0.Util.getUID"
+                        }
+                      ]
+                    }
+                  ],
+                  "fingerprints": {
+                    "precise_sink_and_sink_function": "34331455b0d5edf4c232dd288225780e"
+                  }
+                },
+                {
+                  "ruleId": "js-insecure-random",
+                  "level": "note",
+                  "message": {
+                    "text": "Use of Insecure Random"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/public/js/bootstrap.bundle.js"
+                        },
+                        "region": {
+                          "startLine": 135,
+                          "startColumn": 22,
+                          "endLine": 135,
+                          "endColumn": 35,
+                          "snippet": {
+                            "text": "Math.random()"
+                          }
+                        }
+                      },
+                      "logicalLocations": [
+                        {
+                          "fullyQualifiedName": "public.js.bootstrap\u003cdot\u003ebundle.^_0.Util.getUID"
+                        }
+                      ]
+                    }
+                  ],
+                  "fingerprints": {
+                    "precise_sink_and_sink_function": "281a027677521fa64de4ce1fe14e01ab"
+                  }
+                },
+                {
+                  "ruleId": "js-express-without-helmet",
+                  "level": "note",
+                  "message": {
+                    "text": "Express Not Using Helmet"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                        },
+                        "region": {
+                          "startLine": 8,
+                          "startColumn": 11,
+                          "endLine": 8,
+                          "endColumn": 20,
+                          "snippet": {
+                            "text": "express()"
+                          }
+                        }
+                      },
+                      "logicalLocations": [
+                        {
+                          "fullyQualifiedName": "server"
+                        }
+                      ]
+                    }
+                  ],
+                  "fingerprints": {
+                    "precise_sink_and_sink_function": "f8caf6a43a2c1eb41369843ca3c7d94c"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "jas_violations": {
+          "secrets": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://jfrog.com/help/r/jfrog-security-documentation/jfrog-advanced-security",
+                  "name": "JFrog Secrets scanner",
+                  "rules": [
+                    {
+                      "id": "REQ.SECRET.GENERIC.TEXT",
+                      "name": "REQ.SECRET.GENERIC.TEXT",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.TEXT"
+                      },
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.GENERIC.CODE",
+                      "name": "REQ.SECRET.GENERIC.CODE",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.CODE"
+                      },
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.KEYS",
+                      "name": "REQ.SECRET.KEYS",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.KEYS"
+                      },
+                      "fullDescription": {
+                        "text": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n",
+                        "markdown": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+                      },
+                      "properties": {
+                        "applicability": "applicable",
+                        "conclusion": "negative",
+                        "security-severity": "6.9"
+                      }
+                    },
+                    {
+                      "id": "REQ.CRED.PUBLIC-ONLY",
+                      "name": "REQ.CRED.PUBLIC-ONLY",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.CRED.PUBLIC-ONLY"
+                      },
+                      "fullDescription": {
+                        "text": "",
+                        "markdown": ""
+                      },
+                      "properties": {
+                        "applicability": "undetermined",
+                        "conclusion": "private"
+                      }
+                    },
+                    {
+                      "id": "REQ.SECRET.GENERIC.URL-TEXT",
+                      "name": "REQ.SECRET.GENERIC.URL-TEXT",
+                      "shortDescription": {
+                        "text": "Scanner for REQ.SECRET.GENERIC.URL-TEXT"
+                      },
+                      "fullDescription": {
+                        "text": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n",
+                        "markdown": "Storing hardcoded secrets in your source code or binary artifact could lead to several risks.\n\nIf the secret is associated with a wide scope of privileges, attackers could extract it from the source code or binary artifact and use it maliciously to attack many targets. For example, if the hardcoded password gives high-privilege access to an AWS account, the attackers may be able to query/modify company-wide sensitive data without per-user authentication.\n\n## Best practices\n\nUse safe storage when storing high-privilege secrets such as passwords and tokens, for example -\n\n* ### Environment Variables\n\nEnvironment variables are set outside of the application code, and can be dynamically passed to the application only when needed, for example -\n`SECRET_VAR=MySecret ./my_application`\nThis way, `MySecret` does not have to be hardcoded into `my_application`.\n\nNote that if your entire binary artifact is published (ex. a Docker container published to Docker Hub), the value for the environment variable must not be stored in the artifact itself (ex. inside the `Dockerfile` or one of the container's files) but rather must be passed dynamically, for example in the `docker run` call as an argument.\n\n* ### Secret management services\n\nExternal vendors offer cloud-based secret management services, that provide proper access control to each secret. The given access to each secret can be dynamically modified or even revoked. Some examples include -\n\n* [Hashicorp Vault](https://www.vaultproject.io)\n* [AWS KMS](https://aws.amazon.com/kms) (Key Management Service)\n* [Google Cloud KMS](https://cloud.google.com/security-key-management)\n\n## Least-privilege principle\n\nStoring a secret in a hardcoded manner can be made safer, by making sure the secret grants the least amount of privilege as needed by the application.\nFor example - if the application needs to read a specific table from a specific database, and the secret grants access to perform this operation **only** (meaning - no access to other tables, no write access at all) then the damage from any secret leaks is mitigated.\nThat being said, it is still not recommended to store secrets in a hardcoded manner, since this type of storage does not offer any way to revoke or moderate the usage of the secret.\n"
+                      },
+                      "properties": {
+                        "applicability": "not_applicable",
+                        "conclusion": "positive"
+                      }
+                    }
+                  ],
+                  "version": "1.0"
+                }
+              },
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/jas_scanner/jas_scanner",
+                    "scan",
+                    "/Secrets_1725803029/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
+                  }
+                }
+              ],
+              "results": [
+                {
+                  "properties": {
+                    "metadata": "",
+                    "tokenValidation": ""
+                  },
+                  "ruleId": "REQ.SECRET.KEYS",
+                  "message": {
+                    "text": "Secret keys were found"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/fake-creds.txt"
+                        },
+                        "region": {
+                          "startLine": 3,
+                          "startColumn": 1,
+                          "endLine": 3,
+                          "endColumn": 11,
+                          "snippet": {
+                            "text": "gho************"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "iac": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/infrastructure-as-code-iac",
+                  "name": "JFrog Terraform scanner",
+                  "rules": [],
+                  "version": "1.8.14"
+                }
+              },
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/iac_scanner/tf_scanner",
+                    "scan",
+                    "/IaC_1725803037/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
+                  }
+                }
+              ],
+              "results": []
+            }
+          ],
+          "sast": [
+            {
+              "tool": {
+                "driver": {
+                  "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sast",
+                  "name": "🐸 JFrog SAST",
+                  "rules": [
+                    {
+                      "id": "js-express-without-helmet",
+                      "shortDescription": {
+                        "text": "Express Not Using Helmet"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n",
+                        "markdown": "\n### Overview\nHelmet library should be used when using Express in order to properly configure\nHTTP header settings to mitigate a range of well-known vulnerabilities.\n\n### Remediation\n```javascript\nconst helmet = require(\"helmet\");\nconst app = express()\n\napp.use(helmet())\n```\n\n### References\n[Best practices for Express](https://expressjs.com/en/advanced/best-practice-security.html)\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "693"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "3.9"
+                      }
+                    },
+                    {
+                      "id": "js-insecure-random",
+                      "shortDescription": {
+                        "text": "Use of Insecure Random"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n",
+                        "markdown": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "338"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "3.9"
+                      }
+                    },
+                    {
+                      "id": "js-template-injection",
+                      "shortDescription": {
+                        "text": "Template Object Injection"
+                      },
+                      "fullDescription": {
+                        "text": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n",
+                        "markdown": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n"
+                      },
+                      "defaultConfiguration": {
+                        "parameters": {
+                          "properties": {
+                            "CWE": "73"
+                          }
+                        }
+                      },
+                      "properties": {
+                        "security-severity": "8.9"
+                      }
+                    }
+                  ],
+                  "version": "1.8.14"
+                }
+              },
+              "invocations": [
+                {
+                  "arguments": [
+                    "analyzerManager/zd_scanner/scanner",
+                    "scan",
+                    "/Sast_1725803040/results.sarif",
+                    "/Sast_1725803040/config.yaml"
+                  ],
+                  "executionSuccessful": true,
+                  "workingDirectory": {
+                    "uri": "/Users/user/ejs-frog-demo"
+                  }
+                }
+              ],
+              "results": [
+                {
+                  "ruleId": "js-template-injection",
+                  "level": "error",
+                  "message": {
+                    "text": "Template Object Injection"
+                  },
+                  "locations": [
+                    {
+                      "physicalLocation": {
+                        "artifactLocation": {
+                          "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                        },
+                        "region": {
+                          "startLine": 26,
+                          "startColumn": 28,
+                          "endLine": 26,
+                          "endColumn": 37,
+                          "snippet": {
+                            "text": "req.query"
+                          }
+                        }
+                      },
+                      "logicalLocations": [
+                        {
+                          "fullyQualifiedName": "server.^_4"
+                        }
+                      ]
+                    }
+                  ],
+                  "fingerprints": {
+                    "precise_sink_and_sink_function": "a549106dc43cdc0d36b0f81d0465a5d2"
+                  },
+                  "codeFlows": [
+                    {
+                      "threadFlows": [
+                        {
+                          "locations": [
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 21,
+                                    "startColumn": 23,
+                                    "endLine": 21,
+                                    "endColumn": 26,
+                                    "snippet": {
+                                      "text": "req"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 26,
+                                    "startColumn": 28,
+                                    "endLine": 26,
+                                    "endColumn": 31,
+                                    "snippet": {
+                                      "text": "req"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "location": {
+                                "physicalLocation": {
+                                  "artifactLocation": {
+                                    "uri": "file:///Users/user/ejs-frog-demo/server.js"
+                                  },
+                                  "region": {
+                                    "startLine": 26,
+                                    "startColumn": 28,
+                                    "endLine": 26,
+                                    "endColumn": 37,
+                                    "snippet": {
+                                      "text": "req.query"
+                                    }
+                                  }
+                                },
+                                "logicalLocations": [
+                                  {
+                                    "fullyQualifiedName": "server.^_4"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     }
   ]

@@ -1,7 +1,7 @@
 {
     "scans": [
         {
-            "target": "",
+            "target": "/Users/user/ejs-frog-demo",
             "vulnerabilities": {
                 "sca": {
                     "scan_ids": [
@@ -54,11 +54,18 @@
                         },
                         "High": {
                             "Not Applicable": 2
-                        },
-                        "Medium": {
-                            "Not Applicable": 3,
-                            "Not Covered": 3
                         }
+                    }
+                },
+                "iac": {},
+                "secrets": {
+                    "Medium": {
+                        "": 1
+                    }
+                },
+                "sast": {
+                    "High": {
+                        "": 1
                     }
                 }
             }
