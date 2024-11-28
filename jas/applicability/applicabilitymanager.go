@@ -43,10 +43,6 @@ type ApplicabilityScanManager struct {
 // Checking if the scanned project is eligible for applicability scan.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-// Return values:
-// map[string]string: A map containing the applicability result of each XRAY CVE.
-// bool: true if the user is entitled to the applicability scan, false otherwise.
-// error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string

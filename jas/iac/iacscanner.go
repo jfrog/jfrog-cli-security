@@ -30,10 +30,6 @@ type IacScanManager struct {
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-// Return values:
-// []utils.SourceCodeScanResult: a list of the iac violations that were found.
-// bool: true if the user is entitled to iac scan, false otherwise.
-// error: An error object (if any).
 func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
