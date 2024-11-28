@@ -164,8 +164,6 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 
-	scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
-
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
 	if err != nil {
 		return
