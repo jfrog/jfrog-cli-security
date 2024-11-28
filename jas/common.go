@@ -131,26 +131,6 @@ func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (
 	return
 }
 
-func LogJasScanFindings(scanType jasutils.JasScanType, vulnerabilitiesCount, violationsCount, threadId int) {
-	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		log.Info(fmt.Sprintf("%sNo %s findings", clientutils.GetLogMsgPrefix(threadId, false), scanType.String()))
-		return
-	}
-	msg := fmt.Sprintf("%sFound", clientutils.GetLogMsgPrefix(threadId, false))
-	hasVulnerabilities := vulnerabilitiesCount > 0
-	if hasVulnerabilities {
-		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
-	}
-	if violationsCount > 0 {
-		if hasVulnerabilities {
-			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
-		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
-		}
-	}
-	log.Info(msg)
-}
-
 func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
 	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
