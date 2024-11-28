@@ -129,8 +129,8 @@ github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYL
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
 github.com/jfrog/jfrog-cli-core/v2 v2.57.0 h1:3ON0J6Sjc2+4HZrzh4eSbdciXx3sJsJUIJ3TPQXh/5c=
 github.com/jfrog/jfrog-cli-core/v2 v2.57.0/go.mod h1:SThaC/fniC96oN8YgCsHjvOxp5rBM7IppuIybn1oxT0=
-github.com/jfrog/jfrog-client-go v1.48.1 h1:R6x6gazy0F196XXDhDdRAxmNplSJ5SrJfEmmNBgks/8=
-github.com/jfrog/jfrog-client-go v1.48.1/go.mod h1:1a7bmQHkRmPEza9wva2+WVrYzrGbosrMymq57kyG5gU=
+github.com/jfrog/jfrog-client-go v1.48.2 h1:YVAIiNWuBEa4NbWL54I+YzvXHaxoHDk532USDKTvgLU=
+github.com/jfrog/jfrog-client-go v1.48.2/go.mod h1:1a7bmQHkRmPEza9wva2+WVrYzrGbosrMymq57kyG5gU=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
 github.com/k0kubun/pp v3.0.1+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
