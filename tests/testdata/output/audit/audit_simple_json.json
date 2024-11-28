@@ -999,167 +999,6 @@
       }
     },
     {
-      "severity": "Medium",
-      "impactedPackageName": "lodash",
-      "impactedPackageVersion": "4.17.0",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "lodash",
-          "version": "4.17.0",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "lodash prior to 4.17.11 is affected by: CWE-400: Uncontrolled Resource Consumption. The impact is: Denial of service. The component is: Date handler. The attack vector is: Attacker provides very long strings, which the library attempts to match using a regular expression. The fixed version is: 4.17.11.",
-      "applicable": "Not Covered",
-      "fixedVersions": [
-        "[4.17.11]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2019-1010266",
-          "cvssV2": "4.0",
-          "cvssV3": "6.5",
-          "applicability": {
-            "status": "Not Covered"
-          }
-        }
-      ],
-      "issueId": "XRAY-85049",
-      "references": [
-        "https://nvd.nist.gov/vuln/detail/CVE-2019-1010266",
-        "https://github.com/lodash/lodash/wiki/Changelog",
-        "https://snyk.io/vuln/SNYK-JS-LODASH-73639",
-        "https://security.netapp.com/advisory/ntap-20190919-0004",
-        "https://security.netapp.com/advisory/ntap-20190919-0004/",
-        "https://github.com/lodash/lodash/issues/3359",
-        "https://github.com/lodash/lodash/commit/5c08f18d365b64063bfbfa686cbb97cdd6267347"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "lodash",
-            "version": "4.17.0"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": null
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "lodash",
-      "impactedPackageVersion": "4.17.0",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "lodash",
-          "version": "4.17.0",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "lodash node module before 4.17.5 suffers from a Modification of Assumed-Immutable Data (MAID) vulnerability via defaultsDeep, merge, and mergeWith functions, which allows a malicious user to modify the prototype of \"Object\" via __proto__, causing the addition or modification of an existing property that will exist on all objects.",
-      "applicable": "Not Covered",
-      "fixedVersions": [
-        "[4.17.5]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2018-3721",
-          "cvssV2": "4.0",
-          "cvssV3": "6.5",
-          "applicability": {
-            "status": "Not Covered"
-          }
-        }
-      ],
-      "issueId": "XRAY-72918",
-      "references": [
-        "https://www.npmjs.com/advisories/577",
-        "https://hackerone.com/reports/310443",
-        "https://github.com/advisories/GHSA-fvqr-27wr-82fm",
-        "https://nvd.nist.gov/vuln/detail/CVE-2018-3721",
-        "https://security.netapp.com/advisory/ntap-20190919-0004",
-        "https://security.netapp.com/advisory/ntap-20190919-0004/",
-        "https://github.com/lodash/lodash/commit/d8e069cc3410082e44eb18fcf8e7f3d08ebe1d4a"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "lodash",
-            "version": "4.17.0"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": null
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "express",
-      "impactedPackageVersion": "4.18.2",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "express",
-          "version": "4.18.2",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "Express.js minimalist web framework for node. Versions of Express.js prior to 4.19.0 and all pre-release alpha and beta versions of 5.0 are affected by an open redirect vulnerability using malformed URLs. When a user of Express performs a redirect using a user-provided URL Express performs an encode [using `encodeurl`](https://github.com/pillarjs/encodeurl) on the contents before passing it to the `location` header. This can cause malformed URLs to be evaluated in unexpected ways by common redirect allow list implementations in Express applications, leading to an Open Redirect via bypass of a properly implemented allow list. The main method impacted is `res.location()` but this is also called from within `res.redirect()`. The vulnerability is fixed in 4.19.2 and 5.0.0-beta.3.",
-      "applicable": "Not Covered",
-      "fixedVersions": [
-        "[4.19.2]",
-        "[5.0.0-beta.3]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2024-29041",
-          "cvssV2": "",
-          "cvssV3": "6.1",
-          "applicability": {
-            "status": "Not Covered"
-          }
-        }
-      ],
-      "issueId": "XRAY-594935",
-      "references": [
-        "https://github.com/koajs/koa/issues/1800",
-        "https://github.com/expressjs/express/pull/5539",
-        "https://github.com/expressjs/express/commit/0b746953c4bd8e377123527db11f9cd866e39f94",
-        "https://github.com/expressjs/express/commit/0867302ddbde0e9463d0564fea5861feb708c2dd",
-        "https://github.com/advisories/GHSA-rv95-896h-c2vc",
-        "https://expressjs.com/en/4x/api.html#res.location",
-        "https://nvd.nist.gov/vuln/detail/CVE-2024-29041",
-        "https://github.com/expressjs/express/security/advisories/GHSA-rv95-896h-c2vc"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "express",
-            "version": "4.18.2"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": null
-    },
-    {
       "severity": "Critical",
       "impactedPackageName": "lodash",
       "impactedPackageVersion": "4.17.0",
@@ -1503,246 +1342,6 @@
         ],
         "remediation": "##### Deployment mitigations\n\nAs general guidelines against prototype pollution, first consider not merging objects originating from user input or using a Map structure instead of an object. If merging objects is needed, look into creating objects without a prototype with `Object.create(null)` or into freezing `Object.prototype` with `Object.freeze()`. Finally, it is always best to perform input validation with a a [JSON schema validator](https://github.com/ajv-validator/ajv), which could mitigate this issue entirely in many cases."
       }
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "lodash",
-      "impactedPackageVersion": "4.17.0",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "lodash",
-          "version": "4.17.0",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "A prototype pollution vulnerability was found in lodash \u003c4.17.11 where the functions merge, mergeWith, and defaultsDeep can be tricked into adding or modifying properties of Object.prototype.",
-      "applicable": "Not Applicable",
-      "fixedVersions": [
-        "[4.17.11]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2018-16487",
-          "cvssV2": "6.8",
-          "cvssV3": "5.6",
-          "applicability": {
-            "status": "Not Applicable",
-            "scannerDescription": "The scanner checks whether any of the following vulnerable functions are called:\n\n* `lodash.merge` with external input to its 2nd (`sources`) argument.\n* `lodash.mergeWith` with external input to its 2nd (`sources`) argument.\n* `lodash.defaultsDeep` with external input to its 2nd (`sources`) argument.\n\nThe scanner also checks whether the `Object.freeze()` remediation is not present.",
-            "evidence": [
-              {
-                "file": "server.js",
-                "startLine": 4,
-                "startColumn": 1,
-                "endLine": 4,
-                "endColumn": 32,
-                "snippet": "Object.freeze(Object.prototype)",
-                "reason": "Prototype pollution `Object.freeze` remediation was detected"
-              }
-            ]
-          }
-        }
-      ],
-      "issueId": "XRAY-75300",
-      "references": [
-        "https://nvd.nist.gov/vuln/detail/CVE-2018-16487",
-        "https://www.npmjs.com/advisories/782",
-        "https://security.netapp.com/advisory/ntap-20190919-0004/",
-        "https://github.com/advisories/GHSA-4xc9-xhrj-v574",
-        "https://github.com/lodash/lodash/commit/90e6199a161b6445b01454517b40ef65ebecd2ad",
-        "https://security.netapp.com/advisory/ntap-20190919-0004",
-        "https://hackerone.com/reports/380873"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "lodash",
-            "version": "4.17.0"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": {
-        "severity": "High",
-        "summary": "Insufficient input validation in the Lodash library leads to prototype pollution.",
-        "details": "The [Lodash](https://lodash.com/) library is an open-source JavaScript project that simplifies operations on string, arrays, numbers, and other objects. It is widely used in connected devices. \n\nThe `merge`, `mergeWith`, and `defaultsDeep`  methods in Lodash are vulnerable to [prototype pollution](https://shieldfy.io/security-wiki/prototype-pollution/introduction-to-prototype-pollution/). Attackers can exploit this vulnerability by specifying a crafted `sources` parameter to any of these methods, which can modify the prototype properties of the `Object`, `Function`, `Array`, `String`, `Number`, and `Boolean` objects. A public [exploit](https://hackerone.com/reports/380873) exists which performs the prototype pollution with an arbitrary key and value.\n\nThe library implementation has a bug in the `safeGet()` function in the `lodash.js` module that allows for adding or modifying `prototype` properties of various objects. The official [solution](https://github.com/lodash/lodash/commit/90e6199a161b6445b01454517b40ef65ebecd2ad) fixes the bug by explicitly forbidding the addition or modification of  `prototype` properties.\n\nA related CVE (CVE-2018-3721) covers the same issue prior to Lodash version 4.17.5, but the fix for that was incomplete.",
-        "severityReasons": [
-          {
-            "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
-            "description": "An attacker must find remote input that propagates into one of the following methods - \n* `merge` - 2nd argument\n* `mergeWith` - 2nd argument\n* `defaultsDeep` - 2nd argument",
-            "isPositive": true
-          },
-          {
-            "name": "The impact of exploiting the issue depends on the context of surrounding software. A severe impact such as RCE is not guaranteed.",
-            "description": "A prototype pollution attack allows the attacker to inject new properties to all JavaScript objects (but not set existing properties).\nTherefore, the impact of a prototype pollution attack depends on the way the JavaScript code uses any object properties after the attack is triggered.\nUsually, a DoS attack is possible since invalid properties quickly lead to an exception being thrown. In more severe cases, RCE may be achievable.",
-            "isPositive": true
-          },
-          {
-            "name": "The issue has an exploit published",
-            "description": "A public PoC demonstrated exploitation by injecting an attacker controlled key and value into the prototype"
-          }
-        ],
-        "remediation": "##### Development mitigations\n\nAdd the `Object.freeze(Object.prototype);` directive once at the beginning of your main JS source code file (ex. `index.js`), preferably after all your `require` directives. This will prevent any changes to the prototype object, thus completely negating prototype pollution attacks."
-      }
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "ejs",
-      "impactedPackageVersion": "3.1.6",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "ejs",
-          "version": "3.1.6",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "The ejs (aka Embedded JavaScript templates) package before 3.1.10 for Node.js lacks certain pollution protection.",
-      "applicable": "Not Applicable",
-      "fixedVersions": [
-        "[3.1.10]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2024-33883",
-          "cvssV2": "",
-          "cvssV3": "4.0",
-          "applicability": {
-            "status": "Not Applicable",
-            "scannerDescription": "The scanner checks whether the vulnerable function `ejs.compile()` is called."
-          }
-        }
-      ],
-      "issueId": "XRAY-599735",
-      "references": [
-        "https://security.netapp.com/advisory/ntap-20240605-0003/",
-        "https://security.netapp.com/advisory/ntap-20240605-0003",
-        "https://github.com/mde/ejs/commit/e469741dca7df2eb400199e1cdb74621e3f89aa5",
-        "https://github.com/mde/ejs/compare/v3.1.9...v3.1.10",
-        "https://github.com/advisories/GHSA-ghr5-ch3p-vcr6",
-        "https://nvd.nist.gov/vuln/detail/CVE-2024-33883"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "ejs",
-            "version": "3.1.6"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": {
-        "severity": "Medium",
-        "summary": "Insufficient input validation in EJS may lead to prototype pollution.",
-        "details": "[Embedded JavaScript templates](https://github.com/mde/ejs), also known as `EJS`, is one of the most popular Node.js templating engines, which is compiled with the Express JS view system.\n\nA prototype pollution gadget within the EJS template engine could potentially be leveraged by attackers to achieve remote code execution or DoS via prototype pollution.\n\n```\nfunction Template(text, opts) {\n  opts = opts || utils.createNullProtoObjWherePossible();\n```\n\nWhen checking for the presence of a property within an object variable, the lookup scope isn't explicitly defined. In JavaScript, the absence of a defined lookup scope prompts a search up to the root prototype (`Object.prototype`). This could potentially be under the control of an attacker if another prototype pollution vulnerability is present within the application.\n\nIf the application server is using the EJS as the backend template engine, and there is another prototype pollution vulnerability in the application, then the attacker could leverage the found gadgets in the EJS template engine to escalate the prototype pollution to remote code execution or DoS.\n\nThe following code will execute a command on the server by polluting `opts.escapeFunction`:\n \n```\nconst express = require('express');\nconst app = express();\nconst port = 8008;\nconst ejs = require('ejs');\n\n// Set EJS as the view engine\napp.set('view engine', 'ejs');\n\napp.get('/', (req, res) =\u003e {\n    \n    const data = {title: 'Welcome', message: 'Hello'};\n\n    // Sample EJS template string\n    const templateString = `\u003chtml\u003e\u003chead\u003e\u003ctitle\u003e\u003c%= title %\u003e\u003c/title\u003e\u003c/head\u003e\u003cbody\u003e\u003ch1\u003e\u003c%= message %\u003e\u003c/h1\u003e\u003c/body\u003e\u003c/html\u003e`;\n\n    const { exec } = require('child_process');\n\n    function myFunc() {\n        exec('bash -c \"echo 123\"', (error, stdout, stderr) =\u003e {\n            if (error) {\n                console.error(`exec error: ${error}`);\n                return;\n            }\n            if (stderr){\n                console.log(`stderr : ${stderr}`);\n                return;\n            }\n            // Handle success\n            console.log(`Command executed successfully. Output: ${stdout}`);\n        });\n    }\n\n    const options = {client:false};\n\n    Object.prototype.escapeFunction = myFunc;\n    \n    const compiledTemplate = ejs.compile(templateString, options);\n    const renderedHtml = compiledTemplate(data);\n    res.send(renderedHtml);\n});\n\n// Start the server\napp.listen(port, () =\u003e {\n    console.log(`Server is running on http://localhost:${port}`);\n});\n```",
-        "severityReasons": [
-          {
-            "name": "The prerequisites for exploiting the issue are extremely unlikely",
-            "description": "Attackers can only leverage this vulnerability when the application server is using the EJS as the backend template engine. Moreover, there must be a second prototype pollution vulnerability in the application.",
-            "isPositive": true
-          },
-          {
-            "name": "The reported CVSS was either wrongly calculated, downgraded by other vendors, or does not reflect the vulnerability's impact",
-            "description": "CVSS does not take into account the unlikely prerequisites necessary for exploitation.",
-            "isPositive": true
-          },
-          {
-            "name": "The issue results in a severe impact (such as remote code execution)",
-            "description": "A prototype pollution attack allows the attacker to inject new properties into all JavaScript objects.\nTherefore, the impact of a prototype pollution attack depends on the way the JavaScript code uses any object properties after the attack is triggered.\nUsually, a DoS attack is possible since invalid properties quickly lead to an exception being thrown. In more severe cases, RCE may be achievable."
-          }
-        ]
-      }
-    },
-    {
-      "severity": "Medium",
-      "impactedPackageName": "lodash",
-      "impactedPackageVersion": "4.17.0",
-      "impactedPackageType": "npm",
-      "components": [
-        {
-          "name": "lodash",
-          "version": "4.17.0",
-          "location": {
-            "file": "/Users/user/ejs-frog-demo/package.json"
-          }
-        }
-      ],
-      "summary": "Lodash versions prior to 4.17.21 are vulnerable to Regular Expression Denial of Service (ReDoS) via the toNumber, trim and trimEnd functions.",
-      "applicable": "Not Applicable",
-      "fixedVersions": [
-        "[4.17.21]"
-      ],
-      "cves": [
-        {
-          "id": "CVE-2020-28500",
-          "cvssV2": "5.0",
-          "cvssV3": "5.3",
-          "applicability": {
-            "status": "Not Applicable",
-            "scannerDescription": "The scanner checks whether any of the following vulnerable functions are called:\n\n* `lodash.trim` with external input to its 1st (`string`) argument.\n* `lodash.toNumber` with external input to its 1st (`value`) argument.\n* `lodash.trimEnd` with external input to its 1st (`string`) argument."
-          }
-        }
-      ],
-      "issueId": "XRAY-140562",
-      "references": [
-        "https://cert-portal.siemens.com/productcert/pdf/ssa-637483.pdf",
-        "https://github.com/lodash/lodash/commit/c4847ebe7d14540bb28a8b932a9ce1b9ecbfee1a",
-        "https://snyk.io/vuln/SNYK-JAVA-ORGWEBJARS-1074894",
-        "https://github.com/lodash/lodash/blob/npm/trimEnd.js%23L8",
-        "https://security.netapp.com/advisory/ntap-20210312-0006/",
-        "https://snyk.io/vuln/SNYK-JAVA-ORGWEBJARSNPM-1074893",
-        "https://snyk.io/vuln/SNYK-JAVA-ORGWEBJARSBOWER-1074892",
-        "https://www.oracle.com//security-alerts/cpujul2021.html",
-        "https://www.oracle.com/security-alerts/cpuoct2021.html",
-        "https://nvd.nist.gov/vuln/detail/CVE-2020-28500",
-        "https://www.oracle.com/security-alerts/cpujul2022.html",
-        "https://snyk.io/vuln/SNYK-JAVA-ORGWEBJARSBOWERGITHUBLODASH-1074895",
-        "https://github.com/lodash/lodash/pull/5065/commits/02906b8191d3c100c193fe6f7b27d1c40f200bb7",
-        "https://www.oracle.com/security-alerts/cpujan2022.html",
-        "https://github.com/advisories/GHSA-29mw-wpgm-hmr9",
-        "https://github.com/lodash/lodash/pull/5065",
-        "https://snyk.io/vuln/SNYK-JAVA-ORGFUJIONWEBJARS-1074896",
-        "https://snyk.io/vuln/SNYK-JS-LODASH-1018905"
-      ],
-      "impactPaths": [
-        [
-          {
-            "name": "froghome",
-            "version": "1.0.0"
-          },
-          {
-            "name": "lodash",
-            "version": "4.17.0"
-          }
-        ]
-      ],
-      "jfrogResearchInformation": {
-        "severity": "Medium",
-        "summary": "ReDoS in lodash could lead to a denial of service when handling untrusted strings.",
-        "details": "JavaScript-based applications that use [lodash](https://github.com/lodash/lodash) and specifically the [_.toNumber](https://lodash.com/docs/4.17.15#toNumber), [_.trim](https://lodash.com/docs/4.17.15#trim) and [_.trimEnd](https://lodash.com/docs/4.17.15#trimEnd) functions, could be vulnerable to DoS (Denial of Service) through a faulty regular expression that introduces a ReDoS (Regular Expression DoS) vulnerability. This vulnerability is only triggered if untrusted user input flows into these vulnerable functions and the attacker can supply arbitrary long strings (over 50kB) that contain whitespaces. \n\nOn a modern Core i7-based system, calling the vulnerable functions with a 50kB string could take between 2 to 3 seconds to execute and 4.5 minutes for a longer 500kB string. The fix improved the regular expression performance so it took only a few milliseconds on the same Core i7-based system. This vulnerability is easily exploitable as all is required is to build a string that triggers it as can be seen in this PoC reproducing code - \n\n```js\nvar untrusted_user_input_50k = \"a\" + ' '.repeat(50000) + \"z\"; // assume this is provided over the network\nlo.trimEnd(untrusted_user_input_50k); // should take a few seconds to run\nvar untrusted_user_input_500k = \"a\" + ' '.repeat(500000) + \"z\"; // assume this is provided over the network\nlo.trimEnd(untrusted_user_input_500k); // should take a few minutes to run\n```",
-        "severityReasons": [
-          {
-            "name": "The issue has an exploit published",
-            "description": "Public exploit demonstrated ReDoS"
-          },
-          {
-            "name": "Exploitation of the issue is only possible when the vulnerable component is used in a specific manner. The attacker has to perform per-target research to determine the vulnerable attack vector",
-            "description": "Exploitation depends on parsing user input by the `.toNumber`, `.trim` or `.trimEnd` `lodash` functions, and requires the input to contain whitespaces and be very long (over 50KB)",
-            "isPositive": true
-          }
-        ],
-        "remediation": "##### Deployment mitigations\n\nTrim untrusted strings based on size before providing it to the vulnerable functions by using the `substring` function to with a fixed maximum size like so - ```js untrusted_user_input.substring(0, max_string_size_less_than_50kB); ```"
-      }
     }
   ],
   "licensesViolations": null,
@@ -1783,8 +1382,22 @@
       "scannerDescription": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
     }
   ],
+  "secretsViolations": [
+    {
+      "severity": "Medium",
+      "file": "fake-creds.txt",
+      "startLine": 3,
+      "startColumn": 1,
+      "endLine": 3,
+      "endColumn": 11,
+      "snippet": "gho************",
+      "finding": "Secret keys were found",
+      "scannerDescription": "\nStoring an API key in the image could lead to several risks.\n\nIf the key is associated with a wide scope of privileges, attackers could extract it from a single image or firmware and use it maliciously to attack many targets. For example, if the embedded key allows querying/modifying data for all cloud user accounts, without per-user authentication, the attackers who extract it would gain access to system-wide data.\n\nIf the cloud/SaaS provider bills by key usage - for example, every million queries cost the key's owner a fixed sum of money - attackers could use the keys for their own purposes (or just as a form of vandalism), incurring a large cost to the legitimate user or operator.\n\n## Best practices\n\nUse narrow scopes for stored API keys. As much as possible, API keys should be unique per host and require additional authentication with the user's individual credentials for any sensitive actions.\n\nAvoid placing keys whose use incurs costs directly in the image. Store the key with any software or hardware protection available on the host for key storage (such as operating system key-stores, hardware cryptographic storage mechanisms or cloud-managed secure storage services such as [AWS KMS](https://aws.amazon.com/kms/)).\n\nTokens that were detected as exposed should be revoked and replaced -\n\n* [AWS Key Revocation](https://aws.amazon.com/premiumsupport/knowledge-center/delete-access-key/#:~:text=If%20you%20see%20a%20warning,the%20confirmation%20box%2C%20choose%20Deactivate.)\n* [GCP Key Revocation](https://www.trendmicro.com/cloudoneconformity/knowledge-base/gcp/CloudIAM/delete-api-keys.html)\n* [Azure Key Revocation](https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops\u0026tabs=Windows#revoke-a-pat)\n* [GitHub Key Revocation](https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization)\n"
+    }
+  ],
+  "iac": null,
   "iacViolations": null,
-  "sastViolations": [
+  "sast": [
     {
       "severity": "High",
       "file": "server.js",
@@ -1856,6 +1469,47 @@
       "snippet": "Math.random()",
       "finding": "Use of Insecure Random",
       "scannerDescription": "\n### Overview\nA use of insecure random vulnerability is a type of security flaw that is\ncaused by the use of inadequate or predictable random numbers in a program\nor system. Random numbers are used in many security-related applications,\nsuch as generating cryptographic keys and if the numbers are not truly\nrandom, an attacker may be able to predict or recreate them, potentially\ncompromising the security of the system.\n\n### Vulnerable example\n```javascript\nvar randomNum = Math.random();\n```\n`Math.random` is not secured, as it creates predictable random numbers.\n\n### Remediation\n```diff\nvar randomNum = crypto.randomInt(0, 100)\n```\n`crypto.randomInt` is secured, and creates much less predictable random\nnumbers.\n"
+    }
+  ],
+  "sastViolations": [
+    {
+      "severity": "High",
+      "file": "server.js",
+      "startLine": 26,
+      "startColumn": 28,
+      "endLine": 26,
+      "endColumn": 37,
+      "snippet": "req.query",
+      "finding": "Template Object Injection",
+      "scannerDescription": "\n### Overview\nTemplate Object Injection (TOI) is a vulnerability that can occur in\nweb applications that use template engines to render dynamic content.\nTemplate engines are commonly used to generate HTML pages, emails, or\nother types of documents that include variable data. TOI happens when\nuntrusted user input is included as part of the template rendering\nprocess, and the template engine evaluates the input as a code\nexpression, leading to potential code injection or data tampering\nattacks. To prevent TOI vulnerabilities, it's important to sanitize and\nvalidate all user input that is used as part of the template rendering\nprocess.\n\n### Query operation\nIn this query we look for user inputs that flow directly to a\nrequest render.\n\n### Vulnerable example\n```javascript\nvar app = require('express')();\napp.set('view engine', 'hbs');\n\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n    res.render('template', bodyParameter);\n});\n```\nIn this example, a user-provided data is injected directly into the\n`render` command, leading to potential code injection or data\ntampering attacks.\n\n### Remediation\n```diff\n+   const sanitizeHtml = require('sanitize-html');\nvar app = require('express')();\napp.set('view engine', 'hbs');\napp.use(require('body-parser').json());\napp.use(require('body-parser').urlencoded({ extended: false }));\napp.post('/path', function(req, res) {\n    var bodyParameter = req.body.bodyParameter;\n    var queryParameter = req.query.queryParameter;\n\n-       res.render('template', bodyParameter);\n+       res.render('template', sanitizeHtml(bodyParameter));\n});\nUsing `sanitize-html`, the user-provided data is sanitized, before\nrendering to the response.\n```\n",
+      "codeFlow": [
+        [
+          {
+            "file": "server.js",
+            "startLine": 21,
+            "startColumn": 23,
+            "endLine": 21,
+            "endColumn": 26,
+            "snippet": "req"
+          },
+          {
+            "file": "server.js",
+            "startLine": 26,
+            "startColumn": 28,
+            "endLine": 26,
+            "endColumn": 31,
+            "snippet": "req"
+          },
+          {
+            "file": "server.js",
+            "startLine": 26,
+            "startColumn": 28,
+            "endLine": 26,
+            "endColumn": 37,
+            "snippet": "req.query"
+          }
+        ]
+      ]
     }
   ],
   "errors": null

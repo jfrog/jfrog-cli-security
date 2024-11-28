@@ -52,9 +52,9 @@ func TestXrayBinaryScanJson(t *testing.T) {
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities:    1,
-		SecurityViolations: 1,
-		Licenses:           1,
+		Vulnerabilities:       1,
+		ScaSecurityViolations: 1,
+		Licenses:              1,
 	})
 }
 
@@ -73,9 +73,9 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities:    1,
-		SecurityViolations: 1,
-		Licenses:           1,
+		Vulnerabilities:       1,
+		ScaSecurityViolations: 1,
+		Licenses:              1,
 	})
 }
 
@@ -181,7 +181,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations})
+			validations.VerifyJsonResults(t, output, validations.ValidationParams{ScaSecurityViolations: minViolations})
 		}
 	}
 }

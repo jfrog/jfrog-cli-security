@@ -32,10 +32,23 @@
           "sast": {}
         },
         "violations": {
+          "watches": [
+            "Security_watch_2"
+          ],
           "sca": {
             "scan_ids": [
               "27da9106-88ea-416b-799b-bc7d15783473"
-            ]
+            ],
+            "security": {
+              "Critical": {
+                "Undetermined": 1
+              }
+            }
+          },
+          "secrets": {
+            "Medium": {
+              "": 2
+            }
           }
         }
       }

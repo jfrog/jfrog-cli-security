@@ -40,17 +40,17 @@ import (
 func TestXrayAuditNpmJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Licenses:           1,
+		ScaSecurityViolations: 1,
+		Licenses:              1,
 	})
 }
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Vulnerabilities:    1,
-		Licenses:           1,
+		ScaSecurityViolations: 1,
+		Vulnerabilities:       1,
+		Licenses:              1,
 	})
 }
 

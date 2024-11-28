@@ -59,7 +59,7 @@ type ValidationParams struct {
 	// Expected number of contextual statuses for violations (sca/secrets)
 	InactiveViolations int
 	// Expected number of sca violations by type
-	SecurityViolations int
+	ScaSecurityViolations int
 	// Expected number of sca violations by type
 	LicenseViolations int
 	// Expected number of sca violations by type

@@ -68,7 +68,7 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 	ValidateContent(t, params.ExactResultsMatch,
 		// Total
 		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "sarif report", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: violations, Msg: GetValidationCountErrMsg("violations", "sarif report", params.ExactResultsMatch, params.SecurityViolations, violations)},
+		CountValidation[int]{Expected: params.ScaSecurityViolations, Actual: violations, Msg: GetValidationCountErrMsg("violations", "sarif report", params.ExactResultsMatch, params.ScaSecurityViolations, violations)},
 		// JAS Vulnerabilities
 		CountValidation[int]{Expected: params.SastVulnerabilities, Actual: sastVulnerabilities, Msg: GetValidationCountErrMsg("sast vulnerabilities", "sarif report", params.ExactResultsMatch, params.SastVulnerabilities, sastVulnerabilities)},
 		CountValidation[int]{Expected: params.IacVulnerabilities, Actual: iacVulnerabilities, Msg: GetValidationCountErrMsg("Iac vulnerabilities", "sarif report", params.ExactResultsMatch, params.IacVulnerabilities, iacVulnerabilities)},
@@ -91,7 +91,7 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 		CountValidation[int]{Expected: params.NotCoveredViolations, Actual: notCoveredViolationsResults, Msg: GetValidationCountErrMsg("not covered violations", "sarif report", params.ExactResultsMatch, params.NotCoveredViolations, notCoveredViolationsResults)},
 		CountValidation[int]{Expected: params.NotApplicableViolations, Actual: notApplicableViolationsResults, Msg: GetValidationCountErrMsg("not applicable violations", "sarif report", params.ExactResultsMatch, params.NotApplicableViolations, notApplicableViolationsResults)},
 		CountValidation[int]{Expected: params.MissingContextViolations, Actual: missingContextViolationsResults, Msg: GetValidationCountErrMsg("missing context violations", "sarif report", params.ExactResultsMatch, params.MissingContextViolations, missingContextViolationsResults)},
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "sarif report", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.ScaSecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "sarif report", params.ExactResultsMatch, params.ScaSecurityViolations, securityViolations)},
 		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "sarif report", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
 	)
 }

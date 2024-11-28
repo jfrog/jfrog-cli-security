@@ -58,7 +58,7 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 	ValidateContent(t, params.ExactResultsMatch,
 		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "scan responses", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
 		CountValidation[int]{Expected: params.Licenses, Actual: licenses, Msg: GetValidationCountErrMsg("licenses", "scan responses", params.ExactResultsMatch, params.Licenses, licenses)},
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "scan responses", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
+		CountValidation[int]{Expected: params.ScaSecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "scan responses", params.ExactResultsMatch, params.ScaSecurityViolations, securityViolations)},
 		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "scan responses", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
 		CountValidation[int]{Expected: params.OperationalViolations, Actual: operationalViolations, Msg: GetValidationCountErrMsg("operational risk violations", "scan responses", params.ExactResultsMatch, params.OperationalViolations, operationalViolations)},
 	)

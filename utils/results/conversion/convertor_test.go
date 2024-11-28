@@ -39,13 +39,12 @@ func getAuditValidationParams() validations.ValidationParams {
 		SastVulnerabilities:          4,
 		SecretsVulnerabilities:       3,
 
-		Violations:              18,
-		SecurityViolations:      11,
+		Violations:              7,
+		ScaSecurityViolations:   5,
 		ApplicableViolations:    1,
-		NotApplicableViolations: 7,
-		NotCoveredViolations:    3,
-		SastViolations:          4,
-		SecretsViolations:       3,
+		NotApplicableViolations: 4,
+		SastViolations:          1,
+		SecretsViolations:       1,
 	}
 }
 
@@ -55,6 +54,11 @@ func getDockerScanValidationParams(unique bool) validations.ValidationParams {
 	params := validations.ValidationParams{
 		ExactResultsMatch:      true,
 		SecretsVulnerabilities: 3,
+
+		Violations:             3,
+		ScaSecurityViolations:  1,
+		UndeterminedViolations: 1,
+		SecretsViolations:      2,
 	}
 	if unique {
 		params.Vulnerabilities = 11
