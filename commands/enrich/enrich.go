@@ -73,18 +73,22 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	fileName := getScaScanFileName(cmdResults)
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
+		log.Error("Error reading file:")
 		return err
 	}
 	var data map[string]interface{}
 	err = json.Unmarshal(fileContent, &data)
 	if err != nil {
-		fmt.Println("Error parsing XML:", err)
+		log.Error("Error parsing XML:")
 		return err
 	}
 	var vulnerabilities []map[string]string
-	xrayResults := cmdResults.GetScaScansXrayResults()[0]
-	for _, vuln := range xrayResults.Vulnerabilities {
+	xrayResults := cmdResults.GetScaScansXrayResults()
+	if len(xrayResults) == 0 {
+		log.Error("Failed while getting sca scan from xray")
+		return err
+	}
+	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
 			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
 			vulnerabilities = append(vulnerabilities, vulnerability)
