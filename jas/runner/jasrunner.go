@@ -52,9 +52,6 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// 	return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 	// }
 	params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
-	// if exists, err := fileutils.IsFileExists(params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, false); err != nil || !exists {
-	// 	return fmt.Errorf("failed to find analyzer manager executable at %s", params.Scanner.AnalyzerManager.AnalyzerManagerFullPath)
-	// }
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
