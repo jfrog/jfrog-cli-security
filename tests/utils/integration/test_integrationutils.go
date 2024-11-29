@@ -147,8 +147,8 @@ func InitScanTest(t *testing.T, minVersion string) {
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
-func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
-	if !*configTests.TestDockerScan {
+func InitNativeDockerTest(t *testing.T, isSkip bool) (mockCli *coreTests.JfrogCli, cleanUp func()) {
+	if isSkip && !*configTests.TestDockerScan {
 		t.Skip(getSkipTestMsg("Docker scan command integration (Ubuntu)", "--test.dockerScan"))
 	}
 	return InitTestWithMockCommandOrParams(t, false, cli.DockerScanMockCommand)

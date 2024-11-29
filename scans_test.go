@@ -122,7 +122,7 @@ func TestDockerScanWithProgressBar(t *testing.T) {
 
 func TestDockerScanWithTokenValidation(t *testing.T) {
 	integration.InitScanTest(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	testCli, cleanup := integration.InitNativeDockerTest(t)
+	testCli, cleanup := integration.InitNativeDockerTest(t, true)
 	defer cleanup()
 	// #nosec G101 -- Image with dummy token for tests
 	tokensImageToScan := "srmishj/inactive_tokens:latest"
@@ -131,7 +131,7 @@ func TestDockerScanWithTokenValidation(t *testing.T) {
 
 func TestDockerScan(t *testing.T) {
 	integration.InitScanTest(t, "")
-	testCli, cleanup := integration.InitNativeDockerTest(t)
+	testCli, cleanup := integration.InitNativeDockerTest(t, true)
 	defer cleanup()
 
 	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
@@ -190,7 +190,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 
 func TestAdvancedSecurityDockerScan(t *testing.T) {
 	integration.InitScanTest(t, "")
-	testCli, cleanup := integration.InitNativeDockerTest(t)
+	testCli, cleanup := integration.InitNativeDockerTest(t, true)
 	defer cleanup()
 	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }

@@ -52,7 +52,7 @@ func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 func TestXscAuditMavenJson(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testXscAuditMaven(t, string(format.Json))
+	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
@@ -62,7 +62,7 @@ func TestXscAuditMavenJson(t *testing.T) {
 func TestXscAuditMavenSimpleJson(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testXscAuditMaven(t, string(format.SimpleJson))
+	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
@@ -102,7 +102,7 @@ func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output s
 func TestAdvancedSecurityDockerScanWithXsc(t *testing.T) {
 	_, _, cleanUpXsc := integration.InitXscTest(t)
 	defer cleanUpXsc()
-	testCli, cleanupDocker := integration.InitNativeDockerTest(t)
+	testCli, cleanupDocker := integration.InitNativeDockerTest(t, false)
 	defer cleanupDocker()
 	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }

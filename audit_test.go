@@ -38,6 +38,7 @@ import (
 )
 
 func TestXrayAuditNpmJson(t *testing.T) {
+	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		SecurityViolations: 1,
@@ -46,6 +47,7 @@ func TestXrayAuditNpmJson(t *testing.T) {
 }
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
+	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		SecurityViolations: 1,
@@ -55,7 +57,6 @@ func TestXrayAuditNpmSimpleJson(t *testing.T) {
 }
 
 func testAuditNpm(t *testing.T, format string, withVuln bool) string {
-	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm"))
 	defer cleanUp()
 	// Run npm install before executing jfrog xr npm-audit
@@ -337,7 +338,8 @@ func testXrayAuditGradle(t *testing.T, format string) string {
 }
 
 func TestXrayAuditMavenJson(t *testing.T) {
-	output := testXscAuditMaven(t, string(format.Json))
+	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
@@ -345,15 +347,15 @@ func TestXrayAuditMavenJson(t *testing.T) {
 }
 
 func TestXrayAuditMavenSimpleJson(t *testing.T) {
-	output := testXscAuditMaven(t, string(format.SimpleJson))
+	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
 		Licenses:        1,
 	})
 }
 
-func testXscAuditMaven(t *testing.T, format string) string {
-	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
+func testAuditMaven(t *testing.T, format string) string {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "maven", "maven"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
