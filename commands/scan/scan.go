@@ -453,6 +453,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				params.MultiScanId = cmdResults.MultiScanId
 				params.XscVersion = cmdResults.XscVersion
+				params.XrayVersion = cmdResults.XrayVersion
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
