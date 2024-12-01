@@ -27,61 +27,70 @@ type JasRunnerParams struct {
 	ServerDetails *config.ServerDetails
 	Scanner       *jas.JasScanner
 
-	Module        jfrogappsconfig.Module
-	ConfigProfile *services.ConfigProfile
+	Module              jfrogappsconfig.Module
+	ConfigProfile       *services.ConfigProfile
+	AllowPartialResults bool
 
 	ScansToPreform []utils.SubScanType
 
+	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
-
+	// Contextual Analysis scan flags
+	ApplicableScanType          applicability.ApplicabilityScanType
 	DirectDependencies          *[]string
 	ThirdPartyApplicabilityScan bool
-	ApplicableScanType          applicability.ApplicabilityScanType
+	// SAST scan flags
+	SignedDescriptions bool
 
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
 
-func AddJasScannersTasks(params JasRunnerParams) (err error) {
+func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
-	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
-		return
+	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 	}
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType, params.TargetOutputDir)); err != nil {
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); err != nil {
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
 	if !runAllScanners {
 		return
 	}
-	if err = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); err != nil {
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); generalError != nil {
 		return
 	}
-	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir))
+	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir, params.SignedDescriptions))
 }
 
-func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (err error) {
+func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubScanType, task parallel.TaskFunc) (generalError error) {
 	jasType := jasutils.SubScanTypeToJasScanType(subScan)
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
 	}
 	if len(params.ScansToPreform) > 0 && !slices.Contains(params.ScansToPreform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
+		return
 	}
 	if params.ConfigProfile != nil {
 		// This code section is related to CentralizedConfig integration in CI Next.
 		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
+		if len(params.ConfigProfile.Modules) < 1 {
+			// Verify Modules are not nil and contain at least one modules
+			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
+		}
 		// Currently, if config profile exists, the only possible scanners to run are: Secrets, Sast
 		enabled := false
 		switch jasType {
@@ -90,14 +99,12 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		case jasutils.Sast:
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
 		case jasutils.IaC:
-			log.Debug("Skipping Iac scan as it is not currently supported with a config profile...")
-			return
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
 		case jasutils.Applicability:
-			log.Debug("Skipping Contextual Analysis scan as it is not currently supported with a config profile...")
-			return
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.EnableContextualAnalysisScan
 		}
 		if enabled {
-			err = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults)
+			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 		} else {
 			log.Debug(fmt.Sprintf("Skipping %s scan as requested by '%s' config profile...", jasType, params.ConfigProfile.ProfileName))
 		}
@@ -107,15 +114,15 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by local module config...", subScan))
 		return
 	}
-	return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults)
+	return addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
 }
 
-func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults) (err error) {
+func addModuleJasScanTask(scanType jasutils.JasScanType, securityParallelRunner *utils.SecurityParallelRunner, task parallel.TaskFunc, scanResults *results.TargetResults, allowSkippingErrors bool) (generalError error) {
 	securityParallelRunner.JasScannersWg.Add(1)
-	if _, err = securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
-		scanResults.AddError(err)
-	}); err != nil {
-		err = fmt.Errorf("failed to create %s scan task: %s", scanType, err.Error())
+	if _, addTaskErr := securityParallelRunner.Runner.AddTaskWithError(task, func(err error) {
+		_ = scanResults.AddTargetError(fmt.Errorf("failed to run %s scan: %s", scanType, err.Error()), allowSkippingErrors)
+	}); addTaskErr != nil {
+		generalError = scanResults.AddTargetError(fmt.Errorf("error occurred while adding '%s' scan to parallel runner: %s", scanType, addTaskErr.Error()), allowSkippingErrors)
 	}
 	return
 }
@@ -157,12 +164,12 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 }
 
 func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *jas.JasScanner, extendedScanResults *results.JasScansResults,
-	module jfrogappsconfig.Module, scansOutputDir string) parallel.TaskFunc {
+	module jfrogappsconfig.Module, scansOutputDir string, signedDescriptions bool) parallel.TaskFunc {
 	return func(threadId int) (err error) {
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := sast.RunSastScan(scanner, module, threadId)
+		results, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		if err != nil {
 			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}

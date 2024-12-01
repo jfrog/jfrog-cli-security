@@ -21,6 +21,11 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
+const (
+	// Visual Studio inner directory.
+	DotVsRepoSuffix = ".vs"
+)
+
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
@@ -33,6 +38,7 @@ func GetExcludePattern(params utils.AuditParams) string {
 }
 
 func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
+	scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
 	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
 	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
 	if xscGitInfoContext != nil {

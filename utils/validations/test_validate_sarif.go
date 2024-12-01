@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SastToolName = "USAF"
+	SastToolName = "🐸 JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
 	SecretsToolName = "JFrog Secrets scanner"
@@ -191,7 +191,6 @@ func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.
 	log.Output("====================================")
 	log.Output(fmt.Sprintf(":: Actual results with expected results: %s", getResultId(expected)))
 	for _, result := range actual {
-
 		log.Output(fmt.Sprintf("Compare actual result (isPotential=%t, hasSameLocations=%t) with expected result: %s", isPotentialSimilarResults(expected, result), hasSameLocations(expected, result), getResultId(result)))
 		if isPotentialSimilarResults(expected, result) && hasSameLocations(expected, result) {
 			return result
@@ -202,7 +201,7 @@ func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.
 }
 
 func isPotentialSimilarResults(expected, actual *sarif.Result) bool {
-	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultMsgText(actual) == sarifutils.GetResultMsgText(expected) && sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, expected)
+	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, expected)
 }
 
 func getResultId(result *sarif.Result) string {

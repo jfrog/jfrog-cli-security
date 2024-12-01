@@ -231,7 +231,7 @@
       "tool": {
         "driver": {
           "informationUri": "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/sast",
-          "name": "USAF",
+          "name": "🐸 JFrog SAST",
           "rules": [
             {
               "id": "js-express-without-helmet",
@@ -1106,7 +1106,7 @@
           "ruleIndex": 6,
           "level": "warning",
           "message": {
-            "text": "[CVE-2020-28500] lodash 4.17.0"
+            "text": "Security violation [CVE-2020-28500] lodash 4.17.0"
           },
           "locations": [
             {

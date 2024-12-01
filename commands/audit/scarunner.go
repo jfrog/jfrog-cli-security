@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
@@ -17,6 +18,7 @@ import (
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/cocoapods"
 	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
@@ -44,30 +46,35 @@ func hasAtLeastOneTech(cmdResults *results.SecurityCommandResults) bool {
 		return false
 	}
 	for _, scan := range cmdResults.Targets {
-		if scan.Technology != "" {
+		if scan.Technology != techutils.NoTech {
 			return true
 		}
 	}
 	return false
 }
 
-func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (err error) {
+func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (generalError error) {
 	if len(auditParams.ScansToPerform()) > 0 && !slices.Contains(auditParams.ScansToPerform(), xrayutils.ScaScan) {
 		log.Debug("Skipping SCA scan as requested by input...")
 		return
 	}
 	if auditParams.configProfile != nil {
-		log.Debug("Skipping SCA scan as a configuration profile is being utilized and currently only Secrets and Sast scanners are supported when utilizing a configuration profile")
-		return
+		if len(auditParams.configProfile.Modules) < 1 {
+			// Verify Modules are not nil and contain at least one modules
+			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", auditParams.configProfile.ProfileName)
+		}
+		if !auditParams.configProfile.Modules[0].ScanConfig.EnableScaScan {
+			log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", auditParams.configProfile.ProfileName))
+			return
+		}
 	}
-
 	// Prepare
-	currentWorkingDir, err := os.Getwd()
-	if errorutils.CheckError(err) != nil {
+	currentWorkingDir, generalError := os.Getwd()
+	if errorutils.CheckError(generalError) != nil {
 		return
 	}
-	serverDetails, err := auditParams.ServerDetails()
-	if err != nil {
+	serverDetails, generalError := auditParams.ServerDetails()
+	if generalError != nil {
 		return
 	}
 	if !hasAtLeastOneTech(cmdResults) {
@@ -76,33 +83,34 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	}
 	defer func() {
 		// Make sure to return to the original working directory, buildDependencyTree may change it
-		err = errors.Join(err, os.Chdir(currentWorkingDir))
+		generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 	}()
 	// Preform SCA scans
-	for _, scan := range cmdResults.Targets {
-		if scan.Technology == "" {
-			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", scan.Target))
+	for _, targetResult := range cmdResults.Targets {
+		if targetResult.Technology == "" {
+			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", targetResult.Target))
 			continue
 		}
 		// Get the dependency tree for the technology in the working directory.
-		treeResult, bdtErr := buildDependencyTree(scan, auditParams)
+		treeResult, bdtErr := buildDependencyTree(targetResult, auditParams)
 		if bdtErr != nil {
 			var projectNotInstalledErr *biutils.ErrProjectNotInstalled
 			if errors.As(bdtErr, &projectNotInstalledErr) {
 				log.Warn(bdtErr.Error())
 				continue
 			}
-			err = errors.Join(err, createErrorIfPartialResultsDisabled(auditParams, nil, fmt.Sprintf("Dependencies tree construction ha failed for the following target: %s", scan.Target), fmt.Errorf("failed to get dependencies trees in '%s':\n%s", scan.Target, bdtErr.Error())))
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, scan, treeResult), func(err error) {
-			_ = createErrorIfPartialResultsDisabled(auditParams, auditParallelRunner, fmt.Sprintf("Failed to execute SCA scan for the following target: %s", scan.Target), fmt.Errorf("SCA scan failed in '%s':\n%s", scan.Target, err.Error()))
-			auditParallelRunner.ScaScansWg.Done()
+		// defer auditParallelRunner.ScaScansWg.Done()
+		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
 		if taskErr != nil {
-			return fmt.Errorf("failed to create sca scan task for '%s': %s", scan.Target, taskErr.Error())
+			_ = targetResult.AddTargetError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
+			auditParallelRunner.ScaScansWg.Done()
 		}
 	}
 	return
@@ -120,14 +128,8 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
 	scan *results.TargetResults, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {
+		defer auditParallelRunner.ScaScansWg.Done()
 		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Running SCA scan for", scan.Target, "vulnerable dependencies in", scan.Target, "directory...")
-		var xrayErr error
-		defer func() {
-			if xrayErr == nil {
-				// We Sca waitGroup as done only when we have no errors. If we have errors we mark it done in the error's handler function
-				auditParallelRunner.ScaScansWg.Done()
-			}
-		}()
 		// Scan the dependency tree.
 		scanResults, xrayErr := runScaWithTech(scan.Technology, auditParams, serverDetails, *treeResult.FlatTree, treeResult.FullDepTrees)
 		if xrayErr != nil {
@@ -144,10 +146,14 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
 	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	xrayScanGraphParams := params.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
-		SetXrayVersion(params.xrayVersion).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetXrayVersion(params.GetXrayVersion()).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)
@@ -249,6 +255,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		})
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+	case techutils.Cocoapods:
+		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}

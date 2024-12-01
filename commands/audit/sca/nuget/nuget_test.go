@@ -10,6 +10,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/build-info-go/entities"
@@ -140,9 +141,83 @@ func TestRunDotnetRestoreAndLoadSolution(t *testing.T) {
 		assert.Empty(t, sol.GetDependenciesSources())
 
 		params := &xrayUtils2.AuditBasicParams{}
-		sol, err = runDotnetRestoreAndLoadSolution(params, tempDirPath, "")
+		sol, err = runDotnetRestoreAndLoadSolution(params, tempDirPath, "", true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, sol.GetProjects())
 		assert.NotEmpty(t, sol.GetDependenciesSources())
+	}
+}
+
+// This test checks that the tree construction is skipped when the project is not installed and the user prohibited installation
+func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
+	testCases := []struct {
+		name                        string
+		testDir                     string
+		installCommand              string
+		successfulTreeBuiltExpected bool
+	}{
+		{
+			name:                        "nuget single 4.0  - installed | install not required",
+			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single4.0"),
+			successfulTreeBuiltExpected: true,
+		},
+		{
+			name:                        "nuget single 5.0  - not installed | install required - install command",
+			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single5.0"),
+			installCommand:              "nuget restore", // todo test in ci with nuget restore
+			successfulTreeBuiltExpected: true,
+		},
+		{
+			name:                        "nuget single 5.0  - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "nuget", "single5.0"),
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "nuget multi  - not installed | install required - install command",
+			testDir:                     filepath.Join("projects", "package-managers", "nuget", "multi"),
+			installCommand:              "nuget restore", // todo test in ci with nuget restore
+			successfulTreeBuiltExpected: true,
+		},
+		{
+			name:                        "nuget multi  - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "nuget", "multi"),
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "dotnet-single  - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "dotnet", "dotnet-single"),
+			successfulTreeBuiltExpected: false,
+		},
+		{
+			name:                        "dotnet-multi  - not installed | install required - install forbidden",
+			testDir:                     filepath.Join("projects", "package-managers", "dotnet", "dotnet-multi"),
+			successfulTreeBuiltExpected: false,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			// Create and change directory to test workspace
+			_, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			defer cleanUp()
+
+			params := (&xrayUtils2.AuditBasicParams{}).SetSkipAutoInstall(true)
+			if test.installCommand != "" {
+				splitInstallCommand := strings.Split(test.installCommand, " ")
+				params = params.SetInstallCommandName(splitInstallCommand[0]).SetInstallCommandArgs(splitInstallCommand[1:])
+			}
+
+			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
+			if !test.successfulTreeBuiltExpected {
+				assert.Nil(t, dependencyTrees)
+				assert.Nil(t, uniqueDeps)
+				assert.Error(t, err)
+				assert.IsType(t, &utils.ErrProjectNotInstalled{}, err)
+			} else {
+				assert.NotNil(t, dependencyTrees)
+				assert.NotNil(t, uniqueDeps)
+				assert.NoError(t, err)
+			}
+		})
 	}
 }

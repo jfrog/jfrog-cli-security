@@ -73,18 +73,21 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	fileName := getScaScanFileName(cmdResults)
 	fileContent, err := os.ReadFile(fileName)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return err
+		return fmt.Errorf("error reading file: %s", err.Error())
 	}
 	var data map[string]interface{}
 	err = json.Unmarshal(fileContent, &data)
 	if err != nil {
-		fmt.Println("Error parsing XML:", err)
-		return err
+		return fmt.Errorf("error parsing JSON: %s", err.Error())
 	}
 	var vulnerabilities []map[string]string
-	xrayResults := cmdResults.GetScaScansXrayResults()[0]
-	for _, vuln := range xrayResults.Vulnerabilities {
+	xrayResults := cmdResults.GetScaScansXrayResults()
+	if len(xrayResults) == 0 {
+		return fmt.Errorf("failed while getting sca scan from xray: %s", err.Error())
+	} else if len(xrayResults) > 1 {
+		log.Warn("Received %d results, parsing only first result", len(xrayResults))
+	}
+	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
 			vulnerability := map[string]string{"bom-ref": component, "id": vuln.Cves[0].Id}
 			vulnerabilities = append(vulnerabilities, vulnerability)
@@ -102,9 +105,14 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 		return err
 	}
 	destination := result.FindElements("//bom")[0]
-	xrayResults := cmdResults.GetScaScansXrayResults()[0]
+	xrayResults := cmdResults.GetScaScansXrayResults()
+	if len(xrayResults) == 0 {
+		return fmt.Errorf("failed while getting sca scan from xray: %s", err.Error())
+	} else if len(xrayResults) > 1 {
+		log.Warn("Received %d results, parsing only first result", len(xrayResults))
+	}
 	vulns := destination.CreateElement("vulnerabilities")
-	for _, vuln := range xrayResults.Vulnerabilities {
+	for _, vuln := range xrayResults[0].Vulnerabilities {
 		for component := range vuln.Components {
 			addVuln := vulns.CreateElement("vulnerability")
 			addVuln.CreateAttr("bom-ref", component)
@@ -156,7 +164,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	log.Info("JFrog Xray version is:", xrayVersion)
 
-	scanResults := results.NewCommandResults(utils.SBOM, xrayVersion, false, false)
+	scanResults := results.NewCommandResults(utils.SBOM).SetXrayVersion(xrayVersion)
 
 	fileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
 	indexedFileProducerConsumer := parallel.NewRunner(enrichCmd.threads, 20000, false)
@@ -175,7 +183,7 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 
 	fileCollectingErr := fileCollectingErrorsQueue.GetError()
 	if fileCollectingErr != nil {
-		scanResults.Error = errors.Join(scanResults.Error, fileCollectingErr)
+		scanResults.GeneralError = errors.Join(scanResults.GeneralError, fileCollectingErr)
 	}
 
 	isXml, err := isXML(scanResults.Targets)
@@ -233,13 +241,13 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 			// Add a new task to the second producer/consumer
 			// which will send the indexed binary to Xray and then will store the received result.
 			taskFunc := func(threadId int) (err error) {
+				logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 				// Create a scan target for the file.
 				targetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filePath, Name: filepath.Base(filePath)})
-				log.Debug(clientutils.GetLogMsgPrefix(threadId, false)+"enrich file:", targetResults.Target)
+				log.Debug(logPrefix, "enrich file:", targetResults.Target)
 				fileContent, err := os.ReadFile(targetResults.Target)
 				if err != nil {
-					targetResults.AddError(err)
-					return err
+					return targetResults.AddTargetError(err, false)
 				}
 				params := &services.XrayGraphImportParams{
 					SBOMInput: fileContent,
@@ -251,13 +259,11 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 					SetXrayVersion(xrayVersion)
 				xrayManager, err := xray.CreateXrayServiceManager(importGraphParams.ServerDetails())
 				if err != nil {
-					targetResults.AddError(err)
-					return err
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
 				}
 				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
 				if err != nil {
-					targetResults.AddError(err)
-					return
+					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
 				targetResults.NewScaScanResults(*scanResults)
 				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)

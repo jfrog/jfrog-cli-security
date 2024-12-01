@@ -43,10 +43,13 @@ func (sjc *CmdResultsSimpleJsonConverter) Get() (formats.SimpleJsonResults, erro
 	return *sjc.current, nil
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, generalError error) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
 	sjc.multipleRoots = multipleTargets
+	if generalError != nil {
+		sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{ErrorMessage: generalError.Error()})
+	}
 	return
 }
 
@@ -229,7 +232,7 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseRow, 
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		*licenseViolationsRows = append(*licenseViolationsRows,
 			formats.LicenseRow{
-				LicenseKey: violation.LicenseKey,
+				LicenseKey: getLicenseKey(violation.LicenseKey, violation.IssueId),
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
 					ImpactedDependencyName:    impactedPackagesName,
@@ -241,6 +244,13 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseRow, 
 		)
 		return nil
 	}
+}
+
+func getLicenseKey(licenseKey, issueId string) string {
+	if licenseKey == "" {
+		return issueId
+	}
+	return licenseKey
 }
 
 func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) results.ParseScaViolationFunc {

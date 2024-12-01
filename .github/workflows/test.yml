@@ -1,4 +1,5 @@
 name: JFrog CLI Security Tests
+
 on:
   push:
     branches:
@@ -8,75 +9,242 @@ on:
   # Triggers the workflow on labeled PRs only.
   pull_request_target:
     types: [ labeled ]
+
 # Ensures that only the latest commit is running for each PR at a time.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Environment variables shared across all jobs.
+env:
+  GOPROXY: direct
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+  CI: true
+  JFROG_CLI_LOG_LEVEL: DEBUG
+
 jobs:
-  test:
+  Pretest:
     if: contains(github.event.pull_request.labels.*.name, 'safe to test') || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove 'safe to test' label
+        uses: actions-ecosystem/action-remove-labels@v1
+        if: ${{ github.event_name != 'push' }}
+        with:
+          labels: "safe to test"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      
+      - name: Setup Go with cache
+        uses: jfrog/.github/actions/install-go-with-cache@main
+
+      - name: Run Go vet
+        run: go vet -v ./...
+  
+  Unit_Tests:
+    name: "[${{ matrix.os }}] Unit Tests"
+    needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
       fail-fast: false
       matrix:
         os: [ ubuntu, windows, macos ]
-    env:
-      GOPROXY: direct
-      GRADLE_OPTS: -Dorg.gradle.daemon=false
-      CI: true
-      JFROG_CLI_LOG_LEVEL: DEBUG
     steps:
-      # Install dependencies
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.22.x
-      - name: Install npm
-        uses: actions/setup-node@v3
-        with:
-          node-version: "16"
-      - name: Setup Pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-      - name: Install Java
-        uses: actions/setup-java@v3
-        with:
-          java-version: "11"
-          distribution: "adopt"
-      - name: Install NuGet
-        uses: nuget/setup-nuget@v2
-        with:
-          nuget-version: 6.x
-      - name: Install dotnet
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '6.x'
-      - name: Setup Python3
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-      - name: Setup Pipenv
-        run: python -m pip install pipenv
-      - name: Setup Poetry
-        run: python -m pip install poetry
-      - name: Setup Conan
-        run: |
-          python -m pip install conan
-          conan profile detect
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 7.6
-      # Checkout code
+      # Prepare the environment
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test and generate code coverage
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
+
+      - name: Archive Code Coverage Results
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu'
+        with:
+          name: unit-tests-code-coverage
+          path: cover-unit-tests
+
+  Audit_Command_Integration_Tests:
+    name: "[${{ matrix.os }}] ${{ matrix.suite.name }} Audit Command Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+        suite:
+          - name: 'General Suite (Detection, MultiTech, NoTech...)'
+            testFlags: '--test.audit'
+          - name: 'JAS Suite'
+            testFlags: '--test.audit.Jas'
+          - name: 'Java Script Suite (Npm, Pnpm, Yarn)'
+            testFlags: '--test.audit.JavaScript'
+          - name: 'Python Suite (Pip, Pipenv, Poetry)'
+            testFlags: '--test.audit.Python'
+          - name: 'Java Suite (Maven, Gradle)'
+            testFlags: '--test.audit.Java'
+          - name: 'Go Suite (Go Modules, Dep, Glide)'
+            testFlags: '--test.audit.Go'
+          - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
+            testFlags: '--test.audit.C'
+          - name: 'Cocoapods Suite'
+            testFlags: '--test.audit.Cocoapods'
+        
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
       # Test
-      - name: Run security tests (without Docker Scan)
-        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --jfrog.user=${{ secrets.PLATFORM_USER }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
+
+  Artifactory_Integration_Tests:
+    name: "[${{ matrix.os }}] Artifactory Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
+    
+
+  Xray_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Xray Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xray
+
+  Xsc_Integration_Tests:
+    name: "[${{ matrix.os }}] XSC Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
         if: ${{ matrix.os != 'ubuntu' }}
-      - name: Run security tests (with Docker Scan, only on Ubuntu)
-        run: go test -v github.com/jfrog/jfrog-cli-security --race --timeout 0 --test.security --test.dockerScan --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-xray
+      - name: Run security tests (with Docker Scan)
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
         if: ${{ matrix.os == 'ubuntu' }}
+
+  Other_Scan_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Other Scan Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
+        if: ${{ matrix.os != 'ubuntu' }}
+      - name: Run security tests (with Docker Scan)
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        if: ${{ matrix.os == 'ubuntu' }}
+
+  Other_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Other Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.git
+ 
+  Code_Coverage:
+    name: Generate Code Coverage Report
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    needs: [Unit_Tests]
+    permissions:
+      contents:      read
+      actions:       read  # to download code coverage results from jobs
+      pull-requests: write # write permission needed to comment on PR
+    steps:
+      - name: Generate Unit Tests Code Coverage Report
+        uses: fgrosse/go-coverage-report@v1.2.0
+        with:
+          coverage-artifact-name: unit-tests-code-coverage
+          coverage-file-name: cover-unit-tests

@@ -206,6 +206,10 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
 	var specFile *spec.SpecFiles
 	if c.IsFlagSet(flags.SpecFlag) && len(c.GetStringFlagValue(flags.SpecFlag)) > 0 {
 		specFile, err = pluginsCommon.GetFileSystemSpec(c)
@@ -233,6 +237,8 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	scanCmd := scan.NewScanCommand().
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
 		SetSpec(specFile).
@@ -369,7 +375,7 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
-	auditCmd, err := CreateAuditCmd(c)
+	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -419,7 +425,7 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
+	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
 	return err
 }
 
@@ -428,45 +434,41 @@ func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
-func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
+func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) {
 	if err == nil || !usage.ShouldReportUsage() {
 		return
 	}
-	var serverDetails *coreConfig.ServerDetails
-	serverDetails, innerError := auditCmd.ServerDetails()
-	if innerError != nil {
-		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
-		return
-	}
-	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
+	if reportError := xsc.ReportError(xrayVersion, xscVersion, serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
 }
 
-func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	err = validateXrayContext(c, serverDetails)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
+	}
+	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return "", "", nil, nil, err
 	}
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
-
-	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
@@ -489,6 +491,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))
 	}
 	auditCmd.SetServerDetails(serverDetails).
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
 		SetUseJas(true).
@@ -498,7 +502,7 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
 		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
 		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
-	return auditCmd, err
+	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
 
 func logNonGenericAuditCommandDeprecation(cmdName string) {
@@ -514,7 +518,7 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 
 func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := CreateAuditCmd(c)
+	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
@@ -523,7 +527,7 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	err = progressbar.ExecWithProgress(auditCmd)
 
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
+	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
 	return err
 }
 
@@ -710,6 +714,10 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
+	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
 	containerScanCommand := scan.NewDockerScanCommand()
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
@@ -722,6 +730,8 @@ func DockerScan(c *components.Context, image string) error {
 	containerScanCommand.SetImageTag(image).
 		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetServerDetails(serverDetails).
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
@@ -732,10 +742,32 @@ func DockerScan(c *components.Context, image string) error {
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails)).
 		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return progressbar.ExecWithProgress(containerScanCommand)
+}
+
+func GetJfrogServicesVersion(serverDetails *coreConfig.ServerDetails) (xrayVersion, xscVersion string, err error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return
+	}
+	xrayVersion, err = xrayManager.GetVersion()
+	if err != nil {
+		return
+	}
+	log.Debug("Xray version: " + xrayVersion)
+	xscService, err := xsc.CreateXscService(xrayVersion, serverDetails)
+	if err != nil {
+		return
+	}
+	xscVersion, e := xscService.GetVersion()
+	if e != nil {
+		log.Debug("Using Xray: " + e.Error())
+		return
+	}
+	log.Debug("XSC version: " + xscVersion)
+	return
 }

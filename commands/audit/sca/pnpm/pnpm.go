@@ -13,6 +13,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -115,7 +116,9 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 			err = errors.Join(err, fileutils.RemoveTempDir(dirForDependenciesCalculation))
 		}
 	}()
-	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, nil)
+
+	// Exclude Visual Studio inner directory since it is not necessary for the scan process and may cause race condition.
+	err = biutils.CopyDir(workingDir, dirForDependenciesCalculation, true, []string{sca.DotVsRepoSuffix})
 	if err != nil {
 		err = fmt.Errorf("failed copying project to temp dir: %w", err)
 		return
