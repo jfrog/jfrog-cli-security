@@ -647,8 +647,10 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	// Don't allow working directory if sub directory already exists as key for the same technology
-	techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet {
+		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
+		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	}
 	return
 }
 
