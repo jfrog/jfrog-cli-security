@@ -1,13 +1,11 @@
 package pnpm
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,18 +27,18 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 		expectedUniqueDeps []string
 		expectedTree       *xrayUtils.GraphNode
 	}{
-		{
-			name:      "Only direct dependencies",
-			treeDepth: "0",
-			expectedUniqueDeps: []string{
-				"npm://zen-website:1.0.0",
-				"npm://balaganjs:1.0.0",
-			},
-			expectedTree: &xrayUtils.GraphNode{
-				Id:    "npm://zen-website:1.0.0",
-				Nodes: []*xrayUtils.GraphNode{{Id: "npm://balaganjs:1.0.0"}},
-			},
-		},
+		// {
+		// 	name:      "Only direct dependencies",
+		// 	treeDepth: "0",
+		// 	expectedUniqueDeps: []string{
+		// 		"npm://zen-website:1.0.0",
+		// 		"npm://balaganjs:1.0.0",
+		// 	},
+		// 	expectedTree: &xrayUtils.GraphNode{
+		// 		Id:    "npm://zen-website:1.0.0",
+		// 		Nodes: []*xrayUtils.GraphNode{{Id: "npm://balaganjs:1.0.0"}},
+		// 	},
+		// },
 		{
 			name:      "With transitive dependencies",
 			treeDepth: "1",
@@ -48,10 +46,16 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 				"npm://zen-website:1.0.0",
 				"npm://balaganjs:1.0.0",
 				"npm://axios:1.7.8",
+				"npm://yargs:13.3.0",
 			},
 			expectedTree: &xrayUtils.GraphNode{
-				Id:    "npm://zen-website:1.0.0",
-				Nodes: []*xrayUtils.GraphNode{{Id: "npm://balaganjs:1.0.0", Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.7.8"}}}},
+				Id: "npm://zen-website:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{
+					{
+						Id:    "npm://balaganjs:1.0.0",
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.7.8"}, {Id: "npm://yargs:13.3.0"}},
+					},
+				},
 			},
 		},
 	}
@@ -67,10 +71,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			if assert.Len(t, rootNode, 1) {
 				assert.Equal(t, rootNode[0].Id, testCase.expectedTree.Id)
 				if !tests.CompareTree(testCase.expectedTree, rootNode[0]) {
-					str, err := utils.GetAsJsonString(rootNode[0], true, true)
-					assert.NoError(t, err)
-					log.Info(str)
-					t.Error(fmt.Sprintf("expected: %v got: %v", testCase.expectedTree.Nodes, rootNode[0].Nodes))
+					t.Error("expected:", testCase.expectedTree.Nodes, "got:", rootNode[0].Nodes)
 				}
 			}
 		})

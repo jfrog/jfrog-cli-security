@@ -10,9 +10,6 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -21,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"golang.org/x/exp/maps"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -167,13 +165,13 @@ func createProjectDependenciesTree(project pnpmLsProject) map[string]xray.DepTre
 	for depName, dependency := range project.Dependencies {
 		directDependency := getDependencyId(depName, dependency.Version)
 		directDependencies = append(directDependencies, directDependency)
-		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
+		appendTransitiveDependencies(directDependency, dependency.Dependencies, &treeMap)
 	}
 	// Handle dev-dependencies
 	for depName, dependency := range project.DevDependencies {
 		directDependency := getDependencyId(depName, dependency.Version)
 		directDependencies = append(directDependencies, directDependency)
-		appendTransitiveDependencies(directDependency, dependency.Dependencies, treeMap)
+		appendTransitiveDependencies(directDependency, dependency.Dependencies, &treeMap)
 	}
 	if len(directDependencies) > 0 {
 		treeMap[getDependencyId(project.Name, project.Version)] = xray.DepTreeNode{Children: directDependencies}
@@ -186,21 +184,15 @@ func getDependencyId(depName, version string) string {
 	return techutils.Npm.GetPackageTypeId() + depName + ":" + version
 }
 
-func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result map[string]xray.DepTreeNode) {
+func appendTransitiveDependencies(parent string, dependencies map[string]pnpmLsDependency, result *map[string]xray.DepTreeNode) {
 	for depName, dependency := range dependencies {
 		dependencyId := getDependencyId(depName, dependency.Version)
-		if node, ok := result[parent]; ok {
-			node.Children = appendUniqueChild(node.Children, dependencyId)
+		if node, ok := (*result)[parent]; ok {
+			node.Children = append(node.Children, dependencyId)
+			(*result)[parent] = node
 		} else {
-			result[parent] = xray.DepTreeNode{Children: []string{dependencyId}}
+			(*result)[parent] = xray.DepTreeNode{Children: []string{dependencyId}}
 		}
 		appendTransitiveDependencies(dependencyId, dependency.Dependencies, result)
 	}
-}
-
-func appendUniqueChild(children []string, candidateDependency string) []string {
-	if slices.Contains(children, candidateDependency) {
-		return children
-	}
-	return append(children, candidateDependency)
 }
