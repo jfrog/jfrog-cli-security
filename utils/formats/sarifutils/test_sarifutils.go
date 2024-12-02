@@ -164,3 +164,17 @@ func CreateThreadFlow(locations ...*sarif.Location) *sarif.ThreadFlow {
 	}
 	return stackStrace
 }
+
+func CreateRunsWithReportingDescriptor(property, name string, value string) *sarif.Run {
+	run := CreateRunWithDummyResults(
+		CreateDummyPassingResult("rule"),
+	)
+	for _, rule := range run.Tool.Driver.Rules {
+		rule.Name = &name
+		rule.Properties = map[string]interface{}{
+			property: value,
+		}
+	}
+
+	return run
+}

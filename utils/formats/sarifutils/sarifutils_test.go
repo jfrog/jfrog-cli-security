@@ -1,9 +1,10 @@
 package sarifutils
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -641,5 +642,52 @@ func TestGetResultFingerprint(t *testing.T) {
 	}
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetResultFingerprint(test.result))
+	}
+}
+
+func TestIsRuleNameHasProperty(t *testing.T) {
+	tests := []struct {
+		name           string
+		runs           []*sarif.Run
+		parameters     []string
+		expectedOutput bool
+	}{
+		{
+			name:           "Empty Run",
+			runs:           []*sarif.Run{},
+			parameters:     []string{"applicability", "CVE-1111-123", "applicable"},
+			expectedOutput: false,
+		},
+		{
+			name: "Rule Has Applicable Property With CVE Name",
+			runs: []*sarif.Run{
+				CreateRunsWithReportingDescriptor("applicability", "CVE-1111-123", "applicable"),
+				CreateRunsWithReportingDescriptor("applicability", "CVE-2222-123", "applicable"),
+			},
+			parameters:     []string{"applicability", "CVE-1111-123", "applicable"},
+			expectedOutput: true,
+		},
+		{
+			name: "UnMatching Names",
+			runs: []*sarif.Run{
+				CreateRunsWithReportingDescriptor("applicability", "CVE-1111-123", "applicable"),
+				CreateRunsWithReportingDescriptor("applicability", "CVE-2222-123", "applicable"),
+			},
+			parameters:     []string{"applicability", "CVE-3333-123", "applicable"},
+			expectedOutput: false,
+		},
+		{
+			name: "UnMatching Property value",
+			runs: []*sarif.Run{
+				CreateRunsWithReportingDescriptor("applicability", "CVE-1111-123", "not_applicable"),
+				CreateRunsWithReportingDescriptor("applicability", "CVE-2222-123", "applicable"),
+			},
+			parameters:     []string{"applicability", "CVE-1111-123", "applicable"},
+			expectedOutput: false,
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, IsRuleNameHasProperty(test.parameters[0], test.parameters[1], test.parameters[2], test.runs...), test.expectedOutput)
 	}
 }
