@@ -116,7 +116,7 @@ func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vul
 	return nil
 }
 
-// PrepareScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+// Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
 func PrepareScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
@@ -141,6 +141,17 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 		// Parse the violation according to its type
 		switch violation.ViolationType {
 		case utils.ViolationTypeSecurity.String():
+			// If the violation is not applicable and all of its policies state that we should skip the violation if not applicable - we ignore the current violation
+			var shouldSkipViolationIfNotApplicable bool
+			if shouldSkipViolationIfNotApplicable, e = shouldSkipIfNotApplicable(violation); e != nil {
+				err = errors.Join(err, e)
+				continue
+			}
+			if applicabilityStatus == jasutils.NotApplicable && shouldSkipViolationIfNotApplicable {
+				log.Debug(fmt.Sprintf("Violation '%s' is not applicable and will be removed from final results as requested by policies applied to it"))
+				continue
+			}
+
 			if securityHandler == nil {
 				// No handler was provided for security violations
 				continue
@@ -626,4 +637,16 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	}
 
 	return jasutils.NotApplicable
+}
+
+func shouldSkipIfNotApplicable(violation services.Violation) (bool, error) {
+	if len(violation.Policies) == 0 {
+		return false, fmt.Errorf("violation '%s' results has no related policies\n")
+	}
+	for _, policy := range violation.Policies {
+		if !policy.SkipNotApplicable {
+			return false, nil
+		}
+	}
+	return true, nil
 }
