@@ -460,9 +460,11 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					IncludeVulnerabilities: scanCmd.includeVulnerabilities,
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
+					MultiScanId:            cmdResults.MultiScanId,
+					XscVersion:             cmdResults.XscVersion,
+					XrayVersion:            cmdResults.XrayVersion,
 				}
-				params.MultiScanId = cmdResults.MultiScanId
-				params.XscVersion = cmdResults.XscVersion
+
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
