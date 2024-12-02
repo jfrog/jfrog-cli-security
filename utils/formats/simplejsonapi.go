@@ -47,6 +47,7 @@ type VulnerabilityOrViolationRow struct {
 	FixedVersions            []string                  `json:"fixedVersions"`
 	Cves                     []CveRow                  `json:"cves"`
 	IssueId                  string                    `json:"issueId"`
+	Watch                    string                    `json:"watch,omitempty"`
 	References               []string                  `json:"references"`
 	ImpactPaths              [][]ComponentRow          `json:"impactPaths"`
 	JfrogResearchInformation *JfrogResearchInformation `json:"jfrogResearchInformation"`

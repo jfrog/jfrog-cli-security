@@ -228,6 +228,7 @@ func addSimpleJsonSecurityViolation(securityViolationsRows *[]formats.Vulnerabil
 				},
 				FixedVersions:            fixedVersion,
 				Cves:                     cves,
+				Watch:                    violation.WatchName,
 				IssueId:                  violation.IssueId,
 				References:               violation.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
