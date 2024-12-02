@@ -2,15 +2,17 @@ package validations
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-client-go/artifactory"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-client-go/artifactory"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -25,7 +27,7 @@ const (
 )
 
 var (
-	versionApiUrl = "/%s/api/v1/system/version"
+	versionApiUrl = "/%s/%ssystem/version"
 )
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)
@@ -50,24 +52,53 @@ func CreateXrayRestsMockServer(testHandler restsTestHandler) (*httptest.Server, 
 	return testServer, serverDetails
 }
 
-func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.ServerDetails) {
-	serverMock, serverDetails, _ := CreateXscRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xsc") {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, xscVersion)))
+type MockServerParams struct {
+	XrayVersion  string
+	XscVersion   string
+	XscNotExists bool
+	ReturnMsi    string
+}
+
+func XscServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
+	if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
+		serverMock, serverDetails, _ := CreateXscRestsMockServer(t, getXscServerApiHandler(t, params))
+		return serverMock, serverDetails
+	}
+	return XrayServer(t, params)
+}
+
+func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.ResponseWriter, r *http.Request) {
+	apiUrlPart := "api/v1/"
+	if xscutils.IsXscXrayInnerService(params.XrayVersion) {
+		apiUrlPart = ""
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if params.XscNotExists {
+			w.WriteHeader(http.StatusNotFound)
+			_, err := w.Write([]byte("Xsc service is not enabled"))
+			assert.NoError(t, err)
+			return
+		}
+
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, apiUrlPart, "xsc") {
+			_, err := w.Write([]byte(fmt.Sprintf(`{"xsc_version": "%s"}`, params.XscVersion)))
 			if !assert.NoError(t, err) {
 				return
 			}
 		}
-		if r.RequestURI == "/xsc/api/v1/event" {
+		if strings.Contains(r.RequestURI, "/xsc/"+apiUrlPart+"event") {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
-				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, TestMsi)))
+				if params.ReturnMsi == "" {
+					params.ReturnMsi = TestMsi
+				}
+				_, err := w.Write([]byte(fmt.Sprintf(`{"multi_scan_id": "%s"}`, params.ReturnMsi)))
 				if !assert.NoError(t, err) {
 					return
 				}
 			}
 		}
-		if r.RequestURI == "/xsc/api/v1/profile/"+TestConfigProfileName {
+		if strings.Contains(r.RequestURI, "/xsc/"+apiUrlPart+"profile/"+TestConfigProfileName) {
 			if r.Method == http.MethodGet {
 				w.WriteHeader(http.StatusOK)
 				content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
@@ -80,14 +111,14 @@ func XscServer(t *testing.T, xscVersion string) (*httptest.Server, *config.Serve
 				}
 			}
 		}
-	})
-	return serverMock, serverDetails
+		w.WriteHeader(http.StatusNotFound)
+	}
 }
 
-func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.ServerDetails) {
+func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == fmt.Sprintf(versionApiUrl, "xray") {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, xrayVersion)))
+		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
+			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)))
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -101,7 +132,8 @@ func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.Ser
 				}
 			}
 		}
-		if strings.HasPrefix(r.RequestURI, "/xray/api/v1/scan/graph") {
+		// Scan graph with Xray or Xsc
+		if strings.Contains(r.RequestURI, "/scan/graph") {
 			if r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
@@ -121,6 +153,10 @@ func XrayServer(t *testing.T, xrayVersion string) (*httptest.Server, *config.Ser
 				}
 			}
 		}
+		if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
+			return
+		}
+		getXscServerApiHandler(t, params)(w, r)
 	})
 	return serverMock, serverDetails
 }

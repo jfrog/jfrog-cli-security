@@ -59,8 +59,14 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		return
 	}
 	if auditParams.configProfile != nil {
-		log.Debug("Skipping SCA scan as a configuration profile is being utilized and currently only Secrets and Sast scanners are supported when utilizing a configuration profile")
-		return
+		if len(auditParams.configProfile.Modules) < 1 {
+			// Verify Modules are not nil and contain at least one modules
+			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", auditParams.configProfile.ProfileName)
+		}
+		if !auditParams.configProfile.Modules[0].ScanConfig.EnableScaScan {
+			log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", auditParams.configProfile.ProfileName))
+			return
+		}
 	}
 	// Prepare
 	currentWorkingDir, generalError := os.Getwd()
@@ -140,10 +146,14 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
 	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	xrayScanGraphParams := params.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
-		SetXrayGraphScanParams(params.createXrayGraphScanParams()).
-		SetXrayVersion(params.xrayVersion).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetXrayVersion(params.GetXrayVersion()).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 	techResults, err = sca.RunXrayDependenciesTreeScanGraph(flatTree, tech, scanGraphParams)

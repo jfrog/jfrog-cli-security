@@ -67,6 +67,8 @@ type AuditBasicParams struct {
 	isRecursiveScan                  bool
 	skipAutoInstall                  bool
 	allowPartialResults              bool
+	xrayVersion                      string
+	xscVersion                       string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -274,4 +276,22 @@ func (abp *AuditBasicParams) SkipAutoInstall() bool {
 
 func (abp *AuditBasicParams) AllowPartialResults() bool {
 	return abp.allowPartialResults
+}
+
+func (abp *AuditBasicParams) SetXrayVersion(xrayVersion string) *AuditBasicParams {
+	abp.xrayVersion = xrayVersion
+	return abp
+}
+
+func (abp *AuditBasicParams) GetXrayVersion() string {
+	return abp.xrayVersion
+}
+
+func (abp *AuditBasicParams) SetXscVersion(xscVersion string) *AuditBasicParams {
+	abp.xscVersion = xscVersion
+	return abp
+}
+
+func (abp *AuditBasicParams) GetXscVersion() string {
+	return abp.xscVersion
 }
