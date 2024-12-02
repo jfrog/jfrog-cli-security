@@ -493,7 +493,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ServerDetails:      scanCmd.serverDetails,
 					Scanner:            scanner,
 					Module:             module,
-					ScansToPreform:     utils.GetAllSupportedScans(),
+					ScansToPerform:     utils.GetAllSupportedScans(),
 					SecretsScanType:    secrets.SecretsScannerDockerScanType,
 					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
 					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,

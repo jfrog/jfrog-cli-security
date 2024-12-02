@@ -40,7 +40,7 @@ import (
 	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-// We can only preform SCA scan if we identified at least one technology for a target.
+// We can only perform SCA scan if we identified at least one technology for a target.
 func hasAtLeastOneTech(cmdResults *results.SecurityCommandResults) bool {
 	if len(cmdResults.Targets) == 0 {
 		return false
@@ -85,7 +85,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Make sure to return to the original working directory, buildDependencyTree may change it
 		generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 	}()
-	// Preform SCA scans
+	// Perform SCA scans
 	for _, targetResult := range cmdResults.Targets {
 		if targetResult.Technology == "" {
 			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", targetResult.Target))
@@ -99,7 +99,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				log.Warn(bdtErr.Error())
 				continue
 			}
-			_ = targetResult.AddTargetError(fmt.Errorf("Failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
 		// Create sca scan task
@@ -124,7 +124,7 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 	return requestedDescriptors
 }
 
-// Preform the SCA scan for the given scan information.
+// Perform the SCA scan for the given scan information.
 func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serverDetails *config.ServerDetails, auditParams *AuditParams,
 	scan *results.TargetResults, treeResult *DependencyTreeResult) parallel.TaskFunc {
 	return func(threadId int) (err error) {

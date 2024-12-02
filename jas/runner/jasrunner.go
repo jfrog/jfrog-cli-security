@@ -31,7 +31,7 @@ type JasRunnerParams struct {
 	ConfigProfile       *services.ConfigProfile
 	AllowPartialResults bool
 
-	ScansToPreform []utils.SubScanType
+	ScansToPerform []utils.SubScanType
 
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
@@ -81,7 +81,7 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
 	}
-	if len(params.ScansToPreform) > 0 && !slices.Contains(params.ScansToPreform, subScan) {
+	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
 		return
 	}

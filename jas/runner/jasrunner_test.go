@@ -50,7 +50,7 @@ func TestJasRunner(t *testing.T) {
 		Runner:             securityParallelRunnerForTest,
 		Scanner:            jasScanner,
 		ScanResults:        targetResults,
-		ScansToPreform:     utils.GetAllSupportedScans(),
+		ScansToPerform:     utils.GetAllSupportedScans(),
 		ApplicableScanType: applicability.ApplicabilityScannerType,
 		SecretsScanType:    secrets.SecretsScannerType,
 		DirectDependencies: &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"},

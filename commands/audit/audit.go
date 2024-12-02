@@ -152,7 +152,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
-		SetSubScansPreformed(auditCmd.ScansToPerform()).
+		SetSubScansPerformed(auditCmd.ScansToPerform()).
 		PrintScanResults(); err != nil {
 		return errors.Join(err, auditResults.GetErrors())
 	}
@@ -296,7 +296,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				Scanner:                     scanner,
 				Module:                      *module,
 				ConfigProfile:               auditParams.configProfile,
-				ScansToPreform:              auditParams.ScansToPerform(),
+				ScansToPerform:              auditParams.ScansToPerform(),
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
@@ -354,7 +354,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Preforming scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
+	log.Info(fmt.Sprintf("Performing scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
 	return
 }
 
@@ -370,14 +370,14 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
 		}
-		// Create scans to preform
+		// Create scans to perform
 		for tech, workingDirs := range techToWorkingDirs {
 			if tech == techutils.Dotnet {
 				// We detect Dotnet and Nuget the same way, if one detected so does the other.
 				// We don't need to scan for both and get duplicate results.
 				continue
 			}
-			// No technology was detected, add scan without descriptors. (so no sca scan will be preformed and set at target level)
+			// No technology was detected, add scan without descriptors. (so no sca scan will be performed and set at target level)
 			if len(workingDirs) == 0 {
 				// Requested technology (from params) descriptors/indicators were not found or recursive scan with NoTech value, add scan without descriptors.
 				cmdResults.NewScanResults(results.ScanTarget{Target: requestedDirectory, Technology: tech})

@@ -33,7 +33,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func TestDetectScansToPreform(t *testing.T) {
+func TestDetectScansToPerform(t *testing.T) {
 
 	dir, cleanUp := createTestDir(t)
 
