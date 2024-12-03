@@ -158,18 +158,27 @@ func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVar
 }
 
 func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
+	exitCode := GetAnalyzerManagerExitCode(err)
+	if err == nil {
+		return
+	}
+	if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[exitCode]; exitCodeExists {
+		log.Warn(exitCodeDescription)
+		return nil
+	}
+	return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+}
+
+func GetAnalyzerManagerExitCode(err error) int {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		exitCode := exitError.ExitCode()
-		if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[exitCode]; exitCodeExists {
-			log.Warn(exitCodeDescription)
-			return nil
-		}
+		return exitError.ExitCode()
 	}
 	if err != nil {
-		return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+		// An exit code of -1 is used to indicate that an error occurred before the command was executed or that the exit code could not be determined.
+		return -1
 	}
-	return
+	return 0
 }
 
 // Download the latest AnalyzerManager executable if not cached locally.

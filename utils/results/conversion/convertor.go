@@ -50,13 +50,12 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewTargetResults(target results.ScanTarget, errors ...error) error
 	// Parse SCA content to the current scan target
-	ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) error
-	ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) error
-	ParseLicenses(target results.ScanTarget, licenses []services.License) error
+	ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
 	// Parse JAS content to the current scan target
-	ParseSecrets(target results.ScanTarget, isViolations bool, secrets ...*sarif.Run) error
-	ParseIacs(target results.ScanTarget, isViolations bool, iacs ...*sarif.Run) error
-	ParseSast(target results.ScanTarget, isViolations bool, sast ...*sarif.Run) error
+	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
+	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
+	ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }
@@ -115,29 +114,29 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
 		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
-		var applicableRuns []*sarif.Run
+		var applicableRuns []results.ScanResult[[]*sarif.Run]
 		if jasEntitled && targetScansResults.JasResults != nil {
 			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
 		}
 		if params.IncludeVulnerabilities {
-			if err = parser.ParseScaVulnerabilities(actualTarget, scaResults, applicableRuns...); err != nil {
+			if err = parser.ParseScaIssues(actualTarget, false, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		}
 		if params.HasViolationContext {
-			if err = parser.ParseScaViolations(actualTarget, scaResults, applicableRuns...); err != nil {
+			if err = parser.ParseScaIssues(actualTarget, true, scaResults, applicableRuns...); err != nil {
 				return
 			}
-		} else if len(scaResults.Violations) == 0 && len(params.AllowedLicenses) > 0 {
+		} else if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
 			// If no violations were found, check if there are licenses that are not allowed
-			if scaResults.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Licenses); len(scaResults.Violations) > 0 {
-				if err = parser.ParseScaViolations(actualTarget, scaResults); err != nil {
+			if scaResults.Scan.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
+				if err = parser.ParseScaIssues(actualTarget, true, scaResults); err != nil {
 					return
 				}
 			}
 		}
 		if params.IncludeLicenses {
-			if err = parser.ParseLicenses(actualTarget, scaResults.Licenses); err != nil {
+			if err = parser.ParseLicenses(actualTarget, scaResults); err != nil {
 				return
 			}
 		}
@@ -171,45 +170,45 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parsing JAS Secrets results
 	if err = parseJasScanResults(params, targetResults, cmdType, utils.SecretsScan, func(violations bool) error {
-		runs := targetResults.JasResults.JasVulnerabilities.SecretsScanResults
+		scanResults := targetResults.JasResults.JasVulnerabilities.SecretsScanResults
 		if violations {
-			runs = targetResults.JasResults.JasViolations.SecretsScanResults
+			scanResults = targetResults.JasResults.JasViolations.SecretsScanResults
 		}
-		return parser.ParseSecrets(targetResults.ScanTarget, violations, runs...)
+		return parser.ParseSecrets(targetResults.ScanTarget, violations, scanResults)
 	}); err != nil {
 		return
 	}
 	// Parsing JAS IAC results
 	if err = parseJasScanResults(params, targetResults, cmdType, utils.IacScan, func(violations bool) error {
-		runs := targetResults.JasResults.JasVulnerabilities.IacScanResults
+		scanResults := targetResults.JasResults.JasVulnerabilities.IacScanResults
 		if violations {
-			runs = targetResults.JasResults.JasViolations.IacScanResults
+			scanResults = targetResults.JasResults.JasViolations.IacScanResults
 		}
-		return parser.ParseIacs(targetResults.ScanTarget, violations, runs...)
+		return parser.ParseIacs(targetResults.ScanTarget, violations, scanResults)
 	}); err != nil {
 		return
 	}
 	// Parsing JAS SAST results
 	return parseJasScanResults(params, targetResults, cmdType, utils.SastScan, func(violations bool) error {
-		runs := targetResults.JasResults.JasVulnerabilities.SastScanResults
+		scanResults := targetResults.JasResults.JasVulnerabilities.SastScanResults
 		if violations {
-			runs = targetResults.JasResults.JasViolations.SastScanResults
+			scanResults = targetResults.JasResults.JasViolations.SastScanResults
 		}
-		return parser.ParseSast(targetResults.ScanTarget, violations, runs...)
+		return parser.ParseSast(targetResults.ScanTarget, violations, scanResults)
 	})
 }
 
 func parseJasScanResults(params ResultConvertParams, targetResults *results.TargetResults, cmdType utils.CommandType, subScanType utils.SubScanType, parseJasFunc func(violations bool) error) (err error) {
-	if !utils.IsScanRequested(cmdType, subScanType, params.RequestedScans...) {
+	if !utils.IsScanRequested(cmdType, subScanType, params.RequestedScans...) || targetResults.JasResults == nil {
 		return
 	}
-	if params.IncludeVulnerabilities && targetResults.JasResults.JasVulnerabilities != nil {
+	if params.IncludeVulnerabilities {
 		// Parse vulnerabilities
 		if err = parseJasFunc(false); err != nil {
 			return
 		}
 	}
-	if !params.HasViolationContext || targetResults.JasResults.JasViolations == nil {
+	if !params.HasViolationContext {
 		return
 	}
 	// Parse violations

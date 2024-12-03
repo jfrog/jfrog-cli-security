@@ -135,13 +135,14 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
+		securityParallelRunner.ResultsMu.Lock()
+		defer securityParallelRunner.ResultsMu.Unlock()
+
+		extendedScanResults.NewJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		securityParallelRunner.ResultsMu.Lock()
-		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.JasVulnerabilities.SecretsScanResults = append(extendedScanResults.JasVulnerabilities.SecretsScanResults, vulnerabilitiesResults...)
-		extendedScanResults.JasViolations.SecretsScanResults = append(extendedScanResults.JasViolations.SecretsScanResults, violationsResults...)
 		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Secrets)
 		return
 	}
@@ -154,13 +155,14 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(scanner, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.JasVulnerabilities.IacScanResults = append(extendedScanResults.JasVulnerabilities.IacScanResults, vulnerabilitiesResults...)
-		extendedScanResults.JasViolations.IacScanResults = append(extendedScanResults.JasViolations.IacScanResults, violationsResults...)
+
+		extendedScanResults.NewJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+
+		if err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
 		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.IaC)
 		return
 	}
@@ -173,13 +175,14 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 			securityParallelRunner.JasScannersWg.Done()
 		}()
 		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.JasVulnerabilities.SastScanResults = append(extendedScanResults.JasVulnerabilities.SastScanResults, vulnerabilitiesResults...)
-		extendedScanResults.JasViolations.SastScanResults = append(extendedScanResults.JasViolations.SastScanResults, violationsResults...)
+
+		extendedScanResults.NewJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+
+		if err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
 		err = dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Sast)
 		return
 	}
@@ -194,12 +197,14 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
 		caScanResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, caScanResults...)
+
+		scanResults.JasResults.NewApplicabilityScanResults(caScanResults, jas.GetAnalyzerManagerExitCode(err))
+
+		if err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
 		err = dumpSarifRunToFileIfNeeded(caScanResults, scansOutputDir, jasutils.Applicability)
 		return
 	}

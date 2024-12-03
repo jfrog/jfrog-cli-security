@@ -16,7 +16,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -191,22 +190,23 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 	cmdResults.StartTime = time.Now()
 	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
-	scanResults.NewScaScanResults(services.ScanResponse{Vulnerabilities: vulnerabilities})
+	scanResults.NewScaScanResults(0, services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
-		scanResults.JasResults.ApplicabilityScanResults = []*sarif.Run{sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123"))}
-		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = []*sarif.Run{
+		scanResults.JasResults.ApplicabilityScanResults = validations.NewMockJasRuns(sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123")))
+
+		scanResults.JasResults.JasVulnerabilities.SecretsScanResults = validations.NewMockJasRuns(
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		}
-		scanResults.JasResults.JasVulnerabilities.IacScanResults = []*sarif.Run{
+		)
+		scanResults.JasResults.JasVulnerabilities.IacScanResults = validations.NewMockJasRuns(
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		}
-		scanResults.JasResults.JasVulnerabilities.SastScanResults = []*sarif.Run{
+		)
+		scanResults.JasResults.JasVulnerabilities.SastScanResults = validations.NewMockJasRuns(
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 0, 0, 0, 0, ""))),
 			sarifutils.CreateRunWithDummyResults(sarifutils.CreateResultWithLocations("", "", "note", sarifutils.CreateLocation("", 1, 1, 1, 1, ""))),
-		}
+		)
 	}
 
 	if withErr {

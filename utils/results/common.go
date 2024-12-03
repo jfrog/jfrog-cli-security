@@ -635,3 +635,10 @@ func ConvertPolicesToString(policies []services.Policy) []string {
 	}
 	return policiesStr
 }
+
+func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
+	for _, result := range results {
+		runs = append(runs, result.Scan...)
+	}
+	return
+}

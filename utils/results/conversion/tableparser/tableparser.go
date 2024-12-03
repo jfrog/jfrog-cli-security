@@ -49,26 +49,22 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseScaViolations(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseScaIssues(target, violations, scaResponse, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseScaVulnerabilities(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+	return tc.simpleJsonConvertor.ParseLicenses(target, scaResponse)
 }
 
-func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {
-	return tc.simpleJsonConvertor.ParseLicenses(target, licenses)
+func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets...)
+func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs)
 }
 
-func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs...)
-}
-
-func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast...)
+func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
 }

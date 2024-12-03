@@ -176,12 +176,25 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseScaViolations(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if violations {
+		if err = sc.parseScaViolations(target, scaResponse, applicableScan...); err != nil {
+			return
+		}
+		return
+	}
+	if err = sc.parseScaVulnerabilities(target, scaResponse, applicableScan...); err != nil {
+		return
+	}
+	return
+}
+
+func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentTarget.scaCurrentRun == nil {
 		return
 	}
 	// Parse violations
-	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, scanResponse.Violations, sc.entitledForJas, applicabilityRuns...)
+	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, scanResponse.Scan.Violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
@@ -189,11 +202,11 @@ func (sc *CmdResultsSarifConverter) ParseScaViolations(target results.ScanTarget
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseScaVulnerabilities(target results.ScanTarget, scanResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentTarget.scaCurrentRun == nil {
 		return
 	}
-	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Vulnerabilities, sc.entitledForJas, applicabilityRuns...)
+	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Scan.Vulnerabilities, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
 		return
 	}
@@ -201,32 +214,32 @@ func (sc *CmdResultsSarifConverter) ParseScaVulnerabilities(target results.ScanT
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {
+func (sc *CmdResultsSarifConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.secretsCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, violations, target, secrets...)...)
+	sc.currentTarget.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.secretsCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(secrets)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violations bool, iacs ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.iacCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, violations, target, iacs...)...)
+	sc.currentTarget.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.iacCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(iacs)...)...)
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violations bool, sast ...*sarif.Run) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.sastCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, violations, target, sast...)...)
+	sc.currentTarget.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.sastCurrentRun, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(sast)...)...)
 	return
 }
 

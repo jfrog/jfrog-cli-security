@@ -23,7 +23,17 @@ type SimpleJsonResults struct {
 	IacsViolations            []SourceCodeRow               `json:"iacViolations"`
 	SastViolations            []SourceCodeRow               `json:"sastViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`
+	Statuses                  ScanStatus                    `json:"scansStatus"`
 	MultiScanId               string                        `json:"multiScanId,omitempty"`
+}
+
+type ScanStatus struct {
+	// If not nil, the scan was preformed. The value is the status code of the scans.
+	ScaStatusCode           *int `json:"scaStatusCode,omitempty"`
+	SastStatusCode          *int `json:"sastStatusCode,omitempty"`
+	IacStatusCode           *int `json:"iacStatusCode,omitempty"`
+	SecretsStatusCode       *int `json:"secretsStatusCode,omitempty"`
+	ApplicabilityStatusCode *int `json:"applicabilityStatusCode,omitempty"`
 }
 
 type ViolationContext struct {

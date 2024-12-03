@@ -10,8 +10,10 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -159,4 +161,8 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		getXscServerApiHandler(t, params)(w, r)
 	})
 	return serverMock, serverDetails
+}
+
+func NewMockJasRuns(runs ...*sarif.Run) []results.ScanResult[[]*sarif.Run] {
+	return []results.ScanResult[[]*sarif.Run]{{Scan: runs}}
 }
