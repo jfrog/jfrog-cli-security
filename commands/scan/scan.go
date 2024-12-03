@@ -450,9 +450,9 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					IncludeVulnerabilities: scanCmd.includeVulnerabilities,
 					ProjectKey:             scanCmd.projectKey,
 					ScanType:               services.Binary,
-					XscVersion:             scanCmd.xscVersion,
-					XrayVersion:            scanCmd.xrayVersion,
-					MultiScanId:            scanCmd.multiScanId,
+					MultiScanId:            cmdResults.MultiScanId,
+					XscVersion:             cmdResults.XscVersion,
+					XrayVersion:            cmdResults.XrayVersion,
 				}
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
@@ -493,7 +493,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ServerDetails:      scanCmd.serverDetails,
 					Scanner:            scanner,
 					Module:             module,
-					ScansToPreform:     utils.GetAllSupportedScans(),
+					ScansToPerform:     utils.GetAllSupportedScans(),
 					SecretsScanType:    secrets.SecretsScannerDockerScanType,
 					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
 					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,

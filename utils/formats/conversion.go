@@ -102,7 +102,7 @@ func ConvertToVulnerabilityTableRow(rows []VulnerabilityOrViolationRow) (tableRo
 	return
 }
 
-func ConvertToLicenseViolationTableRow(rows []LicenseRow) (tableRows []licenseViolationTableRow) {
+func ConvertToLicenseViolationTableRow(rows []LicenseViolationRow) (tableRows []licenseViolationTableRow) {
 	for i := range rows {
 		tableRows = append(tableRows, licenseViolationTableRow{
 			licenseKey:                rows[i].LicenseKey,

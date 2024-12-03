@@ -32,8 +32,8 @@ type ResultsWriter struct {
 	isMultipleRoots *bool
 	// PrintExtended, If true, show extended results.
 	printExtended bool
-	// For table format - show table only for the given subScansPreformed
-	subScansPreformed []utils.SubScanType
+	// For table format - show table only for the given subScansPerformed
+	subScansPerformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
 }
@@ -52,8 +52,8 @@ func (rw *ResultsWriter) SetIsMultipleRootProject(isMultipleRootProject bool) *R
 	return rw
 }
 
-func (rw *ResultsWriter) SetSubScansPreformed(subScansPreformed []utils.SubScanType) *ResultsWriter {
-	rw.subScansPreformed = subScansPreformed
+func (rw *ResultsWriter) SetSubScansPerformed(subScansPerformed []utils.SubScanType) *ResultsWriter {
+	rw.subScansPerformed = subScansPerformed
 	return rw
 }
 
@@ -137,7 +137,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		IncludeLicenses:        rw.includeLicenses,
 		IncludeVulnerabilities: rw.includeVulnerabilities,
 		HasViolationContext:    rw.hasViolationContext,
-		RequestedScans:         rw.subScansPreformed,
+		RequestedScans:         rw.subScansPerformed,
 		Pretty:                 pretty,
 	})
 }
@@ -201,7 +201,7 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printOrSaveRawResults(true); err != nil {
 		return
 	}
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPreformed...) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
 		if rw.hasViolationContext {
 			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 				return
@@ -218,17 +218,17 @@ func (rw *ResultsWriter) printTables() (err error) {
 			}
 		}
 	}
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPreformed...) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPerformed...) {
 		if err = PrintSecretsTable(tableContent, rw.commandResults.EntitledForJas, rw.commandResults.SecretValidation); err != nil {
 			return
 		}
 	}
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.IacScan, rw.subScansPreformed...) {
+	if utils.IsScanRequested(rw.commandResults.CmdType, utils.IacScan, rw.subScansPerformed...) {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
 			return
 		}
 	}
-	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.SastScan, rw.subScansPreformed...) {
+	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.SastScan, rw.subScansPerformed...) {
 		return nil
 	}
 	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
