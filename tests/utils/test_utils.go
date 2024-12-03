@@ -304,7 +304,7 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
-func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
+func CreateTestWatch(t *testing.T, policyName string, watchName string, severity xrayUtils.Severity, skipNotApplicableCves bool, failBuild bool) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
@@ -313,10 +313,10 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 		Type: xrayUtils.Security,
 		Rules: []xrayUtils.PolicyRule{{
 			Name:     "sec_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity),
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, skipNotApplicableCves),
 			Priority: 1,
 			Actions: &xrayUtils.PolicyAction{
-				FailBuild: clientUtils.Pointer(true),
+				FailBuild: clientUtils.Pointer(failBuild),
 			},
 		}},
 	}

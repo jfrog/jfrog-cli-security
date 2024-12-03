@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
@@ -63,7 +63,7 @@ func testAuditNpm(t *testing.T, format string, withVuln bool) string {
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High, false, true)
 	defer deleteWatch()
 	args := []string{"audit", "--npm", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
 	if withVuln {
@@ -95,7 +95,7 @@ func testAuditConan(t *testing.T, format string, withVuln bool) string {
 	defer cleanUp()
 	// Run conan install before executing jfrog audit
 	assert.NoError(t, exec.Command("conan").Run())
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-curation-policy", "audit-curation-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-curation-policy", "audit-curation-watch", xrayUtils.High, false, true)
 	defer deleteWatch()
 	args := []string{"audit", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
 	if withVuln {
@@ -807,4 +807,36 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 		NotCoveredVulnerabilities:    1,
 		NotApplicableVulnerabilities: 2,
 	})
+}
+
+func TestXrayAuditJasWithNonApplicableViolationsThatShouldBeIgnored(t *testing.T) {
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	defer cleanUp()
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+
+	watchWithoutSkipNotApplicable, deleteWatchWithoutSkipNotApplicable := securityTestUtils.CreateTestWatch(t, "policy-without-skip-not-applicable", "test-watch-without-skip", xrayUtils.Low, false, false)
+	require.NotEmpty(t, watchWithoutSkipNotApplicable)
+	defer deleteWatchWithoutSkipNotApplicable()
+	argsWithoutSkip := []string{"audit", "--format=simple-json", "--watches=" + watchWithoutSkipNotApplicable}
+	outputWithoutSkipNotApplicable := securityTests.PlatformCli.RunCliCmdWithOutput(t, argsWithoutSkip...)
+	var resultsWithoutSkip formats.SimpleJsonResults
+	err := json.Unmarshal([]byte(outputWithoutSkipNotApplicable), &resultsWithoutSkip)
+	assert.NoError(t, err, "Failed to unmarshal content to formats.SimpleJsonResults")
+	violationsCountWithoutSkip := len(resultsWithoutSkip.SecurityViolations)
+	assert.GreaterOrEqual(t, 13, violationsCountWithoutSkip)
+
+	watchWithSkipNotApplicable, deleteWatchWithSkipNotApplicable := securityTestUtils.CreateTestWatch(t, "policy-with-skip-not-applicable", "test-watch-with-skip", xrayUtils.Low, true, false)
+	require.NotEmpty(t, watchWithSkipNotApplicable)
+	defer deleteWatchWithSkipNotApplicable()
+	argsWithSkip := []string{"audit", "--format=simple-json", "--watches=" + watchWithSkipNotApplicable}
+	outputWithSkipNotApplicable := securityTests.PlatformCli.RunCliCmdWithOutput(t, argsWithSkip...)
+	var resultsWithSkip formats.SimpleJsonResults
+	err = json.Unmarshal([]byte(outputWithSkipNotApplicable), &resultsWithSkip)
+	assert.NoError(t, err, "Failed to unmarshal content to formats.SimpleJsonResults")
+	violationsCountWithSkip := len(resultsWithSkip.SecurityViolations)
+	assert.GreaterOrEqual(t, 8, violationsCountWithSkip)
+
+	assert.Greater(t, violationsCountWithoutSkip, violationsCountWithSkip)
 }
