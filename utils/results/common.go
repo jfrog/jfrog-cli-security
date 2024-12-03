@@ -148,7 +148,7 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 				continue
 			}
 			if applicabilityStatus == jasutils.NotApplicable && shouldSkipViolationIfNotApplicable {
-				log.Debug(fmt.Sprintf("Violation '%s' is not applicable and will be removed from final results as requested by policies applied to it"))
+				log.Debug("A non-applicable violation was found and will be removed from final results as requested by its policies")
 				continue
 			}
 
@@ -641,7 +641,7 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 
 func shouldSkipIfNotApplicable(violation services.Violation) (bool, error) {
 	if len(violation.Policies) == 0 {
-		return false, fmt.Errorf("violation '%s' results has no related policies\n")
+		return false, errors.New("A violation with no polices was provided")
 	}
 	for _, policy := range violation.Policies {
 		if !policy.SkipNotApplicable {

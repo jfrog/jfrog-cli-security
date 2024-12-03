@@ -700,3 +700,61 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestShouldSkipIfNotApplicable(t *testing.T) {
+	testCases := []struct {
+		name          string
+		violation     services.Violation
+		errorExpected bool
+		shouldSkip    bool
+	}{
+		{
+			name:          "violation with no policies",
+			violation:     services.Violation{Policies: []services.Policy{}},
+			errorExpected: true,
+		},
+		{
+			name: "violation that should be skipped according to all policies",
+			violation: services.Violation{Policies: []services.Policy{{
+				Policy:            "my-police",
+				Rule:              "r1",
+				SkipNotApplicable: true,
+			},
+				{
+					Policy:            "my-police2",
+					Rule:              "r2",
+					SkipNotApplicable: true,
+				}}},
+			errorExpected: false,
+			shouldSkip:    true,
+		},
+		{
+			name: "violation that should be skipped according to some policies",
+			violation: services.Violation{Policies: []services.Policy{{
+				Policy:            "my-police",
+				Rule:              "r1",
+				SkipNotApplicable: true,
+			},
+				{
+					Policy:            "my-police2",
+					Rule:              "r2",
+					SkipNotApplicable: false,
+				}}},
+			errorExpected: false,
+			shouldSkip:    false,
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			shouldSkipViolationIfNotApplicable, e := shouldSkipIfNotApplicable(test.violation)
+			if test.errorExpected {
+				assert.Error(t, e)
+			} else {
+				assert.NoError(t, e)
+			}
+
+			assert.EqualValues(t, test.shouldSkip, shouldSkipViolationIfNotApplicable)
+		})
+	}
+}
