@@ -26,8 +26,7 @@ const (
 	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
 	CurrentWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
 
-	FixedVersionSarifPropertyKey  = "fixedVersion"
-	WatchSarifPropertyKey         = "watch"
+	fixedVersionSarifPropertyKey  = "fixedVersion"
 	jfrogFingerprintAlgorithmName = "jfrogFingerprintHash"
 	MissingCveScore               = "0"
 	maxPossibleCve                = 10.0
@@ -65,6 +64,25 @@ type currentTargetState struct {
 	secretsCurrentRun *sarif.Run
 	iacCurrentRun     *sarif.Run
 	sastCurrentRun    *sarif.Run
+}
+
+// Parse parameters for the SCA result
+type scaParseParams struct {
+	CmdType                                                                                        utils.CommandType
+	IssueId, Summary, MarkdownDescription, CveScore, ImpactedPackagesName, ImpactedPackagesVersion string
+	GenerateTitleFunc                                                                              func(depName string, version string, issueId string) string
+	Cves                                                                                           []formats.CveRow
+	Severity                                                                                       severityutils.Severity
+	ApplicabilityStatus                                                                            jasutils.ApplicabilityStatus
+	FixedVersions                                                                                  []string
+	DirectComponents                                                                               []formats.ComponentRow
+	Violation                                                                                      *violationContext
+}
+
+// holds the violation context for the results
+type violationContext struct {
+	Watch    string
+	Policies []string
 }
 
 func NewCmdResultsSarifConverter(includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
@@ -246,7 +264,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.PrepareScaViolations(
+	_, _, err := results.ApplyHandlerToScaViolations(
 		target,
 		violations,
 		entitledForJas,
@@ -262,7 +280,7 @@ func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTar
 func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	err := results.PrepareScaVulnerabilities(
+	err := results.ApplyHandlerToScaVulnerabilities(
 		target,
 		vulnerabilities,
 		entitledForJas,
@@ -282,7 +300,21 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule := parseScaToSarifFormat(cmdType, vulnerability.IssueId, vulnerability.Summary, markdownDescription, maxCveScore, getScaVulnerabilitySarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
+		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+			CmdType:                 cmdType,
+			IssueId:                 vulnerability.IssueId,
+			Summary:                 vulnerability.Summary,
+			MarkdownDescription:     markdownDescription,
+			CveScore:                maxCveScore,
+			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+			Cves:                    cves,
+			Severity:                severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    impactedPackagesName,
+			ImpactedPackagesVersion: impactedPackagesVersion,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        directComponents,
+		})
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, vulnerability.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -303,7 +335,25 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule := parseScaToSarifFormat(cmdType, violation.IssueId, violation.Summary, markdownDescription, maxCveScore, getScaSecurityViolationSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents, violation.WatchName)
+		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+			CmdType:                 cmdType,
+			IssueId:                 violation.IssueId,
+			Summary:                 violation.Summary,
+			MarkdownDescription:     markdownDescription,
+			CveScore:                maxCveScore,
+			GenerateTitleFunc:       getScaSecurityViolationSarifHeadline,
+			Cves:                    cves,
+			Severity:                severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    impactedPackagesName,
+			ImpactedPackagesVersion: impactedPackagesVersion,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        directComponents,
+			Violation: &violationContext{
+				Watch:    violation.WatchName,
+				Policies: results.ConvertPolicesToString(violation.Policies),
+			},
+		})
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -324,7 +374,25 @@ func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sar
 		if err != nil {
 			return err
 		}
-		currentResults, currentRule := parseScaToSarifFormat(cmdType, violation.LicenseKey, getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey), markdownDescription, maxCveScore, getXrayLicenseSarifHeadline, cves, severity, applicabilityStatus, impactedPackagesName, impactedPackagesVersion, fixedVersions, directComponents)
+		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+			CmdType:                 cmdType,
+			IssueId:                 violation.LicenseKey,
+			Summary:                 getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
+			MarkdownDescription:     markdownDescription,
+			CveScore:                maxCveScore,
+			GenerateTitleFunc:       getXrayLicenseSarifHeadline,
+			Cves:                    cves,
+			Severity:                severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    impactedPackagesName,
+			ImpactedPackagesVersion: impactedPackagesVersion,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        directComponents,
+			Violation: &violationContext{
+				Watch:    violation.WatchName,
+				Policies: results.ConvertPolicesToString(violation.Policies),
+			},
+		})
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, violation.LicenseKey, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
 			// New Rule
@@ -335,36 +403,42 @@ func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sar
 	}
 }
 
-func parseScaToSarifFormat(cmdType utils.CommandType, xrayId, summary, markdownDescription, cveScore string, generateTitleFunc func(depName string, version string, issueId string) string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, impactedPackagesName, impactedPackagesVersion string, fixedVersions []string, directComponents []formats.ComponentRow, watches ...string) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
+func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result, rule *sarif.ReportingDescriptor) {
 	// General information
-	issueId := results.GetIssueIdentifier(cves, xrayId, "_")
-	cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, issueId)
-	level := severityutils.SeverityToSarifSeverityLevel(severity)
+	issueId := results.GetIssueIdentifier(params.Cves, params.IssueId, "_")
+	cveImpactedComponentRuleId := results.GetScaIssueId(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId)
+	level := severityutils.SeverityToSarifSeverityLevel(params.Severity)
 	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
 		cveImpactedComponentRuleId,
-		generateTitleFunc(impactedPackagesName, impactedPackagesVersion, issueId),
-		cveScore,
-		summary,
-		markdownDescription,
+		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId),
+		params.CveScore,
+		params.Summary,
+		params.MarkdownDescription,
 	)
-	for _, directDependency := range directComponents {
+	for _, directDependency := range params.DirectComponents {
 		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
-			WithMessage(sarif.NewTextMessage(generateTitleFunc(directDependency.Name, directDependency.Version, issueId))).
+			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId))).
 			WithLevel(level.String())
 		// Add properties
 		resultsProperties := sarif.NewPropertyBag()
-		if applicabilityStatus != jasutils.NotScanned {
-			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, applicabilityStatus.String())
+		if params.ApplicabilityStatus != jasutils.NotScanned {
+			resultsProperties.Add(jasutils.ApplicabilitySarifPropertyKey, params.ApplicabilityStatus.String())
 		}
-		if len(watches) > 0 {
-			resultsProperties.Add(WatchSarifPropertyKey, strings.Join(watches, ", "))
+		if params.Violation != nil {
+			// Add violation context
+			if params.Violation.Watch != "" {
+				resultsProperties.Add(sarifutils.WatchSarifPropertyKey, params.Violation.Watch)
+			}
+			if len(params.Violation.Policies) > 0 {
+				resultsProperties.Add(sarifutils.PoliciesSarifPropertyKey, strings.Join(params.Violation.Policies, ","))
+			}
 		}
-		resultsProperties.Add(FixedVersionSarifPropertyKey, getFixedVersionString(fixedVersions))
+		resultsProperties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(params.FixedVersions))
 		issueResult.AttachPropertyBag(resultsProperties)
 		// Add location
-		issueLocation := getComponentSarifLocation(cmdType, directDependency)
+		issueLocation := getComponentSarifLocation(params.CmdType, directDependency)
 		if issueLocation != nil {
 			issueResult.AddLocation(issueLocation)
 		}
@@ -526,7 +600,7 @@ func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, is
 		}
 		if isViolations && subScanType != utils.ScaScan {
 			// Add prefix to the rule description for violations
-			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("Security violation %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
+			sarifutils.SetRuleShortDescriptionText(fmt.Sprintf("[Security Violation] %s", sarifutils.GetRuleShortDescriptionText(rule)), rule)
 		}
 		if rule.Help == nil {
 			// Github code scanning ingestion rules rejects rules without help content.
@@ -792,7 +866,7 @@ func calculateResultFingerprints(resultType utils.CommandType, run *sarif.Run, r
 	if !resultType.IsTargetBinary() {
 		return nil
 	}
-	ids := []string{sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result), getResultWatches(result)}
+	ids := []string{sarifutils.GetRunToolName(run), sarifutils.GetResultRuleId(result), sarifutils.GetResultWatches(result)}
 	for _, location := range sarifutils.GetResultFileLocations(result) {
 		ids = append(ids, strings.ReplaceAll(location, string(filepath.Separator), "/"))
 	}
@@ -804,13 +878,4 @@ func calculateResultFingerprints(resultType utils.CommandType, run *sarif.Run, r
 	}
 	sarifutils.SetResultFingerprint(jfrogFingerprintAlgorithmName, hashValue, result)
 	return nil
-}
-
-func getResultWatches(result *sarif.Result) (watches string) {
-	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
-		if watchesValue, ok := watchesProperty.(string); ok {
-			return watchesValue
-		}
-	}
-	return
 }

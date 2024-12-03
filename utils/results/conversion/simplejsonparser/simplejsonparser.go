@@ -164,7 +164,7 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
 	var licenseViolationsRows []formats.LicenseViolationRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
-	_, _, err := results.PrepareScaViolations(
+	_, _, err := results.ApplyHandlerToScaViolations(
 		target,
 		scaResponse.Violations,
 		jasEntitled,
@@ -178,7 +178,7 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 
 func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
-	err := results.PrepareScaVulnerabilities(
+	err := results.ApplyHandlerToScaVulnerabilities(
 		target,
 		scaResponse.Vulnerabilities,
 		entitledForJas,
@@ -226,9 +226,12 @@ func addSimpleJsonSecurityViolation(securityViolationsRows *[]formats.Vulnerabil
 					ImpactedDependencyType:    impactedPackagesType,
 					Components:                directComponents,
 				},
-				FixedVersions:            fixedVersion,
-				Cves:                     cves,
-				Watch:                    violation.WatchName,
+				FixedVersions: fixedVersion,
+				Cves:          cves,
+				ViolationContext: formats.ViolationContext{
+					Watch:    violation.WatchName,
+					Policies: results.ConvertPolicesToString(violation.Policies),
+				},
 				IssueId:                  violation.IssueId,
 				References:               violation.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
@@ -245,7 +248,10 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViola
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		*licenseViolationsRows = append(*licenseViolationsRows,
 			formats.LicenseViolationRow{
-				Watch: violation.WatchName,
+				ViolationContext: formats.ViolationContext{
+					Watch:    violation.WatchName,
+					Policies: results.ConvertPolicesToString(violation.Policies),
+				},
 				LicenseRow: formats.LicenseRow{
 					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
 					LicenseName: violation.LicenseName,
@@ -275,6 +281,10 @@ func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]form
 		violationOpRiskData := getOperationalRiskViolationReadableData(violation)
 		for compIndex := 0; compIndex < len(impactedPackagesName); compIndex++ {
 			operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
+				ViolationContext: formats.ViolationContext{
+					Watch:    violation.WatchName,
+					Policies: results.ConvertPolicesToString(violation.Policies),
+				},
 				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
 					ImpactedDependencyName:    impactedPackagesName,
@@ -299,7 +309,7 @@ func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]form
 
 func PrepareSimpleJsonLicenses(target results.ScanTarget, licenses []services.License) ([]formats.LicenseRow, error) {
 	var licensesRows []formats.LicenseRow
-	err := results.PrepareLicenses(target, licenses, addSimpleJsonLicense(&licensesRows))
+	err := results.ApplyHandlerToLicenses(target, licenses, addSimpleJsonLicense(&licensesRows))
 	return licensesRows, err
 }
 
@@ -330,6 +340,13 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 		}
 		rows = append(rows,
 			formats.SourceCodeRow{
+				RuleId:  sarifutils.GetResultRuleId(result),
+				IssueId: sarifutils.GetResultIssueId(result),
+				CWE:     sarifutils.GetRuleCWE(rule),
+				ViolationContext: formats.ViolationContext{
+					Watch:    sarifutils.GetResultWatches(result),
+					Policies: sarifutils.GetResultPolicies(result),
+				},
 				SeverityDetails:    severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
 				Finding:            sarifutils.GetResultMsgText(result),
 				ScannerDescription: scannerDescription,

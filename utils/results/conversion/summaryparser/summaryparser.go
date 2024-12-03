@@ -85,7 +85,7 @@ func (sc *CmdResultsSummaryConverter) ParseScaViolations(target results.ScanTarg
 	}
 	// Parse violations
 	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := results.PrepareScaViolations(
+	watches, failBuild, err := results.ApplyHandlerToScaViolations(
 		target,
 		scaResponse.Violations,
 		sc.entitledForJas,
@@ -172,7 +172,7 @@ func (sc *CmdResultsSummaryConverter) ParseScaVulnerabilities(target results.Sca
 	}
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
-	err = results.PrepareScaVulnerabilities(
+	err = results.ApplyHandlerToScaVulnerabilities(
 		target,
 		scaResponse.Vulnerabilities,
 		sc.entitledForJas,
