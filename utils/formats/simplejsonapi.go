@@ -28,12 +28,12 @@ type SimpleJsonResults struct {
 }
 
 type ScanStatus struct {
-	// If not nil, the scan was preformed. The value is the status code of the scans.
-	ScaStatusCode           *int `json:"scaStatusCode,omitempty"`
-	SastStatusCode          *int `json:"sastStatusCode,omitempty"`
-	IacStatusCode           *int `json:"iacStatusCode,omitempty"`
-	SecretsStatusCode       *int `json:"secretsStatusCode,omitempty"`
-	ApplicabilityStatusCode *int `json:"applicabilityStatusCode,omitempty"`
+	// If not nil, the scan was performed. The value is the status code of the scans. if not 0, the scan failed.
+	ScaStatusCode           *int `json:"scaScanStatusCode,omitempty"`
+	SastStatusCode          *int `json:"sastScanStatusCode,omitempty"`
+	IacStatusCode           *int `json:"iacScanStatusCode,omitempty"`
+	SecretsStatusCode       *int `json:"secretsScanStatusCode,omitempty"`
+	ApplicabilityStatusCode *int `json:"ContextualAnalysisScanStatusCode,omitempty"`
 }
 
 type ViolationContext struct {
