@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	orderedJson "gitlab.com/c0b/go-ordered-json"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -75,7 +76,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	if err != nil {
 		return fmt.Errorf("error reading file: %s", err.Error())
 	}
-	var data map[string]interface{}
+	data := orderedJson.NewOrderedMap()
 	err = json.Unmarshal(fileContent, &data)
 	if err != nil {
 		return fmt.Errorf("error parsing JSON: %s", err.Error())
@@ -93,7 +94,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 			vulnerabilities = append(vulnerabilities, vulnerability)
 		}
 	}
-	data["vulnerabilities"] = vulnerabilities
+	data.Set("vulnerabilities", vulnerabilities)
 	return output.PrintJson(data)
 }
 
