@@ -160,9 +160,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 	return
 }
 
-func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services.ScanResponse, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseRow, []formats.OperationalRiskViolationRow, error) {
+func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services.ScanResponse, pretty, jasEntitled bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, []formats.LicenseViolationRow, []formats.OperationalRiskViolationRow, error) {
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
-	var licenseViolationsRows []formats.LicenseRow
+	var licenseViolationsRows []formats.LicenseViolationRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
 	_, _, err := results.PrepareScaViolations(
 		target,
@@ -241,17 +241,21 @@ func addSimpleJsonSecurityViolation(securityViolationsRows *[]formats.Vulnerabil
 	}
 }
 
-func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseRow, pretty bool) results.ParseScaViolationFunc {
+func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViolationRow, pretty bool) results.ParseScaViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		*licenseViolationsRows = append(*licenseViolationsRows,
-			formats.LicenseRow{
-				LicenseKey: getLicenseKey(violation.LicenseKey, violation.IssueId),
-				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-					ImpactedDependencyName:    impactedPackagesName,
-					ImpactedDependencyVersion: impactedPackagesVersion,
-					ImpactedDependencyType:    impactedPackagesType,
-					Components:                directComponents,
+			formats.LicenseViolationRow{
+				Watch: violation.WatchName,
+				LicenseRow: formats.LicenseRow{
+					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
+					LicenseName: violation.LicenseName,
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
+						ImpactedDependencyName:    impactedPackagesName,
+						ImpactedDependencyVersion: impactedPackagesVersion,
+						ImpactedDependencyType:    impactedPackagesType,
+						Components:                directComponents,
+					},
 				},
 			},
 		)

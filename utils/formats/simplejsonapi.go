@@ -13,7 +13,7 @@ import (
 type SimpleJsonResults struct {
 	Vulnerabilities           []VulnerabilityOrViolationRow `json:"vulnerabilities"`
 	SecurityViolations        []VulnerabilityOrViolationRow `json:"securityViolations"`
-	LicensesViolations        []LicenseRow                  `json:"licensesViolations"`
+	LicensesViolations        []LicenseViolationRow         `json:"licensesViolations"`
 	Licenses                  []LicenseRow                  `json:"licenses"`
 	OperationalRiskViolations []OperationalRiskViolationRow `json:"operationalRiskViolations"`
 	SecretsVulnerabilities    []SourceCodeRow               `json:"secrets"`
@@ -54,9 +54,15 @@ type VulnerabilityOrViolationRow struct {
 	Technology               techutils.Technology      `json:"-"`
 }
 
+type LicenseViolationRow struct {
+	LicenseRow
+	Watch string `json:"watch,omitempty"`
+}
+
 type LicenseRow struct {
 	ImpactedDependencyDetails
 	LicenseKey  string           `json:"licenseKey"`
+	LicenseName string           `json:"licenseName,omitempty"`
 	ImpactPaths [][]ComponentRow `json:"impactPaths"`
 }
 
