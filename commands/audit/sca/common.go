@@ -59,6 +59,25 @@ func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams
 	return
 }
 
+func GetScaScanStatusCode(err error, result *services.ScanResponse) int {
+	if err != nil || result == nil || result.ScannedStatus == "Failed" {
+		return 1
+	}
+	return 0
+}
+
+func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
+	if err != nil {
+		return 1
+	}
+	for _, result := range results {
+		if result.ScannedStatus == "Failed" {
+			return 1
+		}
+	}
+	return 0
+}
+
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {
 	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", sourceDir))
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
@@ -128,17 +129,15 @@ func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResul
 			}
 		}
 		if targetResults.JasResults != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
-			if targetResults.JasResults.JasVulnerabilities != nil {
-				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SecretsScanResults...)
-				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.IacScanResults...)
-				convertSarifRunPathsForOS(targetResults.JasResults.JasVulnerabilities.SastScanResults...)
-			}
-			if targetResults.JasResults.JasViolations != nil {
-				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.SecretsScanResults...)
-				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.IacScanResults...)
-				convertSarifRunPathsForOS(targetResults.JasResults.JasViolations.SastScanResults...)
-			}
+			convertSarifRunPathsForOS(targetResults.JasResults.GetApplicabilityScanResults()...)
+
+			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.Secrets)...)
+			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.IaC)...)
+			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.Sast)...)
+
+			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.Secrets)...)
+			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.IaC)...)
+			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.Sast)...)
 		}
 	}
 	return cmdResults

@@ -57,14 +57,14 @@ func TestDetectScansToPerform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 				{
 					ScanTarget: results.ScanTarget{
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -74,7 +74,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -88,7 +88,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -98,7 +98,7 @@ func TestDetectScansToPerform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 			},
 		},
@@ -116,7 +116,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Nuget,
 						Target:     filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj"), filepath.Join(dir, "Nuget", "project.sln")},
 					},
@@ -126,7 +126,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -136,7 +136,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -150,7 +150,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -160,7 +160,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Yarn,
 						Target:     filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
 					},
@@ -170,7 +170,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Pip,
 						Target:     filepath.Join(dir, "yarn", "Pip"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
 					},
@@ -180,7 +180,7 @@ func TestDetectScansToPerform(t *testing.T) {
 						Technology: techutils.Pipenv,
 						Target:     filepath.Join(dir, "yarn", "Pipenv"),
 					},
-					JasResults: &results.JasScansResults{JasVulnerabilities: &results.JasScanResults{}, JasViolations: &results.JasScanResults{}},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
 					},

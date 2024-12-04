@@ -45,24 +45,33 @@ type TargetResults struct {
 	errorsMutex sync.Mutex `json:"-"`
 }
 
+type ScanResult[T interface{}] struct {
+	Scan       T   `json:"scan"`
+	StatusCode int `json:"status_code,omitempty"`
+}
+
+func (sr *ScanResult[T]) IsScanFailed() bool {
+	return sr.StatusCode != 0
+}
+
 type ScaScanResults struct {
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
-	XrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
+	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 }
 
 type JasScansResults struct {
-	JasVulnerabilities       *JasScanResults `json:"jas_vulnerabilities,omitempty"`
-	JasViolations            *JasScanResults `json:"jas_violations,omitempty"`
-	ApplicabilityScanResults []*sarif.Run    `json:"contextual_analysis,omitempty"`
+	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
+	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
+	ApplicabilityScanResults []ScanResult[[]*sarif.Run] `json:"contextual_analysis,omitempty"`
 }
 
 type JasScanResults struct {
-	SecretsScanResults []*sarif.Run `json:"secrets,omitempty"`
-	IacScanResults     []*sarif.Run `json:"iac,omitempty"`
-	SastScanResults    []*sarif.Run `json:"sast,omitempty"`
+	SecretsScanResults []ScanResult[[]*sarif.Run] `json:"secrets,omitempty"`
+	IacScanResults     []ScanResult[[]*sarif.Run] `json:"iac,omitempty"`
+	SastScanResults    []ScanResult[[]*sarif.Run] `json:"sast,omitempty"`
 }
 
 type ScanTarget struct {
@@ -221,7 +230,7 @@ func (r *SecurityCommandResults) HasFindings() bool {
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
 	targetResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
 	if r.EntitledForJas {
-		targetResults.JasResults = &JasScansResults{JasVulnerabilities: &JasScanResults{}, JasViolations: &JasScanResults{}}
+		targetResults.JasResults = &JasScansResults{JasVulnerabilities: JasScanResults{}, JasViolations: JasScanResults{}}
 	}
 
 	r.targetsMutex.Lock()
@@ -263,7 +272,9 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 	if sr.ScaResults == nil {
 		return
 	}
-	results = append(results, sr.ScaResults.XrayResults...)
+	for _, scanResult := range sr.ScaResults.XrayResults {
+		results = append(results, scanResult.Scan)
+	}
 	return
 }
 
@@ -276,12 +287,13 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 		return technologiesSet.ToSlice()
 	}
 	for _, scaResult := range sr.ScaResults.XrayResults {
-		for _, vulnerability := range scaResult.Vulnerabilities {
+		xrayScanResult := scaResult.Scan
+		for _, vulnerability := range xrayScanResult.Vulnerabilities {
 			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
 				technologiesSet.Add(tech)
 			}
 		}
-		for _, violation := range scaResult.Violations {
+		for _, violation := range xrayScanResult.Violations {
 			if tech := techutils.Technology(strings.ToLower(violation.Technology)); tech != "" {
 				technologiesSet.Add(tech)
 			}
@@ -298,7 +310,7 @@ func (sr *TargetResults) HasJasScansResults(scanType jasutils.JasScanType) bool 
 }
 
 func (sr *TargetResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
-	if sr.JasResults == nil || sr.JasResults.JasVulnerabilities == nil {
+	if sr.JasResults == nil {
 		return
 	}
 	return sr.JasResults.GetVulnerabilitiesResults(scanType)
@@ -343,11 +355,13 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, responses...)
+	for _, response := range responses {
+		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
+	}
 	return sr.ScaResults
 }
 
@@ -356,7 +370,7 @@ func (ssr *ScaScanResults) HasInformation() bool {
 		return true
 	}
 	for _, scanResults := range ssr.XrayResults {
-		if len(scanResults.Licenses) > 0 {
+		if len(scanResults.Scan.Licenses) > 0 {
 			return true
 		}
 	}
@@ -365,37 +379,88 @@ func (ssr *ScaScanResults) HasInformation() bool {
 
 func (ssr *ScaScanResults) HasFindings() bool {
 	for _, scanResults := range ssr.XrayResults {
-		if len(scanResults.Vulnerabilities) > 0 || len(scanResults.Violations) > 0 {
+		if len(scanResults.Scan.Vulnerabilities) > 0 || len(scanResults.Scan.Violations) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
+func (jsr *JasScansResults) NewApplicabilityScanResults(runs []*sarif.Run, exitCode int) {
+	jsr.ApplicabilityScanResults = append(jsr.ApplicabilityScanResults, ScanResult[[]*sarif.Run]{Scan: runs, StatusCode: exitCode})
+}
+
+func (jsr *JasScansResults) NewJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
+	switch scanType {
+	case jasutils.Secrets:
+		jsr.JasVulnerabilities.SecretsScanResults = append(jsr.JasVulnerabilities.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.SecretsScanResults = append(jsr.JasViolations.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
+	case jasutils.IaC:
+		jsr.JasVulnerabilities.IacScanResults = append(jsr.JasVulnerabilities.IacScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.IacScanResults = append(jsr.JasViolations.IacScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
+	case jasutils.Sast:
+		jsr.JasVulnerabilities.SastScanResults = append(jsr.JasVulnerabilities.SastScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.SastScanResults = append(jsr.JasViolations.SastScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
+	}
+}
+
+func (jsr *JasScansResults) GetApplicabilityScanResults() (results []*sarif.Run) {
+	for _, scan := range jsr.ApplicabilityScanResults {
+		results = append(results, scan.Scan...)
+	}
+	return
+}
+
 func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
-	case jasutils.Applicability:
-		results = jsr.ApplicabilityScanResults
 	case jasutils.Secrets:
-		results = jsr.JasVulnerabilities.SecretsScanResults
+		for _, scan := range jsr.JasVulnerabilities.SecretsScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	case jasutils.IaC:
-		results = jsr.JasVulnerabilities.IacScanResults
+		for _, scan := range jsr.JasVulnerabilities.IacScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	case jasutils.Sast:
-		results = jsr.JasVulnerabilities.SastScanResults
+		for _, scan := range jsr.JasVulnerabilities.SastScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	}
 	return
 }
 
 func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	switch scanType {
-	case jasutils.Applicability:
-		results = jsr.ApplicabilityScanResults
 	case jasutils.Secrets:
-		results = jsr.JasViolations.SecretsScanResults
+		for _, scan := range jsr.JasViolations.SecretsScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	case jasutils.IaC:
-		results = jsr.JasViolations.IacScanResults
+		for _, scan := range jsr.JasViolations.IacScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	case jasutils.Sast:
-		results = jsr.JasViolations.SastScanResults
+		for _, scan := range jsr.JasViolations.SastScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	}
 	return
 }

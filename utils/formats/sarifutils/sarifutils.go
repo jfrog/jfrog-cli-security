@@ -10,6 +10,61 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
+const (
+	WatchSarifPropertyKey      = "watch"
+	PoliciesSarifPropertyKey   = "policies"
+	JasIssueIdSarifPropertyKey = "issueId"
+	CWEPropertyKey             = "CWE"
+)
+
+// Specific JFrog Sarif Utils
+
+func GetResultWatches(result *sarif.Result) (watches string) {
+	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
+		if watchesValue, ok := watchesProperty.(string); ok {
+			return watchesValue
+		}
+	}
+	return
+}
+
+func GetResultPolicies(result *sarif.Result) (policies []string) {
+	if policiesProperty, ok := result.Properties[PoliciesSarifPropertyKey]; ok {
+		if policiesValue, ok := policiesProperty.(string); ok {
+			split := strings.Split(policiesValue, ",")
+			for _, policy := range split {
+				policies = append(policies, strings.TrimSpace(policy))
+			}
+			return
+		}
+	}
+	return
+}
+
+func GetResultIssueId(result *sarif.Result) (issueId string) {
+	if issueIdProperty, ok := result.Properties[JasIssueIdSarifPropertyKey]; ok {
+		if issueIdValue, ok := issueIdProperty.(string); ok {
+			return issueIdValue
+		}
+	}
+	return
+}
+
+func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe string) {
+	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
+		// No CWE property
+		return
+	}
+	if cweProperty, ok := rule.DefaultConfiguration.Parameters.Properties[CWEPropertyKey]; ok {
+		if cweValue, ok := cweProperty.(string); ok {
+			return cweValue
+		}
+	}
+	return
+}
+
+// General Sarif Utils
+
 func NewReport() (*sarif.Report, error) {
 	report, err := sarif.New(sarif.Version210)
 	if err != nil {

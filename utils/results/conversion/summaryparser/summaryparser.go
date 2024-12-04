@@ -69,7 +69,14 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if violations {
+		return sc.parseScaViolations(target, scaResponse, applicableScan...)
+	}
+	return sc.parseScaVulnerabilities(target, scaResponse, applicableScan...)
+}
+
+func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
 		return
 	}
@@ -77,17 +84,27 @@ func (sc *CmdResultsSummaryConverter) ParseScaViolations(target results.ScanTarg
 		sc.currentScan.Violations.ScanResultSummary.ScaResults = &formats.ScaScanResultSummary{}
 	}
 	// Parse general SCA results
-	if scaResponse.ScanId != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds, scaResponse.ScanId)
+	if scaResponse.Scan.ScanId != "" {
+		sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds, scaResponse.Scan.ScanId)
 	}
-	if scaResponse.XrayDataUrl != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
+	if scaResponse.Scan.XrayDataUrl != "" {
+		sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
+	}
+	if scaResponse.IsScanFailed() {
+		return
+	}
+	applicabilityRuns := []*sarif.Run{}
+	for _, scan := range applicableScan {
+		if scan.IsScanFailed() {
+			continue
+		}
+		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
 	}
 	// Parse violations
 	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := results.PrepareScaViolations(
+	watches, failBuild, err := results.ApplyHandlerToScaViolations(
 		target,
-		scaResponse.Violations,
+		scaResponse.Scan.Violations,
 		sc.entitledForJas,
 		applicabilityRuns,
 		sc.getScaSecurityViolationHandler(parsed),
@@ -156,7 +173,7 @@ func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(pars
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseScaVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -164,17 +181,27 @@ func (sc *CmdResultsSummaryConverter) ParseScaVulnerabilities(target results.Sca
 		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
 	}
 	// Parse general SCA results
-	if scaResponse.ScanId != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.ScanId)
+	if scaResponse.Scan.ScanId != "" {
+		sc.currentScan.Vulnerabilities.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.ScanIds, scaResponse.Scan.ScanId)
 	}
-	if scaResponse.XrayDataUrl != "" {
-		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.XrayDataUrl)
+	if scaResponse.Scan.XrayDataUrl != "" {
+		sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Vulnerabilities.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
+	}
+	if scaResponse.IsScanFailed() {
+		return
+	}
+	applicabilityRuns := []*sarif.Run{}
+	for _, scan := range applicableScan {
+		if scan.IsScanFailed() {
+			continue
+		}
+		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
 	}
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
-	err = results.PrepareScaVulnerabilities(
+	err = results.ApplyHandlerToScaVulnerabilities(
 		target,
-		scaResponse.Vulnerabilities,
+		scaResponse.Scan.Vulnerabilities,
 		sc.entitledForJas,
 		applicabilityRuns,
 		sc.getScaVulnerabilityHandler(parsed),
@@ -221,12 +248,12 @@ func getCveIds(cves []formats.CveRow, issueId string) []string {
 	return ids
 }
 
-func (sc *CmdResultsSummaryConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in the summary
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -240,10 +267,10 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViola
 	if isViolationsResults && sc.currentScan.Violations.SecretsResults == nil {
 		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
 	}
-	return results.ApplyHandlerToJasIssues(secrets, sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
+	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -257,10 +284,10 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 	if isViolationsResults && sc.currentScan.Violations.IacResults == nil {
 		sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
 	}
-	return results.ApplyHandlerToJasIssues(iacs, sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
+	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast ...*sarif.Run) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -274,7 +301,7 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 	if isViolationsResults && sc.currentScan.Violations.SastResults == nil {
 		sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
 	}
-	return results.ApplyHandlerToJasIssues(sast, sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
+	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasFunc {

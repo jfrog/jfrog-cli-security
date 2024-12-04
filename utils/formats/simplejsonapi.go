@@ -23,7 +23,22 @@ type SimpleJsonResults struct {
 	IacsViolations            []SourceCodeRow               `json:"iacViolations"`
 	SastViolations            []SourceCodeRow               `json:"sastViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`
+	Statuses                  ScanStatus                    `json:"scansStatus"`
 	MultiScanId               string                        `json:"multiScanId,omitempty"`
+}
+
+type ScanStatus struct {
+	// If not nil, the scan was performed. The value is the status code of the scans. if not 0, the scan failed.
+	ScaStatusCode           *int `json:"scaScanStatusCode,omitempty"`
+	SastStatusCode          *int `json:"sastScanStatusCode,omitempty"`
+	IacStatusCode           *int `json:"iacScanStatusCode,omitempty"`
+	SecretsStatusCode       *int `json:"secretsScanStatusCode,omitempty"`
+	ApplicabilityStatusCode *int `json:"ContextualAnalysisScanStatusCode,omitempty"`
+}
+
+type ViolationContext struct {
+	Watch    string   `json:"watch,omitempty"`
+	Policies []string `json:"policies,omitempty"`
 }
 
 type SeverityDetails struct {
@@ -42,12 +57,12 @@ type ImpactedDependencyDetails struct {
 // Used for vulnerabilities and security violations
 type VulnerabilityOrViolationRow struct {
 	ImpactedDependencyDetails
+	ViolationContext
 	Summary                  string                    `json:"summary"`
 	Applicable               string                    `json:"applicable"`
 	FixedVersions            []string                  `json:"fixedVersions"`
 	Cves                     []CveRow                  `json:"cves"`
 	IssueId                  string                    `json:"issueId"`
-	Watch                    string                    `json:"watch,omitempty"`
 	References               []string                  `json:"references"`
 	ImpactPaths              [][]ComponentRow          `json:"impactPaths"`
 	JfrogResearchInformation *JfrogResearchInformation `json:"jfrogResearchInformation"`
@@ -56,7 +71,7 @@ type VulnerabilityOrViolationRow struct {
 
 type LicenseViolationRow struct {
 	LicenseRow
-	Watch string `json:"watch,omitempty"`
+	ViolationContext
 }
 
 type LicenseRow struct {
@@ -68,6 +83,7 @@ type LicenseRow struct {
 
 type OperationalRiskViolationRow struct {
 	ImpactedDependencyDetails
+	ViolationContext
 	RiskReason    string `json:"riskReason"`
 	IsEol         string `json:"isEndOfLife"`
 	EolMessage    string `json:"endOfLifeMessage"`
@@ -80,7 +96,11 @@ type OperationalRiskViolationRow struct {
 
 type SourceCodeRow struct {
 	SeverityDetails
+	ViolationContext
 	Location
+	RuleId             string         `json:"ruleId"`
+	IssueId            string         `json:"issueId"`
+	CWE                string         `json:"cwe,omitempty"`
 	Finding            string         `json:"finding,omitempty"`
 	Fingerprint        string         `json:"fingerprint,omitempty"`
 	Applicability      *Applicability `json:"applicability,omitempty"`

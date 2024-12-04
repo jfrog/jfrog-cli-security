@@ -101,7 +101,7 @@ func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabi
 		for _, result := range run.Results {
 			// If watch property exists, add to security violations or license violations else add to vulnerabilities
 			isViolations := false
-			if _, ok := result.Properties[sarifparser.WatchSarifPropertyKey]; ok {
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok {
 				isViolations = true
 				violations++
 				if !isSecurityIssue(result) {
@@ -290,11 +290,11 @@ func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.
 }
 
 func isPotentialSimilarResults(expected, actual *sarif.Result) bool {
-	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, expected)
+	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, expected)
 }
 
 func getResultId(result *sarif.Result) string {
-	return fmt.Sprintf("%s-%s-%s-%s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, result), getLocationsId(result.Locations))
+	return fmt.Sprintf("%s-%s-%s-%s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, result), getLocationsId(result.Locations))
 }
 
 func getLocationsId(locations []*sarif.Location) string {
