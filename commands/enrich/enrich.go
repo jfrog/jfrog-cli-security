@@ -1,7 +1,6 @@
 package enrich
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -27,7 +26,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	orderedJson "gitlab.com/c0b/go-ordered-json"
+	orderedJson "github.com/virtuald/go-ordered-json"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -76,8 +75,8 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	if err != nil {
 		return fmt.Errorf("error reading file: %s", err.Error())
 	}
-	data := orderedJson.NewOrderedMap()
-	err = json.Unmarshal(fileContent, &data)
+	var data orderedJson.OrderedObject
+	err = orderedJson.Unmarshal(fileContent, &data)
 	if err != nil {
 		return fmt.Errorf("error parsing JSON: %s", err.Error())
 	}
@@ -94,7 +93,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 			vulnerabilities = append(vulnerabilities, vulnerability)
 		}
 	}
-	data.Set("vulnerabilities", vulnerabilities)
+	data = append(data, orderedJson.Member{Key: "vulnerabilities", Value: vulnerabilities})
 	return output.PrintJson(data)
 }
 
