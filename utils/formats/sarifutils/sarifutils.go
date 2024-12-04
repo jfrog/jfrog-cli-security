@@ -50,14 +50,18 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 	return
 }
 
-func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe string) {
+func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
 	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
 		// No CWE property
 		return
 	}
 	if cweProperty, ok := rule.DefaultConfiguration.Parameters.Properties[CWEPropertyKey]; ok {
 		if cweValue, ok := cweProperty.(string); ok {
-			return cweValue
+			split := strings.Split(cweValue, ",")
+			for _, policy := range split {
+				cwe = append(cwe, strings.TrimSpace(policy))
+			}
+			return
 		}
 	}
 	return
