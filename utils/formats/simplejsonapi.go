@@ -100,7 +100,7 @@ type SourceCodeRow struct {
 	Location
 	RuleId             string         `json:"ruleId"`
 	IssueId            string         `json:"issueId"`
-	CWE                string         `json:"cwe,omitempty"`
+	CWE                []string       `json:"cwe,omitempty"`
 	Finding            string         `json:"finding,omitempty"`
 	Fingerprint        string         `json:"fingerprint,omitempty"`
 	Applicability      *Applicability `json:"applicability,omitempty"`

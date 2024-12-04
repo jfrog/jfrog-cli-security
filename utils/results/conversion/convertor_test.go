@@ -32,19 +32,17 @@ func getAuditValidationParams() validations.ValidationParams {
 	return validations.ValidationParams{
 		ExactResultsMatch: true,
 
-		Vulnerabilities:              19,
-		ApplicableVulnerabilities:    1,
-		NotApplicableVulnerabilities: 7,
-		NotCoveredVulnerabilities:    4,
-		SastVulnerabilities:          4,
-		SecretsVulnerabilities:       3,
+		Total: &validations.TotalCount{Vulnerabilities: 19, Violations: 7},
 
-		Violations:              7,
-		ScaSecurityViolations:   5,
-		ApplicableViolations:    1,
-		NotApplicableViolations: 4,
-		SastViolations:          1,
-		SecretsViolations:       1,
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 4, Secrets: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 7, NotCovered: 4},
+		},
+
+		Violations: &validations.ViolationCount{
+			ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 1, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 4},
+		},
 	}
 }
 
@@ -52,26 +50,25 @@ func getAuditValidationParams() validations.ValidationParams {
 // We have in the result 2 CVE with 2 impacted components each
 func getDockerScanValidationParams(unique bool) validations.ValidationParams {
 	params := validations.ValidationParams{
-		ExactResultsMatch:      true,
-		SecretsVulnerabilities: 3,
-
-		Violations:             3,
-		ScaSecurityViolations:  1,
-		UndeterminedViolations: 1,
-		SecretsViolations:      2,
+		ExactResultsMatch: true,
+		Total:             &validations.TotalCount{Violations: 3},
+		Violations: &validations.ViolationCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1, Secrets: 2},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Undetermined: 1},
+		},
 	}
 	if unique {
-		params.Vulnerabilities = 11
-		params.ApplicableVulnerabilities = 3
-		params.NotApplicableVulnerabilities = 3
-		params.NotCoveredVulnerabilities = 1
-		params.UndeterminedVulnerabilities = 1
+		params.Total.Vulnerabilities = 11
+		params.Vulnerabilities = &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 8, Secrets: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, NotApplicable: 3, NotCovered: 1, Undetermined: 1},
+		}
 	} else {
-		params.Vulnerabilities = 14
-		params.ApplicableVulnerabilities = 5
-		params.NotApplicableVulnerabilities = 4
-		params.NotCoveredVulnerabilities = 1
-		params.UndeterminedVulnerabilities = 1
+		params.Total.Vulnerabilities = 14
+		params.Vulnerabilities = &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 11, Secrets: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 5, NotApplicable: 4, NotCovered: 1, Undetermined: 1},
+		}
 	}
 	return params
 }

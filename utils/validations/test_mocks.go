@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/artifactory"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -165,4 +166,15 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 
 func NewMockJasRuns(runs ...*sarif.Run) []results.ScanResult[[]*sarif.Run] {
 	return []results.ScanResult[[]*sarif.Run]{{Scan: runs}}
+}
+
+func NewMockScaResults(responses ...services.ScanResponse) (converted []results.ScanResult[services.ScanResponse]) {
+	for _, response := range responses {
+		status := 0
+		if response.ScannedStatus == "Failed" {
+			status = 1
+		}
+		converted = append(converted, results.ScanResult[services.ScanResponse]{Scan: response, StatusCode: status})
+	}
+	return
 }

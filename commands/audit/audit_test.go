@@ -439,24 +439,21 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true}).ConvertToSummary(auditResults)
 			assert.NoError(t, err)
 
-			var ScaResultsCount int
+			var scaResultsCount int
 			// When checking Applicability results with ExactResultsMatch = true, the sum of all statuses should equal total Sca results amount. Else, we check the provided Sca issues amount
 			if testcase.expectedCaApplicable > 0 || testcase.expectedCaNotApplicable > 0 || testcase.expectedCaNotCovered > 0 || testcase.expectedCaUndetermined > 0 {
-				ScaResultsCount = testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
+				scaResultsCount = testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
 			} else {
-				ScaResultsCount = testcase.expectedScaIssues
+				scaResultsCount = testcase.expectedScaIssues
 			}
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
-				Actual:                       summary,
-				ExactResultsMatch:            true,
-				Vulnerabilities:              testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + ScaResultsCount,
-				SastVulnerabilities:          testcase.expectedSastIssues,
-				SecretsVulnerabilities:       testcase.expectedSecretsIssues,
-				IacVulnerabilities:           testcase.expectedIacIssues,
-				ApplicableVulnerabilities:    testcase.expectedCaApplicable,
-				NotApplicableVulnerabilities: testcase.expectedCaNotApplicable,
-				NotCoveredVulnerabilities:    testcase.expectedCaNotCovered,
-				UndeterminedVulnerabilities:  testcase.expectedCaUndetermined,
+				Actual:            summary,
+				ExactResultsMatch: true,
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount},
+				Vulnerabilities: &validations.VulnerabilityCount{
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues},
+					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
+				},
 			})
 		})
 	}

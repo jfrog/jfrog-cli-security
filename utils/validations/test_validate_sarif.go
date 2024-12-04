@@ -43,57 +43,29 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sarif.Report) {
-	var vulnerabilities, violations int
+	actualValues := validationCountActualValues{}
 
 	// SCA
-	scaVulnerabilities, applicableVulnerabilitiesResults, undeterminedVulnerabilitiesResults, notCoveredVulnerabilitiesResults, notApplicableVulnerabilitiesResults, missingContextVulnerabilitiesResults, scaViolations, securityViolations, licenseViolations, applicableViolationsResults, undeterminedViolationsResults, notCoveredViolationsResults, notApplicableViolationsResults, missingContextViolationsResults := countScaResults(report)
-	vulnerabilities += scaVulnerabilities
-	violations += scaViolations
+	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations = countScaResults(report)
+	actualValues.Vulnerabilities += actualValues.ScaVulnerabilities
+	actualValues.Violations += actualValues.ScaViolations
 
 	// Secrets
-	secretsVulnerabilities, inactiveVulnerabilities, secretsViolations, inactiveViolations := countSecretsResults(report)
-	vulnerabilities += secretsVulnerabilities
-	violations += secretsViolations
+	actualValues.SecretsVulnerabilities, actualValues.InactiveSecretsVulnerabilities, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countSecretsResults(report)
+	actualValues.Vulnerabilities += actualValues.SecretsVulnerabilities
+	actualValues.Violations += actualValues.SecretsViolations
 
 	// IAC
-	iacVulnerabilities, iacViolations := countJasResults(sarifutils.GetRunsByToolName(report, IacToolName))
-	vulnerabilities += iacVulnerabilities
-	violations += iacViolations
+	actualValues.IacVulnerabilities, actualValues.IacViolations = countJasResults(sarifutils.GetRunsByToolName(report, IacToolName))
+	actualValues.Vulnerabilities += actualValues.IacVulnerabilities
+	actualValues.Violations += actualValues.IacViolations
 
 	// SAST
-	sastVulnerabilities, sastViolations := countJasResults(sarifutils.GetRunsByToolName(report, SastToolName))
-	vulnerabilities += sastVulnerabilities
-	violations += sastViolations
+	actualValues.SastVulnerabilities, actualValues.SastViolations = countJasResults(sarifutils.GetRunsByToolName(report, SastToolName))
+	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
+	actualValues.Violations += actualValues.SastViolations
 
-	ValidateContent(t, params.ExactResultsMatch,
-		// Total
-		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "sarif report", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
-		CountValidation[int]{Expected: params.ScaSecurityViolations, Actual: violations, Msg: GetValidationCountErrMsg("violations", "sarif report", params.ExactResultsMatch, params.ScaSecurityViolations, violations)},
-		// JAS Vulnerabilities
-		CountValidation[int]{Expected: params.SastVulnerabilities, Actual: sastVulnerabilities, Msg: GetValidationCountErrMsg("sast vulnerabilities", "sarif report", params.ExactResultsMatch, params.SastVulnerabilities, sastVulnerabilities)},
-		CountValidation[int]{Expected: params.IacVulnerabilities, Actual: iacVulnerabilities, Msg: GetValidationCountErrMsg("Iac vulnerabilities", "sarif report", params.ExactResultsMatch, params.IacVulnerabilities, iacVulnerabilities)},
-		CountValidation[int]{Expected: params.SecretsVulnerabilities, Actual: secretsVulnerabilities, Msg: GetValidationCountErrMsg("secrets vulnerabilities", "sarif report", params.ExactResultsMatch, params.SecretsVulnerabilities, secretsVulnerabilities)},
-		CountValidation[int]{Expected: params.InactiveVulnerabilities, Actual: inactiveVulnerabilities, Msg: GetValidationCountErrMsg("inactive secrets vulnerabilities", "sarif report", params.ExactResultsMatch, params.InactiveVulnerabilities, inactiveVulnerabilities)},
-		// JAS Violations
-		CountValidation[int]{Expected: params.SastViolations, Actual: sastViolations, Msg: GetValidationCountErrMsg("sast violations", "sarif report", params.ExactResultsMatch, params.SastViolations, sastViolations)},
-		CountValidation[int]{Expected: params.IacViolations, Actual: iacViolations, Msg: GetValidationCountErrMsg("Iac violations", "sarif report", params.ExactResultsMatch, params.IacViolations, iacViolations)},
-		CountValidation[int]{Expected: params.SecretsViolations, Actual: secretsViolations, Msg: GetValidationCountErrMsg("secrets violations", "sarif report", params.ExactResultsMatch, params.SecretsViolations, secretsViolations)},
-		CountValidation[int]{Expected: params.InactiveViolations, Actual: inactiveViolations, Msg: GetValidationCountErrMsg("inactive secrets violations", "sarif report", params.ExactResultsMatch, params.InactiveViolations, inactiveViolations)},
-		// SCA Vulnerabilities
-		CountValidation[int]{Expected: params.ApplicableVulnerabilities, Actual: applicableVulnerabilitiesResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "sarif report", params.ExactResultsMatch, params.ApplicableVulnerabilities, applicableVulnerabilitiesResults)},
-		CountValidation[int]{Expected: params.UndeterminedVulnerabilities, Actual: undeterminedVulnerabilitiesResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "sarif report", params.ExactResultsMatch, params.UndeterminedVulnerabilities, undeterminedVulnerabilitiesResults)},
-		CountValidation[int]{Expected: params.NotCoveredVulnerabilities, Actual: notCoveredVulnerabilitiesResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "sarif report", params.ExactResultsMatch, params.NotCoveredVulnerabilities, notCoveredVulnerabilitiesResults)},
-		CountValidation[int]{Expected: params.NotApplicableVulnerabilities, Actual: notApplicableVulnerabilitiesResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "sarif report", params.ExactResultsMatch, params.NotApplicableVulnerabilities, notApplicableVulnerabilitiesResults)},
-		CountValidation[int]{Expected: params.MissingContextVulnerabilities, Actual: missingContextVulnerabilitiesResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "sarif report", params.ExactResultsMatch, params.MissingContextVulnerabilities, missingContextVulnerabilitiesResults)},
-		// SCA Violations
-		CountValidation[int]{Expected: params.ApplicableViolations, Actual: applicableViolationsResults, Msg: GetValidationCountErrMsg("applicable violations", "sarif report", params.ExactResultsMatch, params.ApplicableViolations, applicableViolationsResults)},
-		CountValidation[int]{Expected: params.UndeterminedViolations, Actual: undeterminedViolationsResults, Msg: GetValidationCountErrMsg("undetermined violations", "sarif report", params.ExactResultsMatch, params.UndeterminedViolations, undeterminedViolationsResults)},
-		CountValidation[int]{Expected: params.NotCoveredViolations, Actual: notCoveredViolationsResults, Msg: GetValidationCountErrMsg("not covered violations", "sarif report", params.ExactResultsMatch, params.NotCoveredViolations, notCoveredViolationsResults)},
-		CountValidation[int]{Expected: params.NotApplicableViolations, Actual: notApplicableViolationsResults, Msg: GetValidationCountErrMsg("not applicable violations", "sarif report", params.ExactResultsMatch, params.NotApplicableViolations, notApplicableViolationsResults)},
-		CountValidation[int]{Expected: params.MissingContextViolations, Actual: missingContextViolationsResults, Msg: GetValidationCountErrMsg("missing context violations", "sarif report", params.ExactResultsMatch, params.MissingContextViolations, missingContextViolationsResults)},
-		CountValidation[int]{Expected: params.ScaSecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "sarif report", params.ExactResultsMatch, params.ScaSecurityViolations, securityViolations)},
-		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "sarif report", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
-	)
+	ValidateCount(t, "sarif report", params, actualValues)
 }
 
 func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabilitiesResults, undeterminedVulnerabilitiesResults, notCoveredVulnerabilitiesResults, notApplicableVulnerabilitiesResults, missingContextVulnerabilitiesResults, violations, securityViolations, licenseViolations, applicableViolationsResults, undeterminedViolationsResults, notCoveredViolationsResults, notApplicableViolationsResults, missingContextViolationsResults int) {
