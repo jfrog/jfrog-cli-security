@@ -33,8 +33,7 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		ScaSecurityViolations: 1,
-		Licenses:              1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1},
 	})
 }
 
@@ -43,9 +42,7 @@ func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		ScaSecurityViolations: 1,
-		Vulnerabilities:       1,
-		Licenses:              1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -54,8 +51,7 @@ func TestXscAuditMavenJson(t *testing.T) {
 	defer cleanUp()
 	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -64,8 +60,7 @@ func TestXscAuditMavenSimpleJson(t *testing.T) {
 	defer cleanUp()
 	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 

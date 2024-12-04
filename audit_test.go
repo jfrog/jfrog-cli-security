@@ -41,8 +41,10 @@ func TestXrayAuditNpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		ScaSecurityViolations: 1,
-		Licenses:              1,
+		Total: &validations.TotalCount{Licenses: 1},
+		Violations: &validations.ViolationCount{
+			ValidateType: &validations.ScaViolationCount{Security: 1},
+		},
 	})
 }
 
@@ -50,9 +52,10 @@ func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		ScaSecurityViolations: 1,
-		Vulnerabilities:       1,
-		Licenses:              1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
+		Violations: &validations.ViolationCount{
+			ValidateType: &validations.ScaViolationCount{Security: 1},
+		},
 	})
 }
 
@@ -76,8 +79,7 @@ func TestXrayAuditConanJson(t *testing.T) {
 	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditConan(t, string(format.Json), true)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 8,
-		Licenses:        2,
+		Total: &validations.TotalCount{Licenses: 2, Vulnerabilities: 8},
 	})
 }
 
@@ -85,8 +87,7 @@ func TestXrayAuditConanSimpleJson(t *testing.T) {
 	integration.InitAuditCTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditConan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 8,
-		Licenses:        2,
+		Total: &validations.TotalCount{Licenses: 2, Vulnerabilities: 8},
 	})
 }
 
@@ -108,8 +109,7 @@ func TestXrayAuditPnpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPnpm(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -117,8 +117,7 @@ func TestXrayAuditPnpmSimpleJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPnpm(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -137,8 +136,7 @@ func TestXrayAuditYarnV2Json(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v2", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
 		validations.VerifyJsonResults(t, output, validations.ValidationParams{
-			Vulnerabilities: 1,
-			Licenses:        1,
+			Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 		})
 	})
 }
@@ -148,8 +146,7 @@ func TestXrayAuditYarnV2SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v3", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
 		validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-			Vulnerabilities: 1,
-			Licenses:        1,
+			Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 		})
 	})
 }
@@ -159,8 +156,7 @@ func TestXrayAuditYarnV1Json(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.Json))
 		validations.VerifyJsonResults(t, output, validations.ValidationParams{
-			Vulnerabilities: 1,
-			Licenses:        1,
+			Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 		})
 	})
 }
@@ -183,8 +179,7 @@ func TestXrayAuditYarnV1SimpleJson(t *testing.T) {
 	testXrayAuditYarn(t, "yarn-v1", func() {
 		output := runXrayAuditYarnWithOutput(t, string(format.SimpleJson))
 		validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-			Vulnerabilities: 1,
-			Licenses:        1,
+			Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 		})
 	})
 }
@@ -255,8 +250,7 @@ func TestXrayAuditNugetJson(t *testing.T) {
 			func(t *testing.T) {
 				output := testXrayAuditNuget(t, test.projectName, test.format, test.restoreTech)
 				validations.VerifyJsonResults(t, output, validations.ValidationParams{
-					Vulnerabilities: test.minVulnerabilities,
-					Licenses:        test.minLicences,
+					Total: &validations.TotalCount{Licenses: test.minLicences, Vulnerabilities: test.minVulnerabilities},
 				})
 			})
 	}
@@ -299,8 +293,7 @@ func TestXrayAuditNugetSimpleJson(t *testing.T) {
 			func(t *testing.T) {
 				output := testXrayAuditNuget(t, test.projectName, test.format, test.restoreTech)
 				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-					Vulnerabilities: test.minVulnerabilities,
-					Licenses:        test.minLicences,
+					Total: &validations.TotalCount{Licenses: test.minLicences, Vulnerabilities: test.minVulnerabilities},
 				})
 			})
 	}
@@ -323,8 +316,7 @@ func TestXrayAuditGradleJson(t *testing.T) {
 	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGradle(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        3,
+		Total: &validations.TotalCount{Licenses: 3, Vulnerabilities: 3},
 	})
 }
 
@@ -332,8 +324,7 @@ func TestXrayAuditGradleSimpleJson(t *testing.T) {
 	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGradle(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        3,
+		Total: &validations.TotalCount{Licenses: 3, Vulnerabilities: 3},
 	})
 }
 
@@ -349,8 +340,7 @@ func TestXrayAuditMavenJson(t *testing.T) {
 	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -358,8 +348,7 @@ func TestXrayAuditMavenSimpleJson(t *testing.T) {
 	integration.InitAuditJavaTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -374,13 +363,18 @@ func testAuditMaven(t *testing.T, format string) string {
 func TestXrayAuditGoJson(t *testing.T) {
 	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGo(t, false, string(format.Json), "simple-project")
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{Licenses: 1, Vulnerabilities: 4})
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 4}})
 }
 
 func TestXrayAuditGoSimpleJson(t *testing.T) {
 	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGo(t, true, string(format.SimpleJson), "simple-project")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCoveredVulnerabilities: 2, NotApplicableVulnerabilities: 2})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Licenses: 3, Vulnerabilities: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 2},
+		},
+	})
 }
 
 func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
@@ -425,15 +419,11 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SastVulnerabilities:    1,
-		IacVulnerabilities:     9,
-		SecretsVulnerabilities: 6,
-
-		Vulnerabilities:              35,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  0,
-		NotCoveredVulnerabilities:    22,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 43},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 27, Sast: 1, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, NotCovered: 22, NotApplicable: 2},
+		},
 	})
 }
 
@@ -441,38 +431,34 @@ func TestXrayAuditPipJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPip(t, string(format.Json), "")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
 func TestXrayAuditCocoapods(t *testing.T) {
 	integration.InitAuditCocoapodsTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditCocoapods(t, string(format.Json))
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-	})
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 1}})
 }
 
 func TestXrayAuditPipSimpleJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPip(t, string(format.SimpleJson), "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
 func TestXrayAuditPipJsonWithRequirementsFile(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPip(t, string(format.Json), "requirements.txt")
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 2})
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 2}})
 }
 
 func TestXrayAuditPipSimpleJsonWithRequirementsFile(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPip(t, string(format.SimpleJson), "requirements.txt")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 2})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 2}})
 }
 
 func testXrayAuditPip(t *testing.T, format, requirementsFile string) string {
@@ -499,8 +485,7 @@ func TestXrayAuditPipenvJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPipenv(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
@@ -508,8 +493,7 @@ func TestXrayAuditPipenvSimpleJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPipenv(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
@@ -525,8 +509,7 @@ func TestXrayAuditPoetryJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPoetry(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
@@ -534,8 +517,7 @@ func TestXrayAuditPoetrySimpleJson(t *testing.T) {
 	integration.InitAuditPythonTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditPoetry(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 3,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 3},
 	})
 }
 
@@ -570,14 +552,14 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 			name:     "withFlag",
 			withFlag: true,
 			expectedResults: validations.ValidationParams{
-				Vulnerabilities:     1,
-				SastVulnerabilities: 1,
+				Total:           &validations.TotalCount{Vulnerabilities: 1},
+				Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 1}},
 			},
 		},
 		{
 			name:            "withoutFlag",
 			withFlag:        false,
-			expectedResults: validations.ValidationParams{},
+			expectedResults: validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}},
 		},
 	}
 	for _, tc := range testCase {
@@ -593,15 +575,17 @@ func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), "3", false, false, true, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities:     1,
-		SastVulnerabilities: 1,
+		Total:           &validations.TotalCount{Vulnerabilities: 1},
+		Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 1}},
 	})
 }
 
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), "3", false, false, false, "")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{MissingContextVulnerabilities: 1})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{MissingContext: 1}},
+	})
 }
 
 func TestXrayAuditNotEntitledForJas(t *testing.T) {
@@ -609,7 +593,7 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false, false, "")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 8}})
 }
 
 func getNoJasAuditMockCommand() components.Command {
@@ -632,37 +616,34 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SastVulnerabilities:    1,
-		IacVulnerabilities:     9,
-		SecretsVulnerabilities: 6,
-
-		Vulnerabilities:              8,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  1,
-		NotCoveredVulnerabilities:    1,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 23},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 1, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
 }
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, false, false, "")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 5, InactiveVulnerabilities: 5})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Secrets: 5},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: 5},
+		},
+	})
 }
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false, false, false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SastVulnerabilities:    1,
-		IacVulnerabilities:     9,
-		SecretsVulnerabilities: 6,
-
-		Vulnerabilities:              8,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  1,
-		NotCoveredVulnerabilities:    1,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 23},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 1, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
 }
 
@@ -670,20 +651,21 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false, false, false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SecretsVulnerabilities: 1,
-
-		Vulnerabilities:              8,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  1,
-		NotCoveredVulnerabilities:    1,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 8},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
 }
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false, false, false, "")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 1, NotApplicableVulnerabilities: 1})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total:           &validations.TotalCount{Vulnerabilities: 1},
+		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1}},
+	})
 }
 
 func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool, validateSastCpp bool, validateSastCSharp bool, customExclusion string) string {
@@ -739,7 +721,7 @@ func TestXrayRecursiveScan(t *testing.T) {
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format=json")
 
 	// We anticipate the identification of five vulnerabilities: four originating from the .NET project and one from the NPM project.
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 4})
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 4}})
 
 	var results []services.ScanResponse
 	err = json.Unmarshal([]byte(output), &results)
@@ -769,7 +751,7 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 	defer cleanUp()
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false, false, "")
 	// Verify that scan results are printed
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Vulnerabilities: 8})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 8}})
 	// Verify that JAS results are not printed
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
 }
@@ -779,15 +761,11 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, false, false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SastVulnerabilities:    1,
-		IacVulnerabilities:     9,
-		SecretsVulnerabilities: 6,
-
-		Vulnerabilities:              8,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  1,
-		NotCoveredVulnerabilities:    1,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 24},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
 }
 
@@ -797,14 +775,10 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SastVulnerabilities:    2,
-		IacVulnerabilities:     9,
-		SecretsVulnerabilities: 6,
-
-		Vulnerabilities:              8,
-		ApplicableVulnerabilities:    3,
-		UndeterminedVulnerabilities:  1,
-		NotCoveredVulnerabilities:    1,
-		NotApplicableVulnerabilities: 2,
+		Total: &validations.TotalCount{Vulnerabilities: 24},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
 }
