@@ -36,7 +36,6 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	sastScanManager := newSastScanManager(scanner, scannerTempDir, signedDescriptions)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running SAST scan...")
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.SastScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId))

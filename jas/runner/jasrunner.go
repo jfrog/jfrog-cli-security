@@ -139,6 +139,7 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		defer securityParallelRunner.ResultsMu.Unlock()
 
 		extendedScanResults.NewJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
@@ -159,6 +160,7 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		defer securityParallelRunner.ResultsMu.Unlock()
 
 		extendedScanResults.NewJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
 
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
@@ -179,6 +181,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		defer securityParallelRunner.ResultsMu.Unlock()
 
 		extendedScanResults.NewJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		err = jas.ParseAnalyzerManagerError(jasutils.Sast, err)
 
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
@@ -201,6 +204,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		defer securityParallelRunner.ResultsMu.Unlock()
 
 		scanResults.JasResults.NewApplicabilityScanResults(caScanResults, jas.GetAnalyzerManagerExitCode(err))
+		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 
 		if err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())

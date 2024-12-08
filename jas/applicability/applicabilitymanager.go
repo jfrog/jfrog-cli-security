@@ -57,7 +57,6 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
 	// Applicability scan does not produce violations.
 	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
 		return
 	}
 	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)

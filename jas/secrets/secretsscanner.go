@@ -45,7 +45,6 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
 	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
 		return
 	}
 	log.Info(utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId))
