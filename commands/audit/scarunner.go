@@ -257,36 +257,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
-		xrayManager, err := xray.CreateXrayServiceManager(artifactoryServerDetails)
-		if err != nil {
-			return depTreeResult, err
-		}
-		xrayVersion, err := xrayManager.GetVersion()
-		if err != nil {
-			log.Error("Could not get xray version")
-			return depTreeResult, err
-		}
-		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
-		if err != nil {
-			log.Warn(fmt.Sprintf("Your xray version %s does not support cocoapods which is supported on versions %s and above", xrayVersion, scangraph.CocoapodsScanMinXrayVersion))
-			return depTreeResult, err
-		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	case techutils.Swift:
-		xrayManager, err := xray.CreateXrayServiceManager(artifactoryServerDetails)
-		if err != nil {
-			return depTreeResult, err
-		}
-		xrayVersion, err := xrayManager.GetVersion()
-		if err != nil {
-			log.Error("Could not get xray version")
-			return depTreeResult, err
-		}
-		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
-		if err != nil {
-			log.Warn(fmt.Sprintf("Your xray version %s does not support swift which is supported on versions %s and above", xrayVersion, scangraph.SwiftScanMinXrayVersion))
-			return depTreeResult, err
-		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
