@@ -72,6 +72,13 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarg
 	if sjc.current.Statuses.ScaStatusCode == nil || *sjc.current.Statuses.ScaStatusCode == 0 {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
+
+	for _, applicabilityScanResult := range applicableScan {
+		if sjc.current.Statuses.ApplicabilityStatusCode == nil || *sjc.current.Statuses.ApplicabilityStatusCode == 0 {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicabilityScanResult.StatusCode
+		}
+	}
+
 	if violations {
 		err = sjc.parseScaViolations(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	} else {
@@ -153,8 +160,8 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for _, iacsScan := range iacs {
-		if sjc.current.Statuses.SecretsStatusCode == nil || *sjc.current.Statuses.SecretsStatusCode == 0 {
-			sjc.current.Statuses.SecretsStatusCode = &iacsScan.StatusCode
+		if sjc.current.Statuses.IacStatusCode == nil || *sjc.current.Statuses.IacStatusCode == 0 {
+			sjc.current.Statuses.IacStatusCode = &iacsScan.StatusCode
 		}
 	}
 	iacSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(iacs)...)
@@ -177,8 +184,8 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for _, sastScan := range sast {
-		if sjc.current.Statuses.SecretsStatusCode == nil || *sjc.current.Statuses.SecretsStatusCode == 0 {
-			sjc.current.Statuses.SecretsStatusCode = &sastScan.StatusCode
+		if sjc.current.Statuses.SastStatusCode == nil || *sjc.current.Statuses.SastStatusCode == 0 {
+			sjc.current.Statuses.SastStatusCode = &sastScan.StatusCode
 		}
 	}
 	sastSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(sast)...)
