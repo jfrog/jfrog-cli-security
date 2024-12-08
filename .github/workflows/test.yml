@@ -18,7 +18,7 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
@@ -190,6 +190,10 @@ jobs:
       # Test
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
+        if: ${{ matrix.os != 'ubuntu' }}
+      - name: Run security tests (with Docker Scan)
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        if: ${{ matrix.os == 'ubuntu' }}
 
   Other_Scan_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Scan Commands Integration Tests"
@@ -214,7 +218,7 @@ jobs:
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
         if: ${{ matrix.os != 'ubuntu' }}
       - name: Run security tests (with Docker Scan)
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
         if: ${{ matrix.os == 'ubuntu' }}
 
   Other_Commands_Integration_Tests:

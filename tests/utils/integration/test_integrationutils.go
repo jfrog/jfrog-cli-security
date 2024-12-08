@@ -61,14 +61,16 @@ func GetTestServerDetails() *config.ServerDetails {
 	return configTests.RtDetails
 }
 
-func InitXscTest(t *testing.T, validations ...func()) func() {
+func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	if !*configTests.TestXsc {
 		t.Skip(getSkipTestMsg("XSC integration", "--test.xsc"))
 	}
-	// validate XSC is enabled at the given server
-	xscManager, err := xsc.CreateXscServiceManager(configTests.XscDetails)
+	xrayVersion, err := testUtils.GetTestsXrayVersion()
 	assert.NoError(t, err)
-	_, err = xscManager.GetVersion()
+	// validate XSC is enabled at the given server
+	xscService, err := xsc.CreateXscService(xrayVersion.GetVersion(), configTests.XscDetails)
+	assert.NoError(t, err)
+	xscVersion, err := xscService.GetVersion()
 	if err != nil {
 		t.Skip("Skipping XSC integration tests. XSC is not enabled at the given server.")
 	}
@@ -77,7 +79,7 @@ func InitXscTest(t *testing.T, validations ...func()) func() {
 	}
 	// Make sure the audit request will work with xsc and not xray
 	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
-	return func() {
+	return xrayVersion.GetVersion(), xscVersion, func() {
 		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
 }

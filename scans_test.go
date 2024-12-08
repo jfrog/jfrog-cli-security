@@ -42,6 +42,7 @@ import (
 // Binary scan tests
 
 func TestXrayBinaryScanJson(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScan(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
@@ -50,6 +51,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities:    1,
@@ -59,6 +61,7 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.Json), false)
@@ -69,6 +72,7 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 }
 
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
 	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
@@ -80,7 +84,6 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 }
 
 func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
-	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
 	if withViolation {
