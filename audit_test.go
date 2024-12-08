@@ -447,7 +447,7 @@ func TestXrayAuditPipJson(t *testing.T) {
 }
 
 func TestXrayAuditCocoapods(t *testing.T) {
-	integration.InitAuditCocoapodsTest(t, scangraph.GraphScanMinXrayVersion)
+	integration.InitAuditCocoapodsTest(t, scangraph.CocoapodsScanMinXrayVersion)
 	output := testXrayAuditCocoapods(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: 1,
@@ -503,7 +503,7 @@ func testXrayAuditCocoapods(t *testing.T, format string) string {
 }
 
 func testXrayAuditSwift(t *testing.T, format string) string {
-	integration.InitAuditSwiftTest(t, scangraph.GraphScanMinXrayVersion)
+	integration.InitAuditSwiftTest(t, scangraph.SwiftScanMinXrayVersion)
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "swift"))
 	defer cleanUp()
 	// Add dummy descriptor file to check that we run only specific audit
