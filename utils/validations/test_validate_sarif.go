@@ -155,7 +155,7 @@ func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 	for _, run := range runs {
 		for _, result := range run.Results {
 			// JAS results does not have watch property yet, we should infer by prefix in msg
-			if strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
+			if strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "[Security violation]") {
 				violations++
 			} else {
 				vulnerabilities++
