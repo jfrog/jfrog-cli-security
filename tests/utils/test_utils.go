@@ -173,9 +173,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.SimpleJsonResults
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.SimpleJsonResults{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, vulnerability := range results.Vulnerabilities {
 		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails, &vulnerability.Cves)
@@ -270,9 +268,7 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results *sarif.Report
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return &sarif.Report{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	convertSarifRunPathsForOS(results.Runs...)
 	return results
@@ -282,9 +278,7 @@ func ReadSummaryResults(t *testing.T, path string) formats.ResultsSummary {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.ResultsSummary
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.ResultsSummary{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, targetResults := range results.Scans {
 		targetResults.Target = filepath.FromSlash(targetResults.Target)
