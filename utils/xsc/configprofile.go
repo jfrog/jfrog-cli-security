@@ -28,7 +28,6 @@ func GetConfigProfileByName(xrayVersion, xscVersion string, serverDetails *confi
 	return configProfile, err
 }
 
-// TODO eran write test to this func
 func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails) (*services.ConfigProfile, error) {
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileByUrlMinXrayVersion); err != nil {
 		log.Info(fmt.Sprintf("Minimal Xray version required to utilize config profile by url is '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileByUrlMinXrayVersion))
