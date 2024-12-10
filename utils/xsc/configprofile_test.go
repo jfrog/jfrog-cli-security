@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetConfigProfile(t *testing.T) {
+func TestGetConfigProfileByName(t *testing.T) {
 	testCases := []struct {
 		name        string
 		mockParams  validations.MockServerParams
@@ -37,7 +37,7 @@ func TestGetConfigProfile(t *testing.T) {
 			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			configProfile, err := GetConfigProfile(testcase.mockParams.XrayVersion, testcase.mockParams.XscVersion, serverDetails, validations.TestConfigProfileName)
+			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, testcase.mockParams.XscVersion, serverDetails, validations.TestConfigProfileName)
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)
