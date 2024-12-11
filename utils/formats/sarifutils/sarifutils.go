@@ -681,7 +681,7 @@ func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {
 }
 
 func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
+	if rule != nil && rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
 	}
 	return ""
@@ -710,7 +710,7 @@ func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
 }
 
 func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+	if rule != nil && rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
 		return *rule.ShortDescription.Text
 	}
 	return ""

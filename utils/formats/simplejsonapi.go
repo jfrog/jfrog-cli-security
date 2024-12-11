@@ -38,6 +38,7 @@ type ScanStatus struct {
 
 type ViolationContext struct {
 	Watch    string   `json:"watch,omitempty"`
+	IssueId  string   `json:"issueId,omitempty"`
 	Policies []string `json:"policies,omitempty"`
 }
 
@@ -97,15 +98,19 @@ type OperationalRiskViolationRow struct {
 type SourceCodeRow struct {
 	SeverityDetails
 	ViolationContext
+	ScannerInfo
 	Location
-	RuleId             string         `json:"ruleId"`
-	IssueId            string         `json:"issueId"`
-	CWE                []string       `json:"cwe,omitempty"`
-	Finding            string         `json:"finding,omitempty"`
-	Fingerprint        string         `json:"fingerprint,omitempty"`
-	Applicability      *Applicability `json:"applicability,omitempty"`
-	ScannerDescription string         `json:"scannerDescription,omitempty"`
-	CodeFlow           [][]Location   `json:"codeFlow,omitempty"`
+	Finding       string         `json:"finding,omitempty"`
+	Fingerprint   string         `json:"fingerprint,omitempty"`
+	Applicability *Applicability `json:"applicability,omitempty"`
+	CodeFlow      [][]Location   `json:"codeFlow,omitempty"`
+}
+
+type ScannerInfo struct {
+	RuleId                  string   `json:"ruleId"`
+	Cwe                     []string `json:"cwe,omitempty"`
+	ScannerShortDescription string   `json:"scannerShortDescription,omitempty"`
+	ScannerDescription      string   `json:"scannerDescription,omitempty"`
 }
 
 type Location struct {

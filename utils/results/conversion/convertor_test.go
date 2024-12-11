@@ -46,6 +46,12 @@ func getAuditValidationParams() validations.ValidationParams {
 	}
 }
 
+func getAuditTestResults() *results.SecurityCommandResults {
+	cmdResults := results.NewCommandResults(utils.SourceCode)
+
+	return cmdResults
+}
+
 // For Summary we count unique CVE finding (issueId), for SARIF and SimpleJson we count all findings (pair of issueId+impactedComponent)
 // We have in the result 2 CVE with 2 impacted components each
 func getDockerScanValidationParams(unique bool) validations.ValidationParams {
@@ -71,6 +77,12 @@ func getDockerScanValidationParams(unique bool) validations.ValidationParams {
 		}
 	}
 	return params
+}
+
+func getDockerScanTestResults() *results.SecurityCommandResults {
+	cmdResults := results.NewCommandResults(utils.DockerImage)
+
+	return cmdResults
 }
 
 func TestConvertResults(t *testing.T) {

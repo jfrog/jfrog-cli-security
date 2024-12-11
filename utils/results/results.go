@@ -503,12 +503,14 @@ func (jsr *JasScansResults) HasInformation() bool {
 }
 
 func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) bool {
+	if scanType == jasutils.Applicability && len(jsr.ApplicabilityScanResults) > 0 {
+		return true
+	}
 	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
 		if len(run.Results) > 0 {
 			return true
 		}
 	}
-
 	for _, run := range jsr.GetViolationsResults(scanType) {
 		if len(run.Results) > 0 {
 			return true

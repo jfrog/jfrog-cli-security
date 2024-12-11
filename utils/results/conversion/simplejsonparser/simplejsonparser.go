@@ -72,13 +72,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarg
 	if sjc.current.Statuses.ScaStatusCode == nil || *sjc.current.Statuses.ScaStatusCode == 0 {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
-
-	for _, applicabilityScanResult := range applicableScan {
+	for _, applicableScan := range applicableScan {
 		if sjc.current.Statuses.ApplicabilityStatusCode == nil || *sjc.current.Statuses.ApplicabilityStatusCode == 0 {
-			sjc.current.Statuses.ApplicabilityStatusCode = &applicabilityScanResult.StatusCode
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan.StatusCode
 		}
 	}
-
 	if violations {
 		err = sjc.parseScaViolations(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	} else {
@@ -209,7 +207,7 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 		scaResponse.Violations,
 		jasEntitled,
 		applicabilityRuns,
-		addSimpleJsonSecurityViolation(&securityViolationsRows, pretty),
+		addSimpleJsonSecurityViolation(target, &securityViolationsRows, pretty),
 		addSimpleJsonLicenseViolation(&licenseViolationsRows, pretty),
 		addSimpleJsonOperationalRiskViolation(&operationalRiskViolationsRows, pretty),
 	)
@@ -223,13 +221,17 @@ func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse ser
 		scaResponse.Vulnerabilities,
 		entitledForJas,
 		applicabilityRuns,
-		addSimpleJsonVulnerability(&vulnerabilitiesRows, pretty),
+		addSimpleJsonVulnerability(target, &vulnerabilitiesRows, pretty),
 	)
 	return vulnerabilitiesRows, err
 }
 
-func addSimpleJsonVulnerability(vulnerabilitiesRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaVulnerabilityFunc {
+func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		tech := target.Technology
+		if tech == "" {
+			tech = techutils.Technology(impactedPackagesType)
+		}
 		*vulnerabilitiesRows = append(*vulnerabilitiesRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: vulnerability.Summary,
@@ -246,7 +248,7 @@ func addSimpleJsonVulnerability(vulnerabilitiesRows *[]formats.VulnerabilityOrVi
 				References:               vulnerability.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(vulnerability.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               techutils.Technology(vulnerability.Technology),
+				Technology:               tech,
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
@@ -254,8 +256,12 @@ func addSimpleJsonVulnerability(vulnerabilitiesRows *[]formats.VulnerabilityOrVi
 	}
 }
 
-func addSimpleJsonSecurityViolation(securityViolationsRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaViolationFunc {
+func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolationsRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		tech := target.Technology
+		if tech == "" {
+			tech = techutils.Technology(impactedPackagesType)
+		}
 		*securityViolationsRows = append(*securityViolationsRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: violation.Summary,
@@ -276,7 +282,7 @@ func addSimpleJsonSecurityViolation(securityViolationsRows *[]formats.Vulnerabil
 				References:               violation.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               techutils.Technology(violation.Technology),
+				Technology:               tech,
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
@@ -374,23 +380,22 @@ func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow) results.P
 func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif.Run) ([]formats.SourceCodeRow, error) {
 	var rows []formats.SourceCodeRow
 	err := results.ApplyHandlerToJasIssues(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
-		scannerDescription := ""
-		if rule != nil {
-			scannerDescription = sarifutils.GetRuleFullDescription(rule)
-		}
 		rows = append(rows,
 			formats.SourceCodeRow{
-				RuleId:  sarifutils.GetResultRuleId(result),
-				IssueId: sarifutils.GetResultIssueId(result),
-				CWE:     sarifutils.GetRuleCWE(rule),
+				ScannerInfo: formats.ScannerInfo{
+					RuleId:                  sarifutils.GetResultRuleId(result),
+					Cwe:                     sarifutils.GetRuleCWE(rule),
+					ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
+					ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),
+				},
 				ViolationContext: formats.ViolationContext{
 					Watch:    sarifutils.GetResultWatches(result),
+					IssueId:  sarifutils.GetResultIssueId(result),
 					Policies: sarifutils.GetResultPolicies(result),
 				},
-				SeverityDetails:    severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
-				Finding:            sarifutils.GetResultMsgText(result),
-				ScannerDescription: scannerDescription,
-				Fingerprint:        sarifutils.GetResultFingerprint(result),
+				SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
+				Finding:         sarifutils.GetResultMsgText(result),
+				Fingerprint:     sarifutils.GetResultFingerprint(result),
 				Location: formats.Location{
 					File:        sarifutils.GetRelativeLocationFileName(location, run.Invocations),
 					StartLine:   sarifutils.GetLocationStartLine(location),

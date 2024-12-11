@@ -549,6 +549,9 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 }
 
 func GetDependencyId(depName, version string) string {
+	if version == "" {
+		return depName
+	}
 	return fmt.Sprintf("%s:%s", depName, version)
 }
 
