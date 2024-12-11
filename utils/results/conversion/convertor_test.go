@@ -51,6 +51,16 @@ func getAuditValidationParams() validations.ValidationParams {
 	}
 }
 
+// 3 Vuln
+// 5 SCA vuln (1 applic, 3 not applic, 1 not covered)
+// 0 IAC vuln
+// 0 SAST vuln
+// 0 Secrets vuln
+// 2 vio
+// 2 SCA vio (1 applic, 1 not covered)
+// 0 IAC vio
+// 0 SAST vio
+// 0 Secrets vio
 func getAuditTestResults() *results.SecurityCommandResults {
 	cmdResults := results.NewCommandResults(utils.SourceCode)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
@@ -63,12 +73,12 @@ func getAuditTestResults() *results.SecurityCommandResults {
 				Cves: []services.Cve{{
 					Id: "CVE-2024-39249",
 				}},
-				Summary:  "Prototype Pollution",
+				Summary:  "Async vulnerable to ReDoS",
 				Severity: severityutils.Unknown.String(),
 				Components: map[string]services.Component{
 					"npm://async:3.2.4": {
 						ImpactPaths: [][]services.ImpactPathNode{{
-							{ComponentId: "npm://ejs:3.1.6"},
+							{ComponentId: "npm://froghome:1.0.0"},
 							{ComponentId: "npm://jake:10.8.7"},
 							{ComponentId: "npm://async:3.2.4"},
 						}},
@@ -77,8 +87,109 @@ func getAuditTestResults() *results.SecurityCommandResults {
 				IssueId:             "XRAY-609848",
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
 			},
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2020-8203",
+				}},
+				Summary:  "Code Injection",
+				Severity: severityutils.High.String(),
+				Components: map[string]services.Component{
+					"npm://lodash:4.17.0": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://lodash:4.17.0"},
+						}},
+						FixedVersions: []string{"[4.17.19]"},
+					},
+					"npm://ejs:3.1.6": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://lodash:4.17.0"},
+							{ComponentId: "npm://ejs:3.1.6"},
+						}},
+						FixedVersions: []string{"[3.1.7]"},
+                    },
+				},
+				IssueId:             "XRAY-114089",
+				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
+			},
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2018-16487",
+				}},
+				Summary:  "Prototype Pollution",
+				Severity: severityutils.Medium.String(),
+				Components: map[string]services.Component{
+					"npm://lodash:4.17.0": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://lodash:4.17.0"},
+						}},
+						FixedVersions: []string{"[4.17.11]"},
+					},
+				},
+				IssueId:             "XRAY-75300",
+				ExtendedInformation: &services.ExtendedInformation{Remediation: "Some remediation"},
+			},
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2018-3721",
+				}},
+				Summary:  "Improperly Controlled Modification of Object",
+				Severity: severityutils.Medium.String(),
+				Components: map[string]services.Component{
+					"npm://lodash:4.17.0": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://lodash:4.17.0"},
+						}},
+						FixedVersions: []string{"[4.17.5]"},
+					},
+				},
+				IssueId:             "XRAY-72918",
+			},
 		},
-		Violations:    []services.Violation{},
+		Violations:    []services.Violation{
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2024-39249",
+				}},
+				Summary:  "Async vulnerable to ReDoS",
+				Severity: severityutils.Unknown.String(),
+				Components: map[string]services.Component{
+					"npm://async:3.2.4": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://jake:10.8.7"},
+							{ComponentId: "npm://async:3.2.4"},
+						}},
+					},
+				},
+				WatchName: "security-watch",
+				Policies: []services.Policy{{Policy: "npm-security"}},
+				IssueId:             "XRAY-609848",
+				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
+			},
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2018-3721",
+				}},
+				Summary:  "Improperly Controlled Modification of Object",
+				Severity: severityutils.Medium.String(),
+				Components: map[string]services.Component{
+					"npm://lodash:4.17.0": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://froghome:1.0.0"},
+							{ComponentId: "npm://lodash:4.17.0"},
+						}},
+						FixedVersions: []string{"[4.17.5]"},
+					},
+				},
+				WatchName: "security-watch",
+				Policies: []services.Policy{{Policy: "npm-security"}},
+				IssueId:             "XRAY-72918",
+			},
+		},
 		ScannedStatus: "completed",
 	})
 	// Contextual analysis scan results
@@ -88,19 +199,57 @@ func getAuditTestResults() *results.SecurityCommandResults {
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
 					createDummyApplicabilityRule("CVE-2024-39249", jasutils.Applicable),
 					createDummyApplicabilityRule("CVE-2018-16487", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2020-8203", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2018-3721", jasutils.NotCovered),
 				),
 			},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
 			Results: []*sarif.Result{
-				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
-				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
 				// Not Applicable result = remediation location, not a finding add for test confirmation
-				createDummyApplicableResults("CVE-2018-16487", formats.Location{File: "file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+				createDummyApplicableResults("CVE-2018-16487", formats.Location{File: "/Users/user/project-with-issues/file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
 			},
 		},
 	)
-	// Jas scan results
-
+	// Secrets scan results
+	npmTargetResults.JasResults.NewJasScanResults(jasutils.Secrets, 
+		[]*sarif.Run{{
+			Tool: sarif.Tool{
+				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
+					createDummyApplicabilityRule("CVE-2024-39249", jasutils.Applicable),
+					createDummyApplicabilityRule("CVE-2018-16487", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2020-8203", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2018-3721", jasutils.NotCovered),
+				),
+			},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Results: []*sarif.Result{
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				// Not Applicable result = remediation location, not a finding add for test confirmation
+				createDummyApplicableResults("CVE-2018-16487", formats.Location{File: "/Users/user/project-with-issues/file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+			},
+		}},
+		[]*sarif.Run{{
+			Tool: sarif.Tool{
+				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
+					createDummyApplicabilityRule("CVE-2024-39249", jasutils.Applicable),
+					createDummyApplicabilityRule("CVE-2018-16487", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2020-8203", jasutils.NotApplicable),
+					createDummyApplicabilityRule("CVE-2018-3721", jasutils.NotCovered),
+				),
+			},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Results: []*sarif.Result{
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				// Not Applicable result = remediation location, not a finding add for test confirmation
+				createDummyApplicableResults("CVE-2018-16487", formats.Location{File: "/Users/user/project-with-issues/file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+			},
+		}},
+		0,
+	)
 	return cmdResults
 }
 
