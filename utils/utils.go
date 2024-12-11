@@ -186,6 +186,10 @@ func NewFloat64Ptr(v float64) *float64 {
 	return &v
 }
 
+func NewStrPtr(v string) *string {
+	return &v
+}
+
 func Md5Hash(values ...string) (string, error) {
 	return toHash(crypto.MD5, values...)
 }

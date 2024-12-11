@@ -7,6 +7,11 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -48,8 +53,75 @@ func getAuditValidationParams() validations.ValidationParams {
 
 func getAuditTestResults() *results.SecurityCommandResults {
 	cmdResults := results.NewCommandResults(utils.SourceCode)
+	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
+	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: "/Users/user/project-with-issues", Technology: techutils.Npm}).SetDescriptors("/Users/user/project-with-issues/package.json")
+	// SCA scan results
+	npmTargetResults.NewScaScanResults(0, services.ScanResponse{
+		ScanId: "711851ce-68c4-4dfd-7afb-c29737ebcb96",
+		Vulnerabilities: []services.Vulnerability{
+			{
+				Cves: []services.Cve{{
+					Id: "CVE-2024-39249",
+				}},
+				Summary:  "Prototype Pollution",
+				Severity: severityutils.Unknown.String(),
+				Components: map[string]services.Component{
+					"npm://async:3.2.4": {
+						ImpactPaths: [][]services.ImpactPathNode{{
+							{ComponentId: "npm://ejs:3.1.6"},
+							{ComponentId: "npm://jake:10.8.7"},
+							{ComponentId: "npm://async:3.2.4"},
+						}},
+					},
+				},
+				IssueId:             "XRAY-609848",
+				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
+			},
+		},
+		Violations:    []services.Violation{},
+		ScannedStatus: "completed",
+	})
+	// Contextual analysis scan results
+	npmTargetResults.JasResults.NewApplicabilityScanResults(0,
+		&sarif.Run{
+			Tool: sarif.Tool{
+				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
+					createDummyApplicabilityRule("CVE-2024-39249", jasutils.Applicable),
+					createDummyApplicabilityRule("CVE-2018-16487", jasutils.NotApplicable),
+				),
+			},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Results: []*sarif.Result{
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				createDummyApplicableResults("CVE-2024-39249", formats.Location{File: "file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				// Not Applicable result = remediation location, not a finding add for test confirmation
+				createDummyApplicableResults("CVE-2018-16487", formats.Location{File: "file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+			},
+		},
+	)
+	// Jas scan results
 
 	return cmdResults
+}
+
+func createDummyApplicabilityRule(cve string, applicableStatus jasutils.ApplicabilityStatus) *sarif.ReportingDescriptor {
+	return &sarif.ReportingDescriptor{
+		ID:               fmt.Sprintf("applic_%s", cve),
+		Name:             &cve,
+		ShortDescription: sarif.NewMultiformatMessageString(fmt.Sprintf("Scanner for %s", cve)),
+		FullDescription:  sarif.NewMultiformatMessageString(fmt.Sprintf("The Scanner checks for %s", cve)),
+		Properties:       map[string]interface{}{"applicability": applicableStatus.String()},
+	}
+}
+
+func createDummyApplicableResults(cve string, location formats.Location) *sarif.Result {
+	return &sarif.Result{
+		Message: *sarif.NewTextMessage("ca msg"),
+		RuleID:  utils.NewStrPtr(fmt.Sprintf("applic_%s", cve)),
+		Locations: []*sarif.Location{
+			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
+		},
+	}
 }
 
 // For Summary we count unique CVE finding (issueId), for SARIF and SimpleJson we count all findings (pair of issueId+impactedComponent)

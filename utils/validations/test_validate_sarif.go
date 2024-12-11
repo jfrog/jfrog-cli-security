@@ -18,7 +18,8 @@ const (
 	SastToolName = "🐸 JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
-	SecretsToolName = "JFrog Secrets scanner"
+	SecretsToolName            = "JFrog Secrets scanner"
+	ContextualAnalysisToolName = "JFrog Applicability Scanner"
 )
 
 // Validate sarif report according to the expected values and issue counts in the validation params.

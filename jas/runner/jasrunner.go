@@ -48,10 +48,10 @@ type JasRunnerParams struct {
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
-	// if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
-	// 	return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
-	// }
-	params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
+	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
+	}
+	// params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
@@ -194,7 +194,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
 		// We first add the scan results and than check for errors to store the exit code to report it in the end
-		scanResults.JasResults.NewApplicabilityScanResults(caScanResults, jas.GetAnalyzerManagerExitCode(err))
+		scanResults.JasResults.NewApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
