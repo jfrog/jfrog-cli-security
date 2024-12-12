@@ -65,16 +65,23 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
+func shouldUpdateStatus(currentStatus, newStatus *int) bool {
+	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
+		return true
+	}
+	return false
+}
+
 func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	if sjc.current.Statuses.ScaStatusCode == nil || *sjc.current.Statuses.ScaStatusCode == 0 {
+	if shouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &scaResponse.StatusCode) {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
-	for _, applicableScan := range applicableScan {
-		if sjc.current.Statuses.ApplicabilityStatusCode == nil || *sjc.current.Statuses.ApplicabilityStatusCode == 0 {
-			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan.StatusCode
+	for i := range applicableScan {
+		if shouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
 	if violations {
@@ -133,9 +140,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isV
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	for _, secretScan := range secrets {
-		if sjc.current.Statuses.SecretsStatusCode == nil || *sjc.current.Statuses.SecretsStatusCode == 0 {
-			sjc.current.Statuses.SecretsStatusCode = &secretScan.StatusCode
+	for i := range secrets {
+		if shouldUpdateStatus(sjc.current.Statuses.SecretsStatusCode, &secrets[i].StatusCode) {
+			sjc.current.Statuses.SecretsStatusCode = &secrets[i].StatusCode
 		}
 	}
 	secretsSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(secrets)...)
@@ -157,9 +164,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	for _, iacsScan := range iacs {
-		if sjc.current.Statuses.IacStatusCode == nil || *sjc.current.Statuses.IacStatusCode == 0 {
-			sjc.current.Statuses.IacStatusCode = &iacsScan.StatusCode
+	for i := range iacs {
+		if shouldUpdateStatus(sjc.current.Statuses.IacStatusCode, &iacs[i].StatusCode) {
+			sjc.current.Statuses.IacStatusCode = &iacs[i].StatusCode
 		}
 	}
 	iacSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(iacs)...)
@@ -181,9 +188,9 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	for _, sastScan := range sast {
-		if sjc.current.Statuses.SastStatusCode == nil || *sjc.current.Statuses.SastStatusCode == 0 {
-			sjc.current.Statuses.SastStatusCode = &sastScan.StatusCode
+	for i := range sast {
+		if shouldUpdateStatus(sjc.current.Statuses.SastStatusCode, &sast[i].StatusCode) {
+			sjc.current.Statuses.SastStatusCode = &sast[i].StatusCode
 		}
 	}
 	sastSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(sast)...)

@@ -4,6 +4,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -264,8 +265,11 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViola
 	if !isViolationsResults && sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults && sc.currentScan.Violations.SecretsResults == nil {
-		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
+	if isViolationsResults {
+		if sc.currentScan.Violations.SecretsResults == nil {
+			sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
+		}
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(secrets...)...)
 	}
 	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
@@ -281,8 +285,11 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 	if !isViolationsResults && sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults && sc.currentScan.Violations.IacResults == nil {
-		sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
+	if isViolationsResults {
+		if sc.currentScan.Violations.IacResults == nil {
+			sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
+		}
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(iacs...)...)
 	}
 	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
@@ -298,8 +305,11 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 	if !isViolationsResults && sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults && sc.currentScan.Violations.SastResults == nil {
-		sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
+	if isViolationsResults {
+		if sc.currentScan.Violations.SastResults == nil {
+			sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
+		}
+		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(sast...)...)
 	}
 	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
@@ -310,10 +320,14 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 			// Only count the issue if it has a location
 			return
 		}
-		// Get the scanType count
+		// Get the scanType count and status
+		resultStatus := formats.NoStatus
 		var count *formats.ResultSummary
 		switch scanType {
 		case jasutils.Secrets:
+			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus != "" {
+				resultStatus = tokenStatus
+			}
 			if violations {
 				count = sc.currentScan.Violations.SecretsResults
 			} else {
@@ -339,7 +353,20 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 		if _, ok := (*count)[severity.String()]; !ok {
 			(*count)[severity.String()] = map[string]int{}
 		}
-		(*count)[severity.String()][formats.NoStatus] += 1
+		(*count)[severity.String()][resultStatus] += 1
 		return
 	}
+}
+
+func getJasScansWatches(scans ...results.ScanResult[[]*sarif.Run]) (watches []string) {
+	for _, scanInfo := range scans {
+		for _, run := range scanInfo.Scan {
+			for _, result := range run.Results {
+				if watch := sarifutils.GetResultWatches(result); watch != "" {
+					watches = append(watches, watch)
+				}
+			}
+		}
+	}
+	return
 }

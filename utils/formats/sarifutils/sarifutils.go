@@ -98,7 +98,7 @@ func GetToolVersion(run *sarif.Run) string {
 
 func CopyRun(run *sarif.Run) *sarif.Run {
 	copy := CopyRunMetadata(run)
-	if copy.Tool.Driver != nil {
+	if run.Tool.Driver != nil {
 		copy.Tool.Driver.Rules = CopyRules(run.Tool.Driver.Rules...)
 	}
 	for _, result := range run.Results {

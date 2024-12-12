@@ -65,18 +65,22 @@ func TestGetComponentSarifLocation(t *testing.T) {
 }
 
 func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
-	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))
-	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
 }
 
 func TestGetScaSecurityViolationSarifHeadline(t *testing.T) {
-	assert.Equal(t, "Security violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))
-	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
+	assert.Equal(t, "Security violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1 (watch)", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", "watch"))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", "watch"))
 }
 
 func TestGetXrayLicenseSarifHeadline(t *testing.T) {
-	assert.Equal(t, "License violation [MIT] in loadsh 1.4.1", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT"))
-	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT"))
+	assert.Equal(t, "License violation [MIT] in loadsh 1.4.1", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT", ""))
+	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT", ""))
+	assert.Equal(t, "[MIT] in loadsh 1.4.1 (watch)", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT", "watch"))
+	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT", "watch"))
 }
 
 func TestGetLicenseViolationSummary(t *testing.T) {

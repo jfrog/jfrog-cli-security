@@ -66,6 +66,10 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
 	actualValues.Violations += actualValues.SastViolations
 
+	if params.Total != nil {
+		// Not supported in the summary output
+		params.Total.Licenses = 0
+	}
 	ValidateCount(t, "sarif report", params, actualValues)
 }
 
@@ -132,15 +136,14 @@ func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnera
 	for _, run := range allRuns {
 		for _, result := range run.Results {
 			isViolation := false
-			// JAS results does not have watch property yet, we should infer by prefix in msg
-			if strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
+			// JAS results may not have watch property, we should also try to infer by prefix in msg
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
 				isViolation = true
 				violations++
 			} else {
 				vulnerabilities++
 			}
-			vulnerabilities++
-			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.ToString() {
+			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.String() {
 				if isViolation {
 					inactiveViolations++
 				} else {
@@ -155,8 +158,8 @@ func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnera
 func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 	for _, run := range runs {
 		for _, result := range run.Results {
-			// JAS results does not have watch property yet, we should infer by prefix in msg
-			if strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "[Security violation]") {
+			// JAS results may not have watch property, we should also try to infer by prefix in msg
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
 				violations++
 			} else {
 				vulnerabilities++

@@ -70,7 +70,8 @@ type currentTargetState struct {
 type scaParseParams struct {
 	CmdType                                                                                        utils.CommandType
 	IssueId, Summary, MarkdownDescription, CveScore, ImpactedPackagesName, ImpactedPackagesVersion string
-	GenerateTitleFunc                                                                              func(depName string, version string, issueId string) string
+	Watch string
+	GenerateTitleFunc                                                                              func(depName string, version string, issueId string, watch string) string
 	Cves                                                                                           []formats.CveRow
 	Severity                                                                                       severityutils.Severity
 	ApplicabilityStatus                                                                            jasutils.ApplicabilityStatus
@@ -351,6 +352,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 violation.IssueId,
+			Watch: 				     violation.WatchName,
 			Summary:                 violation.Summary,
 			MarkdownDescription:     markdownDescription,
 			CveScore:                maxCveScore,
@@ -389,6 +391,7 @@ func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sar
 		}
 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
 			CmdType:                 cmdType,
+			Watch: 				     violation.WatchName,
 			IssueId:                 violation.LicenseKey,
 			Summary:                 getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
 			MarkdownDescription:     markdownDescription,
@@ -424,7 +427,7 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
 		cveImpactedComponentRuleId,
-		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId),
+		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId, params.Watch),
 		params.CveScore,
 		params.Summary,
 		params.MarkdownDescription,
@@ -432,7 +435,7 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	for _, directDependency := range params.DirectComponents {
 		// Create result for each direct dependency
 		issueResult := sarif.NewRuleResult(cveImpactedComponentRuleId).
-			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId))).
+			WithMessage(sarif.NewTextMessage(params.GenerateTitleFunc(directDependency.Name, directDependency.Version, issueId, params.Watch))).
 			WithLevel(level.String())
 		// Add properties
 		resultsProperties := sarif.NewPropertyBag()
@@ -525,16 +528,30 @@ func getDirectDependenciesFormatted(directDependencies []formats.ComponentRow) (
 	return strings.TrimSuffix(formattedDirectDependencies.String(), "<br/>"), nil
 }
 
-func getScaVulnerabilitySarifHeadline(depName, version, issueId string) string {
-	return fmt.Sprintf("[%s] %s %s", issueId, depName, version)
+func getScaVulnerabilitySarifHeadline(depName, version, issueId, watch string) string {
+	headline := fmt.Sprintf("[%s] %s %s", issueId, depName, version)
+	if watch != "" {
+		headline = fmt.Sprintf("%s (%s)", headline, watch)
+	}
+	return headline
 }
 
-func getScaSecurityViolationSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("Security violation %s", getScaVulnerabilitySarifHeadline(depName, version, key))
+func getScaSecurityViolationSarifHeadline(depName, version, key, watch string) string {
+	headline := getScaVulnerabilitySarifHeadline(depName, version, key, watch)
+	if watch == "" {
+		return fmt.Sprintf("Security violation %s", headline)
+	}
+	return headline
 }
 
-func getXrayLicenseSarifHeadline(depName, version, key string) string {
-	return fmt.Sprintf("License violation [%s] in %s %s", key, depName, version)
+func getXrayLicenseSarifHeadline(depName, version, key, watch string) string {
+	headline := fmt.Sprintf("[%s] in %s %s", key, depName, version)
+	if watch != "" {
+		headline = fmt.Sprintf("%s (%s)", headline, watch)
+	} else {
+		headline = fmt.Sprintf("License violation %s", headline)
+	}
+	return headline
 }
 
 func getLicenseViolationSummary(depName, version, key string) string {
