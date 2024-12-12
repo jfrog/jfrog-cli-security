@@ -58,6 +58,7 @@ func TestGetConfigProfileByName(t *testing.T) {
 	}
 }
 
+// TODO fix test. add repoInfo to mock also
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -80,6 +81,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
+			// TODO eran fix test. HOW do I create a mock for git client like in FROGBOT?
 			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails)
 			if testcase.expectError {
 				assert.Error(t, err)
