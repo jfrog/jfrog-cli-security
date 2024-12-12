@@ -224,7 +224,7 @@ func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, m
 	return &sarif.Result{
 		Message: *sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
 		RuleID:  utils.NewStrPtr(id),
-		Level: utils.NewStrPtr(severityutils.LevelInfo.String()),
+		Level:   utils.NewStrPtr(severityutils.LevelInfo.String()),
 		Locations: []*sarif.Location{
 			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
 		},

@@ -39,44 +39,44 @@ func TestConvertResults(t *testing.T) {
 	// dockerScanInputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "dockerscan", "docker_results.json"))
 
 	testCases := []struct {
-		cmdType utils.CommandType
-		contentFormat       conversionFormat
+		cmdType       utils.CommandType
+		contentFormat conversionFormat
 		// inputResults        *results.SecurityCommandResults
 		expectedContentPath string
 	}{
 		{
-			cmdType: utils.SourceCode,
-			contentFormat:       SimpleJson,
+			cmdType:       utils.SourceCode,
+			contentFormat: SimpleJson,
 			// inputResults:        auditInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_simple_json.json"),
 		},
 		{
-			cmdType: utils.SourceCode,
-			contentFormat:       Sarif,
+			cmdType:       utils.SourceCode,
+			contentFormat: Sarif,
 			// inputResults:        auditInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_sarif.json"),
 		},
 		{
-			cmdType: utils.SourceCode,
-			contentFormat:       Summary,
+			cmdType:       utils.SourceCode,
+			contentFormat: Summary,
 			// inputResults:        auditInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_summary.json"),
 		},
 		{
-			cmdType: utils.DockerImage,
-			contentFormat:       SimpleJson,
+			cmdType:       utils.DockerImage,
+			contentFormat: SimpleJson,
 			// inputResults:        dockerScanInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_simple_json.json"),
 		},
 		{
-			cmdType: utils.DockerImage,
-			contentFormat:       Sarif,
+			cmdType:       utils.DockerImage,
+			contentFormat: Sarif,
 			// inputResults:        dockerScanInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_sarif.json"),
 		},
 		{
-			cmdType: utils.DockerImage,
-			contentFormat:       Summary,
+			cmdType:       utils.DockerImage,
+			contentFormat: Summary,
 			// inputResults:        dockerScanInputResults,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_summary.json"),
 		},
@@ -85,7 +85,7 @@ func TestConvertResults(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(fmt.Sprintf("%s convert to %s", testCase.cmdType, testCase.contentFormat), func(t *testing.T) {
 			var validationParams validations.ValidationParams
-			var inputResults        *results.SecurityCommandResults
+			var inputResults *results.SecurityCommandResults
 			switch testCase.cmdType {
 			case utils.SourceCode:
 				inputResults, validationParams = getAuditTestResults(testCase.contentFormat == Summary)
@@ -156,7 +156,7 @@ func validateSummaryConversion(t *testing.T, expectedResults formats.ResultsSumm
 	// content, err := utils.GetAsJsonBytes(actualResults, true, true)
 	// assert.NoError(t, err)
 	// os.WriteFile("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/tests/testdata/output/dockerscan/docker_summary.json", content, 0644)
-	
+
 	validations.ValidateCommandSummaryOutput(t, validationParams)
 }
 
@@ -225,9 +225,9 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 						}},
 					},
 				},
-				IssueId:             "XRAY-609848",
+				IssueId: "XRAY-609848",
 				ExtendedInformation: &services.ExtendedInformation{
-					ShortDescription:              "ReDoS in Async may lead to denial of service while parsing",
+					ShortDescription:      "ReDoS in Async may lead to denial of service while parsing",
 					JfrogResearchSeverity: "Low",
 					JfrogResearchSeverityReasons: []services.JfrogResearchSeverityReason{
 						{Name: "The reported CVSS was either wrongly calculated", Description: "The reported CVSS does not reflect the severity of the vulnerability", IsPositive: true},
@@ -237,7 +237,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 			{
 				Cves: []services.Cve{{
-					Id: "CVE-2020-8203",
+					Id:          "CVE-2020-8203",
 					CvssV2Score: "5.8",
 					CvssV3Score: "7.4",
 				}},
@@ -301,7 +301,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType:  utils.ViolationTypeSecurity.String(),
+				ViolationType: utils.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-39249",
 				}},
@@ -322,7 +322,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
 			},
 			{
-				ViolationType:  utils.ViolationTypeSecurity.String(),
+				ViolationType: utils.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2018-3721",
 				}},
@@ -343,9 +343,9 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 			{
 				ViolationType: utils.ViolationTypeLicense.String(),
-				LicenseKey:   "MIT",
-				LicenseName: "MIT full name",
-				Severity:    severityutils.High.String(),
+				LicenseKey:    "MIT",
+				LicenseName:   "MIT full name",
+				Severity:      severityutils.High.String(),
 				Components: map[string]services.Component{
 					"npm://lodash:4.17.0": {
 						ImpactPaths: [][]services.ImpactPathNode{{
@@ -361,8 +361,8 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 		Licenses: []services.License{
 			{
-				Key: 	 "MIT",
-				Name:    "MIT full name",
+				Key:  "MIT",
+				Name: "MIT full name",
 				Components: map[string]services.Component{
 					"npm://lodash:4.17.0": {
 						ImpactPaths: [][]services.ImpactPathNode{{
@@ -522,11 +522,11 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
 								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
-								FullPath: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
 								ComponentId: "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1",
-								FullPath: "libssl3:3.0.13-1~deb12u1",
+								FullPath:    "libssl3:3.0.13-1~deb12u1",
 							},
 						}},
 					},
@@ -546,11 +546,11 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
 								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
-								FullPath: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
 								ComponentId: "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1",
-								FullPath: "libssl3:3.0.13-1~deb12u1",
+								FullPath:    "libssl3:3.0.13-1~deb12u1",
 							},
 						}},
 					},
@@ -559,11 +559,11 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
 								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
-								FullPath: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
 								ComponentId: "deb://debian:bookworm:openssl:3.0.13-1~deb12u1",
-								FullPath: "openssl:3.0.13-1~deb12u1",
+								FullPath:    "openssl:3.0.13-1~deb12u1",
 							},
 						}},
 						FixedVersions: []string{"[3.0.14-1~deb12u2]"},
@@ -575,7 +575,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType:  utils.ViolationTypeSecurity.String(),
+				ViolationType: utils.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-6119",
 				}},
@@ -587,19 +587,19 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
 								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
-								FullPath: "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
 								ComponentId: "deb://debian:bookworm:libssl3:3.0.13-1~deb12u1",
-								FullPath: "libssl3:3.0.13-1~deb12u1",
+								FullPath:    "libssl3:3.0.13-1~deb12u1",
 							},
 						}},
 					},
 				},
 				IssueId:             "XRAY-632747",
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Medium"},
-				WatchName: 		 "security-watch",
-				Policies: 		 []services.Policy{{Policy: "debian-security"}},
+				WatchName:           "security-watch",
+				Policies:            []services.Policy{{Policy: "debian-security"}},
 			},
 		},
 		ScannedStatus: "completed",
@@ -614,7 +614,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 				),
 			},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("temp/folders/T/jfrog.cli.temp.-11-11"))},
-			Results: []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file:///usr/local/bin/node"})},
+			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file:///usr/local/bin/node"})},
 		},
 	)
 	// Secrets scan results

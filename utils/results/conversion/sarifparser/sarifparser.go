@@ -70,7 +70,7 @@ type currentTargetState struct {
 type scaParseParams struct {
 	CmdType                                                                                        utils.CommandType
 	IssueId, Summary, MarkdownDescription, CveScore, ImpactedPackagesName, ImpactedPackagesVersion string
-	Watch string
+	Watch                                                                                          string
 	GenerateTitleFunc                                                                              func(depName string, version string, issueId string, watch string) string
 	Cves                                                                                           []formats.CveRow
 	Severity                                                                                       severityutils.Severity
@@ -352,7 +352,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
 			CmdType:                 cmdType,
 			IssueId:                 violation.IssueId,
-			Watch: 				     violation.WatchName,
+			Watch:                   violation.WatchName,
 			Summary:                 violation.Summary,
 			MarkdownDescription:     markdownDescription,
 			CveScore:                maxCveScore,
@@ -391,7 +391,7 @@ func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sar
 		}
 		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
 			CmdType:                 cmdType,
-			Watch: 				     violation.WatchName,
+			Watch:                   violation.WatchName,
 			IssueId:                 violation.LicenseKey,
 			Summary:                 getLicenseViolationSummary(impactedPackagesName, impactedPackagesVersion, violation.LicenseKey),
 			MarkdownDescription:     markdownDescription,

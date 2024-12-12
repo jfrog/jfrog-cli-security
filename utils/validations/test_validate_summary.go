@@ -65,8 +65,7 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 			if scan.Vulnerabilities.SecretsResults != nil {
 				for _, counts := range *scan.Vulnerabilities.SecretsResults {
 					for status, count := range counts {
-						switch status {
-						case jasutils.Inactive.String():
+						if status == jasutils.Inactive.String() {
 							actualValues.InactiveSecretsVulnerabilities += count
 						}
 					}
@@ -95,8 +94,7 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 			if scan.Violations.SecretsResults != nil {
 				for _, counts := range *scan.Violations.SecretsResults {
 					for status, count := range counts {
-						switch status {
-						case jasutils.Inactive.String():
+						if status == jasutils.Inactive.String() {
 							actualValues.InactiveSecretsViolations += count
 						}
 					}
