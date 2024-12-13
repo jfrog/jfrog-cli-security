@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
@@ -372,6 +373,14 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	// third check for platform api
 	isEnabled, err := xrayManager.IsTokenValidationEnabled()
 	return err == nil && isEnabled
+}
+
+// Analyzer Manager expect the git repo url to be in the env vars in a specific way, this function will return the key for the git repo url
+func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
+	if gitRepoHttpsCloneUrl == "" {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }
 
 func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl string, watches []string, technologies ...techutils.Technology) map[string]string {

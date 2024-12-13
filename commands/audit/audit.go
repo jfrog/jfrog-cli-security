@@ -30,11 +30,11 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
-	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
 type AuditCommand struct {
 	watches                []string
+	gitRepoHttpsCloneUrl   string
 	projectKey             string
 	targetRepoPath         string
 	IncludeVulnerabilities bool
@@ -51,6 +51,11 @@ func NewGenericAuditCommand() *AuditCommand {
 
 func (auditCmd *AuditCommand) SetWatches(watches []string) *AuditCommand {
 	auditCmd.watches = watches
+	return auditCmd
+}
+
+func (auditCmd *AuditCommand) SetGitRepoHttpsCloneUrl(gitRepoHttpsCloneUrl string) *AuditCommand {
+	auditCmd.gitRepoHttpsCloneUrl = gitRepoHttpsCloneUrl
 	return auditCmd
 }
 
@@ -90,15 +95,15 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGraphScanParams {
-	commonParams := &scangraph.CommonGraphScanParams{
-		RepoPath: auditCmd.targetRepoPath,
-		Watches:  auditCmd.watches,
-		ScanType: services.Dependency,
+	return &scangraph.CommonGraphScanParams{
+		RepoPath:               auditCmd.targetRepoPath,
+		Watches:                auditCmd.watches,
+		ProjectKey:             auditCmd.projectKey,
+		GitRepoHttpsCloneUrl:   auditCmd.gitRepoHttpsCloneUrl,
+		IncludeVulnerabilities: auditCmd.IncludeVulnerabilities,
+		IncludeLicenses:        auditCmd.IncludeLicenses,
+		ScanType:               services.Dependency,
 	}
-	commonParams.ProjectKey = auditCmd.projectKey
-	commonParams.IncludeVulnerabilities = auditCmd.IncludeVulnerabilities
-	commonParams.IncludeLicenses = auditCmd.IncludeLicenses
-	return commonParams
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
@@ -126,7 +131,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
 		SetCommonGraphScanParams(auditCmd.CreateCommonGraphScanParams()).
-		SetGitInfoContext(auditCmd.gitInfoContext).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
@@ -173,7 +177,7 @@ func (auditCmd *AuditCommand) CommandName() string {
 }
 
 func (auditCmd *AuditCommand) HasViolationContext() bool {
-	return len(auditCmd.watches) > 0 || auditCmd.projectKey != "" || auditCmd.targetRepoPath != "" || (auditCmd.gitInfoContext != nil && auditCmd.gitInfoContext.GitRepoHttpsCloneUrl != "")
+	return len(auditCmd.watches) > 0 || auditCmd.gitRepoHttpsCloneUrl != "" || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
 }
 
 // Runs an audit scan based on the provided auditParams.
@@ -242,7 +246,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		auditParams.minSeverityFilter,
 		jas.GetAnalyzerManagerXscEnvVars(
 			auditParams.GetMultiScanId(),
-			getGitRepoUrlKey(auditParams.gitInfoContext),
+			jas.GetGitRepoUrlKey(auditParams.commonGraphScanParams.GitRepoHttpsCloneUrl),
 			auditParams.commonGraphScanParams.Watches,
 			scanResults.GetTechnologies()...,
 		),
@@ -263,13 +267,6 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		generalError = fmt.Errorf("failed to create JAS task: %s", jasErr.Error())
 	}
 	return
-}
-
-func getGitRepoUrlKey(gitInfoContext *services.XscGitInfoContext) string {
-	if gitInfoContext == nil {
-		return ""
-	}
-	return xscutils.GetGitRepoUrlKey(gitInfoContext.GitRepoHttpsCloneUrl)
 }
 
 func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scanResults *results.SecurityCommandResults,

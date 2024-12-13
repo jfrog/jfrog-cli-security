@@ -21,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/urfave/cli"
 	"os"
 	"strings"
@@ -408,8 +407,6 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
-	auditCmd.SetGitInfoContext(&services.XscGitInfoContext{GitRepoHttpsCloneUrl: "github.com/jfrog/jfrog-cli-security.git"})
-
 	allSubScans := utils.GetAllSupportedScans()
 	subScans := []utils.SubScanType{}
 	for _, subScan := range allSubScans {
@@ -489,6 +486,8 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
+
+	auditCmd.SetGitRepoHttpsCloneUrl("github.com/jfrog/jfrog-cli-security.git")
 
 	if c.GetStringFlagValue(flags.WorkingDirs) != "" {
 		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))

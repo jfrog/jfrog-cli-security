@@ -70,7 +70,7 @@ func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
 }
 
 func TestGetScaSecurityViolationSarifHeadline(t *testing.T) {
-	assert.Equal(t, "Security violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
+	assert.Equal(t, "Security Violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
 	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
 	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1 (watch)", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", "watch"))
 	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", "watch"))
@@ -493,11 +493,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
 			},
-			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
-				),
-			},
+			expectedResults: []*sarif.Run{getExpectedSecretViolationSarifRun(wd, filepath.Join("dir", "file"))},
 		},
 	}
 	for _, tc := range testCases {
@@ -522,4 +518,12 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}
+}
+
+func getExpectedSecretViolationSarifRun(wd string, path string) *sarif.Run {
+	run := sarifutils.CreateRunWithDummyResultsInWd(wd,
+		sarifutils.CreateDummyResult("Security Violation ", "", "rule", "level", sarifutils.CreateDummyLocationInPath(path)),
+	)
+	sarifutils.GetRuleById(run, "rule").ShortDescription = sarif.NewMultiformatMessageString("[Security Violation] ")
+	return run
 }

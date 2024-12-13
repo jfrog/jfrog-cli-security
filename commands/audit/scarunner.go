@@ -154,10 +154,8 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 	xrayScanGraphParams.XrayVersion = params.GetXrayVersion()
 	xrayScanGraphParams.XscVersion = params.GetXscVersion()
 	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.Technology = tech.String()
 
-	if xrayScanGraphParams.XscGitInfoContext != nil {
-		xrayScanGraphParams.XscGitInfoContext.Technologies = []string{tech.String()}
-	}
 	xrayScanGraphParams.DependenciesGraph = &flatTree
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).

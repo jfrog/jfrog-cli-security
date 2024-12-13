@@ -17,6 +17,7 @@ type ScanGraphParams struct {
 type CommonGraphScanParams struct {
 	RepoPath               string
 	ProjectKey             string
+	GitRepoHttpsCloneUrl   string
 	Watches                []string
 	ScanType               services.ScanType
 	IncludeVulnerabilities bool

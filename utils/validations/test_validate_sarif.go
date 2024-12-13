@@ -137,7 +137,7 @@ func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnera
 		for _, result := range run.Results {
 			isViolation := false
 			// JAS results may not have watch property, we should also try to infer by prefix in msg
-			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
 				isViolation = true
 				violations++
 			} else {
@@ -159,7 +159,7 @@ func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 	for _, run := range runs {
 		for _, result := range run.Results {
 			// JAS results may not have watch property, we should also try to infer by prefix in msg
-			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security violation") {
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
 				violations++
 			} else {
 				vulnerabilities++

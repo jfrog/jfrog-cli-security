@@ -390,7 +390,7 @@
           "level": "info",
           "message": {
             "text": "Secret REQ.SECRET.KEYS were found",
-            "markdown": "Security violation Secret REQ.SECRET.KEYS were found"
+            "markdown": "Security Violation Secret REQ.SECRET.KEYS were found"
           },
           "locations": [
             {
@@ -426,7 +426,7 @@
           "level": "info",
           "message": {
             "text": "Secret REQ.SECRET.KEYS were found",
-            "markdown": "Security violation Secret REQ.SECRET.KEYS were found"
+            "markdown": "Security Violation Secret REQ.SECRET.KEYS were found"
           },
           "locations": [
             {
@@ -585,7 +585,7 @@
           "level": "note",
           "message": {
             "text": "Vulnerability js-insecure-random were found",
-            "markdown": "Security violation Vulnerability js-insecure-random were found"
+            "markdown": "Security Violation Vulnerability js-insecure-random were found"
           },
           "locations": [
             {
@@ -620,7 +620,7 @@
           "level": "error",
           "message": {
             "text": "Vulnerability js-template-injection were found",
-            "markdown": "Security violation Vulnerability js-template-injection were found"
+            "markdown": "Security Violation Vulnerability js-template-injection were found"
           },
           "locations": [
             {

@@ -539,7 +539,7 @@ func getScaVulnerabilitySarifHeadline(depName, version, issueId, watch string) s
 func getScaSecurityViolationSarifHeadline(depName, version, key, watch string) string {
 	headline := getScaVulnerabilitySarifHeadline(depName, version, key, watch)
 	if watch == "" {
-		return fmt.Sprintf("Security violation %s", headline)
+		return fmt.Sprintf("Security Violation %s", headline)
 	}
 	return headline
 }
@@ -686,7 +686,7 @@ func patchResultMsg(result *sarif.Result, target results.ScanTarget, commandType
 	}
 	if isJasViolations {
 		// Add prefix to the rule description for violations
-		markdown = fmt.Sprintf("Security violation %s", markdown)
+		markdown = fmt.Sprintf("Security Violation %s", markdown)
 	}
 	sarifutils.SetResultMsgMarkdown(markdown, result)
 }

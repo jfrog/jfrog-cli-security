@@ -253,7 +253,7 @@
           "level": "info",
           "message": {
             "text": "Secret REQ.SECRET.GENERIC.CODE were found",
-            "markdown": "Security violation 🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************\nToken Validation Inactive"
+            "markdown": "Security Violation 🔒 Found Secrets in Binary docker scanning:\nImage: platform.jfrog.io/swamp-docker/swamp:latest\nLayer (sha256): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: usr/src/app/server/index.js\nEvidence: tok************\nToken Validation Inactive"
           },
           "locations": [
             {

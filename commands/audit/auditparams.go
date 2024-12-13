@@ -25,8 +25,6 @@ type AuditParams struct {
 	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
 	startTime                   time.Time
-	// Git params
-	gitInfoContext *services.XscGitInfoContext
 }
 
 func NewAuditParams() *AuditParams {
@@ -124,23 +122,14 @@ func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditPara
 	return params
 }
 
-func (params *AuditParams) SetGitInfoContext(gitInfoContext *services.XscGitInfoContext) *AuditParams {
-	params.gitInfoContext = gitInfoContext
-	return params
-}
-
-func (params *AuditParams) GetGitInfoContext() *services.XscGitInfoContext {
-	return params.gitInfoContext
-}
-
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
 	return &services.XrayGraphScanParams{
 		RepoPath:               params.commonGraphScanParams.RepoPath,
 		Watches:                params.commonGraphScanParams.Watches,
 		ScanType:               params.commonGraphScanParams.ScanType,
 		ProjectKey:             params.commonGraphScanParams.ProjectKey,
+		GitRepoHttpsCloneUrl:   params.commonGraphScanParams.GitRepoHttpsCloneUrl,
 		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
 		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
-		XscGitInfoContext:      params.gitInfoContext,
 	}
 }
