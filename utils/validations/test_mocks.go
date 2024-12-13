@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
@@ -35,6 +36,15 @@ const (
 
 var (
 	versionApiUrl = "/%s/%ssystem/version"
+
+	TestMockGitInfo = xscservices.XscGitInfoContext{
+		GitRepoHttpsCloneUrl: "https://github.com/jfrog/dummy-repo.git",
+		GitProvider:          "github",
+		GitRepoName:          "dummy-repo",
+		GitProject:           "jfrog",
+		BranchName:           "dev",
+		LastCommitHash:       "4be861f9a585d8ae5dde0b9550669972ee05c9d7",
+	}
 )
 
 type restsTestHandler func(w http.ResponseWriter, r *http.Request)

@@ -541,6 +541,11 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 
 // JAS
 
+func TestXrayAuditJasViolationsSimpleJson(t *testing.T) {
+	integration.InitAuditJasTest(t, services.MinXrayVersionGitRepoKey)
+
+}
+
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	testCase := []struct {
@@ -781,4 +786,55 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
 		},
 	})
+}
+
+type auditCommandTestParams struct {
+	// Will combined with "," if provided and be used as --working-dirs flag value
+	WorkingDirsToScan []string
+	// Will be combined with ";" if provided and be used as --exclusions flag value
+	CustomExclusion []string
+	// --format flag value if provided
+	Format string
+	// create watches for the tests that will be used with --watches flag
+	CreateWatchesFuncs []func() (string, func())
+	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
+	FailOnFailedBuildFlag bool
+	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
+	WithVuln bool
+	// --licenses flag value if provided
+	WithLicense bool
+}
+
+func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCommandTestParams) string {
+	args := []string{"audit"}
+	if len(params.WorkingDirsToScan) > 0 {
+		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
+	}
+	if len(params.CustomExclusion) > 0 {
+		args = append(args, "--exclusions="+strings.Join(params.CustomExclusion, ";"))
+	}
+	if params.Format != "" {
+		args = append(args, "--format="+params.Format)
+	}
+	if params.WithLicense {
+		args = append(args, "--licenses")
+	}
+	if len(params.CreateWatchesFuncs) > 0 {
+		for _, createWatch := range params.CreateWatchesFuncs {
+			watchPath, cleanUp := createWatch()
+			defer cleanUp()
+			args = append(args, "--watches="+watchPath)
+		}
+		if params.FailOnFailedBuildFlag {
+			args = append(args, "--fail")
+		}
+		if params.WithVuln {
+			args = append(args, "--vuln")
+		}
+	} else {
+		// Verify params consistency no fail flag or vuln flag without watches
+		assert.False(t, params.FailOnFailedBuildFlag, "Fail flag provided without watches")
+		assert.False(t, params.WithVuln, "Vuln flag provided without watches")
+	}
+	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 }

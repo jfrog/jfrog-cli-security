@@ -297,6 +297,21 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
+func CreateTestIgnoreRule(t *testing.T, filters xrayUtils.IgnoreFilters) func() {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayUtils.IgnoreRuleParams{
+		// expired in one day
+		Notes:         "security cli test ignore rule",
+		ExpiresAt:     time.Now().AddDate(0, 0, 1),
+		IgnoreFilters: filters,
+	})
+	assert.NoError(t, err)
+	return func() {
+		assert.NoError(t, xrayManager.DeleteIgnoreRule(ignoreRuleId))
+	}
+}
+
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
