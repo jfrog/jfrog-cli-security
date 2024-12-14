@@ -57,18 +57,18 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Init XSC tests also enabled analytics reporting.
 	_, _, cleanUpXsc := integration.InitXscTest(t, func() { securityTestUtils.ValidateXrayVersion(t, services.MinXrayVersionGitRepoKey) })
 	defer cleanUpXsc()
-	// TODO: replace with 'Git Audit' command when it will be available.
 	// Create the audit command with git repo context injected.
-	cliToRun, cleanUpHome := integration.InitTestWithMockCommandOrParams(t, false, getAuditCommandWithXscGitRepoContext(validations.TestMockGitInfo))
+	cliToRun, cleanUpHome := integration.InitTestWithMockCommandOrParams(t, false, getAuditCommandWithXscGitContext(validations.TestMockGitInfo))
 	defer cleanUpHome()
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(tests.GetTestResourcesPath()), "projects", "jas", "jas"))
 	defer cleanUpProject()
 	// Create a watch for the git repo so we will also get violations
+	// TODO: how to create a watch and policy connected to a git repo?
 	_, cleanUpWatch := securityTestUtils.CreateTestWatch(t, "git-repo-policy", "git-repo-watch", utils.Critical)
 	defer cleanUpWatch()
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true})
+	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Licenses: 100, Violations: 100, Vulnerabilities: 100}})
 	// Create an ignore rule for the git repo
 	securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{GitRepositories: []string{validations.TestMockGitInfo.GitRepoHttpsCloneUrl}})
@@ -77,10 +77,11 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}})
 }
 
-// This method generate an audit command that will report analytics (if enabled) with git info context provided.
+// TODO: replace with 'Git Audit' command when it will be available.
+// This method generate an audit command that will report analytics (if enabled) with the git info context provided.
 // The method will generate multi-scan-id and provide it to the audit command.
 // The method will also provide the git repo clone url to the audit command.
-func getAuditCommandWithXscGitRepoContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
+func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
 	return func() components.Command {
 		return components.Command{
 			Name:  docs.Audit,
@@ -90,16 +91,15 @@ func getAuditCommandWithXscGitRepoContext(gitInfoContext xscservices.XscGitInfoC
 				if err != nil {
 					return err
 				}
-				// Get and set the multi scan id that was generated and attached to the git context.
-				multiScanId, startTime := xsc.SendNewScanEvent(
-					xrayVersion,
-					xscVersion,
-					serverDetails,
-					xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails),
-				)
-				// Set the multi scan id to the audit command.
+				// Generate the analytics event with the git info context.
+				event := xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails)
+				event.GitInfo = &gitInfoContext
+				event.IsGitInfoFlow = true
+				// Report analytics and get the multi scan id that was generated and attached to the git context.
+				multiScanId, startTime := xsc.SendNewScanEvent(xrayVersion, xscVersion, serverDetails, event)
+				// Set the multi scan id to the audit command to be used in the scans.
 				auditCmd.SetMultiScanId(multiScanId)
-				// Set the git repo context to the audit command.
+				// Set the git repo context to the audit command to pass to the scanners to create violations if applicable.
 				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
 				err = progressbar.ExecWithProgress(auditCmd)
 				// Send the final event to the platform.
