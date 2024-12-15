@@ -330,7 +330,7 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 }
 
 func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity) (string, func()) {
-	return CreateSecurityPolicy(t, policyName, 
+	return CreateSecurityPolicy(t, policyName,
 		xrayUtils.PolicyRule{
 			Name:     "sca_rule",
 			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity), // unkwnon = all

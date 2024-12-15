@@ -74,9 +74,9 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create an ignore rule for the git repo
 	securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{
 		GitRepositories: []string{validations.TestMockGitInfo.GitRepoHttpsCloneUrl},
-		Exposures: []utils.ExposuresFilterName{{Categories: []utils.ExposuresCategories{{Secrets: true, Iac: true}}}},
-		Sast: []utils.SastFilterName{{Rule: []string{"any"}}},
-		CVEs: []string{"any"},
+		Exposures:       []utils.ExposuresFilterName{{Categories: []utils.ExposuresCategories{{Secrets: true, Iac: true}}}},
+		Sast:            []utils.SastFilterName{{Rule: []string{"any"}}},
+		CVEs:            []string{"any"},
 	})
 	// Run the audit command and verify no issues.
 	output = testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson)})
