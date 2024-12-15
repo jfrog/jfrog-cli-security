@@ -63,15 +63,21 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(tests.GetTestResourcesPath()), "projects", "jas", "jas"))
 	defer cleanUpProject()
-	// Create a watch for the git repo so we will also get violations
-	// TODO: how to create a watch and policy connected to a git repo?
+	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
+	_, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-policy", utils.Unknown)
+	defer cleanUpPolicy()
 	_, cleanUpWatch := securityTestUtils.CreateTestWatch(t, "git-repo-policy", "git-repo-watch", utils.Critical)
 	defer cleanUpWatch()
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Licenses: 100, Violations: 100, Vulnerabilities: 100}})
 	// Create an ignore rule for the git repo
-	securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{GitRepositories: []string{validations.TestMockGitInfo.GitRepoHttpsCloneUrl}})
+	securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{
+		GitRepositories: []string{validations.TestMockGitInfo.GitRepoHttpsCloneUrl},
+		Exposures: []utils.ExposuresFilterName{{Categories: []utils.ExposuresCategories{{Secrets: true, Iac: true}}}},
+		Sast: []utils.SastFilterName{{Rule: []string{"any"}}},
+		CVEs: []string{"any"},
+	})
 	// Run the audit command and verify no issues.
 	output = testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson)})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}})

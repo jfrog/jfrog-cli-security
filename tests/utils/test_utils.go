@@ -312,6 +312,60 @@ func CreateTestIgnoreRule(t *testing.T, filters xrayUtils.IgnoreFilters) func() 
 	}
 }
 
+func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.PolicyRule) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default security policy.
+	policyParams := xrayUtils.PolicyParams{
+		Name:  fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Type:  xrayUtils.Security,
+		Rules: rules,
+	}
+	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
+		return "", func() {}
+	}
+	return policyParams.Name, func() {
+		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
+}
+
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity) (string, func()) {
+	return CreateSecurityPolicy(t, policyName, 
+		xrayUtils.PolicyRule{
+			Name:     "sca_rule",
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity), // unkwnon = all
+		},
+		xrayUtils.PolicyRule{
+			Name:     "exposers_rule",
+			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true, false), // unkwnon = all
+		},
+		xrayUtils.PolicyRule{
+			Name:     "sast_rule",
+			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity), // unkwnon = all
+		},
+	)
+}
+
+func CreateWatch(t *testing.T, policyName, watchName string) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default watch.
+	watchParams := xrayUtils.NewWatchParams()
+	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
+	watchParams.Active = true
+	watchParams.Builds.Type = xrayUtils.WatchBuildAll
+	watchParams.Policies = []xrayUtils.AssignedPolicy{
+		{
+			Name: policyName,
+			Type: "security",
+		},
+	}
+	assert.NoError(t, xrayManager.CreateWatch(watchParams))
+	return watchParams.Name, func() {
+		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	}
+}
+
 func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
