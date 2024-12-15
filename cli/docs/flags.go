@@ -2,8 +2,9 @@ package docs
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/commands/git"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/commands/git"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
@@ -114,6 +115,7 @@ const (
 	useWrapperAudit              = auditPrefix + UseWrapper
 	ExcludeTestDeps              = "exclude-test-deps"
 	DepType                      = "dep-type"
+	MaxTreeDepth                 = "max-tree-depth"
 	ThirdPartyContextualAnalysis = "third-party-contextual-analysis"
 	RequirementsFile             = "requirements-file"
 	WorkingDirs                  = "working-dirs"
@@ -240,17 +242,18 @@ var flagsMap = map[string]components.Flag{
 		"List of exclusions separated by semicolons, utilized to skip sub-projects from undergoing an audit. These exclusions may incorporate the * and ? wildcards.",
 		components.WithStrDefaultValue(strings.Join(utils.DefaultScaExcludePatterns, ";")),
 	),
-	Mvn:     components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
-	Gradle:  components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),
-	Npm:     components.NewBoolFlag(Npm, "Set to true to request audit for a npm project."),
-	Pnpm:    components.NewBoolFlag(Pnpm, "Set to true to request audit for a Pnpm project."),
-	Yarn:    components.NewBoolFlag(Yarn, "Set to true to request audit for a Yarn project."),
-	Nuget:   components.NewBoolFlag(Nuget, "Set to true to request audit for a .NET project."),
-	Pip:     components.NewBoolFlag(Pip, "Set to true to request audit for a Pip project."),
-	Pipenv:  components.NewBoolFlag(Pipenv, "Set to true to request audit for a Pipenv project."),
-	Poetry:  components.NewBoolFlag(Poetry, "Set to true to request audit for a Poetry project."),
-	Go:      components.NewBoolFlag(Go, "Set to true to request audit for a Go project."),
-	DepType: components.NewStringFlag(DepType, "[npm] Defines npm dependencies type. Possible values are: all, devOnly and prodOnly."),
+	Mvn:          components.NewBoolFlag(Mvn, "Set to true to request audit for a Maven project."),
+	Gradle:       components.NewBoolFlag(Gradle, "Set to true to request audit for a Gradle project."),
+	Npm:          components.NewBoolFlag(Npm, "Set to true to request audit for a npm project."),
+	Pnpm:         components.NewBoolFlag(Pnpm, "Set to true to request audit for a Pnpm project."),
+	Yarn:         components.NewBoolFlag(Yarn, "Set to true to request audit for a Yarn project."),
+	Nuget:        components.NewBoolFlag(Nuget, "Set to true to request audit for a .NET project."),
+	Pip:          components.NewBoolFlag(Pip, "Set to true to request audit for a Pip project."),
+	Pipenv:       components.NewBoolFlag(Pipenv, "Set to true to request audit for a Pipenv project."),
+	Poetry:       components.NewBoolFlag(Poetry, "Set to true to request audit for a Poetry project."),
+	Go:           components.NewBoolFlag(Go, "Set to true to request audit for a Go project."),
+	DepType:      components.NewStringFlag(DepType, "[npm] Defines npm dependencies type. Possible values are: all, devOnly and prodOnly."),
+	MaxTreeDepth: components.NewStringFlag(MaxTreeDepth, "[pnpm] Max depth of the generated dependencies tree for SCA scan.", components.WithStrDefaultValue("Infinity")),
 	ThirdPartyContextualAnalysis: components.NewBoolFlag(
 		ThirdPartyContextualAnalysis,
 		"[npm] when set, the Contextual Analysis scan also uses the code of the project dependencies to determine the applicability of the vulnerability.",

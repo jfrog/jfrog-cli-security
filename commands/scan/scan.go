@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -625,5 +626,9 @@ func directDepsListFromVulnerabilities(scanResult ...services.ScanResponse) *[]s
 }
 
 func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {
-	return NewScanCommand().SetServerDetails(serverDetails).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
+	return NewScanCommand().SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
 }

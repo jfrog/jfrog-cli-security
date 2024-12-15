@@ -16,6 +16,7 @@ require (
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.16
+	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/sync v0.9.0
 	golang.org/x/text v0.20.0

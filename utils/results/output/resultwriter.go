@@ -106,12 +106,17 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		// Don't print if there are no results and only errors.
 		return nil
 	}
+	// Helper for Debugging purposes, print the raw results to the log
+	if err := rw.printRawResultsLog(); err != nil {
+		return err
+	}
+
 	switch rw.format {
 	case format.Table:
 		return rw.printTables()
 	case format.SimpleJson:
 		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printOrSaveRawResults(false); err != nil {
+		if err := rw.printRawResultsLog(); err != nil {
 			return err
 		}
 		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
@@ -123,7 +128,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return PrintJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
 		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printOrSaveRawResults(false); err != nil {
+		if err := rw.printRawResultsLog(); err != nil {
 			return err
 		}
 		return rw.printSarif()
@@ -166,20 +171,10 @@ func PrintJson(output interface{}) (err error) {
 	return nil
 }
 
-// If "CI" env var is true, print raw JSON of the results. Otherwise, save it as a file and print a link to it.
-// If printMsg is true, print it to the console. Otherwise, print the message to the log.
-func (rw *ResultsWriter) printOrSaveRawResults(printMsg bool) (err error) {
+// Log (Debug) the inner results.SecurityCommandResults object object as a JSON string.
+func (rw *ResultsWriter) printRawResultsLog() (err error) {
 	if !rw.commandResults.HasInformation() {
 		log.Debug("No information to print")
-		return
-	}
-	if printMsg && !utils.IsCI() {
-		// Save the results to a file and print a link to it.
-		var resultsPath string
-		if resultsPath, err = WriteJsonResults(rw.commandResults); err != nil {
-			return
-		}
-		printMessage(coreutils.PrintTitle("The full scan results are available here: ") + coreutils.PrintLink(resultsPath))
 		return
 	}
 	// Print the raw results to console.
@@ -197,9 +192,6 @@ func (rw *ResultsWriter) printTables() (err error) {
 		return
 	}
 	printMessages(rw.messages)
-	if err = rw.printOrSaveRawResults(true); err != nil {
-		return
-	}
 	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPreformed...) {
 		if rw.hasViolationContext {
 			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
