@@ -5,6 +5,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
@@ -43,8 +44,10 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
 		techutils.Swift.GetPackageTypeId() + packageInfo,
 	}
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(server)
+	assert.NoError(t, err)
 
-	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
+	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
