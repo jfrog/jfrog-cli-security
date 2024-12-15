@@ -502,6 +502,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
 		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
 	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
