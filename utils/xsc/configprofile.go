@@ -1,9 +1,7 @@
 package xsc
 
 import (
-	"context"
 	"fmt"
-	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -30,7 +28,7 @@ func GetConfigProfileByName(xrayVersion, xscVersion string, serverDetails *confi
 	return configProfile, err
 }
 
-func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails, gitClient vcsclient.VcsClient, repoOwner string, repoName string) (*services.ConfigProfile, error) {
+func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails, cloneRepoUrl string) (*services.ConfigProfile, error) {
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileByUrlMinXrayVersion); err != nil {
 		log.Info(fmt.Sprintf("Minimal Xray version required to utilize config profile by url is '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileByUrlMinXrayVersion))
 		return nil, err
@@ -40,13 +38,7 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 		return nil, err
 	}
 
-	// Getting repository's url
-	repositoryInfo, err := gitClient.GetRepositoryInfo(context.Background(), repoOwner, repoName)
-	if err != nil {
-		return nil, err
-	}
-
-	configProfile, err := xscService.GetConfigProfileByUrl(repositoryInfo.CloneInfo.HTTP)
+	configProfile, err := xscService.GetConfigProfileByUrl(cloneRepoUrl)
 	if err != nil {
 		err = fmt.Errorf("failed to get config profile for url '%s': %q", serverDetails.Url, err)
 	}
