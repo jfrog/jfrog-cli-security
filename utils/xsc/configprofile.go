@@ -40,7 +40,6 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 		return nil, err
 	}
 
-	// TODO eran this is the latest addition I commited in this service, fix the test for this func
 	// Getting repository's url
 	repositoryInfo, err := gitClient.GetRepositoryInfo(context.Background(), repoOwner, repoName)
 	if err != nil {
