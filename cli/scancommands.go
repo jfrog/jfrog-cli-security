@@ -206,7 +206,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
@@ -715,7 +715,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
@@ -748,27 +748,4 @@ func DockerScan(c *components.Context, image string) error {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return progressbar.ExecWithProgress(containerScanCommand)
-}
-
-func GetJfrogServicesVersion(serverDetails *coreConfig.ServerDetails) (xrayVersion, xscVersion string, err error) {
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
-	if err != nil {
-		return
-	}
-	xrayVersion, err = xrayManager.GetVersion()
-	if err != nil {
-		return
-	}
-	log.Debug("Xray version: " + xrayVersion)
-	xscService, err := xsc.CreateXscService(xrayVersion, serverDetails)
-	if err != nil {
-		return
-	}
-	xscVersion, e := xscService.GetVersion()
-	if e != nil {
-		log.Debug("Using Xray: " + e.Error())
-		return
-	}
-	log.Debug("XSC version: " + xscVersion)
-	return
 }
