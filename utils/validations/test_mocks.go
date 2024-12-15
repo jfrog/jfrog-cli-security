@@ -115,7 +115,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 		if strings.Contains(r.RequestURI, "/xsc/profile_repos") && isXrayAfterXscMigration {
 			assert.Equal(t, http.MethodPost, r.Method)
 			w.WriteHeader(http.StatusOK)
-			content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileWithRepoExample.json")
+			content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
 			if !assert.NoError(t, err) {
 				return
 			}

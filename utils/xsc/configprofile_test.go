@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testRepoUrl = "https://github.com/jfrog/test-repository.git"
+
 func TestGetConfigProfileByName(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -58,7 +60,6 @@ func TestGetConfigProfileByName(t *testing.T) {
 	}
 }
 
-// TODO fix test. add repoInfo to mock also
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -81,8 +82,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			// TODO eran fix test. HOW do I create a mock for git client like in FROGBOT?
-			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails)
+			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl)
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)
@@ -91,7 +91,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 			// Validate results
 			assert.NoError(t, err)
 
-			profileFileContent, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileWithRepoExample.json")
+			profileFileContent, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
 			assert.NoError(t, err)
 
 			var configProfileForComparison services.ConfigProfile
