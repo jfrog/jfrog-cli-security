@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	orderedJson "github.com/virtuald/go-ordered-json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,7 +113,7 @@ func UniqueUnion[T comparable](arr []T, elements ...T) []T {
 
 func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {
 	if escapeValues {
-		if results, err = json.Marshal(output); errorutils.CheckError(err) != nil {
+		if results, err = orderedJson.Marshal(output); errorutils.CheckError(err) != nil {
 			return
 		}
 	} else {
