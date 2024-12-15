@@ -119,7 +119,7 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	assert.NoError(t, err)
 	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "failed to run Secrets scan")
+	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Secrets, err), "failed to run Secrets scan")
 	assert.Nil(t, vulnerabilitiesResults)
 }
 

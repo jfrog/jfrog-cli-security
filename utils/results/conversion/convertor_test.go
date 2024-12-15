@@ -2,7 +2,6 @@ package conversion
 
 import (
 	"fmt"
-	// "os"
 	"path/filepath"
 	"testing"
 
@@ -35,49 +34,39 @@ const (
 type conversionFormat string
 
 func TestConvertResults(t *testing.T) {
-	// auditInputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "audit", "audit_results.json"))
-	// dockerScanInputResults := testUtils.ReadCmdScanResults(t, filepath.Join(testDataDir, "dockerscan", "docker_results.json"))
-
 	testCases := []struct {
-		cmdType       utils.CommandType
-		contentFormat conversionFormat
-		// inputResults        *results.SecurityCommandResults
+		cmdType             utils.CommandType
+		contentFormat       conversionFormat
 		expectedContentPath string
 	}{
 		{
-			cmdType:       utils.SourceCode,
-			contentFormat: SimpleJson,
-			// inputResults:        auditInputResults,
+			cmdType:             utils.SourceCode,
+			contentFormat:       SimpleJson,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_simple_json.json"),
 		},
 		{
-			cmdType:       utils.SourceCode,
-			contentFormat: Sarif,
-			// inputResults:        auditInputResults,
+			cmdType:             utils.SourceCode,
+			contentFormat:       Sarif,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_sarif.json"),
 		},
 		{
-			cmdType:       utils.SourceCode,
-			contentFormat: Summary,
-			// inputResults:        auditInputResults,
+			cmdType:             utils.SourceCode,
+			contentFormat:       Summary,
 			expectedContentPath: filepath.Join(testDataDir, "audit", "audit_summary.json"),
 		},
 		{
-			cmdType:       utils.DockerImage,
-			contentFormat: SimpleJson,
-			// inputResults:        dockerScanInputResults,
+			cmdType:             utils.DockerImage,
+			contentFormat:       SimpleJson,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_simple_json.json"),
 		},
 		{
-			cmdType:       utils.DockerImage,
-			contentFormat: Sarif,
-			// inputResults:        dockerScanInputResults,
+			cmdType:             utils.DockerImage,
+			contentFormat:       Sarif,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_sarif.json"),
 		},
 		{
-			cmdType:       utils.DockerImage,
-			contentFormat: Summary,
-			// inputResults:        dockerScanInputResults,
+			cmdType:             utils.DockerImage,
+			contentFormat:       Summary,
 			expectedContentPath: filepath.Join(testDataDir, "dockerscan", "docker_summary.json"),
 		},
 	}
@@ -121,10 +110,6 @@ func validateSimpleJsonConversion(t *testing.T, expectedResults formats.SimpleJs
 	}
 	validationParams.Actual = actualResults
 
-	// content, err := utils.GetAsJsonBytes(actualResults, true, true)
-	// assert.NoError(t, err)
-	// os.WriteFile("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/tests/testdata/output/dockerscan/docker_simple_json.json", content, 0644)
-
 	validations.ValidateCommandSimpleJsonOutput(t, validationParams)
 }
 
@@ -136,10 +121,6 @@ func validateSarifConversion(t *testing.T, expectedResults *sarif.Report, inputR
 		return
 	}
 	validationParams.Actual = actualResults
-
-	// content, err := utils.GetAsJsonBytes(actualResults, true, true)
-	// assert.NoError(t, err)
-	// os.WriteFile("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/tests/testdata/output/dockerscan/docker_sarif.json", content, 0644)
 
 	validations.ValidateSarifIssuesCount(t, validationParams, actualResults)
 }
@@ -153,30 +134,8 @@ func validateSummaryConversion(t *testing.T, expectedResults formats.ResultsSumm
 	}
 	validationParams.Actual = actualResults
 
-	// content, err := utils.GetAsJsonBytes(actualResults, true, true)
-	// assert.NoError(t, err)
-	// os.WriteFile("/Users/assafa/Documents/code/jfrog-projects/jfrog-cli-security/tests/testdata/output/dockerscan/docker_summary.json", content, 0644)
-
 	validations.ValidateCommandSummaryOutput(t, validationParams)
 }
-
-// func getAuditValidationParams() validations.ValidationParams {
-// 	return validations.ValidationParams{
-// 		ExactResultsMatch: true,
-
-// 		Total: &validations.TotalCount{Vulnerabilities: 19, Violations: 7},
-
-// 		Vulnerabilities: &validations.VulnerabilityCount{
-// 			ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 4, Secrets: 3},
-// 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 7, NotCovered: 4},
-// 		},
-
-// 		Violations: &validations.ViolationCount{
-// 			ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 1, Secrets: 1},
-// 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 1, NotApplicable: 4},
-// 		},
-// 	}
-// }
 
 func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validations.ValidationParams) {
 	expected := validations.ValidationParams{
@@ -205,7 +164,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.SourceCode)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: "/Users/user/project-with-issues", Technology: techutils.Npm}).SetDescriptors("/Users/user/project-with-issues/package.json")
+	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technology: techutils.Npm}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
 	// SCA scan results
 	npmTargetResults.NewScaScanResults(0, services.ScanResponse{
 		ScanId: "711851ce-68c4-4dfd-7afb-c29737ebcb96",
@@ -386,12 +345,12 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					validations.CreateDummyApplicabilityRule("CVE-2018-3721", "not_covered"),
 				),
 			},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-A", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
-				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: "/Users/user/project-with-issues/file-B", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-A"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-B"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
 				// Not Applicable result = remediation location, not a finding add for test confirmation
-				validations.CreateDummyApplicableResults("CVE-2018-16487", formats.Location{File: "/Users/user/project-with-issues/file-C", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+				validations.CreateDummyApplicableResults("CVE-2018-16487", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-C"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
 			},
 		},
 	)
@@ -399,9 +358,9 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	npmTargetResults.JasResults.NewJasScanResults(jasutils.IaC,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.IacToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummyJasResult("aws_cloudfront_tls_only", severityutils.LevelError, formats.Location{File: "/Users/user/project-with-issues/req_sw_terraform_aws_cloudfront_tls_only.tf", StartLine: 2, StartColumn: 1, EndLine: 21, EndColumn: 1, Snippet: "viewer_protocol_policy..."}),
+				validations.CreateDummyJasResult("aws_cloudfront_tls_only", severityutils.LevelError, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "req_sw_terraform_aws_cloudfront_tls_only.tf"), StartLine: 2, StartColumn: 1, EndLine: 21, EndColumn: 1, Snippet: "viewer_protocol_policy..."}),
 			},
 		}},
 		// No Violations
@@ -411,18 +370,18 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	npmTargetResults.JasResults.NewJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummySecretResult("REQ.SECRET.KEYS", jasutils.Active, "active token", formats.Location{File: "/Users/user/project-with-issues/fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
-				validations.CreateDummySecretResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", formats.Location{File: "/Users/user/project-with-issues/dir/server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+				validations.CreateDummySecretResult("REQ.SECRET.KEYS", jasutils.Active, "active token", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+				validations.CreateDummySecretResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "dir", "server.js"), StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
 			},
 		}},
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: "/Users/user/project-with-issues/fake-creds.txt", StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
-				validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: "/Users/user/project-with-issues/dir/server.js", StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
+				validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
+				validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.NotAToken, "", "watch", "sec-violation-2", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 3, StartColumn: 1, EndLine: 3, EndColumn: 11, Snippet: "gho************"}),
 			},
 		}}, 0,
 	)
@@ -431,14 +390,14 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		// No Vulnerabilities
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 		}},
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("js-template-injection", "73"), validations.CreateDummyJasRule("js-insecure-random", "338"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("/Users/user/project-with-issues"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: "/Users/user/project-with-issues/public/js/bootstrap.bundle.js", StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
-				validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: "/Users/user/project-with-issues/server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
+				validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
+				validations.CreateDummySastViolationResult("js-template-injection", severityutils.LevelError, "watch", "sast-violation-2", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "server.js"), StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
 					[]formats.Location{
 						{File: "/Users/user/project-with-issues/server.js", StartLine: 27, StartColumn: 28, EndLine: 26, EndColumn: 31, Snippet: "req"},
 						{File: "/Users/user/project-with-issues/server.js", StartLine: 26, StartColumn: 28, EndLine: 26, EndColumn: 37, Snippet: "req.query"},
@@ -450,33 +409,6 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	)
 	return cmdResults, expected
 }
-
-// For Summary we count unique CVE finding (issueId), for SARIF and SimpleJson we count all findings (pair of issueId+impactedComponent)
-// We have in the result 2 CVE with 2 impacted components each
-// func getDockerScanValidationParams(unique bool) validations.ValidationParams {
-// 	params := validations.ValidationParams{
-// 		ExactResultsMatch: true,
-// 		Total:             &validations.TotalCount{Violations: 3},
-// 		Violations: &validations.ViolationCount{
-// 			ValidateScan:                &validations.ScanCount{Sca: 1, Secrets: 2},
-// 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Undetermined: 1},
-// 		},
-// 	}
-// 	if unique {
-// 		params.Total.Vulnerabilities = 11
-// 		params.Vulnerabilities = &validations.VulnerabilityCount{
-// 			ValidateScan:                &validations.ScanCount{Sca: 8, Secrets: 3},
-// 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, NotApplicable: 3, NotCovered: 1, Undetermined: 1},
-// 		}
-// 	} else {
-// 		params.Total.Vulnerabilities = 14
-// 		params.Vulnerabilities = &validations.VulnerabilityCount{
-// 			ValidateScan:                &validations.ScanCount{Sca: 11, Secrets: 3},
-// 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 5, NotApplicable: 4, NotCovered: 1, Undetermined: 1},
-// 		}
-// 	}
-// 	return params
-// }
 
 func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, validations.ValidationParams) {
 	expected := validations.ValidationParams{
@@ -505,7 +437,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	// Create basic command results to be converted to different formats
 	cmdResults := results.NewCommandResults(utils.DockerImage)
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
-	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: "temp/folders/T/jfrog.cli.temp.-11-11/image.tar", Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technology: techutils.Oci})
+	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technology: techutils.Oci})
 	// SCA scan results
 	dockerImageTarget.NewScaScanResults(0, services.ScanResponse{
 		ScanId: "27da9106-88ea-416b-799b-bc7d15783473",
@@ -586,7 +518,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ImpactPaths: [][]services.ImpactPathNode{{
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
-								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
+								ComponentId: filepath.Join("generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"),
 								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
@@ -613,24 +545,24 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 					validations.CreateDummyApplicabilityRule("CVE-2024-38428", "undetermined"),
 				),
 			},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("temp/folders/T/jfrog.cli.temp.-11-11"))},
-			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file:///usr/local/bin/node"})},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
+			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file://" + filepath.Join("usr", "local", "bin", "node")})},
 		},
 	)
 	// Secrets scan results
 	dockerImageTarget.JasResults.NewJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("temp/folders/T/jfrog.cli.temp.-11-11"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
 			Results: []*sarif.Result{
-				validations.CreateDummySecretResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", formats.Location{File: "temp/folders/T/tmpsfyn_3d1/unpacked/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js", StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
+				validations.CreateDummySecretResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
 			},
 		}},
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation("temp/folders/T/jfrog.cli.temp.-11-11"))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
 			Results: []*sarif.Result{
-				validations.CreateDummySecretViolationResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: "temp/folders/T/tmpsfyn_3d1/unpacked/sha256/9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0/usr/src/app/server/index.js", StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
+				validations.CreateDummySecretViolationResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
 			},
 		}}, 0,
 	)

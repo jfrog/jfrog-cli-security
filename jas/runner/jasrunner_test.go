@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -65,5 +66,5 @@ func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
 	scanner, _ := jas.CreateJasScanner(&jas.FakeServerDetails, false, "", jas.GetAnalyzerManagerXscEnvVars("", "", []string{}))
 	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 	// Expect error:
-	assert.ErrorContains(t, err, "failed to run Applicability scan")
+	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
 }
