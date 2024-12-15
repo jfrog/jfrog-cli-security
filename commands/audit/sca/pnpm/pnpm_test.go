@@ -2,6 +2,7 @@ package pnpm
 
 import (
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -27,33 +28,33 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 		expectedUniqueDeps []string
 		expectedTree       *xrayUtils.GraphNode
 	}{
-		// {
-		// 	name:      "Only direct dependencies",
-		// 	treeDepth: "0",
-		// 	expectedUniqueDeps: []string{
-		// 		"npm://zen-website:1.0.0",
-		// 		"npm://balaganjs:1.0.0",
-		// 	},
-		// 	expectedTree: &xrayUtils.GraphNode{
-		// 		Id:    "npm://zen-website:1.0.0",
-		// 		Nodes: []*xrayUtils.GraphNode{{Id: "npm://balaganjs:1.0.0"}},
-		// 	},
-		// },
+		{
+			name:      "Only direct dependencies",
+			treeDepth: "0",
+			expectedUniqueDeps: []string{
+				"npm://zen-website:1.0.0",
+				"npm://balaganjs:1.0.0",
+			},
+			expectedTree: &xrayUtils.GraphNode{
+				Id:    "npm://zen-website:1.0.0",
+				Nodes: []*xrayUtils.GraphNode{{Id: "npm://balaganjs:1.0.0"}},
+			},
+		},
 		{
 			name:      "With transitive dependencies",
 			treeDepth: "1",
 			expectedUniqueDeps: []string{
-				"npm://zen-website:1.0.0",
+				"npm://axios:1.7.9",
 				"npm://balaganjs:1.0.0",
-				"npm://axios:1.7.8",
 				"npm://yargs:13.3.0",
+				"npm://zen-website:1.0.0",
 			},
 			expectedTree: &xrayUtils.GraphNode{
 				Id: "npm://zen-website:1.0.0",
 				Nodes: []*xrayUtils.GraphNode{
 					{
 						Id:    "npm://balaganjs:1.0.0",
-						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.7.8"}, {Id: "npm://yargs:13.3.0"}},
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.7.9"}, {Id: "npm://yargs:13.3.0"}},
 					},
 				},
 			},
@@ -66,6 +67,9 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			params := &utils.AuditBasicParams{}
 			rootNode, uniqueDeps, err := BuildDependencyTree(params.SetMaxTreeDepth(testCase.treeDepth))
 			require.NoError(t, err)
+			sort.Slice(uniqueDeps, func(i, j int) bool {
+				return uniqueDeps[i] < uniqueDeps[j]
+			})
 			// Validations
 			assert.ElementsMatch(t, uniqueDeps, testCase.expectedUniqueDeps, "First is actual, Second is Expected")
 			if assert.Len(t, rootNode, 1) {
