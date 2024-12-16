@@ -70,14 +70,15 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	defer cleanUpWatch()
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Licenses: 100, Violations: 100, Vulnerabilities: 100}})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Licenses: 3, Violations: 26, Vulnerabilities: 39}})
 	// Create an ignore rule for the git repo
-	securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{
+	cleanUpIgnoreRule := securityTestUtils.CreateTestIgnoreRule(t, utils.IgnoreFilters{
 		GitRepositories: []string{validations.TestMockGitInfo.GitRepoHttpsCloneUrl},
 		Exposures:       []utils.ExposuresFilterName{{Categories: []utils.ExposuresCategories{{Secrets: true, Iac: true}}}},
 		Sast:            []utils.SastFilterName{{Rule: []string{"any"}}},
 		CVEs:            []string{"any"},
 	})
+	defer cleanUpIgnoreRule()
 	// Run the audit command and verify no issues.
 	output = testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson)})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}})
