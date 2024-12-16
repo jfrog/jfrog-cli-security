@@ -47,12 +47,14 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
-    - name: Install Mono with Mono on Linux
+    - name: Install Mono on Linux
       run: |
         sudo apt-get install -y mono-devel
-        sudo apt-get install -y msbuild
       if: runner.os == 'Linux'
       shell: 'bash'
+    - name: Install MsBuild on Linux
+      uses: microsoft/setup-msbuild@v2
+
     - name: Verifying msbuild version
       run: |
         msbuild -version
