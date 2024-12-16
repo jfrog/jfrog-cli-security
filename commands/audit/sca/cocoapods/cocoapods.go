@@ -7,8 +7,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -207,11 +207,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	if err != nil {
 		return nil, nil, err
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(details)
-	if err != nil {
-		return nil, nil, err
-	}
-	xrayVersion, err := xrayManager.GetVersion()
+	xrayVersion, _, err := xsc.GetJfrogServicesVersion(details)
 	if err != nil {
 		log.Error("Could not get xray version")
 		return nil, nil, err
