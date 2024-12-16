@@ -49,8 +49,9 @@ runs:
         dotnet-version: '6.x'
     - name: Install Mono on Linux
       run: |
-        sudo apt update
-        sudo apt install mono-complete
+        sudo apt-get update
+        sudo apt-get install -y mono-devel
+        sudo apt-get install -y msbuild
       if: runner.os == 'Linux'
       shell: 'bash'
     #- name: Install MsBuild on Linux
