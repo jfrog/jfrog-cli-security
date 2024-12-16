@@ -453,7 +453,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ImpactPaths: [][]services.ImpactPathNode{{
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
-								ComponentId: "generic://" + filepath.Join("sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"),
+								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
@@ -477,7 +477,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ImpactPaths: [][]services.ImpactPathNode{{
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
-								ComponentId: "generic://" + filepath.Join("sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"),
+								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
@@ -490,7 +490,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ImpactPaths: [][]services.ImpactPathNode{{
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
-								ComponentId: "generic://" + filepath.Join("sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"),
+								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
@@ -518,7 +518,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 						ImpactPaths: [][]services.ImpactPathNode{{
 							{ComponentId: "docker://platform.jfrog.io/swamp-docker/swamp:latest"},
 							{
-								ComponentId: "generic://" + filepath.Join("sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595", "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar"),
+								ComponentId: "generic://sha256:f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595/sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 								FullPath:    "sha256__f21c087a3964a446bce1aa4e3ec7cf82020dd77ad14f1cf4ea49cbb32eda1595.tar",
 							},
 							{
