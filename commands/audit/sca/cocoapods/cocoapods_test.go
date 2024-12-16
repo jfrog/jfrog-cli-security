@@ -22,6 +22,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
+
 	// Run getModulesDependencyTrees
 	server := &config.ServerDetails{
 		Url:            "https://api.cocoapods.here",
@@ -41,6 +42,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 		techutils.Cocoapods.GetPackageTypeId() + "nanopb:0.4.1",
 		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
+
 	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
