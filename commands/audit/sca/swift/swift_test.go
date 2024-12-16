@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xsc"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
-
+	testUtils.ValidateXrayVersion(t, scangraph.SwiftScanMinXrayVersion)
 	// Run getModulesDependencyTrees
 	server := &config.ServerDetails{
 		Url:            "https://api.swift.here",
@@ -44,10 +45,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
 		techutils.Swift.GetPackageTypeId() + packageInfo,
 	}
-	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(server)
-	assert.NoError(t, err)
-
-	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
+	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
