@@ -829,5 +829,5 @@ func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCom
 	if params.WithVuln {
 		args = append(args, "--vuln")
 	}
-	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+	return testCli.RunCliCmdWithOutput(t, args...)
 }
