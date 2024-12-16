@@ -47,7 +47,14 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
-    - run: sudo apt-get install -y mono-devel
+    - name: Install Mono in Linux
+      run: sudo apt-get install -y mono-devel
+      if: runner.os == 'Linux'
+      shell: 'bash'
+    - name: Verifying Mono version
+      run: |
+        mono --version
+        msbuild -version
       if: runner.os == 'Linux'
       shell: 'bash'
     
