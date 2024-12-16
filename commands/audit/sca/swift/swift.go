@@ -8,9 +8,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-	"github.com/jfrog/jfrog-cli-security/utils/xsc"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -163,20 +160,6 @@ func GetDependenciesData(exePath, currentDir string) (*Dependencies, error) {
 }
 
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	details, err := params.ServerDetails()
-	if err != nil {
-		return nil, nil, err
-	}
-	xrayVersion, _, err := xsc.GetJfrogServicesVersion(details)
-	if err != nil {
-		log.Error("Could not get xray version")
-		return nil, nil, err
-	}
-	err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
-	if err != nil {
-		log.Warn(fmt.Sprintf("Your xray version %s does not support cocoapods which is supported on versions %s and above", xrayVersion, scangraph.SwiftScanMinXrayVersion))
-		return nil, nil, err
-	}
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return nil, nil, err

@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
@@ -24,7 +22,6 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "cocoapods"))
 	defer cleanUp()
-	testUtils.ValidateXrayVersion(t, scangraph.CocoapodsScanMinXrayVersion)
 	// Run getModulesDependencyTrees
 	server := &config.ServerDetails{
 		Url:            "https://api.cocoapods.here",
