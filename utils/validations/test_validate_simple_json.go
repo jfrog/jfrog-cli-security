@@ -176,7 +176,7 @@ func validateImpactPaths(t *testing.T, issueId string, exactMatch bool, expected
 	}
 	for _, expectedPath := range expected {
 		impactPath := getImpactPath(expectedPath, actual)
-		if !assert.NotNil(t, impactPath, fmt.Sprintf("IssueId %s: expected ImpactPath not found in the impactPaths", issueId)) {
+		if !assert.NotNil(t, impactPath, fmt.Sprintf("IssueId %s: expected ImpactPath %v not found in the impactPaths %v", issueId, expectedPath, actual)) {
 			return
 		}
 	}

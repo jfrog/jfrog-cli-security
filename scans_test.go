@@ -43,7 +43,7 @@ import (
 
 func TestXrayBinaryScanJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScan(t, string(format.Json), false)
+	output := testXrayBinaryScan(t, string(format.Json), "", "")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -51,7 +51,7 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-policy", "scan-binary-watch")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
@@ -61,7 +61,7 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.Json), false)
+	output := testXrayBinaryScan(t, string(format.Json), "", "")
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -71,17 +71,17 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-progress-policy", "scan-binary-progress-watch")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
 }
 
-func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
+func testXrayBinaryScan(t *testing.T, format, policyName, watchName string) string {
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
-	if withViolation {
-		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	if policyName != "" && watchName != "" {
+		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
 		defer deleteWatch()
 		// Include violations and vulnerabilities
 		args = append(args, "--watches="+watchName, "--vuln")

@@ -552,8 +552,8 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 			name:     "withFlag",
 			withFlag: true,
 			expectedResults: validations.ValidationParams{
-				Total:           &validations.TotalCount{Vulnerabilities: 1},
-				Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 1}},
+				Total:           &validations.TotalCount{Vulnerabilities: 2},
+				Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 2}},
 			},
 		},
 		{
@@ -564,7 +564,7 @@ func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	}
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
-			output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, tc.withFlag, false, "")
+			output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, tc.withFlag, false, "*out*")
 			validations.VerifySimpleJsonResults(t, output, tc.expectedResults)
 		})
 	}

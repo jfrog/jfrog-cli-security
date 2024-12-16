@@ -94,7 +94,7 @@
         {
           "executionSuccessful": true,
           "workingDirectory": {
-            "uri": "/Users/user/project-with-issues"
+            "uri": "Users/user/project-with-issues"
           }
         }
       ],
@@ -310,7 +310,7 @@
         {
           "executionSuccessful": null,
           "workingDirectory": {
-            "uri": "/Users/user/project-with-issues"
+            "uri": "Users/user/project-with-issues"
           }
         }
       ],
@@ -476,7 +476,7 @@
         {
           "executionSuccessful": null,
           "workingDirectory": {
-            "uri": "/Users/user/project-with-issues"
+            "uri": "Users/user/project-with-issues"
           }
         }
       ],
@@ -566,7 +566,7 @@
         {
           "executionSuccessful": null,
           "workingDirectory": {
-            "uri": "/Users/user/project-with-issues"
+            "uri": "Users/user/project-with-issues"
           }
         }
       ],

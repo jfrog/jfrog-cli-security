@@ -329,21 +329,36 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 	}
 }
 
-func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity) (string, func()) {
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool) (string, func()) {
 	return CreateSecurityPolicy(t, policyName,
 		xrayUtils.PolicyRule{
 			Name:     "sca_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity), // unkwnon = all
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 1,
 		},
 		xrayUtils.PolicyRule{
 			Name:     "exposers_rule",
-			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true, false), // unkwnon = all
+			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true, false),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 2,
 		},
 		xrayUtils.PolicyRule{
 			Name:     "sast_rule",
-			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity), // unkwnon = all
+			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 3,
 		},
 	)
+}
+
+func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
+	if failBuild {
+		return &xrayUtils.PolicyAction{
+			FailBuild: clientUtils.Pointer(true),
+		}
+	}
+	return nil
 }
 
 func CreateWatch(t *testing.T, policyName, watchName string) (string, func()) {
@@ -357,7 +372,7 @@ func CreateWatch(t *testing.T, policyName, watchName string) (string, func()) {
 	watchParams.Policies = []xrayUtils.AssignedPolicy{
 		{
 			Name: policyName,
-			Type: "security",
+			Type: string(xrayUtils.Security),
 		},
 	}
 	assert.NoError(t, xrayManager.CreateWatch(watchParams))

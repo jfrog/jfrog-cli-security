@@ -64,9 +64,9 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(tests.GetTestResourcesPath()), "projects", "jas", "jas"))
 	defer cleanUpProject()
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
-	_, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-policy", utils.Unknown)
+	_, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-policy", utils.Unknown, true)
 	defer cleanUpPolicy()
-	_, cleanUpWatch := securityTestUtils.CreateTestWatch(t, "git-repo-policy", "git-repo-watch", utils.Critical)
+	_, cleanUpWatch := securityTestUtils.CreateWatch(t, "git-repo-policy", "git-repo-watch")
 	defer cleanUpWatch()
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
