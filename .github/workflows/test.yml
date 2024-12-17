@@ -66,8 +66,8 @@ jobs:
       - name: Install Swift on Windows
         uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-5.5-release
-          tag: 5.5-RELEASE
+          branch: swift-5.9-release
+          tag: 5.9-RELEASE
         if: ${{ matrix.os == 'windows'}}
 
       # Test and generate code coverage
