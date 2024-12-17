@@ -46,23 +46,22 @@ runs:
     - name: Install dotnet
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '6.x'
+        dotnet-version: '8.x'
     - name: Install Mono on Linux
       run: |
         sudo apt-get update
         sudo apt-get install -y mono-devel
-        sudo apt-get install -y msbuild
       if: runner.os == 'Linux'
       shell: 'bash'
     #- name: Install MsBuild on Linux
     #  uses: microsoft/setup-msbuild@v2
     #  if: runner.os == 'Linux'
 
-    #- name: Verifying msbuild version
-    #  run: |
-    #    msbuild -version
-    #  if: runner.os == 'Linux'
-    #  shell: 'bash'
+    - name: Verifying msbuild version
+      run: |
+        msbuild -version
+      if: runner.os == 'Linux'
+      shell: 'bash'
     
     - name: Setup Python3
       uses: actions/setup-python@v5
