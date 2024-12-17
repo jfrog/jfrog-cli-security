@@ -257,13 +257,13 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
-		details, err := params.ServerDetails()
-		if err != nil {
-			return depTreeResult, err
+		details, errParams := params.ServerDetails()
+		if errParams != nil {
+			return depTreeResult, errParams
 		}
-		_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(details)
-		if err != nil {
-			return depTreeResult, err
+		_, xrayVersion, errVersion := xray.CreateXrayServiceManagerAndGetVersion(details)
+		if errVersion != nil {
+			return depTreeResult, errVersion
 		}
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
 		if err != nil {
@@ -271,13 +271,13 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	case techutils.Swift:
-		details, err := params.ServerDetails()
-		if err != nil {
-			return depTreeResult, err
+		details, errParams := params.ServerDetails()
+		if errParams != nil {
+			return depTreeResult, errParams
 		}
-		_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(details)
-		if err != nil {
-			return depTreeResult, err
+		_, xrayVersion, errVersion := xray.CreateXrayServiceManagerAndGetVersion(details)
+		if errVersion != nil {
+			return depTreeResult, errVersion
 		}
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
 		if err != nil {
