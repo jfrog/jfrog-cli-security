@@ -112,13 +112,13 @@ jobs:
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
-      - name: Install Swift on Ubuntu
-        uses: swift-actions/setup-swift@v2
-        if: ${{ matrix.os == 'ubuntu' && matrix.suite.testFlags == '--test.audit.Swift' }}
-
-      - name: Install Swift on MacOS
-        run: brew install swift
-        if: ${{ matrix.os == 'macos' && matrix.suite.testFlags == '--test.audit.Swift' }}
+#      - name: Install Swift on Ubuntu
+#        uses: swift-actions/setup-swift@v2
+#        if: ${{ matrix.os == 'ubuntu' && matrix.suite.testFlags == '--test.audit.Swift' }}
+#
+#      - name: Install Swift on MacOS
+#        run: brew install swift
+#        if: ${{ matrix.os == 'macos' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
       - name: Install Swift on Windows
         uses: compnerd/gha-setup-swift@main

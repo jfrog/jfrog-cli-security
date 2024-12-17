@@ -56,7 +56,7 @@ func runSwiftCmd(executablePath, srcPath string, swiftArgs []string) (stdResult,
 		err = fmt.Errorf("error while running '%s %s': %s\n%s", executablePath, strings.Join(args, " "), err.Error(), strings.TrimSpace(string(errResult)))
 		return
 	}
-	log.Debug("npm '" + strings.Join(args, " ") + "' standard output is:\n" + strings.TrimSpace(string(stdResult)))
+	log.Debug("swift '" + strings.Join(args, " ") + "' standard output is:\n" + strings.TrimSpace(string(stdResult)))
 	return
 }
 
