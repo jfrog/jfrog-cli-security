@@ -375,6 +375,7 @@ func TestXrayAuditGoSimpleJson(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3},
 		},
 	})
+	
 }
 
 func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
