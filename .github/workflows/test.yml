@@ -63,6 +63,13 @@ jobs:
       - name: Install and Setup Dependencies
         uses: ./.github/actions/install-and-setup
 
+      - name: Install Swift on Windows
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-5.5-release
+          tag: 5.5-RELEASE
+        if: ${{ matrix.os == 'windows'}}
+
       # Test and generate code coverage
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
