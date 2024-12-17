@@ -120,6 +120,10 @@ jobs:
         run: brew install swift
         if: ${{ matrix.os == 'macos' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
+      - name: Install Swift on Windows
+        uses: compnerd/gha-setup-swift@main
+        if: ${{ matrix.os == 'windows' && matrix.suite.testFlags == '--test.audit.Swift' }}
+
       # Test
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
