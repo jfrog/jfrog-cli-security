@@ -12,6 +12,22 @@ runs:
     # - name: Setup Go with cache
     #   uses: jfrog/.github/actions/install-go-with-cache@main
 
+    - name: Install Swift on Linux
+      uses: swift-actions/setup-swift@v2
+      if: ${{ runner.os == 'Linux'}}
+
+    - name: Install Swift on MacOS
+      run: brew install swift
+      shell: ${{ runner.os == 'macOS'}}
+      if: ${{ runner.os == 'macOS'}}
+
+    - name: Install Swift on Windows
+      uses: compnerd/gha-setup-swift@main
+      with:
+        branch: swift-6.0.2-release
+        tag: 6.0.2-RELEASE
+      if: ${{ runner.os == 'Windows'}}
+
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
