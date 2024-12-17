@@ -18,7 +18,7 @@ runs:
 
     - name: Install Swift on MacOS
       run: brew install swift
-      shell: ${{ runner.os == 'macOS'}}
+      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
       if: ${{ runner.os == 'macOS'}}
 
     - name: Install Swift on Windows
