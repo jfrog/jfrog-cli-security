@@ -74,8 +74,8 @@ jobs:
       - name: Install Swift on Windows
         uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.1-release
-          tag: 6.1-RELEASE
+          branch: swift-6.0.2-release
+          tag: 6.0.2-RELEASE
         if: ${{ matrix.os == 'windows'}}
 
       # Test and generate code coverage
@@ -138,8 +138,8 @@ jobs:
       - name: Install Swift on Windows
         uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.0-release
-          tag: 6.0-RELEASE
+          branch: swift-6.0.2-release
+          tag: 6.0.2-RELEASE
         if: ${{ matrix.os == 'windows' && matrix.suite.testFlags == '--test.audit.Swift' }}
 
       # Test
