@@ -50,7 +50,8 @@ func TestParseYarnDependenciesList(t *testing.T) {
 	}
 	expectedUniqueDeps := []string{npmId + "pack1:1.0.0", npmId + "pack2:2.0.0", npmId + "pack4:4.0.0", npmId + "pack5:5.0.0", npmId + "@jfrog/pack3:3.0.0"}
 
-	xrayDependenciesTree, uniqueDeps := parseYarnDependenciesMap(yarnDependencies, rootXrayId)
+	xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(yarnDependencies, rootXrayId)
+	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 	assert.True(t, tests.CompareTree(expectedTree, xrayDependenciesTree), "expected:", expectedTree.Nodes, "got:", xrayDependenciesTree.Nodes)
 }
