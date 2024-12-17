@@ -380,7 +380,7 @@ func TestXrayAuditGoJson(t *testing.T) {
 func TestXrayAuditGoSimpleJson(t *testing.T) {
 	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGo(t, true, string(format.SimpleJson), "simple-project")
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCovered: 1, NotApplicable: 3})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Licenses: 3, Vulnerabilities: 4, NotCovered: 2, NotApplicable: 2})
 }
 
 func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
