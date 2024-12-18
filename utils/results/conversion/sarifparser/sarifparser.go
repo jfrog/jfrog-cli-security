@@ -254,16 +254,19 @@ func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*
 	}
 }
 
+// For JAS scanners results we get a separate runs for vulnerabilities and violations, we need to combine them to a single run
+// This allows us to have a single run for each scan type in the SARIF report for the ingestion rules and the users to view
 func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sarif.Run {
 	for _, run := range runs {
 		if destination == nil {
-			// First run
+			// First run, set as the destination
 			destination = run
 			continue
 		} else if destination.Tool.Driver.Name != run.Tool.Driver.Name {
 			log.Warn(fmt.Sprintf("Skipping JAS run (%s) as it doesn't match the current run (%s)", run.Tool.Driver.Name, destination.Tool.Driver.Name))
 			continue
 		}
+		// Combine the rules and results of the run to the destination
 		for _, rule := range run.Tool.Driver.Rules {
 			// This method will add the rule only if it doesn't exist
 			destination.Tool.Driver.AddRule(rule)

@@ -24,7 +24,6 @@ func TestReadJasScanRunsFromFile(t *testing.T) {
 		sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
 	))
 
-	// Only vuln,Only vio, both and none (error)
 	tests := []struct {
 		name             string
 		generateVulnFile bool
@@ -44,6 +43,7 @@ func TestReadJasScanRunsFromFile(t *testing.T) {
 			generateVioFile:  true,
 		},
 		{
+			// Expecting error if no files are generated.
 			name: "AM generate none - error",
 		},
 	}
@@ -61,6 +61,7 @@ func TestReadJasScanRunsFromFile(t *testing.T) {
 
 		vuln, vio, err := ReadJasScanRunsFromFile(fileName, "some-working-dir-of-project", "docs URL", "")
 
+		// Expecting error if no files are generated.
 		if !test.generateVulnFile && !test.generateVioFile {
 			assert.Error(t, err)
 			assert.Empty(t, vuln)

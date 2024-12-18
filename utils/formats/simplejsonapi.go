@@ -37,8 +37,11 @@ type ScanStatus struct {
 }
 
 type ViolationContext struct {
-	Watch    string   `json:"watch,omitempty"`
-	IssueId  string   `json:"issueId,omitempty"`
+	// The watch name that generated the violation
+	Watch string `json:"watch,omitempty"`
+	// Unique id of the violation if exists
+	IssueId string `json:"issueId,omitempty"`
+	// The related policy names
 	Policies []string `json:"policies,omitempty"`
 }
 
@@ -122,6 +125,7 @@ type Location struct {
 	Snippet     string `json:"snippet,omitempty"`
 }
 
+// String Representation of the location (can be used as unique ID of the location)
 func (l Location) ToString() string {
 	return fmt.Sprintf("%s|%d|%d|%d|%d|%s", l.File, l.StartLine, l.StartColumn, l.EndLine, l.EndColumn, l.Snippet)
 }

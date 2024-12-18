@@ -55,15 +55,15 @@ func CreateDummyResultInPath(fileName string) *sarif.Result {
 }
 
 func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
-	r := &sarif.Result{
+	result := &sarif.Result{
 		Message: *sarif.NewTextMessage(msg).WithMarkdown(markdown),
 		Level:   &level,
 		RuleID:  &ruleId,
 	}
 	if len(locations) > 0 {
-		r.Locations = locations
+		result.Locations = locations
 	}
-	return r
+	return result
 }
 
 func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {

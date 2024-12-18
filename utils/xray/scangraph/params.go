@@ -14,16 +14,6 @@ type ScanGraphParams struct {
 	severityLevel       int
 }
 
-// type CommonGraphScanParams struct {
-// 	RepoPath               string
-// 	ProjectKey             string
-// 	GitRepoHttpsCloneUrl   string
-// 	Watches                []string
-// 	ScanType               services.ScanType
-// 	IncludeVulnerabilities bool
-// 	IncludeLicenses        bool
-// }
-
 func NewScanGraphParams() *ScanGraphParams {
 	return &ScanGraphParams{}
 }

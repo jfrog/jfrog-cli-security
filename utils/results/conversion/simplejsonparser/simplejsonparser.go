@@ -65,6 +65,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
+// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
 func shouldUpdateStatus(currentStatus, newStatus *int) bool {
 	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
 		return true

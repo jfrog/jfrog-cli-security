@@ -42,8 +42,6 @@ type ScanResultSummary struct {
 	SastResults    *ResultSummary        `json:"sast,omitempty"`
 }
 
-// TODO: add watch (violations) to JAS
-
 type ScanViolationsSummary struct {
 	Watches   []string `json:"watches,omitempty"`
 	FailBuild bool     `json:"fail_build,omitempty"`
