@@ -270,17 +270,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
-	xrayManager, cmdResults := initScanCmdResults(
-		cmdType,
-		scanCmd.serverDetails,
-		scanCmd.xrayVersion,
-		scanCmd.xscVersion,
-		scanCmd.multiScanId,
-		scanCmd.startTime,
-		scanCmd.bypassArchiveLimits,
-		scanCmd.validateSecrets,
-		scanCmd.commandSupportsJAS,
-	)
+	xrayManager, cmdResults := scanCmd.initScanCmdResults(cmdType)
 	if cmdResults.GetErrors() != nil {
 		return
 	}
@@ -319,34 +309,35 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	return
 }
 
-func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, xrayVersion, xscVersion, msi string, startTime time.Time, bypassArchiveLimits, validateSecrets, useJas bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
+func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(cmdType)
 	// Validate Xray minimum version for graph scan command
-	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, scanCmd.xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
-	if bypassArchiveLimits {
+	if scanCmd.bypassArchiveLimits {
 		// Validate Xray minimum version for BypassArchiveLimits flag for indexer
-		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
+		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, scanCmd.xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
 			return xrayManager, cmdResults.AddGeneralError(err, false)
 		}
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(scanCmd.serverDetails)
 	if err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
 	// Initialize general information
-	cmdResults.SetXrayVersion(xrayVersion)
-	cmdResults.SetXscVersion(xscVersion)
-	cmdResults.SetMultiScanId(msi)
-	cmdResults.SetStartTime(startTime)
+	cmdResults.SetXrayVersion(scanCmd.xrayVersion)
+	cmdResults.SetXscVersion(scanCmd.xscVersion)
+	cmdResults.SetMultiScanId(scanCmd.multiScanId)
+	cmdResults.SetStartTime(scanCmd.startTime)
+	cmdResults.SetResultsContext(scanCmd.resultsContext)
 	// Send entitlement request
-	if entitledForJas, err := isEntitledForJas(xrayManager, xrayVersion, useJas); err != nil {
+	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion, scanCmd.commandSupportsJAS); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
-			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, xrayVersion, validateSecrets))
+			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, scanCmd.xrayVersion, scanCmd.validateSecrets))
 		}
 	}
 	return

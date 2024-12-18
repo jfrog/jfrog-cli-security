@@ -70,7 +70,7 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	_, cleanUpWatch := securityTestUtils.CreateWatch(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
 	defer cleanUpWatch()
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true, ProjectKey: "project1"})
+	output := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:      &validations.TotalCount{Licenses: 3, Violations: 26, Vulnerabilities: 39},
 		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Iac: 1}},
