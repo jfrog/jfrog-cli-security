@@ -371,7 +371,7 @@ func buildDependencyTree(scan *results.TargetResults, params *AuditParams) (*Dep
 	}
 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
 	if techErr != nil {
-		return nil, fmt.Errorf("failed while building '%s' dependency tree:\n%w", scan.Technology, techErr)
+		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
 	}
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
