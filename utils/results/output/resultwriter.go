@@ -22,12 +22,10 @@ type ResultsWriter struct {
 	commandResults *results.SecurityCommandResults
 	// Format  The output format.
 	format format.OutputFormat
-	// IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
-	includeVulnerabilities bool
-	// If true, will print violation results.
-	hasViolationContext bool
-	// IncludeLicenses  If true, also include license violations as part of the output.
-	includeLicenses bool
+	// // IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
+	// includeVulnerabilities bool
+	// // IncludeLicenses  If true, also include license violations as part of the output.
+	// includeLicenses bool
 	// IsMultipleRoots  multipleRoots is set to true, in case the given results array contains (or may contain) results of several projects (like in binary scan).
 	isMultipleRoots *bool
 	// PrintExtended, If true, show extended results.
@@ -57,20 +55,15 @@ func (rw *ResultsWriter) SetSubScansPerformed(subScansPerformed []utils.SubScanT
 	return rw
 }
 
-func (rw *ResultsWriter) SetHasViolationContext(hasViolationContext bool) *ResultsWriter {
-	rw.hasViolationContext = hasViolationContext
-	return rw
-}
+// func (rw *ResultsWriter) SetIncludeVulnerabilities(includeVulnerabilities bool) *ResultsWriter {
+// 	rw.includeVulnerabilities = includeVulnerabilities
+// 	return rw
+// }
 
-func (rw *ResultsWriter) SetIncludeVulnerabilities(includeVulnerabilities bool) *ResultsWriter {
-	rw.includeVulnerabilities = includeVulnerabilities
-	return rw
-}
-
-func (rw *ResultsWriter) SetIncludeLicenses(licenses bool) *ResultsWriter {
-	rw.includeLicenses = licenses
-	return rw
-}
+// func (rw *ResultsWriter) SetIncludeLicenses(licenses bool) *ResultsWriter {
+// 	rw.includeLicenses = licenses
+// 	return rw
+// }
 
 func (rw *ResultsWriter) SetPrintExtendedTable(extendedTable bool) *ResultsWriter {
 	rw.printExtended = extendedTable
@@ -139,9 +132,9 @@ func (rw *ResultsWriter) PrintScanResults() error {
 func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.CommandResultsConvertor {
 	return conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IsMultipleRoots:        rw.isMultipleRoots,
-		IncludeLicenses:        rw.includeLicenses,
-		IncludeVulnerabilities: rw.includeVulnerabilities,
-		HasViolationContext:    rw.hasViolationContext,
+		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
+		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
+		HasViolationContext:    rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
 		Pretty:                 pretty,
 	})
@@ -187,43 +180,63 @@ func (rw *ResultsWriter) printRawResultsLog() (err error) {
 }
 
 func (rw *ResultsWriter) printTables() (err error) {
-	// TODO eran- in Tables we need to add the printing of the new tables
 	tableContent, err := rw.createResultsConvertor(isPrettyOutputSupported()).ConvertToTable(rw.commandResults)
 	if err != nil {
 		return
 	}
 	printMessages(rw.messages)
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
-		if rw.hasViolationContext {
-			if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
-				return
-			}
-		}
-		if rw.includeVulnerabilities {
-			if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
-				return
-			}
-		}
-		if rw.includeLicenses {
-			if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
-				return
-			}
-		}
+	if err = rw.printScaTablesIfNeeded(tableContent); err != nil {
+		return
 	}
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPerformed...) {
-		if err = PrintSecretsTable(tableContent, rw.commandResults.EntitledForJas, rw.commandResults.SecretValidation); err != nil {
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.SecretsScan, jasutils.Secrets); err != nil {
+		return
+	}
+	if rw.shouldPrintSecretValidationExtraMessage() {
+		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
+	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
+		return
+	}
+	return rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast)
+}
+
+func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
+	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
+		return
+	}
+	if rw.commandResults.HasViolationContext() {
+		if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 			return
 		}
 	}
-	if utils.IsScanRequested(rw.commandResults.CmdType, utils.IacScan, rw.subScansPerformed...) {
-		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.IaC); err != nil {
+	if rw.commandResults.IncludesVulnerabilities() {
+		if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
 			return
 		}
 	}
-	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.SastScan, rw.subScansPerformed...) {
-		return nil
+	if !rw.commandResults.IncludesLicenses() {
+		return
 	}
-	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, jasutils.Sast)
+	return PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType)
+}
+
+func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTables, subScan utils.SubScanType, scanType jasutils.JasScanType) (err error) {
+	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.subScansPerformed...) {
+		return
+	}
+	if rw.commandResults.HasViolationContext() {
+		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, true); err != nil {
+			return
+		}
+	}
+	if !rw.commandResults.IncludesVulnerabilities() {
+		return
+	}
+	return PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, false)
+}
+
+func (rw *ResultsWriter) shouldPrintSecretValidationExtraMessage() bool {
+	return rw.commandResults.SecretValidation && utils.IsScanRequested(rw.commandResults.CmdType, utils.SecretsScan, rw.subScansPerformed...)
 }
 
 // PrintVulnerabilitiesTable prints the vulnerabilities in a table.
@@ -294,20 +307,7 @@ func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, cmdTyp
 	return coreutils.PrintTable(tables.LicensesTable, "Licenses", "No licenses were found", printExtended)
 }
 
-func PrintSecretsTable(tables formats.ResultsTables, entitledForJas, tokenValidationEnabled bool) (err error) {
-	if !entitledForJas {
-		return
-	}
-	if err = PrintJasTable(tables, entitledForJas, jasutils.Secrets); err != nil {
-		return
-	} // TODO eran -add print to jas violation
-	if tokenValidationEnabled {
-		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
-	}
-	return
-}
-
-func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType jasutils.JasScanType) error {
+func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType jasutils.JasScanType, violations bool) error {
 	if !entitledForJas {
 		return nil
 	}
@@ -315,14 +315,29 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 	log.Output()
 	switch scanType {
 	case jasutils.Secrets:
-		return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secret Detection",
-			"✨ No secrets were found ✨", false)
+		if violations {
+			return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secret Violations",
+				"✨ No violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secret Detection",
+				"✨ No secrets were found ✨", false)
+		}
 	case jasutils.IaC:
-		return coreutils.PrintTable(tables.IacVulnerabilitiesTable, "Infrastructure as Code Vulnerabilities",
-			"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
+		if violations {
+			return coreutils.PrintTable(tables.IacViolationsTable, "Infrastructure as Code Violations",
+				"✨ No Infrastructure as Code violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.IacVulnerabilitiesTable, "Infrastructure as Code Vulnerabilities",
+				"✨ No Infrastructure as Code vulnerabilities were found ✨", false)
+		}
 	case jasutils.Sast:
-		return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
-			"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
+		if violations {
+			return coreutils.PrintTable(tables.SastViolationsTable, "Static Application Security Testing (SAST) Violations",
+				"✨ No Static Application Security Testing violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
+				"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
+		}
 	}
 	return nil
 }

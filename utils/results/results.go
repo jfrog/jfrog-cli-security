@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -24,6 +25,7 @@ type SecurityCommandResults struct {
 	EntitledForJas   bool              `json:"jas_entitled"`
 	SecretValidation bool              `json:"secret_validation,omitempty"`
 	CmdType          utils.CommandType `json:"command_type"`
+	ResultContext    ResultContext     `json:"result_context,omitempty"`
 	StartTime        time.Time         `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
@@ -33,6 +35,33 @@ type SecurityCommandResults struct {
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
+}
+
+// We have three types of results: vulnerabilities, violations and licenses.
+// If the user provides a violation context (watches, repo_path, project_key, git_repo_key) the results will only include violations.
+// If the user provides a violation context and requests vulnerabilities, the results will include both vulnerabilities and violations.
+// If the user doesn't provide a violation context, the results will include vulnerabilities.
+// Only one (Resource) field can be provided at a time.
+// License information can be provided in all cases if requested.
+type ResultContext struct {
+	// If watches are provided, the scan will be performed only with the provided watches.
+	Watches []string `json:"watches,omitempty"`
+	// (Resource) If repo_path is provided, the scan will be performed on the repository's project watches.
+	RepoPath string `json:"repo_path,omitempty"`
+	// (Resource) If projectKey is provided we will fetch the watches defined on the project.
+	ProjectKey string `json:"project_key,omitempty"`
+	// (Resource) If gitRepository is provided we will fetch the watches defined on the git repository.
+	GitRepoHttpsCloneUrl string `json:"git_repo_key,omitempty"`
+	// If non of the above is provided or requested, the results will include vulnerabilities
+	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
+	// If requested, the results will include licenses
+	IncludeLicenses bool `json:"include_licenses"`
+	// The active watches defined on the resources above that is fetched from the platform
+	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
+}
+
+func (rc *ResultContext) HasViolationContext() bool {
+	return len(rc.Watches) > 0 || len(rc.GitRepoHttpsCloneUrl) > 0 || len(rc.ProjectKey) > 0 || len(rc.RepoPath) > 0
 }
 
 type TargetResults struct {
@@ -134,6 +163,11 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 	return r
 }
 
+func (r *SecurityCommandResults) SetResultsContext(context ResultContext) *SecurityCommandResults {
+	r.ResultContext = context
+	return r
+}
+
 // --- Aggregated results for all targets ---
 // Adds a general error to the command results in different phases of its execution.
 // Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
@@ -146,6 +180,21 @@ func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError b
 	r.GeneralError = errors.Join(r.GeneralError, err)
 	r.errorsMutex.Unlock()
 	return r
+}
+
+// Is the result includes violations
+func (r *SecurityCommandResults) HasViolationContext() bool {
+	return r.ResultContext.HasViolationContext()
+}
+
+// Is the result includes vulnerabilities
+func (r *SecurityCommandResults) IncludesVulnerabilities() bool {
+	return r.ResultContext.IncludeVulnerabilities
+}
+
+// Is the result includes licenses
+func (r *SecurityCommandResults) IncludesLicenses() bool {
+	return r.ResultContext.IncludeLicenses
 }
 
 func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {

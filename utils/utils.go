@@ -58,6 +58,10 @@ func (v ViolationIssueType) String() string {
 
 type SubScanType string
 
+func (s SubScanType) String() string {
+	return string(s)
+}
+
 const (
 	SourceCode  CommandType = "source_code"
 	Binary      CommandType = "binary"
@@ -68,10 +72,6 @@ const (
 )
 
 type CommandType string
-
-func (s SubScanType) String() string {
-	return string(s)
-}
 
 func (s CommandType) IsTargetBinary() bool {
 	return s == Binary || s == DockerImage

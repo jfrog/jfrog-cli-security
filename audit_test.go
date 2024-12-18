@@ -375,7 +375,6 @@ func TestXrayAuditGoSimpleJson(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3},
 		},
 	})
-	
 }
 
 func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string {
@@ -794,6 +793,8 @@ type auditCommandTestParams struct {
 	Format string
 	// Will combined with "," if provided and be used as --watches flag value
 	Watches []string
+	// --project flag value if provided.
+	ProjectKey string
 	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
 	FailOnFailedBuildFlag bool
 	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
@@ -816,6 +817,9 @@ func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCom
 	}
 	if params.WithLicense {
 		args = append(args, "--licenses")
+	}
+	if params.ProjectKey != "" {
+		args = append(args, "--project="+params.ProjectKey)
 	}
 	if len(params.Watches) > 0 {
 		args = append(args, "--watches="+strings.Join(params.Watches, ","))

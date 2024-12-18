@@ -2,6 +2,7 @@ package xsc
 
 import (
 	"fmt"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -13,7 +14,7 @@ func GetConfigProfile(xrayVersion, xscVersion string, serverDetails *config.Serv
 		log.Info("Minimal Xsc version required to utilize config profile is '%s'. All configurations will be induced from provided Env vars and files")
 		return nil, err
 	}
-	xscService, err := CreateXscService(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
 	if err != nil {
 		return nil, err
 	}

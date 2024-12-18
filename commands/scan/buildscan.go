@@ -145,7 +145,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(utils.Build).SetXrayVersion(xrayVersion)
+	cmdResults := results.NewCommandResults(utils.Build).
+		SetXrayVersion(xrayVersion).
+		SetResultsContext(results.ResultContext{ProjectKey: params.Project, IncludeVulnerabilities: bsc.includeVulnerabilities})
+
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
 	scanResults.NewScaScanResults(0, services.ScanResponse{
 		Violations:      buildScanResults.Violations,
@@ -155,9 +158,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
-		SetHasViolationContext(true).
-		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
-		SetIncludeLicenses(false).
+		// SetHasViolationContext(true).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable)
 

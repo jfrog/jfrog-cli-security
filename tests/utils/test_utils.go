@@ -361,14 +361,19 @@ func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
 	return nil
 }
 
-func CreateWatch(t *testing.T, policyName, watchName string) (string, func()) {
+func CreateWatch(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default watch.
 	watchParams := xrayUtils.NewWatchParams()
 	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
 	watchParams.Active = true
-	watchParams.Builds.Type = xrayUtils.WatchBuildAll
+	if len(gitResources) > 0 {
+		watchParams.GitRepositories.Resources = gitResources
+	} else {
+		watchParams.Builds.Type = xrayUtils.WatchBuildAll
+	}
+
 	watchParams.Policies = []xrayUtils.AssignedPolicy{
 		{
 			Name: policyName,
@@ -381,7 +386,7 @@ func CreateWatch(t *testing.T, policyName, watchName string) (string, func()) {
 	}
 }
 
-func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
+func CreateTestWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
@@ -401,19 +406,9 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchParams := xrayUtils.NewWatchParams()
-	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
-	watchParams.Active = true
-	watchParams.Builds.Type = xrayUtils.WatchBuildAll
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
-		{
-			Name: policyParams.Name,
-			Type: "security",
-		},
-	}
-	assert.NoError(t, xrayManager.CreateWatch(watchParams))
-	return watchParams.Name, func() {
-		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	watchName, cleanUpWatch := CreateWatch(t, policyParams.Name, watchName)
+	return watchName, func() {
+		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
 }

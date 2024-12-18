@@ -8,8 +8,8 @@ type ResultsTables struct {
 	// Licenses
 	LicensesTable []licenseTableRow
 	// Sca tables
-	SecurityVulnerabilitiesTable   []vulnerabilityTableRow
-	SecurityViolationsTable        []vulnerabilityTableRow
+	SecurityVulnerabilitiesTable   []scaVulnerabilityOrViolationTableRow
+	SecurityViolationsTable        []scaVulnerabilityOrViolationTableRow
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow
 	// Iac tables
@@ -24,7 +24,7 @@ type ResultsTables struct {
 }
 
 // Used for vulnerabilities and security violations
-type vulnerabilityTableRow struct {
+type scaVulnerabilityOrViolationTableRow struct {
 	severity   string `col-name:"Severity"`
 	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting
@@ -35,9 +35,11 @@ type vulnerabilityTableRow struct {
 	fixedVersions             string                       `col-name:"Fixed\nVersions"`
 	impactedDependencyType    string                       `col-name:"Type"`
 	cves                      []cveTableRow                `embed-table:"true"`
+	watch                     string                       `col-name:"Watch Name" omitempty:"true"`
 	issueId                   string                       `col-name:"Issue ID" extended:"true"`
 }
 
+// For Binary scans
 type vulnerabilityScanTableRow struct {
 	severity   string `col-name:"Severity"`
 	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
@@ -77,6 +79,7 @@ type licenseViolationTableRow struct {
 	impactedDependencyName    string                       `col-name:"Impacted\nDependency"`
 	impactedDependencyVersion string                       `col-name:"Impacted\nDependency\nVersion"`
 	impactedDependencyType    string                       `col-name:"Type"`
+	watch                     string                       `col-name:"Watch Name"`
 }
 
 type licenseViolationScanTableRow struct {
@@ -149,6 +152,7 @@ type secretsTableRow struct {
 	secret          string `col-name:"Secret"`
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
 	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
+	watch           string `col-name:"Watch Name" omitempty:"true"`
 }
 
 type iacOrSastTableRow struct {
@@ -156,4 +160,5 @@ type iacOrSastTableRow struct {
 	file       string `col-name:"File"`
 	lineColumn string `col-name:"Line:Column"`
 	finding    string `col-name:"Finding"`
+	watch      string `col-name:"Watch Name" omitempty:"true"`
 }

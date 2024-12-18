@@ -111,12 +111,12 @@ func (dsc *DockerScanCommand) Run() (err error) {
 }
 
 func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
-	hasViolationContext := dsc.ScanCommand.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
+	hasViolationContext := dsc.ScanCommand.resultsContext.HasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
-	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
+	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
 		return
 	}
 	return output.RecordSecurityCommandSummary(summary)
