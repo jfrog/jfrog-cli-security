@@ -487,7 +487,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 
-	auditCmd.SetGitRepoHttpsCloneUrl("github.com/jfrog/jfrog-cli-security.git")
+	// auditCmd.SetGitRepoHttpsCloneUrl("github.com/jfrog/jfrog-cli-security.git")
 
 	if c.GetStringFlagValue(flags.WorkingDirs) != "" {
 		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))

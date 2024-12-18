@@ -41,10 +41,8 @@ func TestXrayAuditNpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1},
-		Violations: &validations.ViolationCount{
-			ValidateType: &validations.ScaViolationCount{Security: 1},
-		},
+		Total:      &validations.TotalCount{Licenses: 1, Violations: 1},
+		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
 	})
 }
 
@@ -52,10 +50,8 @@ func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
-		Violations: &validations.ViolationCount{
-			ValidateType: &validations.ScaViolationCount{Security: 1},
-		},
+		Total:      &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
+		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
 	})
 }
 

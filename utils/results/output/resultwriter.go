@@ -22,10 +22,8 @@ type ResultsWriter struct {
 	commandResults *results.SecurityCommandResults
 	// Format  The output format.
 	format format.OutputFormat
-	// // IncludeVulnerabilities  If true, include all vulnerabilities as part of the output. Else, include violations only.
-	// includeVulnerabilities bool
-	// // IncludeLicenses  If true, also include license violations as part of the output.
-	// includeLicenses bool
+	// For build-scan where always we expect violations, to override the default behavior.
+	showViolations bool
 	// IsMultipleRoots  multipleRoots is set to true, in case the given results array contains (or may contain) results of several projects (like in binary scan).
 	isMultipleRoots *bool
 	// PrintExtended, If true, show extended results.
@@ -55,10 +53,10 @@ func (rw *ResultsWriter) SetSubScansPerformed(subScansPerformed []utils.SubScanT
 	return rw
 }
 
-// func (rw *ResultsWriter) SetIncludeVulnerabilities(includeVulnerabilities bool) *ResultsWriter {
-// 	rw.includeVulnerabilities = includeVulnerabilities
-// 	return rw
-// }
+func (rw *ResultsWriter) SetHasViolationContext(violationContext bool) *ResultsWriter {
+	rw.showViolations = violationContext
+	return rw
+}
 
 // func (rw *ResultsWriter) SetIncludeLicenses(licenses bool) *ResultsWriter {
 // 	rw.includeLicenses = licenses
@@ -204,7 +202,7 @@ func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTabl
 	if !utils.IsScanRequested(rw.commandResults.CmdType, utils.ScaScan, rw.subScansPerformed...) {
 		return
 	}
-	if rw.commandResults.HasViolationContext() {
+	if rw.showViolations || rw.commandResults.HasViolationContext() {
 		if err = PrintViolationsTable(tableContent, rw.commandResults.CmdType, rw.printExtended); err != nil {
 			return
 		}
@@ -224,7 +222,7 @@ func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTabl
 	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.subScansPerformed...) {
 		return
 	}
-	if rw.commandResults.HasViolationContext() {
+	if rw.showViolations || rw.commandResults.HasViolationContext() {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, true); err != nil {
 			return
 		}

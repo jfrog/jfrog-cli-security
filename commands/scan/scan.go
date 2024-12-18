@@ -60,15 +60,10 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath    string
-	indexerTempDir string
-	outputFormat   format.OutputFormat
-
-	// projectKey             string
-	minSeverityFilter severityutils.Severity
-	// watches                []string
-	// includeVulnerabilities bool
-	// includeLicenses        bool
+	indexerPath         string
+	indexerTempDir      string
+	outputFormat        format.OutputFormat
+	minSeverityFilter   severityutils.Severity
 	fail                bool
 	printExtendedTable  bool
 	validateSecrets     bool
@@ -185,10 +180,6 @@ func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
 	return scanCmd
 }
 
-// func (scanCmd *ScanCommand) hasViolationContext() bool {
-// 	return len(scanCmd.watches) > 0 || scanCmd.projectKey != ""
-// }
-
 func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
 	var indexerResults xrayUtils.BinaryGraphNode
 	indexerCmd := exec.Command(scanCmd.indexerPath, indexingCommand, filePath, "--temp-dir", scanCmd.indexerTempDir)
@@ -255,9 +246,6 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
-		// SetHasViolationContext(scanCmd.hasViolationContext()).
-		// SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
-		// SetIncludeLicenses(scanCmd.includeLicenses).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {
@@ -474,7 +462,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(sca.GetScaScanStatusCode(err, graphScanResults), *graphScanResults)
+					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
@@ -485,7 +473,18 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
 				}
 				// Run Jas scans
-				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails, cmdResults.SecretValidation, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(cmdResults.MultiScanId, "", scanCmd.resultsContext.Watches, targetResults.GetTechnologies()...))
+				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails,
+					cmdResults.SecretValidation,
+					scanCmd.minSeverityFilter,
+					jas.GetAnalyzerManagerXscEnvVars(
+						cmdResults.MultiScanId,
+						// Passing but empty since not supported for binary scans
+						scanCmd.resultsContext.GitRepoHttpsCloneUrl,
+						scanCmd.resultsContext.ProjectKey,
+						scanCmd.resultsContext.Watches,
+						targetResults.GetTechnologies()...,
+					),
+				)
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
 				} else if scanner == nil {

@@ -12,7 +12,6 @@ import (
 
 type AuditParams struct {
 	// Common params to all scan routines
-	// commonGraphScanParams *scangraph.CommonGraphScanParams
 	resultsContext    results.ResultContext
 	workingDirs       []string
 	installFunc       func(tech string) error
@@ -113,11 +112,6 @@ func (params *AuditParams) SetResultsContext(resultsContext results.ResultContex
 	return params
 }
 
-// func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.CommonGraphScanParams) *AuditParams {
-// 	params.commonGraphScanParams = commonParams
-// 	return params
-// }
-
 func (params *AuditParams) SetConfigProfile(configProfile *xscservices.ConfigProfile) *AuditParams {
 	params.configProfile = configProfile
 	return params
@@ -132,22 +126,10 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 	return &services.XrayGraphScanParams{
 		RepoPath:               params.resultsContext.RepoPath,
 		Watches:                params.resultsContext.Watches,
-		ScanType:               services.Dependency,
 		ProjectKey:             params.resultsContext.ProjectKey,
 		GitRepoHttpsCloneUrl:   params.resultsContext.GitRepoHttpsCloneUrl,
 		IncludeVulnerabilities: params.resultsContext.IncludeVulnerabilities,
 		IncludeLicenses:        params.resultsContext.IncludeLicenses,
+		ScanType:               services.Dependency,
 	}
 }
-
-// func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
-// 	return &services.XrayGraphScanParams{
-// 		RepoPath:               params.commonGraphScanParams.RepoPath,
-// 		Watches:                params.commonGraphScanParams.Watches,
-// 		ScanType:               params.commonGraphScanParams.ScanType,
-// 		ProjectKey:             params.commonGraphScanParams.ProjectKey,
-// 		GitRepoHttpsCloneUrl:   params.commonGraphScanParams.GitRepoHttpsCloneUrl,
-// 		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
-// 		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
-// 	}
-// }

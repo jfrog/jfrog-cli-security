@@ -425,11 +425,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetConfigProfile(&configProfile).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
-				// SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-				// 	RepoPath:               "",
-				// 	ScanType:               scanservices.Dependency,
-				// 	IncludeVulnerabilities: true,
-				// })
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults := RunAudit(auditParams)
@@ -482,10 +477,6 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-		// SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-		// 	ScanType:               scanservices.Dependency,
-		// 	IncludeVulnerabilities: true,
-		// }).
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
 
@@ -622,10 +613,6 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
-				// SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-				// 	ScanType:               scanservices.Dependency,
-				// 	IncludeVulnerabilities: true,
-				// })
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)

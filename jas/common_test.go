@@ -272,6 +272,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 		name           string
 		msi            string
 		gitRepoUrl     string
+		projectKey     string
 		watches        []string
 		technologies   []techutils.Technology
 		expectedOutput map[string]string
@@ -311,6 +312,20 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			},
 		},
 		{
+			name:         "With project key",
+			msi:          "msi",
+			gitRepoUrl:   "gitRepoUrl",
+			projectKey:   "projectKey",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				gitRepoEnvVariable:          "gitRepoUrl",
+				projectEnvVariable:          "projectKey",
+			},
+		},
+		{
 			name:         "With watches",
 			msi:          "msi",
 			gitRepoUrl:   "gitRepoUrl",
@@ -327,7 +342,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.gitRepoUrl, test.watches, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }

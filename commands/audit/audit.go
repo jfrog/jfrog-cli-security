@@ -95,18 +95,6 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 	return auditCmd
 }
 
-// func (auditCmd *AuditCommand) CreateCommonGraphScanParams() *scangraph.CommonGraphScanParams {
-// 	return &scangraph.CommonGraphScanParams{
-// 		RepoPath:               auditCmd.targetRepoPath,
-// 		Watches:                auditCmd.watches,
-// 		ProjectKey:             auditCmd.projectKey,
-// 		GitRepoHttpsCloneUrl:   auditCmd.gitRepoHttpsCloneUrl,
-// 		IncludeVulnerabilities: auditCmd.IncludeVulnerabilities,
-// 		IncludeLicenses:        auditCmd.IncludeLicenses,
-// 		ScanType:               services.Dependency,
-// 	}
-// }
-
 func (auditCmd *AuditCommand) CreateAuditResultsContext(serverDetails *config.ServerDetails) (context results.ResultContext) {
 	return CreateResultsContext(
 		serverDetails,
@@ -120,6 +108,7 @@ func (auditCmd *AuditCommand) CreateAuditResultsContext(serverDetails *config.Se
 	)
 }
 
+// Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
 func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses bool) (context results.ResultContext) {
 	context = results.ResultContext{
 		RepoPath:               artifactoryRepoPath,
@@ -153,52 +142,16 @@ func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion strin
 		log.Debug(fmt.Sprintf("Git repo key was provided (%s) but no watches were defined in the platform. ignoring git repo key...", context.GitRepoHttpsCloneUrl))
 		context.GitRepoHttpsCloneUrl = ""
 	}
-	logDeprecatedMsgIfNeeded(context)
 	// We calculate again this time also taking into account the final git repo key value.
+	// (if there are no watches defined on the git repo and no other context was given, we should include vulnerabilities)
 	context.IncludeVulnerabilities = shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, context.GitRepoHttpsCloneUrl)
 	return
 }
 
+// If the user requested to include vulnerabilities, or if the user didn't provide any watches, project key, artifactory repo path or git repo key, we should include vulnerabilities.
 func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string) bool {
 	return includeVulnerabilities || !(len(watches) > 0 || projectKey != "" || artifactoryRepoPath != "" || gitRepoHttpsCloneUrl != "")
 }
-
-func logDeprecatedMsgIfNeeded(context results.ResultContext) {
-	if context.GitRepoHttpsCloneUrl == "" {
-		return
-	}
-	deprecated := []string{}
-	if context.ProjectKey != "" {
-		deprecated = append(deprecated, "project-key")
-	}
-	if context.RepoPath != "" {
-		deprecated = append(deprecated, "artifactory-repo-path")
-	}
-	if len(deprecated) > 0 {
-		log.Warn(fmt.Sprintf("Deprecated %s options were provided with git repository watches. The deprecated attributes will be removed in the future versions", strings.Join(deprecated, "/")))
-	}
-}
-
-// func GetViolationContext(manager *xray.XrayServicesManager, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoCloneHttpUrl string) (context *ViolationContext, err error) {
-// 	context = &ViolationContext{
-// 		Watches: watches,
-// 		RepoPath: artifactoryRepoPath,
-// 		ProjectKey: projectKey,
-// 	}
-// 	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
-// 		// Git repo key is not supported by the Xray version.
-// 		return
-// 	}
-// 	context.GitRepoKey = gitRepoCloneHttpUrl
-// 	definedWatches, err := manager.Xsc().GetResourceWatches(gitRepoCloneHttpUrl, projectKey)
-// 	if err != nil || definedWatches == nil {
-// 		// TODO: what todo if err?
-// 		return
-// 	}
-// 	// TODO: resolve conflict between context if needed
-// 	context.ResourcesWatchesBody = *definedWatches
-// 	return
-// }
 
 func (auditCmd *AuditCommand) Run() (err error) {
 	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
@@ -267,10 +220,6 @@ func (auditCmd *AuditCommand) CommandName() string {
 	return "generic_audit"
 }
 
-// func (auditCmd *AuditCommand) HasViolationContext() bool {
-// 	return len(auditCmd.watches) > 0 || auditCmd.gitRepoHttpsCloneUrl != "" || auditCmd.projectKey != "" || auditCmd.targetRepoPath != ""
-// }
-
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
@@ -338,6 +287,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		jas.GetAnalyzerManagerXscEnvVars(
 			auditParams.GetMultiScanId(),
 			jas.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
+			auditParams.resultsContext.ProjectKey,
 			auditParams.resultsContext.Watches,
 			scanResults.GetTechnologies()...,
 		),

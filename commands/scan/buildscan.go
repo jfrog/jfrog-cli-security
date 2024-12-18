@@ -158,7 +158,8 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
-		// SetHasViolationContext(true).
+		// In build-scan we always want to print the violations.
+		SetHasViolationContext(true).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable)
 
@@ -167,14 +168,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		if err = resultsPrinter.PrintScanResults(); err != nil {
 			return
 		}
-	} else {
-		// Print two different tables for violations and vulnerabilities (if needed)
-
+	} else if !noFailBuildPolicy {
 		// If "No Xray Fail build policy...." error received, no need to print violations
-		if !noFailBuildPolicy {
-			if err = resultsPrinter.PrintScanResults(); err != nil {
-				return false, err
-			}
+		if err = resultsPrinter.PrintScanResults(); err != nil {
+			return false, err
 		}
 	}
 	err = bsc.recordResults(cmdResults, params)
