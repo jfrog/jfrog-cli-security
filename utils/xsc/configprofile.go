@@ -18,7 +18,7 @@ func GetConfigProfile(xrayVersion, xscVersion string, serverDetails *config.Serv
 	if err != nil {
 		return nil, err
 	}
-	configProfile, err := xscService.GetConfigProfile(profileName)
+	configProfile, err := xscService.GetConfigProfileByName(profileName)
 	if err != nil {
 		err = fmt.Errorf("failed to get config profile '%s': %q", profileName, err)
 	}
