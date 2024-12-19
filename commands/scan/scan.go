@@ -141,6 +141,11 @@ func (scanCmd *ScanCommand) SetWatches(watches []string) *ScanCommand {
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetBaseRepoPath(artifactoryRepoPath string) *ScanCommand {
+	scanCmd.resultsContext.RepoPath = artifactoryRepoPath
+	return scanCmd
+}
+
 func (scanCmd *ScanCommand) SetIncludeVulnerabilities(include bool) *ScanCommand {
 	scanCmd.resultsContext.IncludeVulnerabilities = include
 	return scanCmd
