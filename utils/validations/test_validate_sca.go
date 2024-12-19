@@ -34,6 +34,9 @@ func ValidateCommandJsonOutput(t *testing.T, params ValidationParams) {
 				ValidateScanResponses(t, params.ExactResultsMatch, expectedResults, results)
 			}
 		}
+		if params.FailBuild == true {
+			ValidateScanResponseFailBuild(t, params.FailBuildCVESeverity, results)
+		}
 	}
 }
 
@@ -62,6 +65,18 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "scan responses", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
 		CountValidation[int]{Expected: params.OperationalViolations, Actual: operationalViolations, Msg: GetValidationCountErrMsg("operational risk violations", "scan responses", params.ExactResultsMatch, params.OperationalViolations, operationalViolations)},
 	)
+}
+
+func ValidateScanResponseFailBuild(t *testing.T, severity string, content []services.ScanResponse) {
+	for _, result := range content {
+		for _, violation := range result.Violations {
+			if violation.Severity == severity {
+				assert.True(t, violation.FailBuild, "FailBuild field is true")
+				return
+			}
+		}
+	}
+	assert.Fail(t, "fail_build field not found in the scan responses")
 }
 
 func ValidateScanResponses(t *testing.T, exactMatch bool, expected, actual []services.ScanResponse) {

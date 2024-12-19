@@ -37,12 +37,29 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
-func TestXrayAuditNpmJson(t *testing.T) {
+func TestXrayViolationsAuditNpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Licenses:           1,
+		SecurityViolations:   1,
+		Licenses:             1,
+		FailBuild:            true,
+		FailBuildCVESeverity: string(xrayUtils.High),
+	})
+}
+
+func TestXscViolationsAuditNpmJson(t *testing.T) {
+	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
+	err := os.Setenv("JFROG_CLI_REPORT_USAGE", "True")
+	if err != nil {
+		assert.NoError(t, err)
+	}
+	output := testAuditNpm(t, string(format.Json), false)
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		SecurityViolations:   1,
+		Licenses:             1,
+		FailBuild:            true,
+		FailBuildCVESeverity: string(xrayUtils.High),
 	})
 }
 

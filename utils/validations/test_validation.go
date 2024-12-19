@@ -43,6 +43,10 @@ type ValidationParams struct {
 	Sast                  int
 	Iac                   int
 	Secrets               int
+	//If provided, the test will check if the fail_build field exists
+	FailBuild bool
+	//If FailBuild provided, the test will that check CVEs with this severity will fail the build
+	FailBuildCVESeverity string
 }
 
 // Validation allows to validate/assert a content with expected values.
