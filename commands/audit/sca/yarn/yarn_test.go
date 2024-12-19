@@ -20,40 +20,69 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParseYarnDependenciesList(t *testing.T) {
+func TestParseYarnDependenciesMap(t *testing.T) {
 	npmId := techutils.Npm.GetPackageTypeId()
-	yarnDependencies := map[string]*bibuildutils.YarnDependency{
-		"pack1@npm:1.0.0":        {Value: "pack1@npm:1.0.0", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}}}},
-		"pack2@npm:2.0.0":        {Value: "pack2@npm:2.0.0", Details: bibuildutils.YarnDepDetails{Version: "2.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}, {Locator: "pack5@npm:5.0.0"}}}},
-		"@jfrog/pack3@npm:3.0.0": {Value: "@jfrog/pack3@npm:3.0.0", Details: bibuildutils.YarnDepDetails{Version: "3.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack1@virtual:c192f6b3b32cd5d11a443144e162ec3bc#npm:1.0.0"}, {Locator: "pack2@npm:2.0.0"}}}},
-		"pack4@npm:4.0.0":        {Value: "pack4@npm:4.0.0", Details: bibuildutils.YarnDepDetails{Version: "4.0.0"}},
-		"pack5@npm:5.0.0":        {Value: "pack5@npm:5.0.0", Details: bibuildutils.YarnDepDetails{Version: "5.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack2@npm:2.0.0"}}}},
-	}
 
-	rootXrayId := npmId + "@jfrog/pack3:3.0.0"
-	expectedTree := &xrayUtils.GraphNode{
-		Id: rootXrayId,
-		Nodes: []*xrayUtils.GraphNode{
-			{Id: npmId + "pack1:1.0.0",
+	testCases := []struct {
+		name               string
+		yarnDependencies   map[string]*bibuildutils.YarnDependency
+		rootXrayId         string
+		expectedTree       *xrayUtils.GraphNode
+		expectedUniqueDeps []string
+		errorExpected      bool
+	}{
+		{
+			name: "Successful tree construction",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"pack1@npm:1.0.0":        {Value: "pack1@npm:1.0.0", Details: bibuildutils.YarnDepDetails{Version: "1.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}}}},
+				"pack2@npm:2.0.0":        {Value: "pack2@npm:2.0.0", Details: bibuildutils.YarnDepDetails{Version: "2.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack4@npm:4.0.0"}, {Locator: "pack5@npm:5.0.0"}}}},
+				"@jfrog/pack3@npm:3.0.0": {Value: "@jfrog/pack3@npm:3.0.0", Details: bibuildutils.YarnDepDetails{Version: "3.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack1@virtual:c192f6b3b32cd5d11a443144e162ec3bc#npm:1.0.0"}, {Locator: "pack2@npm:2.0.0"}}}},
+				"pack4@npm:4.0.0":        {Value: "pack4@npm:4.0.0", Details: bibuildutils.YarnDepDetails{Version: "4.0.0"}},
+				"pack5@npm:5.0.0":        {Value: "pack5@npm:5.0.0", Details: bibuildutils.YarnDepDetails{Version: "5.0.0", Dependencies: []bibuildutils.YarnDependencyPointer{{Locator: "pack2@npm:2.0.0"}}}},
+			},
+			rootXrayId: npmId + "@jfrog/pack3:3.0.0",
+			expectedTree: &xrayUtils.GraphNode{
+				Id: npmId + "@jfrog/pack3:3.0.0",
 				Nodes: []*xrayUtils.GraphNode{
-					{Id: npmId + "pack4:4.0.0",
-						Nodes: []*xrayUtils.GraphNode{}},
-				}},
-			{Id: npmId + "pack2:2.0.0",
-				Nodes: []*xrayUtils.GraphNode{
-					{Id: npmId + "pack4:4.0.0",
-						Nodes: []*xrayUtils.GraphNode{}},
-					{Id: npmId + "pack5:5.0.0",
-						Nodes: []*xrayUtils.GraphNode{}},
-				}},
+					{Id: npmId + "pack1:1.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "pack4:4.0.0",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+					{Id: npmId + "pack2:2.0.0",
+						Nodes: []*xrayUtils.GraphNode{
+							{Id: npmId + "pack4:4.0.0",
+								Nodes: []*xrayUtils.GraphNode{}},
+							{Id: npmId + "pack5:5.0.0",
+								Nodes: []*xrayUtils.GraphNode{}},
+						}},
+				},
+			},
+			expectedUniqueDeps: []string{npmId + "pack1:1.0.0", npmId + "pack2:2.0.0", npmId + "pack4:4.0.0", npmId + "pack5:5.0.0", npmId + "@jfrog/pack3:3.0.0"},
+			errorExpected:      false,
+		},
+		{
+			name: "Incorrect formatted dependency name - error expected",
+			yarnDependencies: map[string]*bibuildutils.YarnDependency{
+				"@privateDep": {Value: "", Details: bibuildutils.YarnDepDetails{Version: "privateDep"}},
+			},
+			rootXrayId:    npmId + "@jfrog/pack3:3.0.0",
+			errorExpected: true,
 		},
 	}
-	expectedUniqueDeps := []string{npmId + "pack1:1.0.0", npmId + "pack2:2.0.0", npmId + "pack4:4.0.0", npmId + "pack5:5.0.0", npmId + "@jfrog/pack3:3.0.0"}
 
-	xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(yarnDependencies, rootXrayId)
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
-	assert.True(t, tests.CompareTree(expectedTree, xrayDependenciesTree), "expected:", expectedTree.Nodes, "got:", xrayDependenciesTree.Nodes)
+	for _, testcase := range testCases {
+		t.Run(testcase.name, func(t *testing.T) {
+			xrayDependenciesTree, uniqueDeps, err := parseYarnDependenciesMap(testcase.yarnDependencies, testcase.rootXrayId)
+			if !testcase.errorExpected {
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, uniqueDeps, testcase.expectedUniqueDeps, "First is actual, Second is Expected")
+				assert.True(t, tests.CompareTree(testcase.expectedTree, xrayDependenciesTree), "expected:", testcase.expectedTree.Nodes, "got:", xrayDependenciesTree.Nodes)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
 }
 
 func TestIsInstallRequired(t *testing.T) {
