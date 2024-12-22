@@ -87,7 +87,6 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, va
 		return nil, err
 	}
 	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
-	log.Debug("Analyzer Manager extra env vars:\n", vars)
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 

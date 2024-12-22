@@ -361,19 +361,14 @@ func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
 	return nil
 }
 
-func CreateWatch(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default watch.
-	watchParams := xrayUtils.NewWatchParams()
+	watchParams := assignParams(xrayUtils.NewWatchParams())
 	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
 	watchParams.Active = true
-	if len(gitResources) > 0 {
-		watchParams.GitRepositories.Resources = gitResources
-	} else {
-		watchParams.Builds.Type = xrayUtils.WatchBuildAll
-	}
-
+	// Assign the policy to the watch.
 	watchParams.Policies = []xrayUtils.AssignedPolicy{
 		{
 			Name: policyName,
@@ -386,7 +381,25 @@ func CreateWatch(t *testing.T, policyName, watchName string, gitResources ...str
 	}
 }
 
-func CreateTestWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
+func CreateTestGitRepoWatch(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
+		return watchParams
+	})
+}
+
+func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		watchParams.ProjectKey = projectKey
+		return watchParams
+	})
+}
+
+func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
@@ -406,7 +419,7 @@ func CreateTestWatch(t *testing.T, policyName, watchName string, severity xrayUt
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateWatch(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateTestGitRepoWatch(t, policyParams.Name, watchName)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))

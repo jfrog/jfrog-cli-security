@@ -6,7 +6,7 @@ require (
 	github.com/beevik/etree v1.4.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.10.6
+	github.com/jfrog/build-info-go v1.10.7
 	github.com/jfrog/froggit-go v1.16.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
@@ -113,7 +113,7 @@ require (
 )
 
 // attiasas:add_repo_context_scan_graph
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241218124804-45bdc2205dc7
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241222093208-082251a38043
 
 // replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20241202121042-ba0c6c74db7a
 

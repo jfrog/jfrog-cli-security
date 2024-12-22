@@ -62,6 +62,8 @@ var (
 	JfrogSshPassphrase *string
 	ContainerRegistry  *string
 	ciRunId            *string
+	// Used for tests that require a project key
+	JfrogTestProjectKey *string
 )
 
 func getTestUrlDefaultValue() string {
@@ -114,6 +116,7 @@ func init() {
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
 	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8084", "Container registry")
 	ciRunId = flag.String("ci.runId", "", "A unique identifier used as a suffix to create repositories and builds in the tests")
+	JfrogTestProjectKey = flag.String("jfrog.projectKey", os.Getenv(TestJfrogPlatformProjectKeyEnvVar), "Project key used for tests")
 }
 
 func InitTestFlags() {

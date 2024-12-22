@@ -22,8 +22,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuW
 github.com/apparentlymart/go-textseg/v13 v13.0.0/go.mod h1:ZK2fH7c4NqDTLtiYLvIkEghdlcqw7yxLeM89kiTRPUo=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
-github.com/attiasas/jfrog-client-go v0.0.0-20241218124804-45bdc2205dc7 h1:SR2SMTTwKikNZmL+8Tn/r34+84IuyLPDsTyRVDlJs3Y=
-github.com/attiasas/jfrog-client-go v0.0.0-20241218124804-45bdc2205dc7/go.mod h1:3rdSCzKoN1l3wklL33D7nu+nB3089rIgxwyoprFdCaw=
+github.com/attiasas/jfrog-client-go v0.0.0-20241222093208-082251a38043 h1:2JSZ3ol8g3QkxkAc9vOPL9sDPCXPZP6lV9Ot1RfnsgU=
+github.com/attiasas/jfrog-client-go v0.0.0-20241222093208-082251a38043/go.mod h1:2ySOMva54L3EYYIlCBYBTcTgqfrrQ19gtpA/MWfA/ec=
 github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
 github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=
@@ -121,8 +121,8 @@ github.com/jedib0t/go-pretty/v6 v6.6.1 h1:iJ65Xjb680rHcikRj6DSIbzCex2huitmc7bDtx
 github.com/jedib0t/go-pretty/v6 v6.6.1/go.mod h1:zbn98qrYlh95FIhwwsbIip0LYpwSG8SUOScs+v9/t0E=
 github.com/jfrog/archiver/v3 v3.6.1 h1:LOxnkw9pOn45DzCbZNFV6K0+6dCsQ0L8mR3ZcujO5eI=
 github.com/jfrog/archiver/v3 v3.6.1/go.mod h1:VgR+3WZS4N+i9FaDwLZbq+jeU4B4zctXL+gL4EMzfLw=
-github.com/jfrog/build-info-go v1.10.6 h1:zH1ZhXlVfi5DlFyunygHjrdOcnv5qxfeLqmsfD4+lc4=
-github.com/jfrog/build-info-go v1.10.6/go.mod h1:JcISnovFXKx3wWf3p1fcMmlPdt6adxScXvoJN4WXqIE=
+github.com/jfrog/build-info-go v1.10.7 h1:10NVHYg0193gJpQft+S4WQfvYMtj5jlwwhJRvkFJtBE=
+github.com/jfrog/build-info-go v1.10.7/go.mod h1:JcISnovFXKx3wWf3p1fcMmlPdt6adxScXvoJN4WXqIE=
 github.com/jfrog/froggit-go v1.16.2 h1:F//S83iXH14qsCwYzv0zB2JtjS2pJVEsUoEmYA+37dQ=
 github.com/jfrog/froggit-go v1.16.2/go.mod h1:5VpdQfAcbuyFl9x/x8HGm7kVk719kEtW/8YJFvKcHPA=
 github.com/jfrog/gofrog v1.7.6 h1:QmfAiRzVyaI7JYGsB7cxfAJePAZTzFz0gRWZSE27c6s=

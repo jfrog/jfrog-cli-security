@@ -204,6 +204,13 @@ func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {
 	return
 }
 
+func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
+	for _, scan := range r.Targets {
+		targets = append(targets, scan.ScanTarget)
+	}
+	return
+}
+
 func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scan := range r.Targets {
 		results = append(results, scan.GetScaScansXrayResults()...)

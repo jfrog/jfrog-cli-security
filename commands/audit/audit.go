@@ -390,7 +390,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 		// No SCA targets were detected, add the root directory as a target for JAS scans.
 		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
 	}
-	scanInfo, err := coreutils.GetJsonIndent(cmdResults)
+	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
 	if err != nil {
 		return
 	}

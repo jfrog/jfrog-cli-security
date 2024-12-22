@@ -18,6 +18,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/artifactory"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
@@ -70,12 +71,17 @@ func CreateXrayRestsMockServer(testHandler restsTestHandler) (*httptest.Server, 
 }
 
 type MockServerParams struct {
+	// General params to mock Xray and Xsc (backward compatible and inner service based on the following params)
 	XrayVersion  string
 	XscVersion   string
 	XscNotExists bool
-	ReturnMsi    string
+	// Xsc/Event Api
+	ReturnMsi string
+	// Xsc/Watch/Resource Api
+	ReturnMockPlatformWatches xrayutils.ResourcesWatchesBody
 }
 
+// Mock Only Xsc server API (backward compatible)
 func XscServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
 	if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
 		serverMock, serverDetails, _ := CreateXscRestsMockServer(t, getXscServerApiHandler(t, params))
@@ -132,6 +138,7 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 	}
 }
 
+// Mock Xray server (with Xsc inner service if supported based on version - not backward compatible to XSC API)
 func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
@@ -172,6 +179,20 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		}
 		if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
 			return
+		}
+		// Get defined active watches only supported after xsc was inner service
+		if strings.Contains(r.RequestURI, "/api/v1/xsc/watches/resource") {
+			if r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				content, err := utils.GetAsJsonBytes(params.ReturnMockPlatformWatches, false, false)
+				if !assert.NoError(t, err) {
+					return
+				}
+				_, err = w.Write(content)
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
 		}
 		getXscServerApiHandler(t, params)(w, r)
 	})

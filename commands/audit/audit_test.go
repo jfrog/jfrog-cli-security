@@ -28,6 +28,8 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	xrayServices "github.com/jfrog/jfrog-client-go/xray/services"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
@@ -622,5 +624,113 @@ func TestAuditWithPartialResults(t *testing.T) {
 				assert.Error(t, auditResults.GetErrors())
 			}
 		})
+	}
+}
+
+func TestCreateResultsContext(t *testing.T) {
+	mockWatches := []string{"watch-1", "watch-2"}
+	mockProjectKey := "project"
+	mockArtifactoryRepoPath := "repo/path"
+
+	tests := []struct {
+		name                    string
+		xrayVersion             string
+		expectedPlatformWatches xrayApi.ResourcesWatchesBody
+	}{
+		{
+			name:                    "Git Repo Url Supported",
+			xrayVersion:             xrayServices.MinXrayVersionGitRepoKey,
+			expectedPlatformWatches: xrayApi.ResourcesWatchesBody{GitRepositoryWatches: mockWatches},
+		},
+		{
+			name:        "Git Repo Url Not Supported (Backward Compatibility)",
+			xrayVersion: "1.0.0",
+		},
+	}
+	for _, test := range tests {
+		testCaseExpectedGitRepoHttpsCloneUrl := ""
+		expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided := false
+		if len(test.expectedPlatformWatches.GitRepositoryWatches) > 0 {
+			// Even if providing the git repo url, the generated object should only include the value if watches are provided
+			testCaseExpectedGitRepoHttpsCloneUrl = validations.TestMockGitInfo.GitRepoHttpsCloneUrl
+		} else {
+			// If only the git repo url is provided but not supported or there are no defined watches, the expected includeVulnerabilities flag should be set to true even if not provided
+			expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided = true
+		}
+		testCases := []struct {
+			name string
+
+			artifactoryRepoPath    string
+			httpCloneUrl           string
+			watches                []string
+			jfrogProjectKey        string
+			includeVulnerabilities bool
+			includeLicenses        bool
+
+			expectedArtifactoryRepoPath    string
+			expectedHttpCloneUrl           string
+			expectedWatches                []string
+			expectedJfrogProjectKey        string
+			expectedIncludeVulnerabilities bool
+			expectedIncludeLicenses        bool
+		}{
+			{
+				name:            "Only Vulnerabilities",
+				includeLicenses: true,
+				// Since no violation context is provided, the includeVulnerabilities flag should be set to true even if not provided
+				expectedIncludeVulnerabilities: true,
+				expectedIncludeLicenses:        true,
+			},
+			{
+				name:            "Watches",
+				watches:         mockWatches,
+				expectedWatches: mockWatches,
+			},
+			{
+				name:                        "Artifactory Repo Path",
+				artifactoryRepoPath:         mockArtifactoryRepoPath,
+				expectedArtifactoryRepoPath: mockArtifactoryRepoPath,
+			},
+			{
+				name:                    "Project key",
+				jfrogProjectKey:         mockProjectKey,
+				expectedJfrogProjectKey: mockProjectKey,
+				includeLicenses:         true,
+				expectedIncludeLicenses: true,
+			},
+			{
+				name:                           "Git Clone Url",
+				httpCloneUrl:                   validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
+				expectedIncludeVulnerabilities: expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided,
+			},
+			{
+				name:                   "All",
+				httpCloneUrl:           validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				watches:                mockWatches,
+				jfrogProjectKey:        mockProjectKey,
+				includeVulnerabilities: true,
+				includeLicenses:        true,
+
+				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
+				expectedWatches:                mockWatches,
+				expectedJfrogProjectKey:        mockProjectKey,
+				expectedIncludeVulnerabilities: true,
+				expectedIncludeLicenses:        true,
+			},
+		}
+		for _, testCase := range testCases {
+			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
+				mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
+				defer mockServer.Close()
+				context := CreateResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses)
+				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
+				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
+				assert.Equal(t, testCase.expectedWatches, context.Watches)
+				assert.Equal(t, testCase.expectedJfrogProjectKey, context.ProjectKey)
+				assert.Equal(t, testCase.expectedIncludeVulnerabilities, context.IncludeVulnerabilities)
+				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
+			})
+		}
 	}
 }

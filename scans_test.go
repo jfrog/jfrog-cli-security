@@ -81,7 +81,7 @@ func testXrayBinaryScan(t *testing.T, format, policyName, watchName string) stri
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
 	if policyName != "" && watchName != "" {
-		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
+		watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
 		defer deleteWatch()
 		// Include violations and vulnerabilities
 		args = append(args, "--watches="+watchName, "--vuln")
@@ -130,7 +130,7 @@ func TestDockerScan(t *testing.T) {
 	testCli, cleanup := integration.InitNativeDockerTest(t)
 	defer cleanup()
 
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
+	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
 	defer deleteWatch()
 
 	imagesToScan := []string{

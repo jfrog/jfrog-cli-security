@@ -36,7 +36,7 @@ const (
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	watchesEnvVariable                        = "AM_WATCHES"
-	projectEnvVariable                        = "AM_PLATFORM_PROJECT"
+	projectEnvVariable                        = "AM_PROJECT_VIOLATIONS"
 	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
