@@ -92,7 +92,8 @@ func XscServer(t *testing.T, params MockServerParams) (*httptest.Server, *config
 
 func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.ResponseWriter, r *http.Request) {
 	apiUrlPart := "api/v1/"
-	if xscutils.IsXscXrayInnerService(params.XrayVersion) {
+	var isXrayAfterXscMigration bool
+	if isXrayAfterXscMigration = xscutils.IsXscXrayInnerService(params.XrayVersion); isXrayAfterXscMigration {
 		apiUrlPart = ""
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +178,22 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 				}
 			}
 		}
-		if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
+
+		isXrayAfterXscMigration := xscutils.IsXscXrayInnerService(params.XrayVersion)
+		if strings.Contains(r.RequestURI, "/xsc/profile_repos") && isXrayAfterXscMigration {
+			assert.Equal(t, http.MethodPost, r.Method)
+			w.WriteHeader(http.StatusOK)
+			content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
+			if !assert.NoError(t, err) {
+				return
+			}
+			_, err = w.Write(content)
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
+
+		if !isXrayAfterXscMigration {
 			return
 		}
 		// Get defined active watches only supported after xsc was inner service

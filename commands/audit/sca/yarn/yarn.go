@@ -77,7 +77,14 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 		return
 	}
 	// Parse the dependencies into Xray dependency tree format
-	dependencyTree, uniqueDeps := parseYarnDependenciesMap(dependenciesMap, getXrayDependencyId(root))
+	rootId, err := getXrayDependencyId(root)
+	if err != nil {
+		return
+	}
+	dependencyTree, uniqueDeps, err := parseYarnDependenciesMap(dependenciesMap, rootId)
+	if err != nil {
+		return
+	}
 	dependencyTrees = []*xrayUtils.GraphNode{dependencyTree}
 	return
 }
@@ -206,22 +213,34 @@ func runYarnInstallAccordingToVersion(curWd, yarnExecPath string, installCommand
 }
 
 // Parse the dependencies into a Xray dependency tree format
-func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string) {
+func parseYarnDependenciesMap(dependencies map[string]*bibuildutils.YarnDependency, rootXrayId string) (*xrayUtils.GraphNode, []string, error) {
 	treeMap := make(map[string]xray.DepTreeNode)
 	for _, dependency := range dependencies {
-		xrayDepId := getXrayDependencyId(dependency)
+		xrayDepId, err := getXrayDependencyId(dependency)
+		if err != nil {
+			return nil, nil, err
+		}
 		var subDeps []string
 		for _, subDepPtr := range dependency.Details.Dependencies {
-			subDeps = append(subDeps, getXrayDependencyId(dependencies[bibuildutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)]))
+			var subDepXrayId string
+			subDepXrayId, err = getXrayDependencyId(dependencies[bibuildutils.GetYarnDependencyKeyFromLocator(subDepPtr.Locator)])
+			if err != nil {
+				return nil, nil, err
+			}
+			subDeps = append(subDeps, subDepXrayId)
 		}
 		if len(subDeps) > 0 {
 			treeMap[xrayDepId] = xray.DepTreeNode{Children: subDeps}
 		}
 	}
 	graph, uniqDeps := xray.BuildXrayDependencyTree(treeMap, rootXrayId)
-	return graph, maps.Keys(uniqDeps)
+	return graph, maps.Keys(uniqDeps), nil
 }
 
-func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) string {
-	return techutils.Npm.GetPackageTypeId() + yarnDependency.Name() + ":" + yarnDependency.Details.Version
+func getXrayDependencyId(yarnDependency *bibuildutils.YarnDependency) (string, error) {
+	dependencyName, err := yarnDependency.Name()
+	if err != nil {
+		return "", err
+	}
+	return techutils.Npm.GetPackageTypeId() + dependencyName + ":" + yarnDependency.Details.Version, nil
 }

@@ -10,11 +10,11 @@ require (
 	github.com/jfrog/froggit-go v1.16.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.57.0
-	github.com/jfrog/jfrog-client-go v1.48.2
+	github.com/jfrog/jfrog-cli-core/v2 v2.57.2
+	github.com/jfrog/jfrog-client-go v1.48.4
 	github.com/magiconair/properties v1.8.7
 	github.com/owenrumney/go-sarif/v2 v2.3.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
@@ -58,7 +58,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.6.1 // indirect
+	github.com/jedib0t/go-pretty/v6 v6.6.3 // indirect
 	github.com/jfrog/archiver/v3 v3.6.1 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect

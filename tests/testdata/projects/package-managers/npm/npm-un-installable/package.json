@@ -9,6 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "non-existing-dependency": "1.0.1"
+    "@jfrog/non-existing-dependency": "1.0.1"
   }
 }
