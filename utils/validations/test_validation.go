@@ -26,6 +26,8 @@ type ValidationParams struct {
 	Actual interface{}
 	// If provided, the test will check if the content matches the expected results.
 	Expected interface{}
+	// If provided, will go through this list of point attribute - and validate they exists in the actual content.
+	ExistingProperties []string
 	// If provided, the test will check exact values and not only the minimum values / existence.
 	ExactResultsMatch bool
 	// Expected issues for each type to check if the content has the correct amount of issues.

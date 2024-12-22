@@ -3,6 +3,8 @@ package validations
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -36,6 +38,13 @@ func ValidateCommandJsonOutput(t *testing.T, params ValidationParams) {
 		}
 		if params.FailBuild == true {
 			ValidateScanResponseFailBuild(t, params.FailBuildCVESeverity, results)
+		}
+		if params.ExistingProperties != nil {
+			//TODO: TEMP Function - to use ValidatePaths
+			ValidateContainedStrings(t, fmt.Sprintf("%v", results), params.ExistingProperties)
+			//for _, res := range results {
+			//	ValidatePaths(t, res, params.ExistingProperties)
+			//}
 		}
 	}
 }
@@ -95,4 +104,10 @@ func getScanResponseByScanId(scanId string, content []services.ScanResponse) *se
 		}
 	}
 	return nil
+}
+
+func ValidateContainedStrings(t *testing.T, output string, strings []string) {
+	for _, str := range strings {
+		assert.Contains(t, output, str, "string not found: %s", str)
+	}
 }

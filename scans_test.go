@@ -174,7 +174,12 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 			if validateSecrets {
 				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
 			} else {
-				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{
+					Vulnerabilities: minVulnerabilities,
+					Licenses:        minLicenses,
+					//ExistingProperties: []string{"targets[].sca_scans.xray_scan[].vulnerabilities[].components[*].impact_paths[][].full_path"}})
+					//ExistingProperties: []string{"vulnerabilities[].components[*].impact_paths[][].full_path"}})
+					ExistingProperties: []string{"impact_paths", "full_path"}})
 			}
 		}
 		// Run docker scan on image with watch
@@ -184,7 +189,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations})
+			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations, Vulnerabilities: 0})
 		}
 	}
 }
