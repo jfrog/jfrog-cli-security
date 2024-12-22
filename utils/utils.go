@@ -236,3 +236,10 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	}
 	return
 }
+
+// This is a general error message for the CLI commands.
+// Because of how command parsing is handled, improperly specified flags may be misinterpreted as arguments.
+// Therefore, these flags will not go through the command's flags verifications, and will not be caught as incorrect flags.
+func GetCliTooManyArgsErrorMessage(numberOfArguments int) string {
+	return fmt.Sprintf("Too many arguments provided (%d in total).\nSome flags may be incorrectly specified, causing them to be misinterpreted as arguments and ignored. Please verify that all flags are valid.", numberOfArguments)
+}
