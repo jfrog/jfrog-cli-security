@@ -79,7 +79,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
+			mockServer, serverDetails := validations.XrayServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl)
