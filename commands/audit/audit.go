@@ -138,7 +138,7 @@ func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion strin
 	}
 	// Set git repo key and check if it has any watches defined in the platform.
 	context.GitRepoHttpsCloneUrl = gitRepoHttpsCloneUrl
-	if len(context.PlatformWatches.GitRepositoryWatches) == 0 {
+	if len(context.PlatformWatches.GitRepositoryWatches) == 0 && len(watches) == 0 && projectKey == "" {
 		log.Debug(fmt.Sprintf("Git repo key was provided (%s) but no watches were defined in the platform. ignoring git repo key...", context.GitRepoHttpsCloneUrl))
 		context.GitRepoHttpsCloneUrl = ""
 	}
