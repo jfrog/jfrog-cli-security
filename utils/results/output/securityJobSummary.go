@@ -73,6 +73,7 @@ func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails 
 	summary.ResultType = cmdResults.CmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
 	summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: vulnerabilitiesRequested,
 		HasViolationContext:    violationsRequested,
 		Pretty:                 true,
@@ -201,6 +202,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails
 	}
 	// Convert the results to SARIF format
 	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: includeVulnerabilities,
 		HasViolationContext:    hasViolationContext,
 		PatchBinaryPaths:       true,
