@@ -33,7 +33,7 @@ var (
 	violationResults = formats.ScanResultSummary{
 		ScaResults: &formats.ScaScanResultSummary{
 			ScanIds:         []string{validations.TestScaScanId},
-			MoreInfoUrls:    []string{validations.TestMoreInfoUrl},
+			MoreInfoUrls:    []string{validations.TestMoreInfoUrl + "scan-descendants/master?repoId=10"},
 			Security:        securityScaResults,
 			License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
 			OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
@@ -236,6 +236,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 		index               commandsummary.Index
 		args                *ResultSummaryArgs
 		violations          bool
+		GithubEnvs          bool
 		content             []formats.ResultsSummary
 		NoExtendedView      bool
 		expectedContentPath string
@@ -422,9 +423,34 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				}},
 			}},
 		},
+		{
+			name:                "Violations - Github Envs",
+			index:               commandsummary.DockerScan,
+			violations:          true,
+			GithubEnvs:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_analytics.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl, DockerImage: "dockerImage:version"},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "image.tar"),
+					Violations: &formats.ScanViolationsSummary{
+						Watches:           []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
+						ScanResultSummary: violationResults,
+					},
+				}},
+			}},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			if testCase.GithubEnvs {
+				cleanCliJobIdEnv := clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "some-job-id")
+				defer cleanCliJobIdEnv()
+				cleanCliRunIdEnv := clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalRunIdEnv, "some-run-id")
+				defer cleanCliRunIdEnv()
+				cleanCliGitRepoEnv := clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalGitRepoEnv, "some-repo")
+				defer cleanCliGitRepoEnv()
+			}
 			// Read expected content from file (or empty string expected if no file is provided)
 			expectedContent := ""
 			if testCase.expectedContentPath != "" {

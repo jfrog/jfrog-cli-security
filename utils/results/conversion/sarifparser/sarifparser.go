@@ -773,7 +773,7 @@ func getAnalyticsHiddenPixel(baseUrl string, resultOfSubScan utils.SubScanType) 
 		return ""
 	}
 	return fmt.Sprintf(
-		"![](%s/ui/api/v1/u?s=1&m=2&job_id=%s&run_id=%s&git_repo=%s&type=%s)",
+		"![](%sui/api/v1/u?s=1&m=2&job_id=%s&run_id=%s&git_repo=%s&type=%s)",
 		baseUrl,
 		jobId,
 		runId,

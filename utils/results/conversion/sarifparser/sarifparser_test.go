@@ -516,7 +516,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchedRuns := patchRunsToPassIngestionRules("url", tc.cmdType, tc.subScan, true, tc.target, tc.input...)
+			patchedRuns := patchRunsToPassIngestionRules("url/", tc.cmdType, tc.subScan, true, tc.target, tc.input...)
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}
