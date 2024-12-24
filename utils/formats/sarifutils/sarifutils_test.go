@@ -566,7 +566,7 @@ func TestGetRunRules(t *testing.T) {
 			run: CreateRunWithDummyResults(
 				CreateDummyPassingResult("rule1"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"))},
+			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"))},
 		},
 		{
 			run: CreateRunWithDummyResults(
@@ -577,9 +577,9 @@ func TestGetRunRules(t *testing.T) {
 				CreateDummyPassingResult("rule2"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
-				sarif.NewRule("rule1").WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
-				sarif.NewRule("rule2").WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
-				sarif.NewRule("rule3").WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule2").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule3").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
 			},
 		},
 	}
