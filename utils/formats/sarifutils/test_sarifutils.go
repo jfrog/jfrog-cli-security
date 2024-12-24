@@ -4,7 +4,7 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
-// TODO: create a builder struct with dynamic setters for fields in the creation functions
+// TODO: Create a Builder struct (with dynamic setters) and refactor sarif tests for better maintenance
 
 func CreateRunWithDummyResultsWithRuleInformation(toolName, ruleShortTxtDescription, ruleTxtDescription, ruleMarkdownDescription, ruleHelpMsg, ruleHelpMarkdown, wd string, results ...*sarif.Result) *sarif.Run {
 	run := createRunWithDummyResults(toolName, ruleShortTxtDescription, ruleTxtDescription, ruleMarkdownDescription, ruleHelpMsg, ruleHelpMarkdown, results...)
