@@ -531,16 +531,16 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
 	}
 	if moreInfoUrls := summary.GetMoreInfoUrls(); len(moreInfoUrls) > 0 {
-		return Link.Format(addAnalyticsSuffix(moreInfoUrls[0], index), "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(moreInfoUrls[0], index), "See the results of the scan in JFrog")
 	}
 	if defaultUrl := args.GetUrl(index, summary.GetScanIds()...); defaultUrl != "" {
-		return Link.Format(addAnalyticsSuffix(defaultUrl, index), "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(defaultUrl, index), "See the results of the scan in JFrog")
 	}
 	return
 }
 
 // adds analytics query params to the url if running in Github
-func addAnalyticsSuffix(url string, index commandsummary.Index) string {
+func addAnalyticsQueryParamsIfNeeded(url string, index commandsummary.Index) string {
 	githubJobId := os.Getenv(utils.JfrogExternalJobIdEnv)
 	if githubJobId == "" {
 		// Not running in Github no need to add analytics
@@ -551,7 +551,7 @@ func addAnalyticsSuffix(url string, index commandsummary.Index) string {
 	indexValue := "gh_section="
 	switch index {
 	case commandsummary.BuildScan:
-		indexValue += "build_info"
+		indexValue += "build"
 	default:
 		indexValue += "on_demand_scan"
 	}

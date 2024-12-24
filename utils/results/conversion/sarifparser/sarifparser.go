@@ -493,7 +493,7 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 			// Patch by transferring the full description to the help field.
 			rule.Help = rule.FullDescription
 		}
-		// Add analytics hidden pixel to the help content if applicable (Github code scanning)
+		// Add analytics hidden pixel to the help content if needed (Github code scanning)
 		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, subScanType); rule.Help != nil && analytics != "" {
 			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s\n\n%s", analytics, sarifutils.GetRuleHelpMarkdown(rule)))
 		}
