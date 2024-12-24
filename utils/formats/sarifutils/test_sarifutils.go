@@ -192,3 +192,12 @@ func CreateThreadFlow(locations ...*sarif.Location) *sarif.ThreadFlow {
 	}
 	return stackStrace
 }
+
+func CreateDummyRuleWithProperties(id string, properties sarif.Properties) *sarif.ReportingDescriptor {
+	return &sarif.ReportingDescriptor{
+		ID:               id,
+		Properties:       properties,
+		ShortDescription: sarif.NewMultiformatMessageString(""),
+		FullDescription:  sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"),
+	}
+}
