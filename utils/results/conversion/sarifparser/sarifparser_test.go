@@ -430,7 +430,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "rule-markdown\n\n![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)", "rule-msg", "rule-markdown\n\n![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)", wd,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nGithub Actions Workflow: .github/workflows/workflowFile.yml\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "result-msg", jfrogFingerprintAlgorithmName, "e721eacf317da6090eca3522308abd28",
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"), filepath.Join("usr", "src", "app", "server", "index.js")), "result-msg", jfrogFingerprintAlgorithmName, "e721eacf317da6090eca3522308abd28",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
 						),
