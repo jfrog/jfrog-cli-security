@@ -21,12 +21,6 @@ runs:
       shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
       if: ${{ runner.os == 'macOS'}}
 
-    - name: Install Swift on Windows
-      uses: compnerd/gha-setup-swift@main
-      with:
-        branch: swift-6.0.2-release
-        tag: 6.0.2-RELEASE
-      if: ${{ runner.os == 'Windows'}}
 
     - name: install ruby
       uses: ruby/setup-ruby@v1
