@@ -45,6 +45,7 @@ var (
 )
 
 type CmdResultsSarifConverter struct {
+	baseJfrogUrl string
 	// Include vulnerabilities/violations in the output
 	includeVulnerabilities bool
 	hasViolationContext    bool
@@ -61,8 +62,8 @@ type CmdResultsSarifConverter struct {
 	currentCmdType utils.CommandType
 }
 
-func NewCmdResultsSarifConverter(includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
-	return &CmdResultsSarifConverter{includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext, patchBinaryPaths: patchBinaryPaths}
+func NewCmdResultsSarifConverter(baseUrl string, includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
+	return &CmdResultsSarifConverter{baseJfrogUrl: baseUrl, includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext, patchBinaryPaths: patchBinaryPaths}
 }
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
@@ -96,7 +97,7 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 	}
 	if sc.scaCurrentRun != nil {
 		// Flush the current run
-		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, sc.currentTarget, sc.scaCurrentRun)...)
+		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, sc.currentTarget, sc.scaCurrentRun)...)
 	}
 	sc.currentTarget = target
 	if sc.hasViolationContext || sc.includeVulnerabilities {
@@ -170,7 +171,7 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, secr
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, target, secrets...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, target, secrets...)...)
 	return
 }
 
@@ -181,7 +182,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, iacs ..
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, target, iacs...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, target, iacs...)...)
 	return
 }
 
@@ -192,7 +193,7 @@ func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, sast ..
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, target, sast...)...)
+	sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, target, sast...)...)
 	return
 }
 
@@ -425,7 +426,7 @@ func getScaLicenseViolationMarkdown(depName, version, key string, directDependen
 	return fmt.Sprintf("%s<br/>Direct dependencies:<br/>%s", getLicenseViolationSummary(depName, version, key), formattedDirectDependencies), nil
 }
 
-func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
+func patchRunsToPassIngestionRules(baseJfrogUrl string, cmdType utils.CommandType, subScanType utils.SubScanType, patchBinaryPaths bool, target results.ScanTarget, runs ...*sarif.Run) []*sarif.Run {
 	patchedRuns := []*sarif.Run{}
 	// Patch changes may alter the original run, so we will create a new run for each
 	for _, run := range runs {
@@ -438,7 +439,7 @@ func patchRunsToPassIngestionRules(cmdType utils.CommandType, subScanType utils.
 			sarifutils.SetRunToolName(BinarySecretScannerToolName, patched)
 		}
 		if patched.Tool.Driver != nil {
-			patched.Tool.Driver.Rules = patchRules(cmdType, subScanType, patched.Tool.Driver.Rules...)
+			patched.Tool.Driver.Rules = patchRules(baseJfrogUrl, cmdType, subScanType, patched.Tool.Driver.Rules...)
 		}
 		patched.Results = patchResults(cmdType, subScanType, patchBinaryPaths, target, patched, patched.Results...)
 		patchedRuns = append(patchedRuns, patched)
@@ -476,7 +477,7 @@ func patchDockerSecretLocations(result *sarif.Result) {
 	}
 }
 
-func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, rules ...*sarif.ReportingDescriptor) (patched []*sarif.ReportingDescriptor) {
+func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanType utils.SubScanType, rules ...*sarif.ReportingDescriptor) (patched []*sarif.ReportingDescriptor) {
 	patched = []*sarif.ReportingDescriptor{}
 	for _, rule := range rules {
 		if rule.Name != nil && rule.ID == *rule.Name {
@@ -491,6 +492,10 @@ func patchRules(commandType utils.CommandType, subScanType utils.SubScanType, ru
 			// Github code scanning ingestion rules rejects rules without help content.
 			// Patch by transferring the full description to the help field.
 			rule.Help = rule.FullDescription
+		}
+		// Add analytics hidden pixel to the help content if needed (Github code scanning)
+		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, subScanType); rule.Help != nil && analytics != "" {
+			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s\n\n%s", sarifutils.GetRuleHelpMarkdown(rule), analytics))
 		}
 		patched = append(patched, rule)
 	}
@@ -756,4 +761,23 @@ func getResultWatches(result *sarif.Result) (watches string) {
 		}
 	}
 	return
+}
+
+// This method returns an image tag of invisible image that is used to track some parameters.
+// It will send a count as soon as the page with it is logged.
+func getAnalyticsHiddenPixel(baseUrl string, resultOfSubScan utils.SubScanType) string {
+	jobId := os.Getenv(utils.JfrogExternalJobIdEnv)
+	runId := os.Getenv(utils.JfrogExternalRunIdEnv)
+	gitRepo := os.Getenv(utils.JfrogExternalGitRepoEnv)
+	if jobId == "" || runId == "" || gitRepo == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"![](%sui/api/v1/u?s=1&m=2&job_id=%s&run_id=%s&git_repo=%s&type=%s)",
+		baseUrl,
+		jobId,
+		runId,
+		gitRepo,
+		resultOfSubScan.String(),
+	)
 }

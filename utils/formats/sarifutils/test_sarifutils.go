@@ -4,12 +4,24 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
+// TODO: Create a Builder struct (with dynamic setters) and refactor sarif tests for better maintenance
+
+func CreateRunWithDummyResultsWithRuleInformation(toolName, ruleShortTxtDescription, ruleTxtDescription, ruleMarkdownDescription, ruleHelpMsg, ruleHelpMarkdown, wd string, results ...*sarif.Result) *sarif.Run {
+	run := createRunWithDummyResults(toolName, ruleShortTxtDescription, ruleTxtDescription, ruleMarkdownDescription, ruleHelpMsg, ruleHelpMarkdown, results...)
+	run.Invocations = []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))}
+	return run
+}
+
+func CreateRunWithDummyResultsInWdWithHelp(helpMsg, helpMarkdown, wd string, results ...*sarif.Result) *sarif.Run {
+	return createRunWithDummyResults("", "", "rule-msg", "rule-markdown", helpMsg, helpMarkdown, results...).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))})
+}
+
 func CreateRunWithDummyResultsInWd(wd string, results ...*sarif.Result) *sarif.Run {
-	return createRunWithDummyResults("", results...).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))})
+	return createRunWithDummyResults("", "", "rule-msg", "rule-markdown", "", "", results...).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))})
 }
 
 func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
-	return createRunWithDummyResults("", results...)
+	return createRunWithDummyResults("", "", "rule-msg", "rule-markdown", "", "", results...)
 }
 
 func CreateDummyDriver(toolName string, rules ...*sarif.ReportingDescriptor) *sarif.ToolComponent {
@@ -20,16 +32,32 @@ func CreateDummyDriver(toolName string, rules ...*sarif.ReportingDescriptor) *sa
 }
 
 func CreateRunNameWithResults(toolName string, results ...*sarif.Result) *sarif.Run {
-	return createRunWithDummyResults(toolName, results...)
+	return createRunWithDummyResults(toolName, "", "rule-msg", "rule-markdown", "", "", results...)
 }
 
-func createRunWithDummyResults(toolName string, results ...*sarif.Result) *sarif.Run {
+func createRunWithDummyResults(toolName, ruleShortTxtDescription, ruleMsg, ruleMarkdown, ruleHelpMsg, ruleHelpMarkdown string, results ...*sarif.Result) *sarif.Run {
 	run := sarif.NewRun(*sarif.NewSimpleTool(toolName))
 	for _, result := range results {
 		if result.RuleID != nil {
-			run.AddRule(*result.RuleID)
+			rule := run.AddRule(*result.RuleID)
+			SetRuleFullDescription(ruleMsg, ruleMarkdown, rule)
+			if ruleHelpMsg != "" || ruleHelpMarkdown != "" {
+				SetRuleHelp(ruleHelpMsg, ruleHelpMarkdown, rule)
+			}
+			SetRuleShortDescriptionText(ruleShortTxtDescription, rule)
 		}
 		run.AddResult(result)
+	}
+	return run
+}
+
+func CreateRunWithDummyResultAndRuleInformation(result *sarif.Result, ruleHelpMsg, ruleHelpMarkdown string, properties, values []string) *sarif.Run {
+	run := CreateRunWithDummyResultAndRuleProperties(result, properties, values)
+	if run != nil {
+		rule := GetRuleById(run, GetResultRuleId(result))
+		if rule != nil {
+			SetRuleHelp(ruleHelpMsg, ruleHelpMarkdown, rule)
+		}
 	}
 	return run
 }
@@ -56,7 +84,7 @@ func CreateDummyResultInPath(fileName string) *sarif.Result {
 
 func CreateDummyResult(markdown, msg, ruleId, level string) *sarif.Result {
 	return &sarif.Result{
-		Message: *sarif.NewTextMessage(msg).WithMarkdown(markdown),
+		Message: sarif.Message{Text: &msg, Markdown: &markdown},
 		Level:   &level,
 		RuleID:  &ruleId,
 	}
@@ -83,7 +111,7 @@ func CreateResultWithDummyLocationAmdProperty(fileName, property, value string) 
 }
 
 func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
-	result := CreateDummyResult("", msg, ruleId, level)
+	result := CreateDummyResult("result-markdown", msg, ruleId, level)
 	result.Locations = locations
 	return result
 }
@@ -103,7 +131,7 @@ func newUintPtr(v uint) *uint {
 }
 
 func CreateDummyResultWithPathAndLogicalLocation(fileName, logicalName, kind, property, value string) *sarif.Result {
-	result := CreateDummyResult("", "", "rule", "level")
+	result := CreateDummyResult("result-markdown", "result-msg", "rule", "level")
 	result.Locations = append(result.Locations, CreateDummyLocationWithPathAndLogicalLocation(fileName, logicalName, kind, property, value))
 	return result
 }
@@ -146,7 +174,7 @@ func CreateDummyPassingResult(ruleId string) *sarif.Result {
 }
 
 func CreateResultWithOneLocation(fileName string, startLine, startCol, endLine, endCol int, snippet, ruleId, level string) *sarif.Result {
-	return CreateResultWithLocations("", ruleId, level, CreateLocation(fileName, startLine, startCol, endLine, endCol, snippet))
+	return CreateResultWithLocations("result-msg", ruleId, level, CreateLocation(fileName, startLine, startCol, endLine, endCol, snippet))
 }
 
 func CreateCodeFlow(threadFlows ...*sarif.ThreadFlow) *sarif.CodeFlow {
@@ -163,4 +191,13 @@ func CreateThreadFlow(locations ...*sarif.Location) *sarif.ThreadFlow {
 		stackStrace.AddLocation(sarif.NewThreadFlowLocation().WithLocation(location))
 	}
 	return stackStrace
+}
+
+func CreateDummyRuleWithProperties(id string, properties sarif.Properties) *sarif.ReportingDescriptor {
+	return &sarif.ReportingDescriptor{
+		ID:               id,
+		Properties:       properties,
+		ShortDescription: sarif.NewMultiformatMessageString(""),
+		FullDescription:  sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"),
+	}
 }
