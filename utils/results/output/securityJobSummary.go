@@ -73,6 +73,7 @@ func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails 
 	summary.ResultType = cmdResults.CmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
 	summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: vulnerabilitiesRequested,
 		HasViolationContext:    violationsRequested,
 		Pretty:                 true,
@@ -201,6 +202,7 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails
 	}
 	// Convert the results to SARIF format
 	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: includeVulnerabilities,
 		HasViolationContext:    hasViolationContext,
 		PatchBinaryPaths:       true,
@@ -531,12 +533,36 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
 	}
 	if moreInfoUrls := summary.GetMoreInfoUrls(); len(moreInfoUrls) > 0 {
-		return Link.Format(moreInfoUrls[0], "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(moreInfoUrls[0], index), "See the results of the scan in JFrog")
 	}
 	if defaultUrl := args.GetUrl(index, summary.GetScanIds()...); defaultUrl != "" {
-		return Link.Format(defaultUrl, "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(defaultUrl, index), "See the results of the scan in JFrog")
 	}
 	return
+}
+
+// adds analytics query params to the url if running in Github
+func addAnalyticsQueryParamsIfNeeded(url string, index commandsummary.Index) string {
+	githubJobId := os.Getenv(utils.JfrogExternalJobIdEnv)
+	if githubJobId == "" {
+		// Not running in Github no need to add analytics
+		return url
+	}
+	suffixValues := []string{fmt.Sprintf("gh_job_id=%s", githubJobId)}
+	// Add section analytics
+	indexValue := "gh_section="
+	switch index {
+	case commandsummary.BuildScan:
+		indexValue += "build"
+	default:
+		indexValue += "on_demand_scan"
+	}
+	suffixValues = append(suffixValues, indexValue)
+	// Add the suffix to the url
+	if strings.Contains(url, "?") {
+		return fmt.Sprintf("%s%s", url, strings.Join(suffixValues, "&"))
+	}
+	return fmt.Sprintf("%s?%s", url, strings.Join(suffixValues, "&"))
 }
 
 func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {
