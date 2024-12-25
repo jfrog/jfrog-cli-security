@@ -112,7 +112,7 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 	if err != nil {
 		return
 	}
-	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(auditPython.Tool, tempDirPath, localDependenciesPath)
+	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(auditPython.Tool, tempDirPath, localDependenciesPath, log.GetLogger())
 	if err != nil {
 		sca.LogExecutableVersion("python")
 		sca.LogExecutableVersion(string(auditPython.Tool))
