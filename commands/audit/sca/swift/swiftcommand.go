@@ -27,14 +27,14 @@ func getSwiftVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'swift' executable in the system PATH %w", err)
 	}
 	log.Debug("Using swift executable:", swiftExecPath)
-	versionData, _, err := runSwiftCmd(swiftExecPath, "", []string{"--version"})
+	versionData, err := runSwiftCmd(swiftExecPath, "", []string{"--version"})
 	if err != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), swiftExecPath, nil
 }
 
-func runSwiftCmd(executablePath, srcPath string, swiftArgs []string) (stdResult, errResult []byte, err error) {
+func runSwiftCmd(executablePath, srcPath string, swiftArgs []string) (stdResult []byte, err error) {
 	args := make([]string, 0)
 	for i := 0; i < len(swiftArgs); i++ {
 		if strings.TrimSpace(swiftArgs[i]) != "" {
@@ -49,7 +49,7 @@ func runSwiftCmd(executablePath, srcPath string, swiftArgs []string) (stdResult,
 	errBuffer := bytes.NewBuffer([]byte{})
 	command.Stderr = errBuffer
 	err = command.Run()
-	errResult = errBuffer.Bytes()
+	errResult := errBuffer.Bytes()
 	stdResult = outBuffer.Bytes()
 	if err != nil {
 		err = fmt.Errorf("error while running '%s %s': %s\n%s", executablePath, strings.Join(args, " "), err.Error(), strings.TrimSpace(string(errResult)))
