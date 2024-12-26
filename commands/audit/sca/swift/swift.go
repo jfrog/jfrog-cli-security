@@ -152,7 +152,7 @@ func GetSwiftDependenciesGraph(data *Dependencies, dependencyMap map[string][]st
 }
 
 func GetDependenciesData(exePath, currentDir string) (*Dependencies, error) {
-	result, _, err := runSwiftCmd(exePath, currentDir, []string{"package", "show-dependencies", "--format", "json"})
+	result, err := runSwiftCmd(exePath, currentDir, []string{"package", "show-dependencies", "--format", "json"})
 	if err != nil {
 		return nil, err
 	}
