@@ -1,6 +1,7 @@
 package swift
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"github.com/jfrog/gofrog/datastructures"
@@ -14,13 +15,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-// VersionForMainModule - We don't have information in swift on the current package, or main module, we only have information on its
-// dependencies.
-
 const (
+	// VersionForMainModule - We don't have information in swift on the current package, or main module, we only have information on its
+	// dependencies.
 	VersionForMainModule = "0.0.0"
 )
 
@@ -47,13 +48,13 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 		foundDependency := false
 		var tempIndex int
 		for i, line := range lines {
-			foundDependency, tempIndex, startLine, startCol = parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath, i, tempIndex, startLine, startCol, lines, foundDependency, &swiftPositions)
+			foundDependency, tempIndex, startLine, startCol = parseSwiftLine(line, directDependencyName, directDependencyVersion, descriptorPath, i, tempIndex, startLine, startCol, lines, foundDependency, &swiftPositions)
 		}
 	}
 	return swiftPositions, nil
 }
 
-func parsePodLine(line, directDependencyName, directDependencyVersion, descriptorPath string, i, tempIndex, startLine, startCol int, lines []string, foundDependency bool, swiftPositions *[]*sarif.Location) (bool, int, int, int) {
+func parseSwiftLine(line, directDependencyName, directDependencyVersion, descriptorPath string, i, tempIndex, startLine, startCol int, lines []string, foundDependency bool, swiftPositions *[]*sarif.Location) (bool, int, int, int) {
 	if strings.Contains(line, directDependencyName) {
 		startLine = i
 		startCol = strings.Index(line, directDependencyName)
@@ -130,17 +131,21 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 	return nil
 }
 
+func extractNameFromSwiftGitRepo(name string) string {
+	name = strings.TrimSuffix(name, ".git")
+	name = strings.TrimPrefix(name, "https://")
+	return name
+}
+
 func GetSwiftDependenciesGraph(data *Dependencies, dependencyMap map[string][]string, versionMap map[string]string) {
-	data.Name = strings.TrimSuffix(data.Name, ".git")
-	data.Name = strings.TrimPrefix(data.Name, "https://")
+	data.Name = extractNameFromSwiftGitRepo(data.Name)
 	_, ok := dependencyMap[data.Name]
 	if !ok {
 		dependencyMap[data.Name] = []string{}
 		versionMap[data.Name] = data.Version
 	}
 	for _, dependency := range data.Dependencies {
-		dependency.Name = strings.TrimSuffix(dependency.Name, ".git")
-		dependency.Name = strings.TrimPrefix(dependency.Name, "https://")
+		dependency.Name = extractNameFromSwiftGitRepo(dependency.Name)
 		dependencyMap[data.Name] = append(dependencyMap[data.Name], dependency.Name)
 		GetSwiftDependenciesGraph(dependency, dependencyMap, versionMap)
 	}
@@ -159,21 +164,49 @@ func GetDependenciesData(exePath, currentDir string) (*Dependencies, error) {
 	return data, nil
 }
 
+func getMainPackageName(currentDir string) (string, error) {
+	file, err := os.Open(path.Join(currentDir, "Package.swift"))
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return "", err
+	}
+	defer file.Close()
+
+	re := regexp.MustCompile(`name:\s*"([^"]+)"`)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			return matches[1], nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", nil
+}
+
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return nil, nil, err
 	}
+	packageName, err := getMainPackageName(currentDir)
+	if err != nil {
+		log.Warn("Failed to get package name from Package.swift file")
+		packageName = filepath.Base(currentDir)
+	}
 
-	packageName := filepath.Base(currentDir)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
-	_, _, err = getSwiftVersionAndExecPath()
+	version, exePath, err := getSwiftVersionAndExecPath()
 	if err != nil {
 		err = fmt.Errorf("failed while retrieving swift path: %s", err.Error())
 		return
 	}
+	log.Debug("Swift version: %s", version.GetVersion())
 	// Calculate pod dependencies
-	data, err := GetDependenciesData("swift", currentDir)
+	data, err := GetDependenciesData(exePath, currentDir)
 	if err != nil {
 		return nil, nil, err
 	}

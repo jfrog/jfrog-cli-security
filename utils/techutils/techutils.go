@@ -211,7 +211,7 @@ var technologiesData = map[Technology]TechData{
 	Swift: {
 		indicators:         []string{"Package.swift", "Package.resolved"},
 		packageDescriptors: []string{"Package.swift", "Package.resolved"},
-		formal:             "swift",
+		formal:             "Swift",
 		packageTypeId:      "swift://",
 	},
 }

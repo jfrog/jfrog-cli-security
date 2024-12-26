@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"os/exec"
@@ -28,8 +27,8 @@ func getSwiftVersionAndExecPath() (*version.Version, string, error) {
 		return nil, "", fmt.Errorf("could not find the 'swift' executable in the system PATH %w", err)
 	}
 	log.Debug("Using swift executable:", swiftExecPath)
-	versionData, stdErr, err := runSwiftCmd(swiftExecPath, "", []string{"--version"})
-	if err != nil || stdErr != nil {
+	versionData, _, err := runSwiftCmd(swiftExecPath, "", []string{"--version"})
+	if err != nil {
 		return nil, "", err
 	}
 	return version.NewVersion(strings.TrimSpace(string(versionData))), swiftExecPath, nil
@@ -71,10 +70,5 @@ func (sc *SwiftCommand) PreparePrerequisites() error {
 		return errorutils.CheckErrorf(
 			"JFrog CLI swift %s command requires swift client version %s or higher. The Current version is: %s", sc.cmdName, minSupportedSwiftVersion, sc.swiftVersion.GetVersion())
 	}
-	sc.workingDirectory, err = coreutils.GetWorkingDirectory()
-	if err != nil {
-		return err
-	}
-	log.Debug("Working directory set to:", sc.workingDirectory)
 	return nil
 }

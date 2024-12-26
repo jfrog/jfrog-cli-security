@@ -257,28 +257,14 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
-		details, errParams := params.ServerDetails()
-		if errParams != nil {
-			return depTreeResult, errParams
-		}
-		_, xrayVersion, errVersion := xray.CreateXrayServiceManagerAndGetVersion(details)
-		if errVersion != nil {
-			return depTreeResult, errVersion
-		}
+		xrayVersion := params.GetXrayVersion()
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
 		if err != nil {
 			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", xrayVersion)
 		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	case techutils.Swift:
-		details, errParams := params.ServerDetails()
-		if errParams != nil {
-			return depTreeResult, errParams
-		}
-		_, xrayVersion, errVersion := xray.CreateXrayServiceManagerAndGetVersion(details)
-		if errVersion != nil {
-			return depTreeResult, errVersion
-		}
+		xrayVersion := params.GetXrayVersion()
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
 		if err != nil {
 			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", xrayVersion)

@@ -44,6 +44,7 @@ type AuditParams interface {
 	IsRecursiveScan() bool
 	SkipAutoInstall() bool
 	AllowPartialResults() bool
+	GetXrayVersion() string
 }
 
 type AuditBasicParams struct {

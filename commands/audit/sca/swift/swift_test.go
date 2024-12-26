@@ -73,17 +73,17 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	assert.Contains(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "github.com/apple/swift-algorithms\", from: \"1.2.0\"")
 }
 
-func TestPodLineParse(t *testing.T) {
+func TestSwiftLineParse(t *testing.T) {
 	var swiftPositions []*sarif.Location
-	foundDependency, _, startLine, startCol := parsePodLine(".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")", "github.com/apple/swift-algorithms", "1.2.0", "test", 0, 0, 0, 0, []string{".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")"}, false, &swiftPositions)
+	foundDependency, _, startLine, startCol := parseSwiftLine(".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")", "github.com/apple/swift-algorithms", "1.2.0", "test", 0, 0, 0, 0, []string{".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")"}, false, &swiftPositions)
 	assert.Equal(t, foundDependency, false)
 	assert.Equal(t, startLine, 0)
 	assert.Equal(t, startCol, 23)
 }
 
-func TestPodLineParseFoundOnlyDependencyName(t *testing.T) {
+func TestSwiftLineParseFoundOnlyDependencyName(t *testing.T) {
 	var swiftPositions []*sarif.Location
-	foundDependency, _, startLine, startCol := parsePodLine(".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")", "github.com/apple/swift-algorithms", "6.2.4", "test", 0, 0, 0, 0, []string{".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")"}, false, &swiftPositions)
+	foundDependency, _, startLine, startCol := parseSwiftLine(".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")", "github.com/apple/swift-algorithms", "6.2.4", "test", 0, 0, 0, 0, []string{".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\")"}, false, &swiftPositions)
 	assert.Equal(t, foundDependency, true)
 	assert.Equal(t, startLine, 0)
 	assert.Equal(t, startCol, 23)
