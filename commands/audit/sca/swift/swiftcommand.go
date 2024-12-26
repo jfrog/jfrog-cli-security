@@ -15,10 +15,9 @@ const (
 )
 
 type SwiftCommand struct {
-	cmdName          string
-	swiftVersion     *version.Version
-	workingDirectory string
-	executablePath   string
+	cmdName        string
+	swiftVersion   *version.Version
+	executablePath string
 }
 
 func getSwiftVersionAndExecPath() (*version.Version, string, error) {
