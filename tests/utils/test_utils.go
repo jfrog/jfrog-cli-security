@@ -339,7 +339,7 @@ func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtil
 		},
 		xrayUtils.PolicyRule{
 			Name:     "exposers_rule",
-			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true, false),
+			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 2,
 		},
