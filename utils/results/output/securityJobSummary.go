@@ -3,6 +3,7 @@ package output
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -542,13 +543,13 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 }
 
 // adds analytics query params to the url if running in Github
-func addAnalyticsQueryParamsIfNeeded(url string, index commandsummary.Index) string {
+func addAnalyticsQueryParamsIfNeeded(platformUrl string, index commandsummary.Index) string {
 	githubJobId := os.Getenv(utils.JfrogExternalJobIdEnv)
 	if githubJobId == "" {
 		// Not running in Github no need to add analytics
-		return url
+		return platformUrl
 	}
-	suffixValues := []string{fmt.Sprintf("gh_job_id=%s", githubJobId)}
+	suffixValues := []string{fmt.Sprintf("gh_job_id=%s", url.PathEscape(githubJobId))}
 	// Add section analytics
 	indexValue := "gh_section="
 	switch index {
@@ -559,10 +560,10 @@ func addAnalyticsQueryParamsIfNeeded(url string, index commandsummary.Index) str
 	}
 	suffixValues = append(suffixValues, indexValue)
 	// Add the suffix to the url
-	if strings.Contains(url, "?") {
-		return fmt.Sprintf("%s%s", url, strings.Join(suffixValues, "&"))
+	if strings.Contains(platformUrl, "?") {
+		return fmt.Sprintf("%s%s", platformUrl, strings.Join(suffixValues, "&"))
 	}
-	return fmt.Sprintf("%s?%s", url, strings.Join(suffixValues, "&"))
+	return fmt.Sprintf("%s?%s", platformUrl, strings.Join(suffixValues, "&"))
 }
 
 func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {

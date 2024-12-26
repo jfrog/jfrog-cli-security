@@ -485,7 +485,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			cleanUps := []func(){}
 			if testCase.GithubEnvs {
-				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "some-job-id"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "some job id"))
 				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalRunIdEnv, "some-run-id"))
 				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalGitRepoEnv, "some-repo"))
 			}
