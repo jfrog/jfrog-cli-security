@@ -712,10 +712,10 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 			jasIssues:      issues,
 			expectedOutput: []formats.SourceCodeRow{
 				{
-					Finding:            "result-msg",
-					Location:           formats.Location{File: "file", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "secret-snippet"},
-					SeverityDetails:    formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
-					ScannerInfo:     formats.ScannerInfo{RuleId: "secret-rule-id", ScannerDescription: "rule-msg",},
+					Finding:         "result-msg",
+					Location:        formats.Location{File: "file", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "secret-snippet"},
+					SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
+					ScannerInfo:     formats.ScannerInfo{RuleId: "secret-rule-id", ScannerDescription: "rule-msg"},
 				},
 			},
 		},
