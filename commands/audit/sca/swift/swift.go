@@ -164,7 +164,7 @@ func GetDependenciesData(exePath, currentDir string) (*Dependencies, error) {
 	return data, nil
 }
 
-func getMainPackageName(currentDir string) (string, error) {
+func GetMainPackageName(currentDir string) (string, error) {
 	file, err := os.Open(path.Join(currentDir, "Package.swift"))
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -192,7 +192,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	if err != nil {
 		return nil, nil, err
 	}
-	packageName, err := getMainPackageName(currentDir)
+	packageName, err := GetMainPackageName(currentDir)
 	if err != nil {
 		log.Warn("Failed to get package name from Package.swift file")
 		packageName = filepath.Base(currentDir)

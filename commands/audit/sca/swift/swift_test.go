@@ -30,7 +30,8 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	}
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	packageName := filepath.Base(currentDir)
+	packageName, err := GetMainPackageName(currentDir)
+	assert.NoError(t, err)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.2.0",
