@@ -251,6 +251,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
+		SetPlatformUrl(scanCmd.serverDetails.Url).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {

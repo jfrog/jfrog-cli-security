@@ -37,6 +37,8 @@ type ResultConvertParams struct {
 	SimplifiedOutput bool
 	// Convert the results to a pretty format if supported (Table and SimpleJson only)
 	Pretty bool
+	// The JFrog platform URL to be used in the results (Sarif only - GitHub integration)
+	PlatformUrl string
 }
 
 func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConvertor {
@@ -66,7 +68,7 @@ func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.Securi
 }
 
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
-	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.IncludeVulnerabilities, c.Params.HasViolationContext, c.Params.PatchBinaryPaths)
+	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.PlatformUrl, c.Params.IncludeVulnerabilities, c.Params.HasViolationContext, c.Params.PatchBinaryPaths)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 

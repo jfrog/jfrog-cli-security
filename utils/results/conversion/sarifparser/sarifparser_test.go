@@ -325,7 +325,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd, sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
 			},
 		},
 		{
@@ -337,17 +337,18 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				sarifutils.CreateRunWithDummyResultAndRuleProperties(
 					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
 					[]string{"applicability"}, []string{"applicable"}).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))}),
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
 					sarifutils.CreateDummyResultWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithMessage(sarif.NewTextMessage("some-msg")),
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultAndRuleProperties(
+				sarifutils.CreateRunWithDummyResultAndRuleInformation(
 					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
 					),
+					"rule-msg", "rule-markdown",
 					[]string{"applicability"}, []string{"applicable"}).WithInvocations([]*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))}),
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
 					sarifutils.CreateDummyResultWithFingerprint("some-msg\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "some-msg", jfrogFingerprintAlgorithmName, "9522c1d915eef55b4a0dc9e160bf5dc7",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("sha256__f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256"),
 					),
@@ -355,7 +356,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 		},
 		{
-			name:        "Docker image scan - with env vars",
+			name:        "Docker image scan - with env vars (SCA)",
 			target:      results.ScanTarget{Name: "dockerImage:imageVersion"},
 			cmdType:     utils.DockerImage,
 			subScan:     utils.ScaScan,
@@ -368,7 +369,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=sca)", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=sca)", wd,
 					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "eda26ae830c578197aeda65a82d7f093",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
@@ -390,7 +391,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(dockerfileDir,
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=sca)", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=sca)", dockerfileDir,
 					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("some-msg\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha256): f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml")), "some-msg", jfrogFingerprintAlgorithmName, "8cbd7268a4d20f2358ba2667ebd18956",
 						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "f752cb05a39e65f231a3c47c2e08cbeac1c15e4daff0188cb129c12a3ea3049d", "layer", "algorithm", "sha256").WithPhysicalLocation(
 							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation("Dockerfile")),
@@ -412,20 +413,34 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				}),
 			},
 			expectedResults: []*sarif.Run{
-				{
-					Tool: sarif.Tool{
-						Driver: sarifutils.CreateDummyDriver(BinarySecretScannerToolName, &sarif.ReportingDescriptor{
-							ID:               "rule",
-							ShortDescription: sarif.NewMultiformatMessageString("[Secret in Binary found] "),
-						}),
-					},
-					Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd))},
-					Results: []*sarif.Result{
-						sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
-							sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join("usr", "src", "app", "server", "index.js")), "result-msg", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
+					),
+				),
+			},
+		},
+		{
+			name:        "Docker image scan - with env vars (Secrets)",
+			target:      results.ScanTarget{Name: "dockerImage:imageVersion"},
+			cmdType:     utils.DockerImage,
+			subScan:     utils.SecretsScan,
+			withEnvVars: true,
+			input: []*sarif.Run{
+				sarifutils.CreateRunNameWithResults("some tool name",
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "unpacked", "filesystem", "blobs", "sha1", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"))),
+				).WithInvocations([]*sarif.Invocation{
+					sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)),
+				}),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)", "rule-msg", "rule-markdown ![](url/ui/api/v1/u?s=1&m=2&job_id=job-id&run_id=run-id&git_repo=repo&type=secrets)", wd,
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nGithub Actions Workflow: %s\nRun: 123\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"), filepath.Join("usr", "src", "app", "server", "index.js")), "result-msg", jfrogFingerprintAlgorithmName, "e721eacf317da6090eca3522308abd28",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation("", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1").WithPhysicalLocation(
+							sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewSimpleArtifactLocation(filepath.Join(GithubBaseWorkflowDir, "workflowFile.yml"))),
 						),
-					},
-				},
+					),
+				),
 			},
 		},
 		{
@@ -439,8 +454,8 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
-					sarifutils.CreateDummyResultWithFingerprint("", "", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
+					sarifutils.CreateDummyResultWithFingerprint("result-msg", "result-msg", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
 				),
 			},
 		},
@@ -457,7 +472,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
 					sarifutils.CreateDummyResultInPath("Package-Descriptor"),
 				),
 			},
@@ -475,7 +490,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
 					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
 				),
 			},
@@ -498,23 +513,29 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			cleanUps := []func(){}
 			if tc.withEnvVars {
-				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflow name")
-				defer cleanFileEnv()
-				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "123")
-				defer cleanRunNumEnv()
+				// Some content depends on env vars values
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflow name"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "123"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "job-id"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalRunIdEnv, "run-id"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalGitRepoEnv, "repo"))
 			} else {
-				// Since the the env are provided by the
-				cleanFileEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "")
-				defer cleanFileEnv()
-				cleanRunNumEnv := clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "")
-				defer cleanRunNumEnv()
+				// Since some of the env vars are provided by the test in GitHub Actions, we need to clean them up before running the test
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, ""))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, ""))
 			}
+			defer func() {
+				for _, cleanUp := range cleanUps {
+					cleanUp()
+				}
+			}()
 			if tc.withDockerfile {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchedRuns := patchRunsToPassIngestionRules(tc.cmdType, tc.subScan, true, tc.isJasViolations, tc.target, tc.input...)
+			patchedRuns := patchRunsToPassIngestionRules("url/", tc.cmdType, tc.subScan, true, tc.isJasViolations, tc.target, tc.input...)
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}

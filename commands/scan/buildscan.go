@@ -158,6 +158,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetPlatformUrl(bsc.serverDetails.Url).
 		// In build-scan we always want to print the violations.
 		SetHasViolationContext(true).
 		SetIsMultipleRootProject(true).

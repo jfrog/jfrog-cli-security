@@ -731,6 +731,30 @@ func SetRuleShortDescriptionText(value string, rule *sarif.ReportingDescriptor) 
 	rule.ShortDescription.Text = &value
 }
 
+func SetRuleHelp(msg, markdown string, rule *sarif.ReportingDescriptor) {
+	if rule.Help == nil {
+		rule.Help = &sarif.MultiformatMessageString{
+			Text:     &msg,
+			Markdown: &markdown,
+		}
+		return
+	}
+	rule.Help.Markdown = &markdown
+	rule.Help.Text = &msg
+}
+
+func SetRuleFullDescription(msg, markdown string, rule *sarif.ReportingDescriptor) {
+	if rule.FullDescription == nil {
+		rule.FullDescription = &sarif.MultiformatMessageString{
+			Text:     &msg,
+			Markdown: &markdown,
+		}
+		return
+	}
+	rule.FullDescription.Markdown = &markdown
+	rule.FullDescription.Text = &msg
+}
+
 func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {
 	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
 		return *rule.ShortDescription.Text

@@ -20,6 +20,8 @@ import (
 type ResultsWriter struct {
 	// The scan commandResults.
 	commandResults *results.SecurityCommandResults
+	// PlatformUrl  The JFrog platform URL to generate GH analysis links.
+	platformUrl string
 	// Format  The output format.
 	format format.OutputFormat
 	// For build-scan where always we expect violations, to override the default behavior.
@@ -40,6 +42,11 @@ func NewResultsWriter(scanResults *results.SecurityCommandResults) *ResultsWrite
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 	rw.format = f
+	return rw
+}
+
+func (rw *ResultsWriter) SetPlatformUrl(platformUrl string) *ResultsWriter {
+	rw.platformUrl = platformUrl
 	return rw
 }
 
@@ -129,6 +136,7 @@ func (rw *ResultsWriter) PrintScanResults() error {
 
 func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.CommandResultsConvertor {
 	return conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            rw.platformUrl,
 		IsMultipleRoots:        rw.isMultipleRoots,
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),

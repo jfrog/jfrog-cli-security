@@ -29,6 +29,10 @@ const (
 	BaseDocumentationURL   = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL             = "https://jfrog.com/xray/"
 	EntitlementsMinVersion = "3.66.5"
+
+	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
+	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
+	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
 )
 
 var (
@@ -169,6 +173,10 @@ func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, err
 		return "", err
 	}
 	return string(results), nil
+}
+
+func NewStringPtr(v string) *string {
+	return &v
 }
 
 func NewBoolPtr(v bool) *bool {
