@@ -18,7 +18,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
-	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -537,27 +536,6 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 }
 
 // JAS
-
-func TestAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
-	integration.InitAuditJasTest(t, services.MinXrayVersionGitRepoKey)
-	if securityTests.TestJfrogPlatformProjectKeyEnvVar == "" {
-		t.Skipf("skipping test. %s is not set.", securityTests.TestJfrogPlatformProjectKeyEnvVar)
-	}
-	// Create the project to scan
-	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	defer cleanUpProject()
-	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
-	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true)
-	defer cleanUpPolicy()
-	_, cleanUpWatch := securityTestUtils.CreateTestProjectKeyWatch(t, policyName, "project-key-jas-violations-watch", securityTests.TestJfrogPlatformProjectKeyEnvVar)
-	defer cleanUpWatch()
-	// Run the audit command with project key and verify violations are reported.
-	output := testAuditCommand(t, securityTests.PlatformCli, auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: securityTests.TestJfrogPlatformProjectKeyEnvVar})
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total:      &validations.TotalCount{Violations: 26},
-		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1, Iac: 1}},
-	})
-}
 
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)

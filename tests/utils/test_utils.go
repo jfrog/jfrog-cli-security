@@ -361,9 +361,14 @@ func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResource
 	})
 }
 
-func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string) (string, func()) {
+func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
 		watchParams.ProjectKey = projectKey
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
 		return watchParams
 	})
 }
