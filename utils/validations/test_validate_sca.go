@@ -40,11 +40,9 @@ func ValidateCommandJsonOutput(t *testing.T, params ValidationParams) {
 			ValidateScanResponseFailBuild(t, params.FailBuildCVESeverity, results)
 		}
 		if params.ExistingProperties != nil {
-			//TODO: TEMP Function - to use ValidatePaths
-			ValidateContainedStrings(t, fmt.Sprintf("%v", results), params.ExistingProperties)
-			//for _, res := range results {
-			//	ValidatePaths(t, res, params.ExistingProperties)
-			//}
+			for _, res := range results {
+				ValidatePaths(t, res, params.ExistingProperties)
+			}
 		}
 	}
 }
@@ -98,15 +96,6 @@ func ValidateScanResponses(t *testing.T, exactMatch bool, expected, actual []ser
 }
 
 func TestValidatePathsFunc(t *testing.T) {
-	//sampleJson := `{
-	//	"targets": [
-	//{
-	//  "target": "/path/to/target",
-	//  "name": "some-target-name",
-	//  "technology": "some-technology",
-	//  "sca_scans": {
-	//    "xray_scan": [
-	//{
 	sampleJson := `{
          "scan_id": "1a97d1a4-4d30-430c-46e9-d0c998065d08",
          "vulnerabilities": [
@@ -155,11 +144,6 @@ func TestValidatePathsFunc(t *testing.T) {
            }
          ]
        }`
-	//       ]
-	//     }
-	//   }
-	// ]
-	//}`
 	actualJson := services.ScanResponse{}
 	err := json.Unmarshal([]byte(sampleJson), &actualJson)
 	if err != nil {
@@ -167,7 +151,6 @@ func TestValidatePathsFunc(t *testing.T) {
 	}
 	stringsToCheck := []string{"vulnerabilities[].components[*].impact_paths[][].full_path"}
 	ValidatePaths(t, actualJson, stringsToCheck)
-	//ValidateContainedStrings(t, sampleJson, []string{"impact_paths", "full_path"})
 }
 
 func ValidatePaths(t *testing.T, output interface{}, paths []string) {
@@ -227,8 +210,9 @@ func validatePath(data interface{}, path []string) bool {
 			dataMap := reflect.ValueOf(data)
 			if val := dataMap.MapIndex(reflect.ValueOf(mapKey)); val.IsValid() {
 				if val.Kind() == reflect.Map {
-					for _, item := range val.Interface().(map[string]interface{}) {
-						if validatePath(item, path[1:]) {
+					for _, item := range val.MapKeys() {
+						mapVal := val.MapIndex(item)
+						if validatePath(mapVal.Interface(), path[1:]) {
 							return true
 						}
 					}
@@ -237,8 +221,9 @@ func validatePath(data interface{}, path []string) bool {
 		} else if reflect.TypeOf(data).Kind() == reflect.Struct {
 			structField, valid := getFieldByTag(data, mapKey)
 			if valid && structField.Kind() == reflect.Map {
-				for _, item := range reflect.ValueOf(structField.Interface()).MapKeys() {
-					if validatePath(item, path[1:]) {
+				for _, item := range structField.MapKeys() {
+					mapVal := structField.MapIndex(item)
+					if validatePath(mapVal.Interface(), path[1:]) {
 						return true
 					}
 				}
@@ -255,6 +240,13 @@ func validatePath(data interface{}, path []string) bool {
 			structField, valid := getFieldByTag(data, key)
 			if valid {
 				return validatePath(structField.Interface(), path[1:])
+			}
+		} else if reflect.TypeOf(data).Kind() == reflect.Slice {
+			slice := reflect.ValueOf(data)
+			for i := 0; i < slice.Len(); i++ {
+				if validatePath(slice.Index(i).Interface(), path) {
+					return true
+				}
 			}
 		}
 	}
@@ -285,10 +277,4 @@ func getScanResponseByScanId(scanId string, content []services.ScanResponse) *se
 		}
 	}
 	return nil
-}
-
-func ValidateContainedStrings(t *testing.T, output string, strings []string) {
-	for _, str := range strings {
-		assert.Contains(t, output, str, "string not found: %s", str)
-	}
 }

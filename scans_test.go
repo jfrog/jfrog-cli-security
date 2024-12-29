@@ -118,7 +118,7 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 // Docker scan tests
 
 func TestValidatePathFunc(t *testing.T) {
-	// ValidatePathFunc should return true for a valid path
+	// ValidatePathFunc is made to test the validatePaths function
 	validations.TestValidatePathsFunc(t)
 }
 
