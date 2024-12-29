@@ -117,6 +117,11 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 
 // Docker scan tests
 
+func TestValidatePathFunc(t *testing.T) {
+	// ValidatePathFunc should return true for a valid path
+	validations.TestValidatePathsFunc(t)
+}
+
 func TestDockerScanWithProgressBar(t *testing.T) {
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
