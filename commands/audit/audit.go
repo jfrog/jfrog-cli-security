@@ -95,21 +95,8 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 	return auditCmd
 }
 
-func (auditCmd *AuditCommand) CreateAuditResultsContext(serverDetails *config.ServerDetails) (context results.ResultContext) {
-	return CreateResultsContext(
-		serverDetails,
-		auditCmd.GetXrayVersion(),
-		auditCmd.watches,
-		auditCmd.targetRepoPath,
-		auditCmd.projectKey,
-		auditCmd.gitRepoHttpsCloneUrl,
-		auditCmd.IncludeVulnerabilities,
-		auditCmd.IncludeLicenses,
-	)
-}
-
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses bool) (context results.ResultContext) {
 	context = results.ResultContext{
 		RepoPath:               artifactoryRepoPath,
 		Watches:                watches,
@@ -123,7 +110,7 @@ func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion strin
 	}
 	if gitRepoHttpsCloneUrl == "" {
 		// No git repo key was provided, no need to check anything else.
-		log.Debug("Git repo key was not provided, jas violations will not be checked.")
+		log.Debug("Git repo key was not provided, jas violations will not be checked for this resource.")
 		return
 	}
 	// Get the defined and active watches from the platform.
@@ -139,7 +126,7 @@ func CreateResultsContext(serverDetails *config.ServerDetails, xrayVersion strin
 	// Set git repo key and check if it has any watches defined in the platform.
 	context.GitRepoHttpsCloneUrl = gitRepoHttpsCloneUrl
 	if len(context.PlatformWatches.GitRepositoryWatches) == 0 && len(watches) == 0 && projectKey == "" {
-		log.Debug(fmt.Sprintf("Git repo key was provided (%s) but no watches were defined in the platform. ignoring git repo key...", context.GitRepoHttpsCloneUrl))
+		log.Debug(fmt.Sprintf("No watches were found in the platform for the given git repo key (%s), and no watches were given by the user (using watches or project flags). Calculating vulnerabilities...", context.GitRepoHttpsCloneUrl))
 		context.GitRepoHttpsCloneUrl = ""
 	}
 	// We calculate again this time also taking into account the final git repo key value.
@@ -177,7 +164,16 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
 		SetGraphBasicParams(auditCmd.AuditBasicParams).
-		SetResultsContext(auditCmd.CreateAuditResultsContext(serverDetails)).
+		SetResultsContext(CreateAuditResultsContext(
+			serverDetails,
+			auditCmd.GetXrayVersion(),
+			auditCmd.watches,
+			auditCmd.targetRepoPath,
+			auditCmd.projectKey,
+			auditCmd.gitRepoHttpsCloneUrl,
+			auditCmd.IncludeVulnerabilities,
+			auditCmd.IncludeLicenses,
+		)).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)

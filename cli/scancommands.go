@@ -490,8 +490,6 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		auditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 
-	// auditCmd.SetGitRepoHttpsCloneUrl("github.com/jfrog/dummy-repo.git")
-
 	if c.GetStringFlagValue(flags.WorkingDirs) != "" {
 		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))
 	}

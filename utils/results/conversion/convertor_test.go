@@ -355,7 +355,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 	)
 	// Iac scan results
-	npmTargetResults.JasResults.NewJasScanResults(jasutils.IaC,
+	npmTargetResults.JasResults.AddJasScanResults(jasutils.IaC,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.IacToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
@@ -367,7 +367,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		[]*sarif.Run{}, 0,
 	)
 	// Secrets scan results
-	npmTargetResults.JasResults.NewJasScanResults(jasutils.Secrets,
+	npmTargetResults.JasResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
@@ -386,7 +386,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		}}, 0,
 	)
 	// Sast scan results
-	npmTargetResults.JasResults.NewJasScanResults(jasutils.Sast,
+	npmTargetResults.JasResults.AddJasScanResults(jasutils.Sast,
 		// No Vulnerabilities
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
@@ -550,7 +550,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 	)
 	// Secrets scan results
-	dockerImageTarget.JasResults.NewJasScanResults(jasutils.Secrets,
+	dockerImageTarget.JasResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
 			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},

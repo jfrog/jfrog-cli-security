@@ -477,7 +477,7 @@ func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
 }
 
 func GetResultMsgMarkdown(result *sarif.Result) string {
-	if result == nil || result.Message.Markdown != nil {
+	if result != nil && result.Message.Markdown != nil {
 		return *result.Message.Markdown
 	}
 	return ""

@@ -51,15 +51,15 @@ type CmdResultsSarifConverter struct {
 	// If we are running on Github actions, we need to add/change information to the output
 	patchBinaryPaths bool
 	// Current stream parse cache information
-	current       *sarif.Report
-	currentTarget *currentTargetState
+	current                    *sarif.Report
+	currentTargetConvertedRuns *currentTargetRuns
 	// General information on the current command results
 	entitledForJas bool
 	xrayVersion    string
 	currentCmdType utils.CommandType
 }
 
-type currentTargetState struct {
+type currentTargetRuns struct {
 	currentTarget results.ScanTarget
 	// Current run cache information, we combine vulnerabilities and violations in the same run
 	scaCurrentRun     *sarif.Run
@@ -70,16 +70,21 @@ type currentTargetState struct {
 
 // Parse parameters for the SCA result
 type scaParseParams struct {
-	CmdType                                                                                        utils.CommandType
-	IssueId, Summary, MarkdownDescription, CveScore, ImpactedPackagesName, ImpactedPackagesVersion string
-	Watch                                                                                          string
-	GenerateTitleFunc                                                                              func(depName string, version string, issueId string, watch string) string
-	Cves                                                                                           []formats.CveRow
-	Severity                                                                                       severityutils.Severity
-	ApplicabilityStatus                                                                            jasutils.ApplicabilityStatus
-	FixedVersions                                                                                  []string
-	DirectComponents                                                                               []formats.ComponentRow
-	Violation                                                                                      *violationContext
+	CmdType                 utils.CommandType
+	IssueId                 string
+	Summary                 string
+	MarkdownDescription     string
+	CveScore                string
+	ImpactedPackagesName    string
+	ImpactedPackagesVersion string
+	Watch                   string
+	GenerateTitleFunc       func(depName string, version string, issueId string, watch string) string
+	Cves                    []formats.CveRow
+	Severity                severityutils.Severity
+	ApplicabilityStatus     jasutils.ApplicabilityStatus
+	FixedVersions           []string
+	DirectComponents        []formats.ComponentRow
+	Violation               *violationContext
 }
 
 // holds the violation context for the results
@@ -113,7 +118,7 @@ func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVers
 	sc.xrayVersion = xrayVersion
 	sc.entitledForJas = entitledForJas
 	// Reset the current stream cache information
-	sc.currentTarget = nil
+	sc.currentTargetConvertedRuns = nil
 	return
 }
 
@@ -123,34 +128,34 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 	}
 	sc.flush()
 	// Reset the current stream cache information
-	sc.currentTarget = &currentTargetState{currentTarget: target}
+	sc.currentTargetConvertedRuns = &currentTargetRuns{currentTarget: target}
 	if sc.hasViolationContext || sc.includeVulnerabilities {
-		sc.currentTarget.scaCurrentRun = sc.createScaRun(target, len(errors))
+		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(errors))
 	}
 	return
 }
 
 func (sc *CmdResultsSarifConverter) flush() {
-	if sc.currentTarget == nil {
+	if sc.currentTargetConvertedRuns == nil {
 		return
 	}
 	// Flush Sca if needed
-	if sc.currentTarget.scaCurrentRun != nil {
-		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, false, sc.currentTarget.currentTarget, sc.currentTarget.scaCurrentRun)...)
+	if sc.currentTargetConvertedRuns.scaCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.ScaScan, sc.patchBinaryPaths, false, sc.currentTargetConvertedRuns.currentTarget, sc.currentTargetConvertedRuns.scaCurrentRun)...)
 	}
 	// Flush secrets if needed
-	if sc.currentTarget.secretsCurrentRun != nil {
-		sc.current.Runs = append(sc.current.Runs, sc.currentTarget.secretsCurrentRun)
+	if sc.currentTargetConvertedRuns.secretsCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.secretsCurrentRun)
 	}
 	// Flush iac if needed
-	if sc.currentTarget.iacCurrentRun != nil {
-		sc.current.Runs = append(sc.current.Runs, sc.currentTarget.iacCurrentRun)
+	if sc.currentTargetConvertedRuns.iacCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.iacCurrentRun)
 	}
 	// Flush sast if needed
-	if sc.currentTarget.sastCurrentRun != nil {
-		sc.current.Runs = append(sc.current.Runs, sc.currentTarget.sastCurrentRun)
+	if sc.currentTargetConvertedRuns.sastCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.sastCurrentRun)
 	}
-	sc.currentTarget = nil
+	sc.currentTargetConvertedRuns = nil
 }
 
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
@@ -173,7 +178,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	if sc.current == nil {
 		return results.ErrResetConvertor
 	}
-	if sc.currentTarget == nil {
+	if sc.currentTargetConvertedRuns == nil {
 		return results.ErrNoTargetConvertor
 	}
 	return
@@ -193,7 +198,7 @@ func (sc *CmdResultsSarifConverter) ParseScaIssues(target results.ScanTarget, vi
 }
 
 func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentTarget.scaCurrentRun == nil {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
 		return
 	}
 	// Parse violations
@@ -206,7 +211,7 @@ func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget
 }
 
 func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentTarget.scaCurrentRun == nil {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
 		return
 	}
 	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Scan.Vulnerabilities, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
@@ -217,7 +222,7 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in Sarif format
 	return
 }
@@ -226,7 +231,7 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, viol
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.secretsCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(secrets)...)...)
+	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SecretsScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(secrets)...)...)
 	return
 }
 
@@ -234,7 +239,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violati
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.iacCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(iacs)...)...)
+	sc.currentTargetConvertedRuns.iacCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.iacCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.IacScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(iacs)...)...)
 	return
 }
 
@@ -242,17 +247,17 @@ func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violati
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
-	sc.currentTarget.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTarget.sastCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(sast)...)...)
+	sc.currentTargetConvertedRuns.sastCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.sastCurrentRun, patchRunsToPassIngestionRules(sc.baseJfrogUrl, sc.currentCmdType, utils.SastScan, sc.patchBinaryPaths, violations, target, results.ScanResultsToRuns(sast)...)...)
 	return
 }
 
 func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*sarif.ReportingDescriptor, results ...*sarif.Result) {
 	for _, rule := range rules {
 		// This method will add the rule only if it doesn't exist
-		sc.currentTarget.scaCurrentRun.Tool.Driver.AddRule(rule)
+		sc.currentTargetConvertedRuns.scaCurrentRun.Tool.Driver.AddRule(rule)
 	}
 	for _, result := range results {
-		sc.currentTarget.scaCurrentRun.AddResult(result)
+		sc.currentTargetConvertedRuns.scaCurrentRun.AddResult(result)
 	}
 }
 

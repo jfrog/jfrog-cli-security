@@ -46,7 +46,7 @@ type SecurityCommandResults struct {
 type ResultContext struct {
 	// If watches are provided, the scan will be performed only with the provided watches.
 	Watches []string `json:"watches,omitempty"`
-	// (Resource) If repo_path is provided, the scan will be performed on the repository's project watches.
+	// (Resource) If repo_path is provided, the scan will be performed on the repository's watches.
 	RepoPath string `json:"repo_path,omitempty"`
 	// (Resource) If projectKey is provided we will fetch the watches defined on the project.
 	ProjectKey string `json:"project_key,omitempty"`
@@ -56,7 +56,7 @@ type ResultContext struct {
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
 	IncludeLicenses bool `json:"include_licenses"`
-	// The active watches defined on the resources above that is fetched from the platform
+	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
 
@@ -446,7 +446,7 @@ func (jsr *JasScansResults) NewApplicabilityScanResults(exitCode int, runs ...*s
 	jsr.ApplicabilityScanResults = append(jsr.ApplicabilityScanResults, ScanResult[[]*sarif.Run]{Scan: runs, StatusCode: exitCode})
 }
 
-func (jsr *JasScansResults) NewJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
+func (jsr *JasScansResults) AddJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
 	switch scanType {
 	case jasutils.Secrets:
 		jsr.JasVulnerabilities.SecretsScanResults = append(jsr.JasVulnerabilities.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})

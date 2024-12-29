@@ -651,7 +651,7 @@ func TestCreateResultsContext(t *testing.T) {
 		testCaseExpectedGitRepoHttpsCloneUrl := ""
 		expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided := false
 		if len(test.expectedPlatformWatches.GitRepositoryWatches) > 0 {
-			// Even if providing the git repo url, the generated object should only include the value if watches are provided
+			// We should include the value of gitRepoUrl only if a watch is assigned to this git_repository
 			testCaseExpectedGitRepoHttpsCloneUrl = validations.TestMockGitInfo.GitRepoHttpsCloneUrl
 		} else {
 			// If only the git repo url is provided but not supported or there are no defined watches, the expected includeVulnerabilities flag should be set to true even if not provided
@@ -723,7 +723,7 @@ func TestCreateResultsContext(t *testing.T) {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
 				mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
-				context := CreateResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses)
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
 				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
 				assert.Equal(t, testCase.expectedWatches, context.Watches)

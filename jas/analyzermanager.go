@@ -24,7 +24,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.12.2"
+	defaultAnalyzerManagerVersion             = "1.13.1"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -159,11 +159,10 @@ func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVar
 }
 
 func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
-	exitCode := GetAnalyzerManagerExitCode(err)
 	if err == nil {
 		return
 	}
-	if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[exitCode]; exitCodeExists {
+	if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[GetAnalyzerManagerExitCode(err)]; exitCodeExists {
 		log.Warn(exitCodeDescription)
 		return nil
 	}

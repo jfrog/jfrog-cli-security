@@ -249,7 +249,7 @@ func getCveIds(cves []formats.CveRow, issueId string) []string {
 	return ids
 }
 
-func (sc *CmdResultsSummaryConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in the summary
 	return
 }
@@ -314,13 +314,14 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
+// getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles
 func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		if location == nil {
 			// Only count the issue if it has a location
 			return
 		}
-		// Get the scanType count and status
+		// Get the count map in the `sc.currentScan` object based on the scanType and violation
 		resultStatus := formats.NoStatus
 		var count *formats.ResultSummary
 		switch scanType {
@@ -349,7 +350,7 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 		if count == nil {
 			return
 		}
-		// Calls the handler for each issue (location)
+		// Aggregate the issue in to the count (based on severity and CA status)
 		if _, ok := (*count)[severity.String()]; !ok {
 			(*count)[severity.String()] = map[string]int{}
 		}

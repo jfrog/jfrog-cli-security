@@ -65,11 +65,6 @@ func (rw *ResultsWriter) SetHasViolationContext(violationContext bool) *ResultsW
 	return rw
 }
 
-// func (rw *ResultsWriter) SetIncludeLicenses(licenses bool) *ResultsWriter {
-// 	rw.includeLicenses = licenses
-// 	return rw
-// }
-
 func (rw *ResultsWriter) SetPrintExtendedTable(extendedTable bool) *ResultsWriter {
 	rw.printExtended = extendedTable
 	return rw

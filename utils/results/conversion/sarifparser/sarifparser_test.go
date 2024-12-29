@@ -67,6 +67,8 @@ func TestGetComponentSarifLocation(t *testing.T) {
 func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
 	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
 	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1 (watch)", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", "watch"))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234", "watch"))
 }
 
 func TestGetScaSecurityViolationSarifHeadline(t *testing.T) {

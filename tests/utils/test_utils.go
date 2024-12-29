@@ -14,8 +14,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -111,36 +109,6 @@ func ChangeWD(t *testing.T, newPath string) string {
 	assert.NoError(t, err, "Failed to get current dir")
 	clientTests.ChangeDirAndAssert(t, newPath)
 	return prevDir
-}
-
-func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResults {
-	content, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var cmdResults *results.SecurityCommandResults
-	if !assert.NoError(t, json.Unmarshal(content, &cmdResults)) {
-		return &results.SecurityCommandResults{}
-	}
-	// replace paths separators
-	for _, targetResults := range cmdResults.Targets {
-		targetResults.Target = filepath.FromSlash(targetResults.Target)
-		if targetResults.ScaResults != nil {
-			for i, descriptor := range targetResults.ScaResults.Descriptors {
-				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
-			}
-		}
-		if targetResults.JasResults != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.GetApplicabilityScanResults()...)
-
-			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.Secrets)...)
-			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.IaC)...)
-			convertSarifRunPathsForOS(targetResults.JasResults.GetVulnerabilitiesResults(jasutils.Sast)...)
-
-			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.Secrets)...)
-			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.IaC)...)
-			convertSarifRunPathsForOS(targetResults.JasResults.GetViolationsResults(jasutils.Sast)...)
-		}
-	}
-	return cmdResults
 }
 
 func convertSarifRunPathsForOS(runs ...*sarif.Run) {
@@ -381,7 +349,8 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	}
 }
 
-func CreateTestGitRepoWatch(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+// If gitResources is empty, the watch will be created with all builds.
+func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
 	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
 		if len(gitResources) > 0 {
 			watchParams.GitRepositories.Resources = gitResources
@@ -419,7 +388,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchName, cleanUpWatch := CreateTestGitRepoWatch(t, policyParams.Name, watchName)
+	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
 	return watchName, func() {
 		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))

@@ -51,7 +51,6 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
 		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 	}
-	// params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = "/Users/assafa/Documents/other/test/analyzerManager/analyzerManager"
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
@@ -137,8 +136,8 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		// We first add the scan results and than check for errors to store the exit code to report it in the end
-		extendedScanResults.NewJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -155,8 +154,8 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(scanner, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		// We first add the scan results and than check for errors to store the exit code to report it in the end
-		extendedScanResults.NewJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -173,8 +172,8 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		// We first add the scan results and than check for errors to store the exit code to report it in the end
-		extendedScanResults.NewJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
 		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
@@ -193,7 +192,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		caScanResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		// We first add the scan results and than check for errors to store the exit code to report it in the end
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
 		scanResults.JasResults.NewApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
