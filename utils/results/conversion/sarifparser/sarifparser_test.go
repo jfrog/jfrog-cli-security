@@ -506,11 +506,13 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(wd,
 					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
-					// No location, should be removed in the output
-					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
 			},
-			expectedResults: []*sarif.Run{getExpectedSecretViolationSarifRun(wd, filepath.Join("dir", "file"))},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "[Security Violation] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
+					sarifutils.CreateDummyResult("Security Violation result-markdown", "result-msg", "rule", "level", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "file"))),
+				),
+			},
 		},
 	}
 	for _, tc := range testCases {
@@ -541,12 +543,4 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}
-}
-
-func getExpectedSecretViolationSarifRun(wd string, path string) *sarif.Run {
-	run := sarifutils.CreateRunWithDummyResultsInWd(wd,
-		sarifutils.CreateDummyResult("Security Violation ", "", "rule", "level", sarifutils.CreateDummyLocationInPath(path)),
-	)
-	sarifutils.GetRuleById(run, "rule").ShortDescription = sarif.NewMultiformatMessageString("[Security Violation] ")
-	return run
 }
