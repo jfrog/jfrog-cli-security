@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	GraphScanMinXrayVersion = "3.29.0"
-	ScanTypeMinXrayVersion  = "3.37.2"
+	GraphScanMinXrayVersion     = "3.29.0"
+	ScanTypeMinXrayVersion      = "3.37.2"
+	SwiftScanMinXrayVersion     = "3.109.4"
+	CocoapodsScanMinXrayVersion = "3.103.3"
 )
 
 func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
@@ -265,7 +266,19 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
+		xrayVersion := params.GetXrayVersion()
+		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
+		if err != nil {
+			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", xrayVersion)
+		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
+	case techutils.Swift:
+		xrayVersion := params.GetXrayVersion()
+		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
+		if err != nil {
+			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", xrayVersion)
+		}
+		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
