@@ -310,15 +310,14 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			applicabilityManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "applicability-scan", tc.fileName)
-			var err error
-			applicabilityManager.applicabilityScanResults, err = jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, applicabilityDocsUrlSuffix, scanner.MinSeverity)
-			if assert.NoError(t, err) && assert.NotNil(t, applicabilityManager.applicabilityScanResults) {
-				assert.Len(t, applicabilityManager.applicabilityScanResults, 1)
-				assert.Len(t, applicabilityManager.applicabilityScanResults[0].Results, tc.expectedResults)
+			vulnerabilitiesResults, _, innerErr := jas.ReadJasScanRunsFromFile(applicabilityManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, applicabilityDocsUrlSuffix, scanner.MinSeverity)
+			if assert.NoError(t, innerErr) && assert.NotNil(t, vulnerabilitiesResults) {
+				assert.Len(t, vulnerabilitiesResults, 1)
+				assert.Len(t, vulnerabilitiesResults[0].Results, tc.expectedResults)
 				if tc.name == "new applicability statuses" {
-					assert.Len(t, applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules, len(tc.expectedApplicabilityStatuses))
+					assert.Len(t, vulnerabilitiesResults[0].Tool.Driver.Rules, len(tc.expectedApplicabilityStatuses))
 					for i, value := range tc.expectedApplicabilityStatuses {
-						assert.Equal(t, value, applicabilityManager.applicabilityScanResults[0].Tool.Driver.Rules[i].Properties["applicability"])
+						assert.Equal(t, value, vulnerabilitiesResults[0].Tool.Driver.Rules[i].Properties["applicability"])
 					}
 				}
 			}

@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -24,6 +25,7 @@ type SecurityCommandResults struct {
 	EntitledForJas   bool              `json:"jas_entitled"`
 	SecretValidation bool              `json:"secret_validation,omitempty"`
 	CmdType          utils.CommandType `json:"command_type"`
+	ResultContext    ResultContext     `json:"result_context,omitempty"`
 	StartTime        time.Time         `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
@@ -33,6 +35,33 @@ type SecurityCommandResults struct {
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
+}
+
+// We have three types of results: vulnerabilities, violations and licenses.
+// If the user provides a violation context (watches, repo_path, project_key, git_repo_key) the results will only include violations.
+// If the user provides a violation context and requests vulnerabilities, the results will include both vulnerabilities and violations.
+// If the user doesn't provide a violation context, the results will include vulnerabilities.
+// Only one (Resource) field can be provided at a time.
+// License information can be provided in all cases if requested.
+type ResultContext struct {
+	// If watches are provided, the scan will be performed only with the provided watches.
+	Watches []string `json:"watches,omitempty"`
+	// (Resource) If repo_path is provided, the scan will be performed on the repository's watches.
+	RepoPath string `json:"repo_path,omitempty"`
+	// (Resource) If projectKey is provided we will fetch the watches defined on the project.
+	ProjectKey string `json:"project_key,omitempty"`
+	// (Resource) If gitRepository is provided we will fetch the watches defined on the git repository.
+	GitRepoHttpsCloneUrl string `json:"git_repo_key,omitempty"`
+	// If non of the above is provided or requested, the results will include vulnerabilities
+	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
+	// If requested, the results will include licenses
+	IncludeLicenses bool `json:"include_licenses"`
+	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
+	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
+}
+
+func (rc *ResultContext) HasViolationContext() bool {
+	return len(rc.Watches) > 0 || len(rc.GitRepoHttpsCloneUrl) > 0 || len(rc.ProjectKey) > 0 || len(rc.RepoPath) > 0
 }
 
 type TargetResults struct {
@@ -45,19 +74,33 @@ type TargetResults struct {
 	errorsMutex sync.Mutex `json:"-"`
 }
 
+type ScanResult[T interface{}] struct {
+	Scan       T   `json:"scan"`
+	StatusCode int `json:"status_code,omitempty"`
+}
+
+func (sr *ScanResult[T]) IsScanFailed() bool {
+	return sr.StatusCode != 0
+}
+
 type ScaScanResults struct {
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
 	// Sca scan results
-	XrayResults []services.ScanResponse `json:"xray_scan,omitempty"`
+	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 }
 
 type JasScansResults struct {
-	ApplicabilityScanResults []*sarif.Run `json:"contextual_analysis,omitempty"`
-	SecretsScanResults       []*sarif.Run `json:"secrets,omitempty"`
-	IacScanResults           []*sarif.Run `json:"iac,omitempty"`
-	SastScanResults          []*sarif.Run `json:"sast,omitempty"`
+	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
+	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
+	ApplicabilityScanResults []ScanResult[[]*sarif.Run] `json:"contextual_analysis,omitempty"`
+}
+
+type JasScanResults struct {
+	SecretsScanResults []ScanResult[[]*sarif.Run] `json:"secrets,omitempty"`
+	IacScanResults     []ScanResult[[]*sarif.Run] `json:"iac,omitempty"`
+	SastScanResults    []ScanResult[[]*sarif.Run] `json:"sast,omitempty"`
 }
 
 type ScanTarget struct {
@@ -85,10 +128,6 @@ func (st ScanTarget) String() (str string) {
 	str += fmt.Sprintf(" [%s]", tech)
 	return
 }
-
-// func NewCommandResults(cmdType utils.CommandType, xrayVersion string, entitledForJas, secretValidation bool) *SecurityCommandResults {
-// 	return &SecurityCommandResults{CmdType: cmdType, XrayVersion: xrayVersion, EntitledForJas: entitledForJas, SecretValidation: secretValidation, targetsMutex: sync.Mutex{}}
-// }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
 	return &SecurityCommandResults{CmdType: cmdType, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
@@ -124,6 +163,11 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 	return r
 }
 
+func (r *SecurityCommandResults) SetResultsContext(context ResultContext) *SecurityCommandResults {
+	r.ResultContext = context
+	return r
+}
+
 // --- Aggregated results for all targets ---
 // Adds a general error to the command results in different phases of its execution.
 // Notice that in some usages we pass constant 'false' to the 'allowSkippingError' parameter in some places, where we wish to force propagation of the error when it occurs.
@@ -132,13 +176,37 @@ func (r *SecurityCommandResults) AddGeneralError(err error, allowSkippingError b
 		log.Warn(fmt.Sprintf("Partial results are allowed, the error is skipped: %s", err.Error()))
 		return r
 	}
+	r.errorsMutex.Lock()
 	r.GeneralError = errors.Join(r.GeneralError, err)
+	r.errorsMutex.Unlock()
 	return r
+}
+
+// Is the result includes violations
+func (r *SecurityCommandResults) HasViolationContext() bool {
+	return r.ResultContext.HasViolationContext()
+}
+
+// Is the result includes vulnerabilities
+func (r *SecurityCommandResults) IncludesVulnerabilities() bool {
+	return r.ResultContext.IncludeVulnerabilities
+}
+
+// Is the result includes licenses
+func (r *SecurityCommandResults) IncludesLicenses() bool {
+	return r.ResultContext.IncludeLicenses
 }
 
 func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {
 	for _, scan := range r.Targets {
 		paths = append(paths, scan.Target)
+	}
+	return
+}
+
+func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
+	for _, scan := range r.Targets {
+		targets = append(targets, scan.ScanTarget)
 	}
 	return
 }
@@ -150,14 +218,16 @@ func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.Sc
 	return
 }
 
-func (r *SecurityCommandResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+func (r *SecurityCommandResults) HasJasScansResults(scanType jasutils.JasScanType) bool {
 	if !r.EntitledForJas {
-		return
+		return false
 	}
-	for _, scan := range r.Targets {
-		results = append(results, scan.GetJasScansResults(scanType)...)
+	for _, target := range r.Targets {
+		if target.HasJasScansResults(scanType) {
+			return true
+		}
 	}
-	return
+	return false
 }
 
 func (r *SecurityCommandResults) GetErrors() (err error) {
@@ -194,8 +264,8 @@ func (r *SecurityCommandResults) HasMultipleTargets() bool {
 }
 
 func (r *SecurityCommandResults) HasInformation() bool {
-	for _, scan := range r.Targets {
-		if scan.HasInformation() {
+	for _, target := range r.Targets {
+		if target.HasInformation() {
 			return true
 		}
 	}
@@ -203,8 +273,8 @@ func (r *SecurityCommandResults) HasInformation() bool {
 }
 
 func (r *SecurityCommandResults) HasFindings() bool {
-	for _, scan := range r.Targets {
-		if scan.HasFindings() {
+	for _, target := range r.Targets {
+		if target.HasFindings() {
 			return true
 		}
 	}
@@ -216,7 +286,7 @@ func (r *SecurityCommandResults) HasFindings() bool {
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
 	targetResults := &TargetResults{ScanTarget: target, errorsMutex: sync.Mutex{}}
 	if r.EntitledForJas {
-		targetResults.JasResults = &JasScansResults{}
+		targetResults.JasResults = &JasScansResults{JasVulnerabilities: JasScanResults{}, JasViolations: JasScanResults{}}
 	}
 
 	r.targetsMutex.Lock()
@@ -258,7 +328,9 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 	if sr.ScaResults == nil {
 		return
 	}
-	results = append(results, sr.ScaResults.XrayResults...)
+	for _, scanResult := range sr.ScaResults.XrayResults {
+		results = append(results, scanResult.Scan)
+	}
 	return
 }
 
@@ -271,12 +343,13 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 		return technologiesSet.ToSlice()
 	}
 	for _, scaResult := range sr.ScaResults.XrayResults {
-		for _, vulnerability := range scaResult.Vulnerabilities {
+		xrayScanResult := scaResult.Scan
+		for _, vulnerability := range xrayScanResult.Vulnerabilities {
 			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
 				technologiesSet.Add(tech)
 			}
 		}
-		for _, violation := range scaResult.Violations {
+		for _, violation := range xrayScanResult.Violations {
 			if tech := techutils.Technology(strings.ToLower(violation.Technology)); tech != "" {
 				technologiesSet.Add(tech)
 			}
@@ -285,11 +358,18 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	return technologiesSet.ToSlice()
 }
 
+func (sr *TargetResults) HasJasScansResults(scanType jasutils.JasScanType) bool {
+	if sr.JasResults == nil {
+		return false
+	}
+	return sr.JasResults.HasInformationByType(scanType)
+}
+
 func (sr *TargetResults) GetJasScansResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
 	if sr.JasResults == nil {
 		return
 	}
-	return sr.JasResults.GetResults(scanType)
+	return sr.JasResults.GetVulnerabilitiesResults(scanType)
 }
 
 func (sr *TargetResults) HasInformation() bool {
@@ -331,11 +411,13 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, responses...)
+	for _, response := range responses {
+		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
+	}
 	return sr.ScaResults
 }
 
@@ -344,7 +426,7 @@ func (ssr *ScaScanResults) HasInformation() bool {
 		return true
 	}
 	for _, scanResults := range ssr.XrayResults {
-		if len(scanResults.Licenses) > 0 {
+		if len(scanResults.Scan.Licenses) > 0 {
 			return true
 		}
 	}
@@ -353,23 +435,88 @@ func (ssr *ScaScanResults) HasInformation() bool {
 
 func (ssr *ScaScanResults) HasFindings() bool {
 	for _, scanResults := range ssr.XrayResults {
-		if len(scanResults.Vulnerabilities) > 0 || len(scanResults.Violations) > 0 {
+		if len(scanResults.Scan.Vulnerabilities) > 0 || len(scanResults.Scan.Violations) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func (jsr *JasScansResults) GetResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+func (jsr *JasScansResults) NewApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {
+	jsr.ApplicabilityScanResults = append(jsr.ApplicabilityScanResults, ScanResult[[]*sarif.Run]{Scan: runs, StatusCode: exitCode})
+}
+
+func (jsr *JasScansResults) AddJasScanResults(scanType jasutils.JasScanType, vulnerabilitiesRuns []*sarif.Run, violationsRuns []*sarif.Run, exitCode int) {
 	switch scanType {
-	case jasutils.Applicability:
-		results = jsr.ApplicabilityScanResults
 	case jasutils.Secrets:
-		results = jsr.SecretsScanResults
+		jsr.JasVulnerabilities.SecretsScanResults = append(jsr.JasVulnerabilities.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.SecretsScanResults = append(jsr.JasViolations.SecretsScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
 	case jasutils.IaC:
-		results = jsr.IacScanResults
+		jsr.JasVulnerabilities.IacScanResults = append(jsr.JasVulnerabilities.IacScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.IacScanResults = append(jsr.JasViolations.IacScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
 	case jasutils.Sast:
-		results = jsr.SastScanResults
+		jsr.JasVulnerabilities.SastScanResults = append(jsr.JasVulnerabilities.SastScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.SastScanResults = append(jsr.JasViolations.SastScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
+	}
+}
+
+func (jsr *JasScansResults) GetApplicabilityScanResults() (results []*sarif.Run) {
+	for _, scan := range jsr.ApplicabilityScanResults {
+		results = append(results, scan.Scan...)
+	}
+	return
+}
+
+func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+	switch scanType {
+	case jasutils.Secrets:
+		for _, scan := range jsr.JasVulnerabilities.SecretsScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	case jasutils.IaC:
+		for _, scan := range jsr.JasVulnerabilities.IacScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	case jasutils.Sast:
+		for _, scan := range jsr.JasVulnerabilities.SastScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	}
+	return
+}
+
+func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) (results []*sarif.Run) {
+	switch scanType {
+	case jasutils.Secrets:
+		for _, scan := range jsr.JasViolations.SecretsScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	case jasutils.IaC:
+		for _, scan := range jsr.JasViolations.IacScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	case jasutils.Sast:
+		for _, scan := range jsr.JasViolations.SastScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	}
 	return
 }
@@ -384,7 +531,15 @@ func (jsr *JasScansResults) HasFindings() bool {
 }
 
 func (jsr *JasScansResults) HasFindingsByType(scanType jasutils.JasScanType) bool {
-	for _, run := range jsr.GetResults(scanType) {
+	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
+		for _, result := range run.Results {
+			if len(result.Locations) > 0 {
+				return true
+			}
+		}
+	}
+
+	for _, run := range jsr.GetViolationsResults(scanType) {
 		for _, result := range run.Results {
 			if len(result.Locations) > 0 {
 				return true
@@ -404,7 +559,15 @@ func (jsr *JasScansResults) HasInformation() bool {
 }
 
 func (jsr *JasScansResults) HasInformationByType(scanType jasutils.JasScanType) bool {
-	for _, run := range jsr.GetResults(scanType) {
+	if scanType == jasutils.Applicability && len(jsr.ApplicabilityScanResults) > 0 {
+		return true
+	}
+	for _, run := range jsr.GetVulnerabilitiesResults(scanType) {
+		if len(run.Results) > 0 {
+			return true
+		}
+	}
+	for _, run := range jsr.GetViolationsResults(scanType) {
 		if len(run.Results) > 0 {
 			return true
 		}

@@ -68,7 +68,7 @@ func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	xrayVersion, err := testUtils.GetTestsXrayVersion()
 	assert.NoError(t, err)
 	// validate XSC is enabled at the given server
-	xscService, err := xsc.CreateXscService(xrayVersion.GetVersion(), configTests.XscDetails)
+	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails)
 	assert.NoError(t, err)
 	xscVersion, err := xscService.GetVersion()
 	if err != nil {

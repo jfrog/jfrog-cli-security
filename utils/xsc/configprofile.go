@@ -2,6 +2,7 @@ package xsc
 
 import (
 	"fmt"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -15,7 +16,7 @@ func GetConfigProfileByName(xrayVersion, xscVersion string, serverDetails *confi
 		return nil, err
 	}
 
-	xscService, err := CreateXscService(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -31,11 +32,10 @@ func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetai
 		log.Info(fmt.Sprintf("Minimal Xray version required to utilize config profile by url is '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileByUrlMinXrayVersion))
 		return nil, err
 	}
-	xscService, err := CreateXscService(xrayVersion, serverDetails)
+	xscService, err := CreateXscService(serverDetails)
 	if err != nil {
 		return nil, err
 	}
-
 	configProfile, err := xscService.GetConfigProfileByUrl(cloneRepoUrl)
 	if err != nil {
 		err = fmt.Errorf("failed to get config profile for url '%s': %q", serverDetails.Url, err)

@@ -14,14 +14,14 @@ import (
 
 const MinXscVersionForErrorReport = "1.7.7"
 
-func CreateXscService(xrayVersion string, serviceDetails *config.ServerDetails) (xsc.XscService, error) {
+func CreateXscServiceBackwardCompatible(xrayVersion string, serviceDetails *config.ServerDetails) (xsc.XscService, error) {
 	if xscservicesutils.IsXscXrayInnerService(xrayVersion) {
-		return createXscService(serviceDetails)
+		return CreateXscService(serviceDetails)
 	}
 	return createDeprecatedXscServiceManager(serviceDetails)
 }
 
-func createXscService(serviceDetails *config.ServerDetails) (*xscservices.XscInnerService, error) {
+func CreateXscService(serviceDetails *config.ServerDetails) (*xscservices.XscInnerService, error) {
 	xrayManager, err := xray.CreateXrayServiceManager(serviceDetails)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func GetJfrogServicesVersion(serverDetails *config.ServerDetails) (xrayVersion, 
 		return
 	}
 	log.Debug("Xray version: " + xrayVersion)
-	xscService, err := CreateXscService(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
 	if err != nil {
 		return
 	}

@@ -82,12 +82,16 @@ func CreateDummyResultInPath(fileName string) *sarif.Result {
 	return CreateResultWithOneLocation(fileName, 0, 0, 0, 0, "snippet", "rule", "level")
 }
 
-func CreateDummyResult(markdown, msg, ruleId, level string) *sarif.Result {
-	return &sarif.Result{
+func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
+	result := &sarif.Result{
 		Message: sarif.Message{Text: &msg, Markdown: &markdown},
 		Level:   &level,
 		RuleID:  &ruleId,
 	}
+	if len(locations) > 0 {
+		result.Locations = locations
+	}
+	return result
 }
 
 func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {

@@ -25,6 +25,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
@@ -117,22 +118,60 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 }
 
 type ScannerCmd interface {
-	Run(module jfrogappsconfig.Module) (err error)
+	Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error)
 }
 
-func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (err error) {
+func (a *JasScanner) Run(scannerCmd ScannerCmd, module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
 	func() {
-		if err = scannerCmd.Run(module); err != nil {
+		if vulnerabilitiesSarifRuns, violationsSarifRuns, err = scannerCmd.Run(module); err != nil {
 			return
 		}
 	}()
 	return
 }
 
-func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
+func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	violationFileName := fmt.Sprintf("%s_violations.sarif", strings.TrimSuffix(fileName, ".sarif"))
+	vulnFileExist, violationsFileExist, err := checkJasResultsFilesExist(fileName, violationFileName)
+	if err != nil {
+		return
+	}
+	if !vulnFileExist && !violationsFileExist {
+		err = fmt.Errorf("Analyzer-Manager did not generate results files at: %s", filepath.Base(fileName))
+		return
+	}
+	if vulnFileExist {
+		vulnerabilitiesSarifRuns, err = readJasScanRunsFromFile(fileName, wd, informationUrlSuffix, minSeverity)
+		if err != nil {
+			return
+		}
+	}
+	if violationsFileExist {
+		violationsSarifRuns, err = readJasScanRunsFromFile(violationFileName, wd, informationUrlSuffix, minSeverity)
+	}
+	return
+}
+
+func checkJasResultsFilesExist(vulnFileName, violationsFileName string) (vulnFileExist, violationsFileExist bool, err error) {
+	if vulnFileExist, err = fileutils.IsFileExists(vulnFileName, false); err != nil {
+		return
+	}
+	if violationsFileExist, err = fileutils.IsFileExists(violationsFileName, false); err != nil {
+		return
+	}
+	return
+}
+
+func readJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSeverity severityutils.Severity) (sarifRuns []*sarif.Run, err error) {
 	if sarifRuns, err = sarifutils.ReadScanRunsFromFile(fileName); err != nil {
 		return
 	}
+	processSarifRuns(sarifRuns, wd, informationUrlSuffix, minSeverity)
+	return
+}
+
+// This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
+func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {
 	for _, sarifRun := range sarifRuns {
 		// Jas reports has only one invocation
 		// Set the actual working directory to the invocation, not the analyzerManager directory
@@ -147,7 +186,6 @@ func ReadJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
 		addScoreToRunRules(sarifRun)
 	}
-	return
 }
 
 func fillMissingRequiredDriverInformation(defaultJasInformationUri, defaultVersion string, run *sarif.Run) {
@@ -252,7 +290,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars(""))
+	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars("", "", "", []string{}))
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -336,8 +374,25 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, technologies ...techutils.Technology) map[string]string {
+// Analyzer Manager expect the git repo url to be in the env vars in a specific way, this function will return the key for the git repo url
+func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
+	if gitRepoHttpsCloneUrl == "" {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
+}
+
+func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
+	if gitRepoUrl != "" {
+		envVars[gitRepoEnvVariable] = gitRepoUrl
+	}
+	if projectKey != "" {
+		envVars[projectEnvVariable] = projectKey
+	}
+	if len(watches) > 0 {
+		envVars[watchesEnvVariable] = strings.Join(watches, ",")
+	}
 	if len(technologies) != 1 {
 		return envVars
 	}

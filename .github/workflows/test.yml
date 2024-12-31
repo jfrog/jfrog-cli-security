@@ -65,7 +65,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -246,7 +246,7 @@ jobs:
       pull-requests: write # write permission needed to comment on PR
     steps:
       - name: Generate Unit Tests Code Coverage Report
-        uses: fgrosse/go-coverage-report@v1.2.0
+        uses: fgrosse/go-coverage-report@v1.1.0
         with:
           coverage-artifact-name: unit-tests-code-coverage
           coverage-file-name: cover-unit-tests

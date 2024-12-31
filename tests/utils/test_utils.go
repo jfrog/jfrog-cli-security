@@ -14,7 +14,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -112,31 +111,6 @@ func ChangeWD(t *testing.T, newPath string) string {
 	return prevDir
 }
 
-func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResults {
-	content, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var cmdResults *results.SecurityCommandResults
-	if !assert.NoError(t, json.Unmarshal(content, &cmdResults)) {
-		return &results.SecurityCommandResults{}
-	}
-	// replace paths separators
-	for _, targetResults := range cmdResults.Targets {
-		targetResults.Target = filepath.FromSlash(targetResults.Target)
-		if targetResults.ScaResults != nil {
-			for i, descriptor := range targetResults.ScaResults.Descriptors {
-				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
-			}
-		}
-		if targetResults.JasResults != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SecretsScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.IacScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SastScanResults...)
-		}
-	}
-	return cmdResults
-}
-
 func convertSarifRunPathsForOS(runs ...*sarif.Run) {
 	for r := range runs {
 		for i := range runs[r].Invocations {
@@ -167,9 +141,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.SimpleJsonResults
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.SimpleJsonResults{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, vulnerability := range results.Vulnerabilities {
 		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails, &vulnerability.Cves)
@@ -183,13 +155,22 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	for _, orViolation := range results.OperationalRiskViolations {
 		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails, nil)
 	}
-	for _, secret := range results.Secrets {
+	for _, secret := range results.SecretsVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&secret)
 	}
-	for _, sast := range results.Sast {
+	for _, sast := range results.SastVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&sast)
 	}
-	for _, iac := range results.Iacs {
+	for _, iac := range results.IacsVulnerabilities {
+		convertJasSimpleJsonPathsForOS(&iac)
+	}
+	for _, secret := range results.SecretsViolations {
+		convertJasSimpleJsonPathsForOS(&secret)
+	}
+	for _, sast := range results.SastViolations {
+		convertJasSimpleJsonPathsForOS(&sast)
+	}
+	for _, iac := range results.IacsViolations {
 		convertJasSimpleJsonPathsForOS(&iac)
 	}
 	return results
@@ -255,9 +236,7 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results *sarif.Report
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return &sarif.Report{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	convertSarifRunPathsForOS(results.Runs...)
 	return results
@@ -267,9 +246,7 @@ func ReadSummaryResults(t *testing.T, path string) formats.ResultsSummary {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.ResultsSummary
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.ResultsSummary{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, targetResults := range results.Scans {
 		targetResults.Target = filepath.FromSlash(targetResults.Target)
@@ -288,7 +265,115 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
-func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
+func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.IgnoreFilters) func() {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayUtils.IgnoreRuleParams{
+		// expired in one day
+		Notes:         description,
+		ExpiresAt:     time.Now().AddDate(0, 0, 1),
+		IgnoreFilters: filters,
+	})
+	assert.NoError(t, err)
+	return func() {
+		assert.NoError(t, xrayManager.DeleteIgnoreRule(ignoreRuleId))
+	}
+}
+
+func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.PolicyRule) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default security policy.
+	policyParams := xrayUtils.PolicyParams{
+		Name:  fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Type:  xrayUtils.Security,
+		Rules: rules,
+	}
+	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
+		return "", func() {}
+	}
+	return policyParams.Name, func() {
+		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
+}
+
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool) (string, func()) {
+	return CreateSecurityPolicy(t, policyName,
+		xrayUtils.PolicyRule{
+			Name:     "sca_rule",
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 1,
+		},
+		xrayUtils.PolicyRule{
+			Name:     "exposers_rule",
+			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 2,
+		},
+		xrayUtils.PolicyRule{
+			Name:     "sast_rule",
+			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 3,
+		},
+	)
+}
+
+func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
+	if failBuild {
+		return &xrayUtils.PolicyAction{
+			FailBuild: clientUtils.Pointer(true),
+		}
+	}
+	return nil
+}
+
+func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default watch.
+	watchParams := assignParams(xrayUtils.NewWatchParams())
+	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
+	watchParams.Active = true
+	// Assign the policy to the watch.
+	watchParams.Policies = []xrayUtils.AssignedPolicy{
+		{
+			Name: policyName,
+			Type: string(xrayUtils.Security),
+		},
+	}
+	assert.NoError(t, xrayManager.CreateWatch(watchParams))
+	return watchParams.Name, func() {
+		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	}
+}
+
+// If gitResources is empty, the watch will be created with all builds.
+func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
+		return watchParams
+	})
+}
+
+func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		watchParams.ProjectKey = projectKey
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
+		return watchParams
+	})
+}
+
+func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
@@ -308,19 +393,9 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchParams := xrayUtils.NewWatchParams()
-	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
-	watchParams.Active = true
-	watchParams.Builds.Type = xrayUtils.WatchBuildAll
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
-		{
-			Name: policyParams.Name,
-			Type: "security",
-		},
-	}
-	assert.NoError(t, xrayManager.CreateWatch(watchParams))
-	return watchParams.Name, func() {
-		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
+	return watchName, func() {
+		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
 }

@@ -1,12 +1,14 @@
 package formats
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"strconv"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 )
 
-func ConvertSecurityTableRowToScanTableRow(tableRows []vulnerabilityTableRow) (scanTableRows []vulnerabilityScanTableRow) {
+// For binary scans
+func ConvertSecurityTableRowToScanTableRow(tableRows []scaVulnerabilityOrViolationTableRow) (scanTableRows []vulnerabilityScanTableRow) {
 	for i := range tableRows {
 		scanTableRows = append(scanTableRows, vulnerabilityScanTableRow{
 			severity:               tableRows[i].severity,
@@ -24,6 +26,7 @@ func ConvertSecurityTableRowToScanTableRow(tableRows []vulnerabilityTableRow) (s
 	return
 }
 
+// For binary scans
 func ConvertLicenseViolationTableRowToScanTableRow(tableRows []licenseViolationTableRow) (scanTableRows []licenseViolationScanTableRow) {
 	for i := range tableRows {
 		scanTableRows = append(scanTableRows, licenseViolationScanTableRow{
@@ -84,9 +87,9 @@ func convertToComponentScanTableRow(rows []directDependenciesTableRow) (tableRow
 	return
 }
 
-func ConvertToVulnerabilityTableRow(rows []VulnerabilityOrViolationRow) (tableRows []vulnerabilityTableRow) {
+func ConvertToScaVulnerabilityOrViolationTableRow(rows []VulnerabilityOrViolationRow) (tableRows []scaVulnerabilityOrViolationTableRow) {
 	for i := range rows {
-		tableRows = append(tableRows, vulnerabilityTableRow{
+		tableRows = append(tableRows, scaVulnerabilityOrViolationTableRow{
 			severity:                  rows[i].Severity,
 			severityNumValue:          rows[i].SeverityNumValue,
 			applicable:                rows[i].Applicable,
@@ -97,12 +100,13 @@ func ConvertToVulnerabilityTableRow(rows []VulnerabilityOrViolationRow) (tableRo
 			directDependencies:        convertToComponentTableRow(rows[i].Components),
 			cves:                      convertToCveTableRow(rows[i].Cves),
 			issueId:                   rows[i].IssueId,
+			watch:                     rows[i].Watch,
 		})
 	}
 	return
 }
 
-func ConvertToLicenseViolationTableRow(rows []LicenseRow) (tableRows []licenseViolationTableRow) {
+func ConvertToLicenseViolationTableRow(rows []LicenseViolationRow) (tableRows []licenseViolationTableRow) {
 	for i := range rows {
 		tableRows = append(tableRows, licenseViolationTableRow{
 			licenseKey:                rows[i].LicenseKey,
@@ -112,6 +116,7 @@ func ConvertToLicenseViolationTableRow(rows []LicenseRow) (tableRows []licenseVi
 			impactedDependencyVersion: rows[i].ImpactedDependencyVersion,
 			impactedDependencyType:    rows[i].ImpactedDependencyType,
 			directDependencies:        convertToComponentTableRow(rows[i].Components),
+			watch:                     rows[i].Watch,
 		})
 	}
 	return
@@ -167,6 +172,7 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow
 			secret:          rows[i].Snippet,
 			tokenValidation: jasutils.TokenValidationStatus(status).ToString(),
 			tokenInfo:       info,
+			watch:           rows[i].Watch,
 		})
 
 	}
@@ -180,6 +186,7 @@ func ConvertToIacOrSastTableRow(rows []SourceCodeRow) (tableRows []iacOrSastTabl
 			file:       rows[i].File,
 			lineColumn: strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
 			finding:    rows[i].Finding,
+			watch:      rows[i].Watch,
 		})
 	}
 	return

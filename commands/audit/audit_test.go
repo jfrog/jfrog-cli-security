@@ -2,16 +2,17 @@ package audit
 
 import (
 	"fmt"
-	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	configTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	"github.com/stretchr/testify/assert"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
@@ -28,11 +28,12 @@ import (
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	scanservices "github.com/jfrog/jfrog-client-go/xray/services"
+	xrayServices "github.com/jfrog/jfrog-client-go/xray/services"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func TestDetectScansToPreform(t *testing.T) {
+func TestDetectScansToPerform(t *testing.T) {
 
 	dir, cleanUp := createTestDir(t)
 
@@ -56,14 +57,14 @@ func TestDetectScansToPreform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 				{
 					ScanTarget: results.ScanTarget{
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -73,7 +74,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -87,7 +88,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -97,7 +98,7 @@ func TestDetectScansToPreform(t *testing.T) {
 					ScanTarget: results.ScanTarget{
 						Target: filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 				},
 			},
 		},
@@ -115,7 +116,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Nuget,
 						Target:     filepath.Join(dir, "Nuget"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "Nuget", "Nuget-sub", "project.csproj"), filepath.Join(dir, "Nuget", "project.sln")},
 					},
@@ -125,7 +126,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Go,
 						Target:     filepath.Join(dir, "dir", "go"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "go", "go.mod")},
 					},
@@ -135,7 +136,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Maven,
 						Target:     filepath.Join(dir, "dir", "maven"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{
 							filepath.Join(dir, "dir", "maven", "maven-sub", "pom.xml"),
@@ -149,7 +150,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Npm,
 						Target:     filepath.Join(dir, "dir", "npm"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
 					},
@@ -159,7 +160,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Yarn,
 						Target:     filepath.Join(dir, "yarn"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "package.json")},
 					},
@@ -169,7 +170,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Pip,
 						Target:     filepath.Join(dir, "yarn", "Pip"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pip", "requirements.txt")},
 					},
@@ -179,7 +180,7 @@ func TestDetectScansToPreform(t *testing.T) {
 						Technology: techutils.Pipenv,
 						Target:     filepath.Join(dir, "yarn", "Pipenv"),
 					},
-					JasResults: &results.JasScansResults{},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
 					},
@@ -425,37 +426,30 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
 				SetConfigProfile(&configProfile).
-				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-					RepoPath:               "",
-					ScanType:               scanservices.Dependency,
-					IncludeVulnerabilities: true,
-				})
+				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
 
 			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
 
-			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true, HasViolationContext: true}).ConvertToSummary(auditResults)
+			summary, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{IncludeVulnerabilities: true}).ConvertToSummary(auditResults)
 			assert.NoError(t, err)
 
-			var ScaResultsCount int
+			var scaResultsCount int
 			// When checking Applicability results with ExactResultsMatch = true, the sum of all statuses should equal total Sca results amount. Else, we check the provided Sca issues amount
 			if testcase.expectedCaApplicable > 0 || testcase.expectedCaNotApplicable > 0 || testcase.expectedCaNotCovered > 0 || testcase.expectedCaUndetermined > 0 {
-				ScaResultsCount = testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
+				scaResultsCount = testcase.expectedCaApplicable + testcase.expectedCaNotApplicable + testcase.expectedCaNotCovered + testcase.expectedCaUndetermined
 			} else {
-				ScaResultsCount = testcase.expectedScaIssues
+				scaResultsCount = testcase.expectedScaIssues
 			}
 			validations.ValidateCommandSummaryOutput(t, validations.ValidationParams{
 				Actual:            summary,
 				ExactResultsMatch: true,
-				Vulnerabilities:   testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + ScaResultsCount,
-				Sast:              testcase.expectedSastIssues,
-				Secrets:           testcase.expectedSecretsIssues,
-				Iac:               testcase.expectedIacIssues,
-				Applicable:        testcase.expectedCaApplicable,
-				NotApplicable:     testcase.expectedCaNotApplicable,
-				NotCovered:        testcase.expectedCaNotCovered,
-				Undetermined:      testcase.expectedCaUndetermined,
+				Total:             &validations.TotalCount{Vulnerabilities: testcase.expectedSastIssues + testcase.expectedSecretsIssues + testcase.expectedIacIssues + scaResultsCount},
+				Vulnerabilities: &validations.VulnerabilityCount{
+					ValidateScan:                &validations.ScanCount{Sca: scaResultsCount, Sast: testcase.expectedSastIssues, Secrets: testcase.expectedSecretsIssues, Iac: testcase.expectedIacIssues},
+					ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: testcase.expectedCaApplicable, NotApplicable: testcase.expectedCaNotApplicable, NotCovered: testcase.expectedCaNotCovered, Undetermined: testcase.expectedCaUndetermined},
+				},
 			})
 		})
 	}
@@ -484,10 +478,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetWorkingDirs([]string{tempDirPath}).
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
-		SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-			ScanType:               scanservices.Dependency,
-			IncludeVulnerabilities: true,
-		}).
+		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath)
 	auditParams.SetIsRecursiveScan(true)
 
@@ -623,10 +614,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
-				SetCommonGraphScanParams(&scangraph.CommonGraphScanParams{
-					ScanType:               scanservices.Dependency,
-					IncludeVulnerabilities: true,
-				})
+				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -636,5 +624,113 @@ func TestAuditWithPartialResults(t *testing.T) {
 				assert.Error(t, auditResults.GetErrors())
 			}
 		})
+	}
+}
+
+func TestCreateResultsContext(t *testing.T) {
+	mockWatches := []string{"watch-1", "watch-2"}
+	mockProjectKey := "project"
+	mockArtifactoryRepoPath := "repo/path"
+
+	tests := []struct {
+		name                    string
+		xrayVersion             string
+		expectedPlatformWatches xrayApi.ResourcesWatchesBody
+	}{
+		{
+			name:                    "Git Repo Url Supported",
+			xrayVersion:             xrayServices.MinXrayVersionGitRepoKey,
+			expectedPlatformWatches: xrayApi.ResourcesWatchesBody{GitRepositoryWatches: mockWatches},
+		},
+		{
+			name:        "Git Repo Url Not Supported (Backward Compatibility)",
+			xrayVersion: "1.0.0",
+		},
+	}
+	for _, test := range tests {
+		testCaseExpectedGitRepoHttpsCloneUrl := ""
+		expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided := false
+		if len(test.expectedPlatformWatches.GitRepositoryWatches) > 0 {
+			// We should include the value of gitRepoUrl only if a watch is assigned to this git_repository
+			testCaseExpectedGitRepoHttpsCloneUrl = validations.TestMockGitInfo.GitRepoHttpsCloneUrl
+		} else {
+			// If only the git repo url is provided but not supported or there are no defined watches, the expected includeVulnerabilities flag should be set to true even if not provided
+			expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided = true
+		}
+		testCases := []struct {
+			name string
+
+			artifactoryRepoPath    string
+			httpCloneUrl           string
+			watches                []string
+			jfrogProjectKey        string
+			includeVulnerabilities bool
+			includeLicenses        bool
+
+			expectedArtifactoryRepoPath    string
+			expectedHttpCloneUrl           string
+			expectedWatches                []string
+			expectedJfrogProjectKey        string
+			expectedIncludeVulnerabilities bool
+			expectedIncludeLicenses        bool
+		}{
+			{
+				name:            "Only Vulnerabilities",
+				includeLicenses: true,
+				// Since no violation context is provided, the includeVulnerabilities flag should be set to true even if not provided
+				expectedIncludeVulnerabilities: true,
+				expectedIncludeLicenses:        true,
+			},
+			{
+				name:            "Watches",
+				watches:         mockWatches,
+				expectedWatches: mockWatches,
+			},
+			{
+				name:                        "Artifactory Repo Path",
+				artifactoryRepoPath:         mockArtifactoryRepoPath,
+				expectedArtifactoryRepoPath: mockArtifactoryRepoPath,
+			},
+			{
+				name:                    "Project key",
+				jfrogProjectKey:         mockProjectKey,
+				expectedJfrogProjectKey: mockProjectKey,
+				includeLicenses:         true,
+				expectedIncludeLicenses: true,
+			},
+			{
+				name:                           "Git Clone Url",
+				httpCloneUrl:                   validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
+				expectedIncludeVulnerabilities: expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided,
+			},
+			{
+				name:                   "All",
+				httpCloneUrl:           validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				watches:                mockWatches,
+				jfrogProjectKey:        mockProjectKey,
+				includeVulnerabilities: true,
+				includeLicenses:        true,
+
+				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
+				expectedWatches:                mockWatches,
+				expectedJfrogProjectKey:        mockProjectKey,
+				expectedIncludeVulnerabilities: true,
+				expectedIncludeLicenses:        true,
+			},
+		}
+		for _, testCase := range testCases {
+			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
+				mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
+				defer mockServer.Close()
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses)
+				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
+				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
+				assert.Equal(t, testCase.expectedWatches, context.Watches)
+				assert.Equal(t, testCase.expectedJfrogProjectKey, context.ProjectKey)
+				assert.Equal(t, testCase.expectedIncludeVulnerabilities, context.IncludeVulnerabilities)
+				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
+			})
+		}
 	}
 }

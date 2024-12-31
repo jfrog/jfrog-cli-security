@@ -4,25 +4,25 @@ import (
 	"time"
 
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
 	// Common params to all scan routines
-	commonGraphScanParams *scangraph.CommonGraphScanParams
-	workingDirs           []string
-	installFunc           func(tech string) error
-	fixableOnly           bool
-	minSeverityFilter     severityutils.Severity
+	resultsContext    results.ResultContext
+	workingDirs       []string
+	installFunc       func(tech string) error
+	fixableOnly       bool
+	minSeverityFilter severityutils.Severity
 	*xrayutils.AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
-	configProfile               *clientservices.ConfigProfile
+	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
 	startTime                   time.Time
 }
@@ -107,12 +107,12 @@ func (params *AuditParams) SetThreads(threads int) *AuditParams {
 	return params
 }
 
-func (params *AuditParams) SetCommonGraphScanParams(commonParams *scangraph.CommonGraphScanParams) *AuditParams {
-	params.commonGraphScanParams = commonParams
+func (params *AuditParams) SetResultsContext(resultsContext results.ResultContext) *AuditParams {
+	params.resultsContext = resultsContext
 	return params
 }
 
-func (params *AuditParams) SetConfigProfile(configProfile *clientservices.ConfigProfile) *AuditParams {
+func (params *AuditParams) SetConfigProfile(configProfile *xscservices.ConfigProfile) *AuditParams {
 	params.configProfile = configProfile
 	return params
 }
@@ -124,11 +124,12 @@ func (params *AuditParams) SetScansResultsOutputDir(outputDir string) *AuditPara
 
 func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanParams {
 	return &services.XrayGraphScanParams{
-		RepoPath:               params.commonGraphScanParams.RepoPath,
-		Watches:                params.commonGraphScanParams.Watches,
-		ScanType:               params.commonGraphScanParams.ScanType,
-		ProjectKey:             params.commonGraphScanParams.ProjectKey,
-		IncludeVulnerabilities: params.commonGraphScanParams.IncludeVulnerabilities,
-		IncludeLicenses:        params.commonGraphScanParams.IncludeLicenses,
+		RepoPath:               params.resultsContext.RepoPath,
+		Watches:                params.resultsContext.Watches,
+		ProjectKey:             params.resultsContext.ProjectKey,
+		GitRepoHttpsCloneUrl:   params.resultsContext.GitRepoHttpsCloneUrl,
+		IncludeVulnerabilities: params.resultsContext.IncludeVulnerabilities,
+		IncludeLicenses:        params.resultsContext.IncludeLicenses,
+		ScanType:               services.Dependency,
 	}
 }
