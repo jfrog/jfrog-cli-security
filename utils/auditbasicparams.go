@@ -72,6 +72,7 @@ type AuditBasicParams struct {
 	allowPartialResults              bool
 	xrayVersion                      string
 	xscVersion                       string
+	placeholder                      string
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
