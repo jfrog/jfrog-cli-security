@@ -131,21 +131,23 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 	return nil
 }
 
-func extractNameFromSwiftGitRepo(name string) string {
+func extractNameFromSwiftRepo(name string) string {
 	name = strings.TrimSuffix(name, ".git")
 	name = strings.TrimPrefix(name, "https://")
+	name = strings.TrimPrefix(name, "http://")
+	name = strings.TrimPrefix(name, "sso://")
 	return name
 }
 
 func GetSwiftDependenciesGraph(data *Dependencies, dependencyMap map[string][]string, versionMap map[string]string) {
-	data.Name = extractNameFromSwiftGitRepo(data.Name)
+	data.Name = extractNameFromSwiftRepo(data.Name)
 	_, ok := dependencyMap[data.Name]
 	if !ok {
 		dependencyMap[data.Name] = []string{}
 		versionMap[data.Name] = data.Version
 	}
 	for _, dependency := range data.Dependencies {
-		dependency.Name = extractNameFromSwiftGitRepo(dependency.Name)
+		dependency.Name = extractNameFromSwiftRepo(dependency.Name)
 		dependencyMap[data.Name] = append(dependencyMap[data.Name], dependency.Name)
 		GetSwiftDependenciesGraph(dependency, dependencyMap, versionMap)
 	}
