@@ -797,14 +797,64 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, false, false, "non_existing_folder")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Sast:    2,
-		Iac:     9,
-		Secrets: 6,
-
-		Vulnerabilities: 8,
-		Applicable:      3,
-		Undetermined:    1,
-		NotCovered:      1,
-		NotApplicable:   2,
+		Total: &validations.TotalCount{Vulnerabilities: 24},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Iac: 9, Secrets: 6},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
 	})
+}
+
+// test audit command parameters
+type auditCommandTestParams struct {
+	// Will combined with "," if provided and be used as --working-dirs flag value
+	WorkingDirsToScan []string
+	// Will be combined with ";" if provided and be used as --exclusions flag value
+	CustomExclusion []string
+	// --format flag value if provided
+	Format string
+	// Will combined with "," if provided and be used as --watches flag value
+	Watches []string
+	// --project flag value if provided.
+	ProjectKey string
+	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
+	FailOnFailedBuildFlag bool
+	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
+	WithVuln bool
+	// --licenses flag value if provided
+	WithLicense bool
+}
+
+// run audit command with different flags and params for integration tests
+func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCommandTestParams) (string, error) {
+	args := []string{"audit"}
+	if len(params.WorkingDirsToScan) > 0 {
+		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
+	}
+	if len(params.CustomExclusion) > 0 {
+		args = append(args, "--exclusions="+strings.Join(params.CustomExclusion, ";"))
+	}
+	if params.Format != "" {
+		args = append(args, "--format="+params.Format)
+	}
+	if params.WithLicense {
+		args = append(args, "--licenses")
+	}
+	if params.ProjectKey != "" {
+		args = append(args, "--project="+params.ProjectKey)
+	}
+	if len(params.Watches) > 0 {
+		args = append(args, "--watches="+strings.Join(params.Watches, ","))
+	}
+	if params.FailOnFailedBuildFlag {
+		if len(params.Watches) == 0 {
+			// Verify params consistency no fail flag
+			assert.False(t, params.FailOnFailedBuildFlag, "Fail flag provided without watches")
+		}
+		args = append(args, "--fail")
+	}
+	if params.WithVuln {
+		args = append(args, "--vuln")
+	}
+	return testCli.RunCliCmdWithOutputs(t, args...)
 }

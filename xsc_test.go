@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
@@ -43,9 +44,80 @@ func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Vulnerabilities:    1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1, Vulnerabilities: 1},
+	})
+}
+
+func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
+	// Init XSC tests also enabled analytics reporting.
+	_, _, cleanUpXsc := integration.InitXscTest(t, func() { securityTestUtils.ValidateXrayVersion(t, services.MinXrayVersionGitRepoKey) })
+	defer cleanUpXsc()
+	// Create the audit command with git repo context injected.
+	cliToRun, cleanUpHome := integration.InitTestWithMockCommandOrParams(t, false, getAuditCommandWithXscGitContext(validations.TestMockGitInfo))
+	defer cleanUpHome()
+	// Create the project to scan
+	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(tests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	defer cleanUpProject()
+	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true)
+	defer cleanUpPolicy()
+	_, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	defer cleanUpWatch()
+	// Run the audit command with git repo and verify violations are reported to the platform.
+	output, err := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true})
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Licenses: 3, Violations: 26, Vulnerabilities: 39},
+		// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+	})
+	// Create an ignore rules for the git repo
+	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		CVEs:            []string{"any"}, Licenses: []string{"any"},
+	})
+	defer cleanUpCveIgnoreRule()
+	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
+	})
+	defer cleanUpExposureIgnoreRule()
+	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
+	})
+	defer cleanSastUpIgnoreRule()
+	// Run the audit command and verify no issues. (all violations are ignored)
+	output, err = testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson)})
+	assert.NoError(t, err)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}})
+}
+
+func TestAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
+	_, _, cleanUpXsc := integration.InitXscTest(t, func() { securityTestUtils.ValidateXrayVersion(t, services.MinXrayVersionGitRepoKey) })
+	defer cleanUpXsc()
+	if tests.TestJfrogPlatformProjectKeyEnvVar == "" {
+		t.Skipf("skipping test. %s is not set.", tests.TestJfrogPlatformProjectKeyEnvVar)
+	}
+	// Create the audit command with git repo context injected.
+	cliToRun, cleanUpHome := integration.InitTestWithMockCommandOrParams(t, false, getAuditCommandWithXscGitContext(validations.TestMockGitInfo))
+	defer cleanUpHome()
+
+	// Create the project to scan
+	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(tests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	defer cleanUpProject()
+	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
+	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true)
+	defer cleanUpPolicy()
+	_, cleanUpWatch := securityTestUtils.CreateTestProjectKeyWatch(t, policyName, "project-key-jas-violations-watch", *tests.JfrogTestProjectKey)
+	defer cleanUpWatch()
+	// Run the audit command with project key and verify violations are reported.
+	output, err := testAuditCommand(t, cliToRun, auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *tests.JfrogTestProjectKey})
+	assert.ErrorContains(t, err, results.NewFailBuildError().Error())
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Violations: 14},
+		// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 	})
 }
 

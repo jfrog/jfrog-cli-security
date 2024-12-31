@@ -114,7 +114,8 @@ require (
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
-// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
+// attiasas:test_cli_with_err
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20241231132458-243cf93225d4
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
