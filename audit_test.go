@@ -440,7 +440,7 @@ func TestXrayAuditCocoapods(t *testing.T) {
 func TestXrayAuditSwift(t *testing.T) {
 	output := testXrayAuditSwift(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
+		Total: &validations.TotalCount{Vulnerabilities: 1},
 	})
 }
 
