@@ -56,8 +56,8 @@ type ParseScaViolationFunc func(violation services.Violation, cves []formats.Cve
 type ParseLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
-// PrepareJasIssues allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
+// Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
+func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -88,8 +88,8 @@ func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFu
 	return nil
 }
 
-// PrepareScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
+// ApplyHandlerToScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
+func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -116,8 +116,8 @@ func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vul
 	return nil
 }
 
-// PrepareScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func PrepareScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+// ApplyHandlerToScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -195,8 +195,8 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 	return
 }
 
-// PrepareLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
-func PrepareLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
+// ApplyHandlerToLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
+func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -549,6 +549,9 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 }
 
 func GetDependencyId(depName, version string) string {
+	if version == "" {
+		return depName
+	}
 	return fmt.Sprintf("%s:%s", depName, version)
 }
 
@@ -626,4 +629,19 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	}
 
 	return jasutils.NotApplicable
+}
+
+func ConvertPolicesToString(policies []services.Policy) []string {
+	var policiesStr []string
+	for _, policy := range policies {
+		policiesStr = append(policiesStr, policy.Policy)
+	}
+	return policiesStr
+}
+
+func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
+	for _, result := range results {
+		runs = append(runs, result.Scan...)
+	}
+	return
 }

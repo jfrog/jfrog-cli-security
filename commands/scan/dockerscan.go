@@ -28,8 +28,7 @@ const (
 
 type DockerScanCommand struct {
 	ScanCommand
-	imageTag       string
-	targetRepoPath string
+	imageTag string
 }
 
 func NewDockerScanCommand() *DockerScanCommand {
@@ -38,11 +37,6 @@ func NewDockerScanCommand() *DockerScanCommand {
 
 func (dsc *DockerScanCommand) SetImageTag(imageTag string) *DockerScanCommand {
 	dsc.imageTag = imageTag
-	return dsc
-}
-
-func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanCommand {
-	dsc.targetRepoPath = repoPath
 	return dsc
 }
 
@@ -88,7 +82,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
-		Target(dsc.targetRepoPath).
+		Target(dsc.resultsContext.RepoPath).
 		BuildSpec()).SetThreads(1)
 	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag).SetRunJasScans(true)
 	err = dsc.setCredentialEnvsForIndexerApp()
@@ -111,12 +105,12 @@ func (dsc *DockerScanCommand) Run() (err error) {
 }
 
 func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
-	hasViolationContext := dsc.ScanCommand.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
+	hasViolationContext := dsc.ScanCommand.resultsContext.HasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
-	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
+	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
 		return
 	}
 	return output.RecordSecurityCommandSummary(summary)

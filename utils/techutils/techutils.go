@@ -39,6 +39,7 @@ const (
 	Oci       Technology = "oci"
 	Conan     Technology = "conan"
 	Cocoapods Technology = "cocoapods"
+	Swift     Technology = "swift"
 	NoTech    Technology = ""
 )
 const Pypi = "pypi"
@@ -56,6 +57,7 @@ const (
 	CPP        CodeLanguage = "C++"
 	// CocoapodsLang package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
@@ -72,6 +74,7 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Nuget:     project.Nuget,
 	Dotnet:    project.Dotnet,
 	Cocoapods: project.Cocoapods,
+	Swift:     project.Swift,
 }
 
 var packageTypes = map[string]string{
@@ -205,6 +208,12 @@ var technologiesData = map[Technology]TechData{
 		formal:             "Cocoapods",
 		packageTypeId:      "cocoapods://",
 	},
+	Swift: {
+		indicators:         []string{"Package.swift", "Package.resolved"},
+		packageDescriptors: []string{"Package.swift", "Package.resolved"},
+		formal:             "Swift",
+		packageTypeId:      "swift://",
+	},
 }
 
 var (
@@ -246,6 +255,7 @@ func TechnologyToLanguage(technology Technology) CodeLanguage {
 		Yarn:      JavaScript,
 		Pnpm:      JavaScript,
 		Cocoapods: CocoapodsLang,
+		Swift:     SwiftLang,
 	}
 	return languageMap[technology]
 }
@@ -421,29 +431,6 @@ func getDirNoTechList(technologiesDetected map[Technology]map[string][]string, d
 		// If all children exists in childNoTechList, add only the parent directory to NoTech
 		noTechList = []string{dir}
 	}
-
-	// for _, techDirs := range technologiesDetected {
-	// 	if _, exist := techDirs[dir]; exist {
-	// 		// The directory is already mapped to a technology, no need to add the dir or its sub directories to NoTech
-	// 		break
-	// 	}
-	// 	for _, child := range children {
-	// 		childNoTechList := getDirNoTechList(technologiesDetected, child, dirsList)
-	// 	}
-
-	// 	if len(children) == 0 {
-	// 		// No children directories, add the directory to NoTech
-	// 		childNoTechList = append(childNoTechList, dir)
-	// 		break
-	// 	}
-	// 	for _, child := range children {
-	// 		childNoTechList = append(childNoTechList, getDirNoTechList(technologiesDetected, child, dirsList)...)
-	// 	}
-	// 	// If all children exists in childNoTechList, add only the parent directory to NoTech
-	// 	if len(children) == len(childNoTechList) {
-	// 		childNoTechList = []string{dir}
-	// 	}
-	// }
 	return
 }
 
@@ -455,58 +442,6 @@ func getDirChildren(dir string, dirsList []string) (children []string) {
 	}
 	return
 }
-
-// func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, path, excludePathPattern string) (finalMap map[Technology]map[string][]string, err error) {
-// 	finalMap = technologiesDetected
-// 	noTechMap := map[string][]string{}
-// 	// TODO: not only direct, need to see if multiple levels of directories are missing technology indicators
-// 	// if all directories in are found no need for anything else,
-// 	// if one missing need to add it to NoTech
-// 	// if not one detected add only parent directory no need for each directory
-// 	directories, err := getDirectDirectories(path, excludePathPattern)
-// 	if err != nil {
-// 		return
-// 	}
-// 	for _, dir := range directories {
-// 		// Check if the directory is already mapped to a technology
-// 		isMapped := false
-// 		for _, techDirs := range finalMap {
-// 			if _, exist := techDirs[dir]; exist {
-// 				isMapped = true
-// 				break
-// 			}
-// 		}
-// 		if !isMapped {
-// 			// Add the directory to NoTech (no indicators/descriptors were found)
-// 			noTechMap[dir] = []string{}
-// 		}
-// 	}
-// 	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
-// 		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
-// 		finalMap[NoTech] = noTechMap
-// 	}
-// 	return
-// }
-
-// func getDirectDirectories(path, excludePathPattern string) (directories []string, err error) {
-// 	// Get all files and directories in the path, not recursive
-// 	filesOrDirsInPath, err := fspatterns.ListFiles(path, false, true, true, true, excludePathPattern)
-// 	if err != nil {
-// 		return
-// 	}
-// 	// Filter to directories only
-// 	for _, potentialDir := range filesOrDirsInPath {
-// 		isDir, e := fileutils.IsDirExists(potentialDir, true)
-// 		if e != nil {
-// 			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", potentialDir, e))
-// 			continue
-// 		}
-// 		if isDir {
-// 			directories = append(directories, potentialDir)
-// 		}
-// 	}
-// 	return
-// }
 
 // Map files to relevant working directories according to the technologies' indicators/descriptors and requested descriptors.
 // files: The file paths to map.

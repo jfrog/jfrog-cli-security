@@ -3,12 +3,17 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
+	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
+	"github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
@@ -18,7 +23,10 @@ import (
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 
+	"github.com/jfrog/jfrog-client-go/xray/services"
+	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
 func TestReportError(t *testing.T) {
@@ -34,8 +42,7 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1},
 	})
 }
 
@@ -121,13 +128,78 @@ func TestAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	})
 }
 
+// TODO: replace with 'Git Audit' command when it will be available.
+// This method generate an audit command that will report analytics (if enabled) with the git info context provided.
+// The method will generate multi-scan-id and provide it to the audit command.
+// The method will also provide the git repo clone url to the audit command.
+func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
+	return func() components.Command {
+		return components.Command{
+			Name:  docs.Audit,
+			Flags: docs.GetCommandFlags(docs.Audit),
+			Action: func(c *components.Context) error {
+				xrayVersion, xscVersion, serverDetails, auditCmd, err := cli.CreateAuditCmd(c)
+				if err != nil {
+					return err
+				}
+				// Generate the analytics event with the git info context.
+				event := xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails)
+				event.GitInfo = &gitInfoContext
+				event.IsGitInfoFlow = true
+				// Report analytics and get the multi scan id that was generated and attached to the git context.
+				multiScanId, startTime := xsc.SendNewScanEvent(xrayVersion, xscVersion, serverDetails, event)
+				// Set the multi scan id to the audit command to be used in the scans.
+				auditCmd.SetMultiScanId(multiScanId)
+				// Set the git repo context to the audit command to pass to the scanners to create violations if applicable.
+				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
+				err = progressbar.ExecWithProgress(auditCmd)
+				// Send the final event to the platform.
+				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, err)
+				return err
+			},
+		}
+	}
+}
+
+// TODO: replace with 'Git Audit' command when it will be available.
+// This method generate an audit command that will report analytics (if enabled) with the git info context provided.
+// The method will generate multi-scan-id and provide it to the audit command.
+// The method will also provide the git repo clone url to the audit command.
+func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
+	return func() components.Command {
+		return components.Command{
+			Name:  docs.Audit,
+			Flags: docs.GetCommandFlags(docs.Audit),
+			Action: func(c *components.Context) error {
+				xrayVersion, xscVersion, serverDetails, auditCmd, err := cli.CreateAuditCmd(c)
+				if err != nil {
+					return err
+				}
+				// Generate the analytics event with the git info context.
+				event := xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails)
+				event.GitInfo = &gitInfoContext
+				event.IsGitInfoFlow = true
+				// Report analytics and get the multi scan id that was generated and attached to the git context.
+				multiScanId, startTime := xsc.SendNewScanEvent(xrayVersion, xscVersion, serverDetails, event)
+				// Set the multi scan id to the audit command to be used in the scans.
+				auditCmd.SetMultiScanId(multiScanId)
+				// Set the git repo context to the audit command to pass to the scanners to create violations if applicable.
+				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
+				err = progressbar.ExecWithProgress(auditCmd)
+				// Send the final event to the platform.
+				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, err)
+				return err
+			},
+		}
+	}
+}
+
 func TestXscAuditMavenJson(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -136,8 +208,7 @@ func TestXscAuditMavenSimpleJson(t *testing.T) {
 	defer cleanUp()
 	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 

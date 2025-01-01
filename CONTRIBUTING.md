@@ -56,12 +56,13 @@ go test -v github.com/jfrog/jfrog-cli-security [test-types] [flags]
 
 ### The available flags are:
 
-| Flag                   | Equivalent Env vars                           | Description                                                                                                     |
-| ---------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `-jfrog.url`           | `JFROG_SECURITY_CLI_TESTS_JFROG_URL`          | [Default: http://localhost:8083] JFrog platform URL                                                             |
-| `-jfrog.user`          | `JFROG_SECURITY_CLI_TESTS_JFROG_USER`         | [Default: admin] JFrog platform username                                                                        |
-| `-jfrog.password`      | `JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD`     | [Default: password] JFrog platform password                                                                     |
-| `-jfrog.adminToken`    | `JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN` | [Optional] JFrog platform admin token                                                                           |
+| Flag                   | Equivalent Env vars                                   | Description                                                                                                     |
+| ---------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `-jfrog.url`           | `JFROG_SECURITY_CLI_TESTS_JFROG_URL`                  | [Default: http://localhost:8083] JFrog platform URL                                                             |
+| `-jfrog.user`          | `JFROG_SECURITY_CLI_TESTS_JFROG_USER`                 | [Default: admin] JFrog platform username                                                                        |
+| `-jfrog.password`      | `JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD`             | [Default: password] JFrog platform password                                                                     |
+| `-jfrog.adminToken`    | `JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN`         | [Optional] JFrog platform admin token                                                                           |
+| `-jfrog.projectKey`    | `JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY` | [Optional] JFrog platform project key                                                                           |
 | `-ci.runId`            | -                                             | [Optional] A unique identifier used as a suffix to create repositories and builds in the tests.                 |
 | `-jfrog.sshKeyPath`    | -                                             | [Optional] Path to the SSH key file. Use this flag only if the Artifactory URL format is `ssh://[domain]:port`. |
 | `-jfrog.sshPassphrase` | -                                             | [Optional] Passphrase for the SSH key.                                                                          |
