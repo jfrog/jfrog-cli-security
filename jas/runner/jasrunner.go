@@ -31,7 +31,7 @@ type JasRunnerParams struct {
 	ConfigProfile       *services.ConfigProfile
 	AllowPartialResults bool
 
-	ScansToPreform []utils.SubScanType
+	ScansToPerform []utils.SubScanType
 
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
@@ -80,7 +80,7 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
 	}
-	if len(params.ScansToPreform) > 0 && !slices.Contains(params.ScansToPreform, subScan) {
+	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
 		return
 	}
@@ -133,15 +133,15 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Secrets)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Secrets)
 	}
 }
 
@@ -151,15 +151,15 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := iac.RunIacScan(scanner, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(scanner, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.IaC)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.IaC)
 	}
 }
 
@@ -169,15 +169,15 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Sast)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Sast)
 	}
 }
 
@@ -189,15 +189,15 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		caScanResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Applicability)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		scanResults.JasResults.NewApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
+		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(caScanResults, scansOutputDir, jasutils.Applicability)
 	}
 }
 

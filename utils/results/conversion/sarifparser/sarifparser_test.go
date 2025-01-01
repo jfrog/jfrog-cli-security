@@ -65,18 +65,24 @@ func TestGetComponentSarifLocation(t *testing.T) {
 }
 
 func TestGetVulnerabilityOrViolationSarifHeadline(t *testing.T) {
-	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))
-	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1 (watch)", getScaVulnerabilitySarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", "watch"))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.4.1", getScaVulnerabilitySarifHeadline("comp", "1.2.1", "CVE-2022-1234", "watch"))
 }
 
 func TestGetScaSecurityViolationSarifHeadline(t *testing.T) {
-	assert.Equal(t, "Security violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234"))
-	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234"))
+	assert.Equal(t, "Security Violation [CVE-2022-1234] loadsh 1.4.1", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", ""))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", ""))
+	assert.Equal(t, "[CVE-2022-1234] loadsh 1.4.1 (watch)", getScaSecurityViolationSarifHeadline("loadsh", "1.4.1", "CVE-2022-1234", "watch"))
+	assert.NotEqual(t, "[CVE-2022-1234] comp 1.2.1", getScaSecurityViolationSarifHeadline("comp", "1.2.1", "CVE-2022-1234", "watch"))
 }
 
 func TestGetXrayLicenseSarifHeadline(t *testing.T) {
-	assert.Equal(t, "License violation [MIT] in loadsh 1.4.1", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT"))
-	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT"))
+	assert.Equal(t, "License violation [MIT] in loadsh 1.4.1", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT", ""))
+	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT", ""))
+	assert.Equal(t, "[MIT] in loadsh 1.4.1 (watch)", getXrayLicenseSarifHeadline("loadsh", "1.4.1", "MIT", "watch"))
+	assert.NotEqual(t, "License violation [] in comp 1.2.1", getXrayLicenseSarifHeadline("comp", "1.2.1", "MIT", "watch"))
 }
 
 func TestGetLicenseViolationSummary(t *testing.T) {
@@ -300,6 +306,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 		subScan         utils.SubScanType
 		withEnvVars     bool
 		withDockerfile  bool
+		isJasViolations bool
 		input           []*sarif.Run
 		expectedResults []*sarif.Run
 	}{
@@ -490,6 +497,23 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				),
 			},
 		},
+		{
+			name:            "Audit scan - Secrets violations",
+			target:          results.ScanTarget{Target: wd},
+			cmdType:         utils.SourceCode,
+			subScan:         utils.SecretsScan,
+			isJasViolations: true,
+			input: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsInWd(wd,
+					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+				),
+			},
+			expectedResults: []*sarif.Run{
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "[Security Violation] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
+					sarifutils.CreateDummyResult("Security Violation result-markdown", "result-msg", "rule", "level", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "file"))),
+				),
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -515,7 +539,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 				revertWd := clientTests.ChangeDirWithCallback(t, wd, dockerfileDir)
 				defer revertWd()
 			}
-			patchedRuns := patchRunsToPassIngestionRules("url/", tc.cmdType, tc.subScan, true, tc.target, tc.input...)
+			patchedRuns := patchRunsToPassIngestionRules("url/", tc.cmdType, tc.subScan, true, tc.isJasViolations, tc.target, tc.input...)
 			assert.ElementsMatch(t, tc.expectedResults, patchedRuns)
 		})
 	}

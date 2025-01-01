@@ -18,7 +18,8 @@ const (
 	SastToolName = "🐸 JFrog SAST"
 	IacToolName  = "JFrog Terraform scanner"
 	// #nosec G101 -- Not credentials.
-	SecretsToolName = "JFrog Secrets scanner"
+	SecretsToolName            = "JFrog Secrets scanner"
+	ContextualAnalysisToolName = "JFrog Applicability Scanner"
 )
 
 // Validate sarif report according to the expected values and issue counts in the validation params.
@@ -43,65 +44,129 @@ func ValidateCommandSarifOutput(t *testing.T, params ValidationParams) {
 // If Expected is provided, the validation will check if the Actual content matches the expected results.
 // If ExactResultsMatch is true, the validation will check exact values and not only the 'equal or grater' counts / existence of expected attributes. (For Integration tests with JFrog API, ExactResultsMatch should be set to false)
 func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sarif.Report) {
-	var vulnerabilities, securityViolations, licenseViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, inactiveResults int
+	actualValues := validationCountActualValues{}
 
-	iac := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, IacToolName)...)
-	vulnerabilities += iac
-	secrets := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SecretsToolName)...)
-	secrets += sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, sarifparser.BinarySecretScannerToolName)...)
-	vulnerabilities += secrets
-	sast := sarifutils.GetResultsLocationCount(sarifutils.GetRunsByToolName(report, SastToolName)...)
-	vulnerabilities += sast
+	// SCA
+	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities, actualValues.ScaViolations, actualValues.SecurityViolations, actualValues.LicenseViolations, actualValues.ApplicableViolations, actualValues.UndeterminedViolations, actualValues.NotCoveredViolations, actualValues.NotApplicableViolations, actualValues.MissingContextViolations = countScaResults(report)
+	actualValues.Vulnerabilities += actualValues.ScaVulnerabilities
+	actualValues.Violations += actualValues.ScaViolations
 
-	scaRuns := sarifutils.GetRunsByToolName(report, sarifparser.ScaScannerToolName)
-	for _, run := range scaRuns {
+	// Secrets
+	actualValues.SecretsVulnerabilities, actualValues.InactiveSecretsVulnerabilities, actualValues.SecretsViolations, actualValues.InactiveSecretsViolations = countSecretsResults(report)
+	actualValues.Vulnerabilities += actualValues.SecretsVulnerabilities
+	actualValues.Violations += actualValues.SecretsViolations
+
+	// IAC
+	actualValues.IacVulnerabilities, actualValues.IacViolations = countJasResults(sarifutils.GetRunsByToolName(report, IacToolName))
+	actualValues.Vulnerabilities += actualValues.IacVulnerabilities
+	actualValues.Violations += actualValues.IacViolations
+
+	// SAST
+	actualValues.SastVulnerabilities, actualValues.SastViolations = countJasResults(sarifutils.GetRunsByToolName(report, SastToolName))
+	actualValues.Vulnerabilities += actualValues.SastVulnerabilities
+	actualValues.Violations += actualValues.SastViolations
+
+	if params.Total != nil {
+		// Not supported in the summary output
+		params.Total.Licenses = 0
+	}
+	ValidateCount(t, "sarif report", params, actualValues)
+}
+
+func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabilitiesResults, undeterminedVulnerabilitiesResults, notCoveredVulnerabilitiesResults, notApplicableVulnerabilitiesResults, missingContextVulnerabilitiesResults, violations, securityViolations, licenseViolations, applicableViolationsResults, undeterminedViolationsResults, notCoveredViolationsResults, notApplicableViolationsResults, missingContextViolationsResults int) {
+	for _, run := range sarifutils.GetRunsByToolName(report, sarifparser.ScaScannerToolName) {
 		for _, result := range run.Results {
 			// If watch property exists, add to security violations or license violations else add to vulnerabilities
-			if _, ok := result.Properties[sarifparser.WatchSarifPropertyKey]; ok {
-				if isSecurityIssue(result) {
-					securityViolations++
-				} else {
+			isViolations := false
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok {
+				isViolations = true
+				violations++
+				if !isSecurityIssue(result) {
 					licenseViolations++
+					continue
 				}
-				continue
+				securityViolations++
+			} else {
+				vulnerabilities++
 			}
-			vulnerabilities++
+
 			// Get the applicability status in the result properties (convert to string) and add count to the appropriate category
 			applicabilityProperty := result.Properties[jasutils.ApplicabilitySarifPropertyKey]
 			if applicability, ok := applicabilityProperty.(string); ok {
 				switch applicability {
 				case jasutils.Applicable.String():
-					applicableResults++
+					if isViolations {
+						applicableViolationsResults++
+					} else {
+						applicableVulnerabilitiesResults++
+					}
 				case jasutils.NotApplicable.String():
-					notApplicableResults++
+					if isViolations {
+						notApplicableViolationsResults++
+					} else {
+						notApplicableVulnerabilitiesResults++
+					}
 				case jasutils.ApplicabilityUndetermined.String():
-					undeterminedResults++
+					if isViolations {
+						undeterminedViolationsResults++
+					} else {
+						undeterminedVulnerabilitiesResults++
+					}
 				case jasutils.NotCovered.String():
-					notCoveredResults++
+					if isViolations {
+						notCoveredViolationsResults++
+					} else {
+						notCoveredVulnerabilitiesResults++
+					}
 				case jasutils.MissingContext.String():
-					missingContextResults++
+					if isViolations {
+						missingContextViolationsResults++
+					} else {
+						missingContextVulnerabilitiesResults++
+					}
 				}
-			}
-			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.ToString() {
-				inactiveResults++
 			}
 		}
 	}
+	return
+}
 
-	ValidateContent(t, params.ExactResultsMatch,
-		CountValidation[int]{Expected: params.Sast, Actual: sast, Msg: GetValidationCountErrMsg("sast", "sarif report", params.ExactResultsMatch, params.Sast, sast)},
-		CountValidation[int]{Expected: params.Iac, Actual: iac, Msg: GetValidationCountErrMsg("Iac", "sarif report", params.ExactResultsMatch, params.Iac, iac)},
-		CountValidation[int]{Expected: params.Secrets, Actual: secrets, Msg: GetValidationCountErrMsg("secrets", "sarif report", params.ExactResultsMatch, params.Secrets, secrets)},
-		CountValidation[int]{Expected: params.Inactive, Actual: inactiveResults, Msg: GetValidationCountErrMsg("inactive secret results", "sarif report", params.ExactResultsMatch, params.Inactive, inactiveResults)},
-		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable results", "sarif report", params.ExactResultsMatch, params.Applicable, applicableResults)},
-		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined results", "sarif report", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
-		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered results", "sarif report", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
-		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable results", "sarif report", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
-		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context results", "sarif report", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "sarif report", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
-		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "sarif report", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
-		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "sarif report", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
-	)
+func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnerabilities, violations, inactiveViolations int) {
+	allRuns := append(sarifutils.GetRunsByToolName(report, SecretsToolName), sarifutils.GetRunsByToolName(report, sarifparser.BinarySecretScannerToolName)...)
+	for _, run := range allRuns {
+		for _, result := range run.Results {
+			isViolation := false
+			// JAS results may not have watch property, we should also try to infer by prefix in msg
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
+				isViolation = true
+				violations++
+			} else {
+				vulnerabilities++
+			}
+			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.String() {
+				if isViolation {
+					inactiveViolations++
+				} else {
+					inactiveVulnerabilities++
+				}
+			}
+		}
+	}
+	return
+}
+
+func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
+	for _, run := range runs {
+		for _, result := range run.Results {
+			// JAS results may not have watch property, we should also try to infer by prefix in msg
+			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
+				violations++
+			} else {
+				vulnerabilities++
+			}
+		}
+	}
+	return
 }
 
 func isSecurityIssue(result *sarif.Result) bool {
@@ -201,11 +266,11 @@ func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.
 }
 
 func isPotentialSimilarResults(expected, actual *sarif.Result) bool {
-	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, expected)
+	return sarifutils.GetResultRuleId(actual) == sarifutils.GetResultRuleId(expected) && sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, actual) == sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, expected)
 }
 
 func getResultId(result *sarif.Result) string {
-	return fmt.Sprintf("%s-%s-%s-%s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetResultProperty(sarifparser.WatchSarifPropertyKey, result), getLocationsId(result.Locations))
+	return fmt.Sprintf("%s-%s-%s-%s", sarifutils.GetResultRuleId(result), sarifutils.GetResultMsgText(result), sarifutils.GetResultProperty(sarifutils.WatchSarifPropertyKey, result), getLocationsId(result.Locations))
 }
 
 func getLocationsId(locations []*sarif.Location) string {

@@ -2,6 +2,7 @@ package jas
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -11,7 +12,71 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
+
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
+
+func TestReadJasScanRunsFromFile(t *testing.T) {
+	dummyReport, err := sarifutils.NewReport()
+	assert.NoError(t, err)
+	dummyReport.AddRun(sarifutils.CreateRunWithDummyResults(
+		sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
+		sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
+	))
+
+	tests := []struct {
+		name             string
+		generateVulnFile bool
+		generateVioFile  bool
+	}{
+		{
+			name:             "Expect AM to generate vulnerabilities file",
+			generateVulnFile: true,
+		},
+		{
+			name:            "Expect AM to generate violation file",
+			generateVioFile: true,
+		},
+		{
+			name:             "Expect AM to generate both files",
+			generateVulnFile: true,
+			generateVioFile:  true,
+		},
+		{
+			// Expecting error if no files are generated.
+			name: "AM generate none - error",
+		},
+	}
+
+	for _, test := range tests {
+		tempDir, cleanUp := coreTests.CreateTempDirWithCallbackAndAssert(t)
+		defer cleanUp()
+		fileName := filepath.Join(tempDir, "results.sarif")
+		if test.generateVulnFile {
+			assert.NoError(t, dummyReport.WriteFile(fileName))
+		}
+		if test.generateVioFile {
+			assert.NoError(t, dummyReport.WriteFile(filepath.Join(tempDir, "results_violations.sarif")))
+		}
+
+		vuln, vio, err := ReadJasScanRunsFromFile(fileName, "some-working-dir-of-project", "docs URL", "")
+
+		// Expecting error if no files are generated.
+		if !test.generateVulnFile && !test.generateVioFile {
+			assert.Error(t, err)
+			assert.Empty(t, vuln)
+			assert.Empty(t, vio)
+			return
+		}
+		assert.NoError(t, err)
+		if test.generateVulnFile {
+			assert.NotEmpty(t, vuln)
+		}
+		if test.generateVioFile {
+			assert.NotEmpty(t, vio)
+		}
+	}
+}
 
 func TestExcludeSuppressResults(t *testing.T) {
 	tests := []struct {
@@ -207,6 +272,9 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 	tests := []struct {
 		name           string
 		msi            string
+		gitRepoUrl     string
+		projectKey     string
+		watches        []string
 		technologies   []techutils.Technology
 		expectedOutput map[string]string
 	}{
@@ -232,10 +300,50 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 			technologies:   []techutils.Technology{},
 			expectedOutput: map[string]string{utils.JfMsiEnvVariable: "msi"},
 		},
+		{
+			name:         "With git repo url",
+			msi:          "msi",
+			gitRepoUrl:   "gitRepoUrl",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				gitRepoEnvVariable:          "gitRepoUrl",
+			},
+		},
+		{
+			name:         "With project key",
+			msi:          "msi",
+			gitRepoUrl:   "gitRepoUrl",
+			projectKey:   "projectKey",
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				gitRepoEnvVariable:          "gitRepoUrl",
+				projectEnvVariable:          "projectKey",
+			},
+		},
+		{
+			name:         "With watches",
+			msi:          "msi",
+			gitRepoUrl:   "gitRepoUrl",
+			watches:      []string{"watch1", "watch2"},
+			technologies: []techutils.Technology{techutils.Npm},
+			expectedOutput: map[string]string{
+				JfPackageManagerEnvVariable: string(techutils.Npm),
+				JfLanguageEnvVariable:       string(techutils.JavaScript),
+				utils.JfMsiEnvVariable:      "msi",
+				gitRepoEnvVariable:          "gitRepoUrl",
+				watchesEnvVariable:          "watch1,watch2",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.technologies...))
+			assert.Equal(t, test.expectedOutput, GetAnalyzerManagerXscEnvVars(test.msi, test.gitRepoUrl, test.projectKey, test.watches, test.technologies...))
 		})
 	}
 }

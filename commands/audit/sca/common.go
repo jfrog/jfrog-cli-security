@@ -37,23 +37,16 @@ func GetExcludePattern(params utils.AuditParams) string {
 	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
 }
 
-func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, technology techutils.Technology, scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
-	scanGraphParams.XrayGraphScanParams().XrayVersion = scanGraphParams.XrayVersion()
-	scanGraphParams.XrayGraphScanParams().DependenciesGraph = &dependencyTree
-	xscGitInfoContext := scanGraphParams.XrayGraphScanParams().XscGitInfoContext
-	if xscGitInfoContext != nil {
-		xscGitInfoContext.Technologies = []string{technology.String()}
-	}
-	scanMessage := fmt.Sprintf("Scanning %d %s dependencies", len(dependencyTree.Nodes), technology)
-	log.Info(scanMessage + "...")
+func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
+	technology := scanGraphParams.Technology()
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
 	if err != nil {
 		return nil, err
 	}
 	scanResults, err = scangraph.RunScanGraphAndGetResults(scanGraphParams, xrayManager)
 	if err != nil {
-		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", string(technology), err.Error())
+		err = errorutils.CheckErrorf("scanning %s dependencies failed with error: %s", technology.ToFormal(), err.Error())
 		return
 	}
 	for i := range scanResults.Vulnerabilities {
@@ -64,6 +57,19 @@ func RunXrayDependenciesTreeScanGraph(dependencyTree xrayUtils.GraphNode, techno
 	}
 	results = append(results, *scanResults)
 	return
+}
+
+// Infer the status code of SCA Xray scan, must have at least one result, if err occurred or any of the results is `failed` return 1, otherwise return 0.
+func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
+	if err != nil || len(results) == 0 {
+		return 1
+	}
+	for _, result := range results {
+		if result.ScannedStatus == "Failed" {
+			return 1
+		}
+	}
+	return 0
 }
 
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {

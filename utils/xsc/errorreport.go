@@ -18,7 +18,7 @@ func ReportError(xrayVersion, xscVersion string, serverDetails *config.ServerDet
 		return nil
 	}
 	log.Debug("Sending an error report to JFrog analytics...")
-	xscService, err := CreateXscService(xrayVersion, serverDetails)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
 	if err != nil {
 		return fmt.Errorf("failed to create an HTTP client: %s.\nReporting to JFrog analytics is skipped", err.Error())
 	}

@@ -211,13 +211,15 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	var specFile *spec.SpecFiles
+	repoPath := ""
 	if c.IsFlagSet(flags.SpecFlag) && len(c.GetStringFlagValue(flags.SpecFlag)) > 0 {
 		specFile, err = pluginsCommon.GetFileSystemSpec(c)
 		if err != nil {
 			return err
 		}
 	} else {
-		specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+		repoPath = addTrailingSlashToRepoPathIfNeeded(c)
+		specFile = createDefaultScanSpec(c, repoPath)
 	}
 	err = spec.ValidateSpec(specFile.Files, false, false)
 	if err != nil {
@@ -244,6 +246,7 @@ func ScanCmd(c *components.Context) error {
 		SetSpec(specFile).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -472,7 +475,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
-		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
@@ -728,12 +731,12 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand.SetImageTag(image).
-		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).

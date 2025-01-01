@@ -10,6 +10,65 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
+const (
+	WatchSarifPropertyKey      = "watch"
+	PoliciesSarifPropertyKey   = "policies"
+	JasIssueIdSarifPropertyKey = "issueId"
+	CWEPropertyKey             = "CWE"
+)
+
+// Specific JFrog Sarif Utils
+
+func GetResultWatches(result *sarif.Result) (watches string) {
+	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
+		if watchesValue, ok := watchesProperty.(string); ok {
+			return watchesValue
+		}
+	}
+	return
+}
+
+func GetResultPolicies(result *sarif.Result) (policies []string) {
+	if policiesProperty, ok := result.Properties[PoliciesSarifPropertyKey]; ok {
+		if policiesValue, ok := policiesProperty.(string); ok {
+			split := strings.Split(policiesValue, ",")
+			for _, policy := range split {
+				policies = append(policies, strings.TrimSpace(policy))
+			}
+			return
+		}
+	}
+	return
+}
+
+func GetResultIssueId(result *sarif.Result) (issueId string) {
+	if issueIdProperty, ok := result.Properties[JasIssueIdSarifPropertyKey]; ok {
+		if issueIdValue, ok := issueIdProperty.(string); ok {
+			return issueIdValue
+		}
+	}
+	return
+}
+
+func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
+	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
+		// No CWE property
+		return
+	}
+	if cweProperty, ok := rule.DefaultConfiguration.Parameters.Properties[CWEPropertyKey]; ok {
+		if cweValue, ok := cweProperty.(string); ok {
+			split := strings.Split(cweValue, ",")
+			for _, policy := range split {
+				cwe = append(cwe, strings.TrimSpace(policy))
+			}
+			return
+		}
+	}
+	return
+}
+
+// General Sarif Utils
+
 func NewReport() (*sarif.Report, error) {
 	report, err := sarif.New(sarif.Version210)
 	if err != nil {
@@ -39,7 +98,7 @@ func GetToolVersion(run *sarif.Run) string {
 
 func CopyRun(run *sarif.Run) *sarif.Run {
 	copy := CopyRunMetadata(run)
-	if copy.Tool.Driver != nil {
+	if run.Tool.Driver != nil {
 		copy.Tool.Driver.Rules = CopyRules(run.Tool.Driver.Rules...)
 	}
 	for _, result := range run.Results {
@@ -417,6 +476,13 @@ func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
 	result.Message.Markdown = &markdown
 }
 
+func GetResultMsgMarkdown(result *sarif.Result) string {
+	if result != nil && result.Message.Markdown != nil {
+		return *result.Message.Markdown
+	}
+	return ""
+}
+
 func GetResultMsgText(result *sarif.Result) string {
 	if result.Message.Text != nil {
 		return *result.Message.Text
@@ -615,7 +681,7 @@ func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {
 }
 
 func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
+	if rule != nil && rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
 	}
 	return ""
@@ -644,7 +710,7 @@ func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
 }
 
 func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+	if rule != nil && rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
 		return *rule.ShortDescription.Text
 	}
 	return ""
