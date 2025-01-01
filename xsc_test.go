@@ -161,39 +161,6 @@ func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoConte
 	}
 }
 
-// TODO: replace with 'Git Audit' command when it will be available.
-// This method generate an audit command that will report analytics (if enabled) with the git info context provided.
-// The method will generate multi-scan-id and provide it to the audit command.
-// The method will also provide the git repo clone url to the audit command.
-func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
-	return func() components.Command {
-		return components.Command{
-			Name:  docs.Audit,
-			Flags: docs.GetCommandFlags(docs.Audit),
-			Action: func(c *components.Context) error {
-				xrayVersion, xscVersion, serverDetails, auditCmd, err := cli.CreateAuditCmd(c)
-				if err != nil {
-					return err
-				}
-				// Generate the analytics event with the git info context.
-				event := xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails)
-				event.GitInfo = &gitInfoContext
-				event.IsGitInfoFlow = true
-				// Report analytics and get the multi scan id that was generated and attached to the git context.
-				multiScanId, startTime := xsc.SendNewScanEvent(xrayVersion, xscVersion, serverDetails, event)
-				// Set the multi scan id to the audit command to be used in the scans.
-				auditCmd.SetMultiScanId(multiScanId)
-				// Set the git repo context to the audit command to pass to the scanners to create violations if applicable.
-				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
-				err = progressbar.ExecWithProgress(auditCmd)
-				// Send the final event to the platform.
-				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, err)
-				return err
-			},
-		}
-	}
-}
-
 func TestXscAuditMavenJson(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
