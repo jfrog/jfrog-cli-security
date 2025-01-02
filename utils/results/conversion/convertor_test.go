@@ -335,7 +335,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		ScannedStatus: "completed",
 	})
 	// Contextual analysis scan results
-	npmTargetResults.JasResults.NewApplicabilityScanResults(0,
+	npmTargetResults.JasResults.AddApplicabilityScanResults(0,
 		&sarif.Run{
 			Tool: sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
@@ -537,7 +537,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		ScannedStatus: "completed",
 	})
 	// Contextual analysis scan results
-	dockerImageTarget.JasResults.NewApplicabilityScanResults(0,
+	dockerImageTarget.JasResults.AddApplicabilityScanResults(0,
 		&sarif.Run{
 			Tool: sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,

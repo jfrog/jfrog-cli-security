@@ -193,7 +193,7 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
-		scanResults.JasResults.NewApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
+		scanResults.JasResults.AddApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
