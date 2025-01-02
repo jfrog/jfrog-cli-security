@@ -145,6 +145,13 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 				// No handler was provided for security violations
 				continue
 			}
+
+			var skipNotApplicable bool
+			if skipNotApplicable, err = shouldSkipNotApplicable(violation, applicabilityStatus); skipNotApplicable {
+				log.Debug("A non-applicable violation was found and will be removed from final results as requested by its policies")
+				continue
+			}
+
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				if e := securityHandler(
 					violation, cves, applicabilityStatus, severity,
@@ -644,4 +651,24 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 		runs = append(runs, result.Scan...)
 	}
 	return
+}
+
+// Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
+func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
+	if applicabilityStatus != jasutils.NotApplicable {
+		return false, nil
+	}
+
+	// TODO question: is there a chance that we will not have policy at this point? can we have violation created without a policy at all?
+	// TODO questin: if the above is possible, should we return an error or just skip this violation and not filtering it out?
+	if len(violation.Policies) == 0 {
+		return false, errors.New("A violation with no policies was provided")
+	}
+
+	for _, policy := range violation.Policies {
+		if !policy.SkipNotApplicable {
+			return false, nil
+		}
+	}
+	return true, nil
 }
