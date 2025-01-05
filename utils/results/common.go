@@ -645,3 +645,16 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 	}
 	return
 }
+
+// Resolve the actual technology from multiple sources:
+func GetIssueTechnology(responseTechnology, impactedPackagesType string, targetTech techutils.Technology) techutils.Technology {
+	if responseTechnology != "" {
+		// technology returned in the vulnerability/violation obj is the most specific technology
+		return techutils.Technology(responseTechnology)
+	}
+	if impactedPackagesType != "" {
+		// if no technology is provided, use the impacted package type as the technology
+		return techutils.Technology(impactedPackagesType)
+	}
+	return targetTech
+}
