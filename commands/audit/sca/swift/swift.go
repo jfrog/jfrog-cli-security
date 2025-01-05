@@ -91,7 +91,7 @@ func parseSwiftLine(line, directDependencyName, directDependencyVersion, descrip
 	return foundDependency, tempIndex, startLine, startCol
 }
 
-func updateDependency(descriptorPath, content, name, version, fixVersion string) string {
+func updateDependency(content, name, version, fixVersion string) string {
 	urlPattern := `(?:https://|http://|sso://)?` + regexp.QuoteMeta(strings.TrimSuffix(name, ".git")) + `(?:\.git)?`
 	pattern := `\.package\(url:\s*"` + urlPattern + `",\s*(exact:\s*"(` + version + `)"|from:\s*"(` + version + `)"|"([\d\.]+)"\.\.\s*<?\s*"([\d\.]+)")\)`
 	re := regexp.MustCompile(pattern)
@@ -141,7 +141,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 			log.Logger.Warn("Error reading file: ", descriptorPath, err)
 			continue
 		}
-		updatedContent := updateDependency(descriptorPath, string(data), dependencyName, dependencyVersion, fixVersion)
+		updatedContent := updateDependency(string(data), dependencyName, dependencyVersion, fixVersion)
 		if strings.Compare(string(data), updatedContent) != 0 {
 			err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644)
 			if err != nil {
