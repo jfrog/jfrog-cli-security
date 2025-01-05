@@ -90,24 +90,48 @@ func TestSwiftLineParseFoundOnlyDependencyName(t *testing.T) {
 	assert.Equal(t, startCol, 23)
 }
 
-func TestFixTechDependencySingleLocation(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
-	defer cleanUp()
-	currentDir, err := coreutils.GetWorkingDirectory()
-	assert.NoError(t, err)
-	err = FixTechDependency("github.com/apple/swift-nio-http2", "1.0.0", "1.0.1", filepath.Join(currentDir, "Package.swift"))
-	assert.NoError(t, err)
-	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
-	assert.NoError(t, err)
-	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-nio-http2\", \"1.0.1\"..<\"1.19.1\")")
-}
-
-func TestFixTechDependencyNoLocations(t *testing.T) {
+func TestFixTechDependencySingleLocation_Range(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
 	err = FixTechDependency("github.com/apple/swift-nio-http2", "1.8.2", "1.8.3", filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-nio-http2\", \"1.8.3\"..<\"1.19.1\")")
+}
+
+func TestFixTechDependencySingleLocation_From(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("github.com/apple/swift-algorithms", "1.2.0", "1.3.0", filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.3.0\"")
+}
+
+func TestFixTechDependencySingleLocation_Exact(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("github.com/apple/swift-http-types", "1.0.2", "1.0.3", filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
+	assert.NoError(t, err)
+	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-http-types\", exact: \"1.0.3\"")
+}
+
+func TestFixTechDependencyNoLocations_FixOutOfRange(t *testing.T) {
+	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	defer cleanUp()
+	currentDir, err := coreutils.GetWorkingDirectory()
+	assert.NoError(t, err)
+	err = FixTechDependency("github.com/apple/swift-nio-http2", "1.8.3", "1.19.2", filepath.Join(currentDir, "Package.swift"))
 	assert.NoError(t, err)
 	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
 	assert.NoError(t, err)
