@@ -936,7 +936,7 @@ func getAnalyticsHiddenPixel(baseUrl string, resultOfSubScan utils.SubScanType) 
 	return fmt.Sprintf(
 		"![](%sui/api/v1/u?s=1&m=2&job_id=%s&run_id=%s&git_repo=%s&type=%s)",
 		baseUrl,
-		url.PathEscape(jobId),
+		url.QueryEscape(jobId),
 		runId,
 		gitRepo,
 		resultOfSubScan.String(),

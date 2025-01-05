@@ -550,7 +550,7 @@ func addAnalyticsQueryParamsIfNeeded(platformUrl string, index commandsummary.In
 		return platformUrl
 	}
 	// M=3 (type of event)
-	suffixValues := []string{"s=1", "m=3", fmt.Sprintf("gh_job_id=%s", url.PathEscape(githubJobId))}
+	suffixValues := []string{"s=1", "m=3", fmt.Sprintf("gh_job_id=%s", url.QueryEscape(githubJobId))}
 	// Add section analytics
 	indexValue := "gh_section="
 	switch index {
