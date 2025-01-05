@@ -251,7 +251,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 				References:               vulnerability.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(vulnerability.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               results.GetIssueTechnology(vulnerability.Technology, impactedPackagesType, target.Technology),
+				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
@@ -281,7 +281,7 @@ func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolation
 				References:               violation.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               results.GetIssueTechnology(violation.Technology, impactedPackagesType, target.Technology),
+				Technology:               results.GetIssueTechnology(violation.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
