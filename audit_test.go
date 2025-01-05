@@ -816,7 +816,7 @@ type auditCommandTestParams struct {
 }
 
 // run audit command with different flags and params for integration tests
-func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCommandTestParams) string {
+func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCommandTestParams) (string, error) {
 	args := []string{"audit"}
 	if len(params.WorkingDirsToScan) > 0 {
 		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
@@ -846,5 +846,5 @@ func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCom
 	if params.WithVuln {
 		args = append(args, "--vuln")
 	}
-	return testCli.RunCliCmdWithOutput(t, args...)
+	return testCli.RunCliCmdWithOutputs(t, args...)
 }

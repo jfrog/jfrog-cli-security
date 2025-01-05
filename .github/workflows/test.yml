@@ -22,6 +22,7 @@ env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
+  JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
 
 jobs:
   Pretest:
