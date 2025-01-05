@@ -74,15 +74,15 @@ func TestParseResults_EmptyResults(t *testing.T) {
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "no-secrets.sarif")
 
 	// Act
-	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, scanner.MinSeverity)
 
 	// Assert
-	if assert.NoError(t, err) && assert.NotNil(t, secretScanManager.secretsScannerResults) {
-		assert.Len(t, secretScanManager.secretsScannerResults, 1)
-		assert.Empty(t, secretScanManager.secretsScannerResults[0].Results)
-		secretScanManager.secretsScannerResults = processSecretScanRuns(secretScanManager.secretsScannerResults)
-		assert.Len(t, secretScanManager.secretsScannerResults, 1)
-		assert.Empty(t, secretScanManager.secretsScannerResults[0].Results)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Empty(t, vulnerabilitiesResults[0].Results)
+		vulnerabilitiesResults = processSecretScanRuns(vulnerabilitiesResults)
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Empty(t, vulnerabilitiesResults[0].Results)
 	}
 
 }
@@ -98,15 +98,15 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "contain-secrets.sarif")
 
 	// Act
-	secretScanManager.secretsScannerResults, err = jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, severityutils.Medium)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(secretScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, secretsDocsUrlSuffix, severityutils.Medium)
 
 	// Assert
-	if assert.NoError(t, err) && assert.NotNil(t, secretScanManager.secretsScannerResults) {
-		assert.Len(t, secretScanManager.secretsScannerResults, 1)
-		assert.NotEmpty(t, secretScanManager.secretsScannerResults[0].Results)
-		secretScanManager.secretsScannerResults = processSecretScanRuns(secretScanManager.secretsScannerResults)
-		assert.Len(t, secretScanManager.secretsScannerResults, 1)
-		assert.Len(t, secretScanManager.secretsScannerResults[0].Results, 6)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.NotEmpty(t, vulnerabilitiesResults[0].Results)
+		vulnerabilitiesResults = processSecretScanRuns(vulnerabilitiesResults)
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Len(t, vulnerabilitiesResults[0].Results, 6)
 	}
 	assert.NoError(t, err)
 
@@ -117,10 +117,10 @@ func TestGetSecretsScanResults_AnalyzerManagerReturnsError(t *testing.T) {
 	defer cleanUp()
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
-	scanResults, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
+	vulnerabilitiesResults, _, err := RunSecretsScan(scanner, SecretsScannerType, jfrogAppsConfigForTest.Modules[0], 0)
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "failed to run Secrets scan")
-	assert.Nil(t, scanResults)
+	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Secrets, err), "failed to run Secrets scan")
+	assert.Nil(t, vulnerabilitiesResults)
 }
 
 func TestHideSecret(t *testing.T) {

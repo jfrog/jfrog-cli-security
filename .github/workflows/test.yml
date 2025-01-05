@@ -22,6 +22,7 @@ env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
+  JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
 
 jobs:
   Pretest:
@@ -65,7 +66,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -99,7 +100,9 @@ jobs:
             testFlags: '--test.audit.C'
           - name: 'Cocoapods Suite'
             testFlags: '--test.audit.Cocoapods'
-        
+          - name: 'Swift Suite'
+            testFlags: '--test.audit.Swift'
+
     steps:
       # Prepare the environment
       - name: Checkout code
@@ -244,7 +247,7 @@ jobs:
       pull-requests: write # write permission needed to comment on PR
     steps:
       - name: Generate Unit Tests Code Coverage Report
-        uses: fgrosse/go-coverage-report@v1.2.0
+        uses: fgrosse/go-coverage-report@v1.1.0
         with:
           coverage-artifact-name: unit-tests-code-coverage
           coverage-file-name: cover-unit-tests

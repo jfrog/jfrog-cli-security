@@ -9,12 +9,14 @@ import (
 )
 
 const (
-	GraphScanMinXrayVersion = "3.29.0"
-	ScanTypeMinXrayVersion  = "3.37.2"
+	GraphScanMinXrayVersion     = "3.29.0"
+	ScanTypeMinXrayVersion      = "3.37.2"
+	SwiftScanMinXrayVersion     = "3.109.4"
+	CocoapodsScanMinXrayVersion = "3.103.3"
 )
 
 func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
-	err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayVersion, ScanTypeMinXrayVersion)
+	err := clientutils.ValidateMinimumVersion(clientutils.Xray, params.xrayGraphScanParams.XrayVersion, ScanTypeMinXrayVersion)
 	if err != nil {
 		// Remove scan type param if Xray version is under the minimum supported version
 		params.xrayGraphScanParams.ScanType = ""
@@ -26,7 +28,7 @@ func RunScanGraphAndGetResults(params *ScanGraphParams, xrayManager *xray.XraySe
 	}
 
 	xscEnabled := params.xrayGraphScanParams.XscVersion != "" && params.xrayGraphScanParams.MultiScanId != ""
-	scanResult, err := xrayManager.GetScanGraphResults(scanId, params.xrayVersion, params.XrayGraphScanParams().IncludeVulnerabilities, params.XrayGraphScanParams().IncludeLicenses, xscEnabled)
+	scanResult, err := xrayManager.GetScanGraphResults(scanId, params.xrayGraphScanParams.XrayVersion, params.XrayGraphScanParams().IncludeVulnerabilities, params.XrayGraphScanParams().IncludeLicenses, xscEnabled)
 	if err != nil {
 		return nil, err
 	}

@@ -68,7 +68,7 @@ func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	xrayVersion, err := testUtils.GetTestsXrayVersion()
 	assert.NoError(t, err)
 	// validate XSC is enabled at the given server
-	xscService, err := xsc.CreateXscService(xrayVersion.GetVersion(), configTests.XscDetails)
+	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails)
 	assert.NoError(t, err)
 	xscVersion, err := xscService.GetVersion()
 	if err != nil {
@@ -129,6 +129,13 @@ func InitAuditGoTest(t *testing.T, minVersion string) {
 func InitAuditCocoapodsTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditCocoapods {
 		t.Skip(getSkipTestMsg("Audit command Cocoapods technologies integration", "--test.audit.Cocoapods"))
+	}
+	testUtils.ValidateXrayVersion(t, minVersion)
+}
+
+func InitAuditSwiftTest(t *testing.T, minVersion string) {
+	if !*configTests.TestAuditSwift {
+		t.Skip(getSkipTestMsg("Audit command Swift technologies integration", "--test.audit.Swift"))
 	}
 	testUtils.ValidateXrayVersion(t, minVersion)
 }

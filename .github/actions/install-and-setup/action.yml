@@ -74,3 +74,19 @@ runs:
         python -m pip install conan
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+
+    - name: Install Swift on Linux
+      uses: swift-actions/setup-swift@v2
+      if: ${{ runner.os == 'Linux'}}
+
+    - name: Install Swift on MacOS
+      run: brew install swift
+      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
+      if: ${{ runner.os == 'macOS'}}
+
+    - name: Install Swift on Windows
+      uses: compnerd/gha-setup-swift@main
+      with:
+        branch: swift-6.0.2-release
+        tag: 6.0.2-RELEASE
+      if: ${{ runner.os == 'Windows'}}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -28,6 +29,10 @@ const (
 	BaseDocumentationURL   = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL             = "https://jfrog.com/xray/"
 	EntitlementsMinVersion = "3.66.5"
+
+	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
+	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
+	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
 )
 
 var (
@@ -57,6 +62,10 @@ func (v ViolationIssueType) String() string {
 
 type SubScanType string
 
+func (s SubScanType) String() string {
+	return string(s)
+}
+
 const (
 	SourceCode  CommandType = "source_code"
 	Binary      CommandType = "binary"
@@ -67,10 +76,6 @@ const (
 )
 
 type CommandType string
-
-func (s SubScanType) String() string {
-	return string(s)
-}
 
 func (s CommandType) IsTargetBinary() bool {
 	return s == Binary || s == DockerImage
@@ -86,6 +91,29 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
+	threadPrefix := ""
+	if threadId >= 0 {
+		threadPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	if vulnerabilitiesCount == 0 && violationsCount == 0 {
+		return fmt.Sprintf("%sNo %s findings", threadPrefix, scanType.String())
+	}
+	msg := fmt.Sprintf("%sFound", threadPrefix)
+	hasVulnerabilities := vulnerabilitiesCount > 0
+	if hasVulnerabilities {
+		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+	}
+	if violationsCount > 0 {
+		if hasVulnerabilities {
+			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
+		} else {
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+		}
+	}
+	return msg
 }
 
 func IsCI() bool {
@@ -147,6 +175,10 @@ func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, err
 	return string(results), nil
 }
 
+func NewStringPtr(v string) *string {
+	return &v
+}
+
 func NewBoolPtr(v bool) *bool {
 	return &v
 }
@@ -160,6 +192,10 @@ func NewInt64Ptr(v int64) *int64 {
 }
 
 func NewFloat64Ptr(v float64) *float64 {
+	return &v
+}
+
+func NewStrPtr(v string) *string {
 	return &v
 }
 
