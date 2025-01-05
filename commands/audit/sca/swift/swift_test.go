@@ -34,7 +34,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	assert.NoError(t, err)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.1.0",
+		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.2.0",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-numerics:1.0.2",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio-http2:1.19.0",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-atomics:1.2.0",
