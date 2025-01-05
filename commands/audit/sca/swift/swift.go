@@ -104,12 +104,12 @@ func updateDependency(descriptorPath, content, name, version, fixVersion string)
 		// Handle exact match
 		if len(submatches) > 1 && strings.Contains(submatches[1], "exact") {
 			log.Logger.Debug("Fixing dependency", name, "from version", submatches[2], "to", fixVersion)
-			return strings.Replace(match, submatches[2], fixVersion, -1)
+			return strings.Replace(match, submatches[2], fixVersion, 1)
 		}
 		// Handle from match
 		if len(submatches) > 1 && strings.Contains(submatches[1], "from") {
 			log.Logger.Debug("Fixing dependency", name, "from version", submatches[3], "to", fixVersion)
-			return strings.Replace(match, submatches[3], fixVersion, -1)
+			return strings.Replace(match, submatches[3], fixVersion, 1)
 		}
 
 		// Handle range case
