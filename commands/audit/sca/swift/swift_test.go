@@ -66,14 +66,14 @@ func TestGetTechDependencyLocation(t *testing.T) {
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	locations, err := GetTechDependencyLocation("github.com/apple/swift-algorithms", "1.2.0", filepath.Join(currentDir, "Package.swift"))
+	locations, err := GetTechDependencyLocation("github.com/apple/swift-algorithms", "1.1.0", filepath.Join(currentDir, "Package.swift"))
 	assert.NoError(t, err)
 	assert.Len(t, locations, 1)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.StartLine, 10)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.StartColumn, 10)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndLine, 31)
 	assert.Equal(t, *locations[0].PhysicalLocation.Region.EndColumn, 80)
-	assert.Contains(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "github.com/apple/swift-algorithms\", from: \"1.2.0\"")
+	assert.Contains(t, *locations[0].PhysicalLocation.Region.Snippet.Text, "github.com/apple/swift-algorithms\", from: \"1.1.0\"")
 }
 
 func TestSwiftLineParse(t *testing.T) {
