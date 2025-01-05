@@ -124,7 +124,6 @@ func updateDependency(descriptorPath, content, name, version, fixVersion string)
 				return strings.Replace(match, startVersion, fixVersion, 1)
 			}
 		}
-		log.Logger.Debug("No fixes were done in file", descriptorPath)
 		return match
 	})
 	return result
@@ -143,9 +142,25 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 			continue
 		}
 		updatedContent := updateDependency(descriptorPath, string(data), dependencyName, dependencyVersion, fixVersion)
-		err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write file: %v", err)
+		if strings.Compare(string(data), updatedContent) != 0 {
+			err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write file: %v", err)
+			}
+			currentDir, err := coreutils.GetWorkingDirectory()
+			if err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
+			}
+			_, exePath, err := getSwiftVersionAndExecPath()
+			if err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
+			}
+			_, err = runSwiftCmd(exePath, currentDir, []string{"build"})
+			if err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
+			}
+		} else {
+			log.Logger.Debug("No fixes were done in file", descriptorPath)
 		}
 	}
 	return nil

@@ -40,6 +40,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-atomics:1.2.0",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-collections:1.1.4",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-system:1.4.0",
+		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-http-types:1.0.2",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
 		techutils.Swift.GetPackageTypeId() + packageInfo,
 	}
@@ -50,7 +51,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	assert.NotEmpty(t, rootNode)
 
 	assert.Equal(t, rootNode[0].Id, techutils.Swift.GetPackageTypeId()+packageInfo)
-	assert.Len(t, rootNode[0].Nodes, 9)
+	assert.Len(t, rootNode[0].Nodes, 11)
 
 	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "github.com/apple/swift-algorithms:1.2.0")
 	assert.Len(t, child1.Nodes, 1)
