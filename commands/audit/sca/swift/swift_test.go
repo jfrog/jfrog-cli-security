@@ -44,6 +44,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio:2.76.1",
 		techutils.Swift.GetPackageTypeId() + packageInfo,
 	}
+
 	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
