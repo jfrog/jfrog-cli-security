@@ -34,7 +34,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 	assert.NoError(t, err)
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
-		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.2.0",
+		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-algorithms:1.1.0",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-numerics:1.0.2",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-nio-http2:1.19.0",
 		techutils.Swift.GetPackageTypeId() + "github.com/apple/swift-atomics:1.2.0",
@@ -108,11 +108,11 @@ func TestFixTechDependencySingleLocation_From(t *testing.T) {
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
-	err = FixTechDependency("github.com/apple/swift-algorithms", "1.2.0", "1.3.0", filepath.Join(currentDir, "Package.swift"))
+	err = FixTechDependency("github.com/apple/swift-algorithms", "1.1.0", "1.2.0", filepath.Join(currentDir, "Package.swift"))
 	assert.NoError(t, err)
 	file, err := os.ReadFile(filepath.Join(currentDir, "Package.swift"))
 	assert.NoError(t, err)
-	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.3.0\"")
+	assert.Contains(t, string(file), ".package(url: \"https://github.com/apple/swift-algorithms\", from: \"1.2.0\"")
 }
 
 func TestFixTechDependencySingleLocation_Exact(t *testing.T) {
