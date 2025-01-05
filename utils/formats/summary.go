@@ -74,7 +74,7 @@ func (cp *CuratedPackages) GetApprovedCount() int {
 func (cp *CuratedPackages) GetBlockedCount() int {
 	parsed := datastructures.MakeSet[string]()
 	for _, blocked := range cp.Blocked {
-		for packageId, _ := range blocked.Packages {
+		for packageId := range blocked.Packages {
 			if parsed.Exists(packageId) {
 				continue
 			}
