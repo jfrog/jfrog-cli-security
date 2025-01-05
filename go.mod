@@ -117,6 +117,6 @@ replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250101110857-b26e9a6644c6
 
 // attiasas:fix_pipenv_graph_not_valid_json
-replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20241225081552-01472f3b78a4
+replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250105175942-420666fa5b9e
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev
