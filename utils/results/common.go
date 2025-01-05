@@ -116,7 +116,7 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 	return nil
 }
 
-// ApplyHandlerToScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+// Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
 func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
@@ -659,8 +659,6 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 		return false, nil
 	}
 
-	// TODO question: is there a chance that we will not have policy at this point? can we have violation created without a policy at all?
-	// TODO questin: if the above is possible, should we return an error or just skip this violation and not filtering it out?
 	if len(violation.Policies) == 0 {
 		return false, errors.New("A violation with no policies was provided")
 	}
