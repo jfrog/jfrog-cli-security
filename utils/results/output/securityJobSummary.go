@@ -562,7 +562,7 @@ func addAnalyticsQueryParamsIfNeeded(platformUrl string, index commandsummary.In
 	suffixValues = append(suffixValues, indexValue)
 	// Add the suffix to the url
 	if strings.Contains(platformUrl, "?") {
-		return fmt.Sprintf("%s%s", platformUrl, strings.Join(suffixValues, "&"))
+		return fmt.Sprintf("%s&%s", platformUrl, strings.Join(suffixValues, "&"))
 	}
 	return fmt.Sprintf("%s?%s", platformUrl, strings.Join(suffixValues, "&"))
 }
