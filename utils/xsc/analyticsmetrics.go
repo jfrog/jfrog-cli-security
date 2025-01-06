@@ -28,6 +28,7 @@ func CreateAnalyticsEvent(product xscservices.ProductName, eventType xscservices
 			OsArchitecture:         curArch,
 			JpdVersion:             serviceDetails.ServerId,
 			AnalyzerManagerVersion: jas.GetAnalyzerManagerVersion(),
+			JfrogApplicationKey:    serviceDetails.GetApplicationKey(),
 		},
 	}
 	return &event
