@@ -10,7 +10,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
@@ -236,10 +235,6 @@ func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse ser
 
 func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		tech := target.Technology
-		if tech == "" {
-			tech = techutils.Technology(impactedPackagesType)
-		}
 		*vulnerabilitiesRows = append(*vulnerabilitiesRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: vulnerability.Summary,
@@ -256,7 +251,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 				References:               vulnerability.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(vulnerability.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               tech,
+				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
@@ -266,10 +261,6 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 
 func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolationsRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScaViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
-		tech := target.Technology
-		if tech == "" {
-			tech = techutils.Technology(impactedPackagesType)
-		}
 		*securityViolationsRows = append(*securityViolationsRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: violation.Summary,
@@ -290,7 +281,7 @@ func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolation
 				References:               violation.References,
 				JfrogResearchInformation: convertJfrogResearchInformation(violation.ExtendedInformation),
 				ImpactPaths:              impactPaths,
-				Technology:               tech,
+				Technology:               results.GetIssueTechnology(violation.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
 			},
 		)
