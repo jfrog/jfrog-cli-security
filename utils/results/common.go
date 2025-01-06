@@ -653,6 +653,16 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 	return
 }
 
+// Resolve the actual technology from multiple sources:
+func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
+	if responseTechnology != "" {
+		// technology returned in the vulnerability/violation obj is the most specific technology
+		return techutils.Technology(responseTechnology)
+	}
+	// if no technology is provided, use the target technology
+	return targetTech
+}
+
 // Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
 func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
 	if applicabilityStatus != jasutils.NotApplicable {
