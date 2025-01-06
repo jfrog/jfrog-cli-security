@@ -297,11 +297,11 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 	}
 }
 
-func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool) (string, func()) {
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
 	return CreateSecurityPolicy(t, policyName,
 		xrayUtils.PolicyRule{
 			Name:     "sca_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, false),
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 1,
 		},
