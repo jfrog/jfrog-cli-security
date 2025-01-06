@@ -442,7 +442,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 	return false
 }
 
-func (jsr *JasScansResults) NewApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {
+func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {
 	jsr.ApplicabilityScanResults = append(jsr.ApplicabilityScanResults, ScanResult[[]*sarif.Run]{Scan: runs, StatusCode: exitCode})
 }
 
