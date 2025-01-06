@@ -649,7 +649,7 @@ func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanTy
 		}
 		// Add analytics hidden pixel to the help content if needed (Github code scanning)
 		if analytics := getAnalyticsHiddenPixel(platformBaseUrl, subScanType); rule.Help != nil && analytics != "" {
-			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s %s", sarifutils.GetRuleHelpMarkdown(rule), analytics))
+			rule.Help.Markdown = utils.NewStringPtr(fmt.Sprintf("%s\n%s", analytics, sarifutils.GetRuleHelpMarkdown(rule)))
 		}
 		patched = append(patched, rule)
 	}
@@ -936,7 +936,7 @@ func getAnalyticsHiddenPixel(baseUrl string, resultOfSubScan utils.SubScanType) 
 	return fmt.Sprintf(
 		"![](%sui/api/v1/u?s=1&m=2&job_id=%s&run_id=%s&git_repo=%s&type=%s)",
 		baseUrl,
-		url.PathEscape(jobId),
+		url.QueryEscape(jobId),
 		runId,
 		gitRepo,
 		resultOfSubScan.String(),
