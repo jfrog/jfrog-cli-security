@@ -808,7 +808,7 @@ type auditCommandTestParams struct {
 	// --project flag value if provided.
 	ProjectKey string
 	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
-	FailOnFailedBuildFlag bool
+	DisableFailOnFailedBuildFlag bool
 	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
 	WithVuln bool
 	// --licenses flag value if provided
@@ -836,12 +836,9 @@ func testAuditCommand(t *testing.T, testCli *coreTests.JfrogCli, params auditCom
 	if len(params.Watches) > 0 {
 		args = append(args, "--watches="+strings.Join(params.Watches, ","))
 	}
-	if params.FailOnFailedBuildFlag {
-		if len(params.Watches) == 0 {
-			// Verify params consistency no fail flag
-			assert.False(t, params.FailOnFailedBuildFlag, "Fail flag provided without watches")
-		}
-		args = append(args, "--fail")
+	// Default value for --fail flag is 'true'. Unless we directly pass DisableFailOnFailedBuildFlag=true, the flow will fail when security issues are found
+	if params.DisableFailOnFailedBuildFlag {
+		args = append(args, "--fail=false")
 	}
 	if params.WithVuln {
 		args = append(args, "--vuln")
