@@ -101,7 +101,7 @@ func TestXscAuditViolationsWithIgnoreRule(t *testing.T) {
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}})
 }
 
-func TestXrayAuditJasSkipNotApplicableCves(t *testing.T) {
+func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Init XSC tests also enabled analytics reporting.
 	_, _, cleanUpXsc := integration.InitXscTest(t, func() { securityTestUtils.ValidateXrayVersion(t, services.MinXrayVersionGitRepoKey) })
 	defer cleanUpXsc()
