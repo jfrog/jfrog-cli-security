@@ -94,11 +94,6 @@ func GetTestsXrayVersion() (version.Version, error) {
 	return *version.NewVersion(xrayVersion), err
 }
 
-func getTestsDeprecatedXscVersion() (version.Version, error) {
-	xscVersion, err := configTests.XscAuth.GetVersion()
-	return *version.NewVersion(xscVersion), err
-}
-
 func ChangeWD(t *testing.T, newPath string) string {
 	prevDir, err := os.Getwd()
 	assert.NoError(t, err, "Failed to get current dir")
