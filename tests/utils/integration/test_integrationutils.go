@@ -174,9 +174,17 @@ func InitEnrichTest(t *testing.T, minVersion string) {
 	testUtils.ValidateXrayVersion(t, minVersion)
 }
 
-func InitGitTest(t *testing.T) {
+func InitGitTest(t *testing.T, minXrayVersion string) func() {
 	if !*configTests.TestGit {
 		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))
+	}
+	if minXrayVersion != "" {
+		testUtils.ValidateXrayVersion(t, minXrayVersion)
+	}
+	// Make sure the request will work with xsc and not xray
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
+	return func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
 }
 
