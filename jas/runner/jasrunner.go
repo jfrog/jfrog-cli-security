@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -141,7 +141,7 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Secrets)
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Secrets, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -159,7 +159,7 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.IaC)
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.IaC, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -177,7 +177,7 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(vulnerabilitiesResults, scansOutputDir, jasutils.Sast)
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Sast, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -197,18 +197,25 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(caScanResults, scansOutputDir, jasutils.Applicability)
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Applicability, caScanResults)
 	}
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
-func dumpSarifRunToFileIfNeeded(results []*sarif.Run, scanResultsOutputDir string, scanType jasutils.JasScanType) (err error) {
-	if scanResultsOutputDir == "" || results == nil {
+func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.JasScanType, scanResults ...[]*sarif.Run) (err error) {
+	if scanResultsOutputDir == "" || len(scanResults) == 0 {
 		return
 	}
-	fileContent, err := json.Marshal(results)
-	if err != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	var fileContent []byte
+	for _, resultsToDump := range scanResults {
+		if len(resultsToDump) == 0 {
+			continue
+		}
+		if fileContent, err = utils.GetAsJsonBytes(resultsToDump, true, true); err != nil {
+			err = errors.Join(err, fmt.Errorf("failed to write %s scan results to file", scanType))
+		} else {
+			err = errors.Join(err, utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String()))
+		}
 	}
-	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+	return
 }

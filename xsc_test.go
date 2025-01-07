@@ -31,7 +31,8 @@ import (
 )
 
 func TestReportError(t *testing.T) {
-	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t, func() { securityTestUtils.ValidateXscVersion(t, xsc.MinXscVersionForErrorReport) })
+	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
+	securityTestUtils.ValidateXscVersion(t, xscVersion, xsc.MinXscVersionForErrorReport)
 	defer cleanUp()
 	errorToReport := errors.New("THIS IS NOT A REAL ERROR! This Error is posted as part of TestReportError test")
 	assert.NoError(t, xsc.ReportError(xrayVersion, xscVersion, tests.XscDetails, errorToReport, "cli"))
