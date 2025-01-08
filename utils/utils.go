@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	orderedJson "github.com/virtuald/go-ordered-json"
 	"os"
 	"path/filepath"
@@ -271,4 +272,12 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
+}
+
+// Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report
+func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
+	if gitRepoHttpsCloneUrl == "" {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }
