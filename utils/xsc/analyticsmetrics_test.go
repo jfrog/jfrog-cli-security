@@ -3,6 +3,7 @@ package xsc
 import (
 	"errors"
 	"fmt"
+	clientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"os"
 	"testing"
 	"time"
@@ -145,27 +146,44 @@ func TestCreateFinalizedEvent(t *testing.T) {
 	testCases := []struct {
 		name         string
 		auditResults *results.SecurityCommandResults
-		expected     xscservices.XscAnalyticsBasicGeneralEvent
+		expected     xscservices.XscAnalyticsGeneralEventFinalize
 	}{
 		{
 			name:         "No audit results",
 			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
+			},
 		},
 		{
 			name:         "Valid audit result",
-			auditResults: getDummyContentForGeneralEvent(true, false),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
+			auditResults: getDummyContentForGeneralEvent(true, false, false),
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 7, EventStatus: xscservices.Completed},
+			},
 		},
 		{
-			name:         "Scan failed with findings.",
-			auditResults: getDummyContentForGeneralEvent(false, true),
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
+			name:         "Scan failed with findings",
+			auditResults: getDummyContentForGeneralEvent(false, true, false),
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Failed},
+			},
+		},
+		{
+			name:         "Valid audit results with Watches and GitRepoUrl",
+			auditResults: getDummyContentForGeneralEvent(false, false, true),
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Completed},
+				GitRepoUrl:                    "github.com/my-user/my-repo.git",
+				Watches:                       []string{"Watch-1, Watch-2", "Watch-3"},
+			},
 		},
 		{
 			name:         "Scan failed no findings.",
 			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
-			expected:     xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
+			expected: xscservices.XscAnalyticsGeneralEventFinalize{
+				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
+			},
 		},
 	}
 
@@ -183,7 +201,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 // Create a dummy content for general event. 1 SCA scan with 1 vulnerability
 // withJas - Add 2 JAS results for each scan type.
 // withErr - Add an error to the results.
-func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityCommandResults {
+func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *results.SecurityCommandResults {
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
 	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
@@ -211,6 +229,16 @@ func getDummyContentForGeneralEvent(withJas, withErr bool) *results.SecurityComm
 
 	if withErr {
 		scanResults.Errors = []error{errors.New("an error")}
+	}
+
+	if withResultContext {
+		cmdResults.SetResultsContext(results.ResultContext{
+			Watches:              []string{"Watch-1, Watch-2"},
+			GitRepoHttpsCloneUrl: "https://github.com/my-user/my-repo",
+			PlatformWatches: &clientUtils.ResourcesWatchesBody{
+				GitRepositoryWatches: []string{"Watch-1", "Watch-3"},
+			},
+		})
 	}
 
 	return cmdResults
