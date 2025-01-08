@@ -64,6 +64,29 @@ func (rc *ResultContext) HasViolationContext() bool {
 	return len(rc.Watches) > 0 || len(rc.GitRepoHttpsCloneUrl) > 0 || len(rc.ProjectKey) > 0 || len(rc.RepoPath) > 0
 }
 
+// This func returns a slice of all unique watches that can be provided directly, through Project and through Git Ripoeitory
+func (rc *ResultContext) GetUniqueWatchesFromAllSources() []string {
+	uniqueWatches := datastructures.MakeSet[string]()
+
+	// Collecting Watches names that were provided by name
+	if len(rc.Watches) != 0 {
+		uniqueWatches.AddElements(rc.Watches...)
+	}
+
+	if rc.PlatformWatches != nil {
+		// Collecting Watches from Git Repository resource
+		if len(rc.PlatformWatches.GitRepositoryWatches) != 0 {
+			uniqueWatches.AddElements(rc.PlatformWatches.GitRepositoryWatches...)
+		}
+
+		// Collecting Watches from Project resource
+		if len(rc.PlatformWatches.ProjectWatches) != 0 {
+			uniqueWatches.AddElements(rc.PlatformWatches.ProjectWatches...)
+		}
+	}
+	return uniqueWatches.ToSlice()
+}
+
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
