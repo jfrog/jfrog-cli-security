@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-security/commands/git"
+	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
@@ -34,15 +34,15 @@ func TestCountContributorsFlags(t *testing.T) {
 	assert.EqualError(t, err, "Mandatory flag 'scm-api-url' is missing")
 
 	// Test token env variable
-	bitbucketCallback := tests.SetEnvWithCallbackAndAssert(t, git.BitbucketTokenEnvVar, "token")
+	bitbucketCallback := tests.SetEnvWithCallbackAndAssert(t, contributors.BitbucketTokenEnvVar, "token")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "count-contributors", "--scm-type", "bitbucket", "--owner", "owner", "--scm-api-url", "url")
 	assert.NotContains(t, err.Error(), "Providing a token is mandatory")
 	bitbucketCallback()
-	gitlabCallback := tests.SetEnvWithCallbackAndAssert(t, git.GitlabTokenEnvVar, "token")
+	gitlabCallback := tests.SetEnvWithCallbackAndAssert(t, contributors.GitlabTokenEnvVar, "token")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "count-contributors", "--scm-type", "gitlab", "--owner", "owner", "--scm-api-url", "url")
 	assert.NotContains(t, err.Error(), "Providing a token is mandatory")
 	gitlabCallback()
-	githubCallback := tests.SetEnvWithCallbackAndAssert(t, git.GithubTokenEnvVar, "token")
+	githubCallback := tests.SetEnvWithCallbackAndAssert(t, contributors.GithubTokenEnvVar, "token")
 	err = securityTests.PlatformCli.WithoutCredentials().Exec("git", "count-contributors", "--scm-type", "github", "--owner", "owner", "--scm-api-url", "url")
 	assert.NotContains(t, err.Error(), "Providing a token is mandatory")
 	githubCallback()
@@ -58,7 +58,7 @@ type gitAuditCommandTestParams struct {
 }
 
 func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string, error) {
-	args := append([]string{"git","audit"}, getAuditCmdArgs(params.auditCommandTestParams)...)
+	args := append([]string{"git", "audit"}, getAuditCmdArgs(params.auditCommandTestParams)...)
 	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
 }
 
@@ -94,7 +94,6 @@ func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string
 // 		}
 // 	}
 // }
-
 
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
@@ -171,7 +170,6 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	})
 }
 
-
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
@@ -201,8 +199,8 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	output, err := testGitAuditCommand(t, params)
 	assert.NoError(t, err)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Violations:        &validations.ViolationCount{
-			ValidateScan: &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 15},
+		Violations: &validations.ViolationCount{
+			ValidateScan:                &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 15},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, Applicable: 2, NotCovered: 10},
 		},
 		ExactResultsMatch: true,
@@ -225,8 +223,8 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	output, err = testGitAuditCommand(t, params)
 	assert.NoError(t, err)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Violations:        &validations.ViolationCount{
-			ValidateScan: &validations.ScanCount{Sca: 12, Sast: 1, Secrets: 15},
+		Violations: &validations.ViolationCount{
+			ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 1, Secrets: 15},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotCovered: 10},
 		},
 		ExactResultsMatch: true,
