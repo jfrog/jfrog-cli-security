@@ -5,13 +5,16 @@ import (
 	"strings"
 
 	"github.com/jfrog/froggit-go/vcsutils"
+	outputFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
+	pluginsCommon "github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	gitAuditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/audit"
 	gitContributorsDocs "github.com/jfrog/jfrog-cli-security/cli/docs/git/contributors"
 	"github.com/jfrog/jfrog-cli-security/commands/git/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -38,13 +41,45 @@ func getGitNameSpaceCommands() []components.Command {
 }
 
 func GitAuditCmd(c *components.Context) error {
-	_, _, _, auditCmd, err := CreateAuditCmd(c)
+	gitAuditCmd := audit.NewGitAuditCommand()
+	// Set connection params
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
 		return err
 	}
-	gitAuditCmd := audit.NewGitAuditCommand(*auditCmd)
-
-	return progressbar.ExecWithProgress(gitAuditCmd)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
+	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
+	// Set violations params
+	if err = validateXrayContext(c, serverDetails); err != nil {
+		return err
+	}
+	if c.IsFlagSet(flags.Watches) {
+		gitAuditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
+	}
+	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c))
+	// Set Scan params
+	if subScans, err := getSubScansToPreform(c); err != nil {
+		return err
+	} else if len(subScans) > 0 {
+		gitAuditCmd.SetScansToPerform(subScans)
+	}
+	if threads, err := pluginsCommon.GetThreadsCount(c); err != nil {
+		return err
+	} else {
+		gitAuditCmd.SetThreads(threads)
+	}
+	gitAuditCmd.SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
+	// Set output params
+	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
+	if err != nil {
+		return err
+	}
+	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
+	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
 }
 
 func GetCountContributorsParams(c *components.Context) (*contributors.CountContributorsParams, error) {

@@ -377,6 +377,28 @@ func BuildScan(c *components.Context) error {
 	return commandsCommon.Exec(buildScanCmd)
 }
 
+func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, err error) {
+	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
+		// No CA flag provided but sca flag is not provided, error
+		err = pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
+		return
+	}
+
+	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
+		// No secrets flag but secret validation is provided, error
+		err = pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
+		return
+	}
+
+	allSubScans := utils.GetAllSupportedScans()
+	for _, subScan := range allSubScans {
+		if shouldAddSubScan(subScan, c) {
+			subScans = append(subScans, subScan)
+		}
+	}
+	return
+}
+
 func AuditCmd(c *components.Context) error {
 	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
@@ -410,14 +432,9 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
-	allSubScans := utils.GetAllSupportedScans()
-	subScans := []utils.SubScanType{}
-	for _, subScan := range allSubScans {
-		if shouldAddSubScan(subScan, c) {
-			subScans = append(subScans, subScan)
-		}
-	}
-	if len(subScans) > 0 {
+	if subScans, err := getSubScansToPreform(c); err != nil {
+		return err
+	} else if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
 	}
 
@@ -426,10 +443,8 @@ func AuditCmd(c *components.Context) error {
 		return err
 	}
 	auditCmd.SetThreads(threads)
-	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
-	return err
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
 }
 
 func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
@@ -437,13 +452,14 @@ func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
 		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
 }
 
-func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) {
+func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) error {
 	if err == nil || !usage.ShouldReportUsage() {
-		return
+		return err
 	}
 	if reportError := xsc.ReportError(xrayVersion, xscVersion, serverDetails, err, "cli"); reportError != nil {
 		log.Debug("failed to report error log:" + reportError.Error())
 	}
+	return err
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
@@ -527,11 +543,8 @@ func AuditSpecificCmd(c *components.Context, technology techutils.Technology) er
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
-
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(xrayVersion, xscVersion, serverDetails, err)
-	return err
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
 }
 
 func CurationCmd(c *components.Context) error {

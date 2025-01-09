@@ -59,6 +59,7 @@ const (
 	// Base flags keys
 	ServerId    = "server-id"
 	url         = "url"
+	xrayUrl     = "xray-url"
 	user        = "user"
 	password    = "password"
 	accessToken = "access-token"
@@ -155,12 +156,22 @@ var commandFlags = map[string][]string{
 		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
 	Audit: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
+		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
 	},
-	GitAudit: {},
+	GitAudit: {
+		// Connection params
+		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls,
+		// Violations params
+		Project, Watches, ScanVuln, Fail,
+		// Scan params
+		Threads, ExclusionsAudit,
+		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
+		// Output params
+		Licenses, OutputFormat, ExtendedTable,
+	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
 	},
@@ -192,7 +203,8 @@ var commandFlags = map[string][]string{
 var flagsMap = map[string]components.Flag{
 	// Common commands flags
 	ServerId:    components.NewStringFlag(ServerId, "Server ID configured using the config command."),
-	url:         components.NewStringFlag(url, "JFrog Xray URL."),
+	url:         components.NewStringFlag(url, "JFrog URL."),
+	xrayUrl:     components.NewStringFlag(xrayUrl, "JFrog Xray URL."),
 	user:        components.NewStringFlag(user, "JFrog username."),
 	password:    components.NewStringFlag(password, "JFrog password."),
 	accessToken: components.NewStringFlag(accessToken, "JFrog access token."),

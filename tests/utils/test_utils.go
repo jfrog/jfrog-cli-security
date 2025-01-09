@@ -403,9 +403,27 @@ func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func(
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, createTempDirCallback := CreateTestProjectInTempDir(t, projectPath)
-	prevWd := ChangeWD(t, tempDirPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
 	return tempDirPath, func() {
-		clientTests.ChangeDirAndAssert(t, prevWd)
+		cleanCwd()
+		createTempDirCallback()
+	}
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZip(t *testing.T, projectPath string) (string, func()) {
+	tempDirWithZip, cleanUp := CreateTestProjectInTempDir(t, projectPath)
+	zipName := fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+	assert.NoError(t, clientUtils.ExtractArchive(tempDirWithZip, zipName, zipName, "", false))
+	return tempDirWithZip, cleanUp
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := CreateTestProjectFromZip(t, projectPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
+	return tempDirPath, func() {
+		cleanCwd()
 		createTempDirCallback()
 	}
 }
