@@ -7,7 +7,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
@@ -41,9 +40,9 @@ func (gaCmd *GitAuditCommand) ServerDetails() (*config.ServerDetails, error) {
 
 func (gaCmd *GitAuditCommand) Run() (err error) {
 	// Detect git info
-	_, gitInfo, err := DetectGitInfo()
+	gitInfo, err := DetectGitInfo()
 	if err != nil {
-		return
+		return fmt.Errorf("failed to get git context: %v", err)
 	}
 	if gitInfo == nil {
 		// No Error but no git info = project is dirty
@@ -61,20 +60,12 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 	return sourceAudit.ProcessResultsAndOutput(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
-func DetectGitInfo() (gitManager *gitutils.GitManager, gitInfo *services.XscGitInfoContext, err error) {
-	gitManager, err = gitutils.NewGitManager(".")
+func DetectGitInfo() (gitInfo *services.XscGitInfoContext, err error) {
+	gitManager, err := gitutils.NewGitManager(".")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to found local git repository at the current directory: %v", err)
+		return
 	}
-	gitInfo, err = gitManager.GetGitContext()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get git context: %v", err)
-	}
-	if gitInfo == nil {
-		log.Warn("Failed to get git context: defaulting to audit command.")
-		return nil, nil, nil
-	}
-	return
+	return gitManager.GetGitContext()
 }
 
 func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {

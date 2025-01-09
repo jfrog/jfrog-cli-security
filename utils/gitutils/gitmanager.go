@@ -117,8 +117,7 @@ func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err 
 		return nil, err
 	}
 	if !isClean {
-		log.Warn("Uncommitted changes found in the repository, not supported in git audit.")
-		return nil, nil
+		return nil, fmt.Errorf("uncommitted changes found in the repository, not supported in git audit")
 	}
 	log.Debug(fmt.Sprintf("Git Context: %+v", gitInfo))
 	return gitInfo, nil
@@ -137,11 +136,12 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 	return remote.Config().URLs[0], nil
 }
 
+// Normalize the URL by removing protocol prefix and any trailing ".git"
 func normalizeGitUrl(url string) string {
-	// Normalize the URL by removing "http://", "https://", and any trailing ".git"
-	url = strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ".git")
-	url = strings.TrimSuffix(strings.TrimPrefix(url, "https://"), ".git")
-	return url
+	url = strings.TrimPrefix(url, "http://")
+	url = strings.TrimPrefix(url, "https://")
+	url = strings.TrimPrefix(url, "ssh://")
+	return strings.TrimSuffix(url, ".git")
 }
 
 func getGitRepoName(url string) string {
@@ -151,7 +151,7 @@ func getGitRepoName(url string) string {
 
 func getGitProject(url string) string {
 	// First part after base Url is the owner/organization name.
-	urlParts := strings.Split(url, "/")
+	urlParts := strings.Split(normalizeGitUrl(url), "/")
 	if len(urlParts) < 2 {
 		log.Debug(fmt.Sprintf("Failed to get project name from URL: %s", url))
 		return ""

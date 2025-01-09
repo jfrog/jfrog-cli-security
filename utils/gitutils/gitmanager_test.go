@@ -20,10 +20,12 @@ func TestGetGitContext(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		testProjectZipDirPath string
+		NoDotGitFolder        bool
 		gitInfo               *services.XscGitInfoContext
 	}{
 		{
 			name:                  "No Git Info",
+			NoDotGitFolder:        true,
 			testProjectZipDirPath: filepath.Join(basePath, "nogit"),
 		},
 		{
@@ -42,28 +44,13 @@ func TestGetGitContext(t *testing.T) {
 			},
 		},
 		{
-			name:                  "Dirty Project (with uncommitted changes)",
-			testProjectZipDirPath: filepath.Join(basePath, "dirty"),
-			// gitInfo: &services.XscGitInfoContext{
-			// 	GitRepoHttpsCloneUrl:        "https://github.com/attiasas/test-security-git.git",
-			// 	GitRepoName:       "test-security-git",
-			// 	GitProject:        "attiasas",
-			// 	GitProvider:       "github",
-			// 	LastCommitUrl:     "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
-			// 	LastCommitMessage: "remove json",
-			// 	LastCommitAuthor:  "attiasas",
-
-			// 	BranchName: "dirty_branch",
-			// },
-		},
-		{
 			name:                  "Self-Hosted Git Project (and SSO credentials)",
 			testProjectZipDirPath: filepath.Join(basePath, "selfhosted"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
 				GitRepoName:          "test-security-git",
 				// TODO: maybe detect provider as bb if ~ in the project name
-				GitProject:        "assafa",
+				GitProject:        "~assafa",
 				BranchName:        "main",
 				LastCommitHash:    "6abd0162f4e02e358124f74e89b30d1b1ff906bc",
 				LastCommitMessage: "initial commit",
@@ -79,14 +66,42 @@ func TestGetGitContext(t *testing.T) {
 				GitProject:           "attiasas",
 				GitProvider:          "gitlab",
 				BranchName:           "main",
-				LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+				LastCommitHash:       "ada14e9f525d8cbfb3c8c31ebe345d85ec342480",
 				LastCommitMessage:    "add npm",
 				LastCommitAuthor:     "attiasas",
 			},
 		},
-		// {
-		// 	name:                  "Forked Project (multiple remotes)",
-		// },
+		// Not supported yet
+		{
+			name:                  "Dirty Project (with uncommitted changes)",
+			testProjectZipDirPath: filepath.Join(basePath, "dirty"),
+			// gitInfo: &services.XscGitInfoContext{
+			// 	GitRepoHttpsCloneUrl:        "https://github.com/attiasas/test-security-git.git",
+			// 	GitRepoName:       "test-security-git",
+			// 	GitProject:        "attiasas",
+			// 	GitProvider:       "github",
+			// 	LastCommitUrl:     "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+			// 	LastCommitMessage: "remove json",
+			// 	LastCommitAuthor:  "attiasas",
+
+			// 	BranchName: "dirty_branch",
+			// },
+		},
+		{
+			name:                  "Forked Project (multiple remotes)",
+			testProjectZipDirPath: filepath.Join(basePath, "forked"),
+			// gitInfo: &services.XscGitInfoContext{
+			// 	GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
+			// 	GitRepoName:          "test-security-git",
+			// 	GitProject:           "attiasas",
+			// 	GitProvider:          "github",
+			// 	LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+			// 	LastCommitMessage:    "remove json",
+			// 	LastCommitAuthor:     "attiasas",
+
+			// 	BranchName: "main",
+			// },
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -96,16 +111,25 @@ func TestGetGitContext(t *testing.T) {
 			defer cleanUp()
 			// Run the test
 			gitManager, err := NewGitManager(".")
-			if testCase.gitInfo == nil {
+			if testCase.NoDotGitFolder {
 				// Assert no git info
 				assert.Error(t, err, goGit.ErrRepositoryNotExists.Error())
-				assert.Nil(t, gitManager)
+				return
+			} else if err != nil {
+				// Assert multiple remotes error
+				assert.Error(t, err, "multiple (2) remotes found, currently only one remote is supported, remotes: origin, upstream")
 				return
 			}
 			assert.NoError(t, err)
 			assert.NotNil(t, gitManager)
 			gitInfo, err := gitManager.GetGitContext()
 
+			if testCase.gitInfo == nil {
+				// Dirty project, we can't assert the git info
+				assert.Error(t, err)
+				assert.Nil(t, gitInfo)
+				return
+			}
 			// Assert the expected git info
 			require.NoError(t, err)
 			assert.Equal(t, testCase.gitInfo, gitInfo)
