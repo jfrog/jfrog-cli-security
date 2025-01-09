@@ -76,8 +76,7 @@ func GitAuditCmd(c *components.Context) error {
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
-	} 
-	
+	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
