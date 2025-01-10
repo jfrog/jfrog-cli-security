@@ -15,7 +15,7 @@ import (
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	commonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
