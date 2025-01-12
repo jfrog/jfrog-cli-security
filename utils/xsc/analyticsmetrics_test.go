@@ -3,7 +3,6 @@ package xsc
 import (
 	"errors"
 	"fmt"
-	clientUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"os"
 	"testing"
 	"time"
@@ -175,7 +174,6 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 1, EventStatus: xscservices.Completed},
 				GitRepoUrl:                    "github.com/my-user/my-repo.git",
-				Watches:                       []string{"Watch-1, Watch-2", "Watch-3"},
 			},
 		},
 		{
@@ -192,6 +190,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 			event := createFinalizedEvent(testCase.auditResults)
 			assert.Equal(t, testCase.expected.TotalFindings, event.TotalFindings)
 			assert.Equal(t, testCase.expected.EventStatus, event.EventStatus)
+			assert.Equal(t, testCase.expected.GitRepoUrl, event.GitRepoUrl)
 			assert.Equal(t, testCase.auditResults.MultiScanId, event.MultiScanId)
 			assert.NotEmpty(t, event.TotalScanDuration)
 		})
@@ -233,11 +232,7 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 
 	if withResultContext {
 		cmdResults.SetResultsContext(results.ResultContext{
-			Watches:              []string{"Watch-1, Watch-2"},
 			GitRepoHttpsCloneUrl: "https://github.com/my-user/my-repo",
-			PlatformWatches: &clientUtils.ResourcesWatchesBody{
-				GitRepositoryWatches: []string{"Watch-1", "Watch-3"},
-			},
 		})
 	}
 

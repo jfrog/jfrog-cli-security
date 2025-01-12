@@ -99,17 +99,14 @@ func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings
 		eventStatus = xscservices.Failed
 	}
 
-	var uniqueWatches []string
 	var gitRepoUrlKey string
 	if resultsContext != nil {
 		gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
-		uniqueWatches = resultsContext.GetUniqueWatchesFromAllSources()
 	}
 
 	return xscservices.XscAnalyticsGeneralEventFinalize{
 		MultiScanId: multiScanId,
 		GitRepoUrl:  gitRepoUrlKey,
-		Watches:     uniqueWatches,
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
 			EventStatus:       eventStatus,
 			TotalFindings:     totalFindings,
