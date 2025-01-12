@@ -17,7 +17,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/jfrog/jfrog-client-go/xray/services/utils"
-	// xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 )
 
@@ -57,39 +56,6 @@ func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, e
 	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git", "audit"}, getAuditCmdArgs(params)...)...)
 }
 
-// TODO: replace with 'Git Audit' command when it will be available.
-// This method generate an audit command that will report analytics (if enabled) with the git info context provided.
-// The method will generate multi-scan-id and provide it to the audit command.
-// The method will also provide the git repo clone url to the audit command.
-// func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoContext) func() components.Command {
-// 	return func() components.Command {
-// 		return components.Command{
-// 			Name:  docs.Audit,
-// 			Flags: docs.GetCommandFlags(docs.Audit),
-// 			Action: func(c *components.Context) error {
-// 				xrayVersion, xscVersion, serverDetails, auditCmd, err := cli.CreateAuditCmd(c)
-// 				if err != nil {
-// 					return err
-// 				}
-// 				// Generate the analytics event with the git info context.
-// 				event := xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails)
-// 				event.GitInfo = &gitInfoContext
-// 				event.IsGitInfoFlow = true
-// 				// Report analytics and get the multi scan id that was generated and attached to the git context.
-// 				multiScanId, startTime := xsc.SendNewScanEvent(xrayVersion, xscVersion, serverDetails, event)
-// 				// Set the multi scan id to the audit command to be used in the scans.
-// 				auditCmd.SetMultiScanId(multiScanId)
-// 				// Set the git repo context to the audit command to pass to the scanners to create violations if applicable.
-// 				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
-// 				err = progressbar.ExecWithProgress(auditCmd)
-// 				// Send the final event to the platform.
-// 				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, err)
-// 				return err
-// 			},
-// 		}
-// 	}
-// }
-
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams auditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
@@ -122,10 +88,6 @@ func TestGitAuditSimpleJson(t *testing.T) {
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
-
-	// // Create the project to scan
-	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	// defer cleanUpProject()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 
@@ -169,11 +131,6 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		// No Violations should be reported since all violations are ignored.
 		validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}},
 	)
-
-	// // Run the audit command and verify no issues. (all violations are ignored)
-	// output, err = testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson)}})
-	// assert.NoError(t, err)
-	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}})
 }
 
 func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
@@ -183,10 +140,6 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	if *securityTests.JfrogTestProjectKey == "" {
 		t.Skipf("skipping test. %s is not set.", securityTests.TestJfrogPlatformProjectKeyEnvVar)
 	}
-
-	// Create the project to scan
-	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	// defer cleanUpProject()
 
 	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true, false)
@@ -205,25 +158,11 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
 	)
-
-	// // Run the audit command with project key.
-	// output, err := testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey}})
-	// // verify violations are reported and the build fails.
-	// assert.ErrorContains(t, err, results.NewFailBuildError().Error())
-	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-	// 	Total: &validations.TotalCount{Violations: 14},
-	// 	// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-	// 	Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
-	// })
 }
 
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
-
-	// // Create the project to scan
-	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	// defer cleanUpProject()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
 
@@ -255,19 +194,6 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		},
 	)
 
-	// params := gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true}}
-
-	// // Run the git audit command and verify violations are reported to the platform.
-	// output, err := testGitAuditCommand(t, params)
-	// assert.NoError(t, err)
-	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-	// 	Violations: &validations.ViolationCount{
-	// 		ValidateScan:                &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 15},
-	// 		ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, Applicable: 2, NotCovered: 10},
-	// 	},
-	// 	ExactResultsMatch: true,
-	// })
-
 	// We clean the initially created Policy and Watch that are related to the Git Repo resource, because we must have all related policies with skipNotApplicable=true
 	cleanUpWatch()
 	firstWatchCleaned = true
@@ -292,15 +218,4 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			ExactResultsMatch: true,
 		},
 	)
-
-	// params.Watches = []string{skipWatchName}
-	// output, err = testGitAuditCommand(t, params)
-	// assert.NoError(t, err)
-	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-	// 	Violations: &validations.ViolationCount{
-	// 		ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 1, Secrets: 15},
-	// 		ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotCovered: 10},
-	// 	},
-	// 	ExactResultsMatch: true,
-	// })
 }
