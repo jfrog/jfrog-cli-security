@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
@@ -39,14 +40,17 @@ func (gaCmd *GitAuditCommand) ServerDetails() (*config.ServerDetails, error) {
 }
 
 func (gaCmd *GitAuditCommand) Run() (err error) {
+	if gaCmd.repositoryLocalPath, err = coreutils.GetWorkingDirectory(); err != nil {
+		return
+	}
 	// Detect git info
-	gitInfo, err := DetectGitInfo()
+	gitInfo, err := DetectGitInfo(gaCmd.repositoryLocalPath)
 	if err != nil {
 		return fmt.Errorf("failed to get git context: %v", err)
 	}
 	if gitInfo == nil {
 		// No Error but no git info = project is dirty
-		return fmt.Errorf("failed to get git context from dirty project")
+		return fmt.Errorf("the project in '%s' is dirty. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
 	gaCmd.source = *gitInfo
 	// Run the scan
@@ -60,12 +64,13 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 	return sourceAudit.ProcessResultsAndOutput(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
-func DetectGitInfo() (gitInfo *services.XscGitInfoContext, err error) {
-	gitManager, err := gitutils.NewGitManager(".")
+func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
+	gitManager, err := gitutils.NewGitManager(wd)
 	if err != nil {
 		return
 	}
-	return gitManager.GetGitContext()
+	gitInfo, err = gitManager.GetGitContext()
+	return
 }
 
 func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
@@ -73,15 +78,25 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
 	// Violations params
-	auditParams.SetResultsContext(params.resultsContext)
+	resultContext := sourceAudit.CreateAuditResultsContext(
+		params.serverDetails,
+		params.xrayVersion,
+		params.resultsContext.Watches,
+		params.resultsContext.RepoPath,
+		params.resultsContext.ProjectKey,
+		params.source.GitRepoHttpsCloneUrl,
+		params.resultsContext.IncludeVulnerabilities,
+		params.resultsContext.IncludeLicenses)
+	auditParams.SetResultsContext(resultContext)
+	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
 	// Scan params
-	auditParams.SetThreads(params.threads).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
+	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
 	// Cmd information
 	auditParams.SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
-	auditParams.SetIsRecursiveScan(true)
+	auditParams.SetUseJas(true).SetIsRecursiveScan(true)
 	return auditParams
 }
 

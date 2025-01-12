@@ -58,8 +58,7 @@ type gitAuditCommandTestParams struct {
 }
 
 func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string, error) {
-	args := append([]string{"git", "audit"}, getAuditCmdArgs(params.auditCommandTestParams)...)
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git", "audit"}, getAuditCmdArgs(params.auditCommandTestParams)...)...)
 }
 
 // TODO: replace with 'Git Audit' command when it will be available.
@@ -95,13 +94,27 @@ func testGitAuditCommand(t *testing.T, params gitAuditCommandTestParams) (string
 // 	}
 // }
 
+func createTestProjectRunGitAuditAndValidate(t *testing.T, gitAuditParams gitAuditCommandTestParams, expectError string, validationParams validations.ValidationParams) {
+	// Create the project to scan
+	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues"))
+	defer cleanUpProject()
+	// Run the audit command with git repo and verify violations are reported to the platform.
+	output, err := testGitAuditCommand(t, gitAuditParams)
+	if expectError != "" {
+		assert.ErrorContains(t, err, expectError)
+	} else {
+		assert.NoError(t, err)
+	}
+	validations.VerifySimpleJsonResults(t, output, validationParams)
+}
+
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
-	// Create the project to scan
-	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	defer cleanUpProject()
+	// // Create the project to scan
+	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	// defer cleanUpProject()
 
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
@@ -110,13 +123,15 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true}})
-	assert.NoError(t, err)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Licenses: 3, Violations: 26, Vulnerabilities: 39},
-		// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
-	})
+	createTestProjectRunGitAuditAndValidate(t,
+		gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true}},
+		"",
+		validations.ValidationParams{
+			Total: &validations.TotalCount{Licenses: 3, Violations: 16, Vulnerabilities: 16},
+			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+		},
+	)
 
 	// Create an ignore rules for the git repo
 	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
@@ -135,10 +150,17 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	})
 	defer cleanSastUpIgnoreRule()
 
-	// Run the audit command and verify no issues. (all violations are ignored)
-	output, err = testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson)}})
-	assert.NoError(t, err)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}})
+	createTestProjectRunGitAuditAndValidate(t,
+		gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson)}},
+		"",
+		// No Violations should be reported since all violations are ignored.
+		validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}},
+	)
+
+	// // Run the audit command and verify no issues. (all violations are ignored)
+	// output, err = testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson)}})
+	// assert.NoError(t, err)
+	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true, Total: &validations.TotalCount{}, Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{}}})
 }
 
 func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
@@ -150,8 +172,8 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	}
 
 	// Create the project to scan
-	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	defer cleanUpProject()
+	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	// defer cleanUpProject()
 
 	// Create policy and watch for the project so we will get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "project-key-jas-violations-policy", utils.Unknown, true, false)
@@ -159,24 +181,35 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	_, cleanUpWatch := securityTestUtils.CreateTestProjectKeyWatch(t, policyName, "project-key-jas-violations-watch", *securityTests.JfrogTestProjectKey)
 	defer cleanUpWatch()
 
-	// Run the audit command with project key.
-	output, err := testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey}})
-	// verify violations are reported and the build fails.
-	assert.ErrorContains(t, err, results.NewFailBuildError().Error())
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Violations: 14},
-		// Check that we have at least one violation for each scan type. (IAC is not supported yet)
-		Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
-	})
+	// Run the audit command with git repo and verify violations are reported to the platform.
+	createTestProjectRunGitAuditAndValidate(t,
+		gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey}},
+		results.NewFailBuildError().Error(),
+		validations.ValidationParams{
+			Total: &validations.TotalCount{Violations: 16},
+			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+		},
+	)
+
+	// // Run the audit command with project key.
+	// output, err := testGitAuditCommand(t, gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey}})
+	// // verify violations are reported and the build fails.
+	// assert.ErrorContains(t, err, results.NewFailBuildError().Error())
+	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+	// 	Total: &validations.TotalCount{Violations: 14},
+	// 	// Check that we have at least one violation for each scan type. (IAC is not supported yet)
+	// 	Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
+	// })
 }
 
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
-	// Create the project to scan
-	_, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
-	defer cleanUpProject()
+	// // Create the project to scan
+	// _, cleanUpProject := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas", "jas"))
+	// defer cleanUpProject()
 
 	// Create policy and watch for the git repo so we will also get violations - This watch DO NOT skip not-applicable results
 	var firstPolicyCleaned, firstWatchCleaned bool
@@ -193,18 +226,31 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		}
 	}()
 
-	params := gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true}}
-
 	// Run the git audit command and verify violations are reported to the platform.
-	output, err := testGitAuditCommand(t, params)
-	assert.NoError(t, err)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Violations: &validations.ViolationCount{
-			ValidateScan:                &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 15},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, Applicable: 2, NotCovered: 10},
+	createTestProjectRunGitAuditAndValidate(t,
+		gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true}},
+		"",
+		validations.ValidationParams{
+			Violations: &validations.ViolationCount{
+				ValidateScan:                &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1, NotCovered: 7},
+			},
+			ExactResultsMatch: true,
 		},
-		ExactResultsMatch: true,
-	})
+	)
+
+	// params := gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), Watches: []string{watchName}, DisableFailOnFailedBuildFlag: true}}
+
+	// // Run the git audit command and verify violations are reported to the platform.
+	// output, err := testGitAuditCommand(t, params)
+	// assert.NoError(t, err)
+	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+	// 	Violations: &validations.ViolationCount{
+	// 		ValidateScan:                &validations.ScanCount{Sca: 17, Sast: 1, Secrets: 15},
+	// 		ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 5, Applicable: 2, NotCovered: 10},
+	// 	},
+	// 	ExactResultsMatch: true,
+	// })
 
 	// We clean the initially created Policy and Watch that are related to the Git Repo resource, because we must have all related policies with skipNotApplicable=true
 	cleanUpWatch()
@@ -219,14 +265,26 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
-	params.Watches = []string{skipWatchName}
-	output, err = testGitAuditCommand(t, params)
-	assert.NoError(t, err)
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Violations: &validations.ViolationCount{
-			ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 1, Secrets: 15},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotCovered: 10},
+	createTestProjectRunGitAuditAndValidate(t,
+		gitAuditCommandTestParams{gitInfoContext: &validations.TestMockGitInfo, auditCommandTestParams: auditCommandTestParams{Format: string(format.SimpleJson), Watches: []string{skipWatchName}, DisableFailOnFailedBuildFlag: true}},
+		"",
+		validations.ValidationParams{
+			Violations: &validations.ViolationCount{
+				ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 7},
+			},
+			ExactResultsMatch: true,
 		},
-		ExactResultsMatch: true,
-	})
+	)
+
+	// params.Watches = []string{skipWatchName}
+	// output, err = testGitAuditCommand(t, params)
+	// assert.NoError(t, err)
+	// validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+	// 	Violations: &validations.ViolationCount{
+	// 		ValidateScan:                &validations.ScanCount{Sca: 12, Sast: 1, Secrets: 15},
+	// 		ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotCovered: 10},
+	// 	},
+	// 	ExactResultsMatch: true,
+	// })
 }

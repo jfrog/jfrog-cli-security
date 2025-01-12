@@ -59,7 +59,7 @@ func GitAuditCmd(c *components.Context) error {
 	if c.IsFlagSet(flags.Watches) {
 		gitAuditCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
-	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c))
+	gitAuditCmd.SetProjectKey(getProject(c)).SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	// Set Scan params
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err

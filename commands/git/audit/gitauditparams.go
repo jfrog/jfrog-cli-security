@@ -25,11 +25,12 @@ type GitAuditParams struct {
 	// Output params
 	outputFormat  format.OutputFormat
 	extendedTable bool
-	// Cmd information
-	xrayVersion string
-	xscVersion  string
-	multiScanId string
-	startTime   time.Time
+	// Cmd information (not params, set by the cmd)
+	xrayVersion         string
+	xscVersion          string
+	repositoryLocalPath string
+	multiScanId         string
+	startTime           time.Time
 }
 
 func NewGitAuditParams() *GitAuditParams {

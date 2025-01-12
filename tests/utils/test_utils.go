@@ -1,6 +1,7 @@
 package utils
 
 import (
+	// "crypto/rand"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -23,7 +24,7 @@ import (
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	// coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
@@ -393,8 +394,13 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, err := fileutils.CreateTempDir()
 	assert.NoError(t, err, "Couldn't create temp dir")
-	actualPath := filepath.Join(filepath.Dir(tempDirPath), filepath.Base(projectPath))
-	coreTests.RenamePath(tempDirPath, actualPath, t)
+	// create a temp dir inside it with generated random name, than create another dir inside it with the project name
+	// randomDirName := fmt.Sprintf("temp_%s", strconv.FormatInt(time.Now().UnixNano(), 10))
+	actualPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(actualPath))
+
+	// actualPath := filepath.Join(filepath.Dir(tempDirPath), filepath.Base(projectPath))
+	// coreTests.RenamePath(tempDirPath, actualPath, t)
 	assert.NoError(t, biutils.CopyDir(projectPath, actualPath, true, nil))
 	return actualPath, func() {
 		assert.NoError(t, fileutils.RemoveTempDir(actualPath), "Couldn't remove temp dir")
