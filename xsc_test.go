@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 
@@ -77,11 +78,11 @@ func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output s
 	// Get MSI.
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(output), &results)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify analytics metrics.
 	event, err := xsc.GetScanEvent(xrayVersion, xscVersion, results.MultiScanId, tests.XscDetails)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, event)
 	assert.NotEmpty(t, results.MultiScanId)
 

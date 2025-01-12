@@ -48,14 +48,17 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	return xmlMap
 }
 
-func ValidateXrayVersion(t *testing.T, minVersion string) {
+func GetAndValidateXrayVersion(t *testing.T, minVersion string) {
 	xrayVersion, err := GetTestsXrayVersion()
 	if err != nil {
 		assert.NoError(t, err)
 		return
 	}
-	err = clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion.GetVersion(), minVersion)
-	if err != nil {
+	ValidateXrayVersion(t, xrayVersion.GetVersion(), minVersion)
+}
+
+func ValidateXrayVersion(t *testing.T, xrayVersion, minVersion string) {
+	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion, minVersion); err != nil {
 		t.Skip(err)
 	}
 }
