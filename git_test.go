@@ -79,7 +79,7 @@ func TestGitAuditSimpleJson(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Vulnerabilities: 2},
+			Total:           &validations.TotalCount{Licenses: 3, Vulnerabilities: 2},
 			Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 2}},
 		},
 	)
