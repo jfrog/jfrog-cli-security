@@ -23,7 +23,12 @@ import (
 const (
 	// VersionForMainModule - We don't have information in swift on the current package, or main module, we only have information on its
 	// dependencies.
-	VersionForMainModule = "0.0.0"
+	VersionForMainModule      = "0.0.0"
+	VERSION_SYNTAX_TYPE_INDEX = 1
+	EXACT_VERSION_INDEX       = 2
+	FROM_VERSION_INDEX        = 3
+	START_RANGE_INDEX         = 4
+	END_RANGE_INDEX           = 5
 )
 
 type Dependencies struct {
@@ -37,7 +42,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Logger.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
+			log.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -102,25 +107,23 @@ func updateDependency(content, name, version, fixVersion string) string {
 		}
 
 		// Handle exact match
-		if len(submatches) > 1 && strings.Contains(submatches[1], "exact") {
-			log.Logger.Debug("Fixing dependency", name, "from version", submatches[2], "to", fixVersion)
-			return strings.Replace(match, submatches[2], fixVersion, 1)
+		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "exact") {
+			log.Debug("Fixing dependency", name, "from version", submatches[EXACT_VERSION_INDEX], "to", fixVersion)
+			return strings.Replace(match, submatches[EXACT_VERSION_INDEX], fixVersion, 1)
 		}
 		// Handle from match
-		if len(submatches) > 1 && strings.Contains(submatches[1], "from") {
-			log.Logger.Debug("Fixing dependency", name, "from version", submatches[3], "to", fixVersion)
-			return strings.Replace(match, submatches[3], fixVersion, 1)
+		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "from") {
+			log.Debug("Fixing dependency", name, "from version", submatches[FROM_VERSION_INDEX], "to", fixVersion)
+			return strings.Replace(match, submatches[FROM_VERSION_INDEX], fixVersion, 1)
 		}
 
 		// Handle range case
-		if len(submatches) > 5 && submatches[4] != "" && submatches[5] != "" {
-			// submatches[4] is the start of the range
-			// submatches[5] is the end of the range
-			startVersion := submatches[4]
-			endVersion := submatches[5]
+		if len(submatches) > 5 && submatches[START_RANGE_INDEX] != "" && submatches[END_RANGE_INDEX] != "" {
+			startVersion := submatches[START_RANGE_INDEX]
+			endVersion := submatches[END_RANGE_INDEX]
 			if version2.NewVersion(fixVersion).Compare(startVersion) < 1 && version2.NewVersion(fixVersion).Compare(endVersion) == 1 {
 				// Replace the start of the range with `fixVersion`
-				log.Logger.Debug("Fixing dependency", name, "from start version", startVersion, "to", fixVersion)
+				log.Debug("Fixing dependency", name, "from start version", startVersion, "to", fixVersion)
 				return strings.Replace(match, startVersion, fixVersion, 1)
 			}
 		}
@@ -133,18 +136,17 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Logger.Warn("Cannot support other files besides Package.swift: ", descriptorPath)
+			log.Warn("Cannot support other files besides Package.swift: ", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
 		if err != nil {
-			log.Logger.Warn("Error reading file: ", descriptorPath, err)
+			log.Warn("Error reading file: ", descriptorPath, err)
 			continue
 		}
 		updatedContent := updateDependency(string(data), dependencyName, dependencyVersion, fixVersion)
 		if strings.Compare(string(data), updatedContent) != 0 {
-			err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644)
-			if err != nil {
+			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil {
 				return fmt.Errorf("failed to write file: %v", err)
 			}
 			currentDir, err := coreutils.GetWorkingDirectory()
@@ -155,12 +157,11 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 			if err != nil {
 				return fmt.Errorf("could not run swift build due to %s", err)
 			}
-			_, err = runSwiftCmd(exePath, currentDir, []string{"build"})
-			if err != nil {
+			if _, err = runSwiftCmd(exePath, currentDir, []string{"build"}); err != nil {
 				return fmt.Errorf("could not run swift build due to %s", err)
 			}
 		} else {
-			log.Logger.Debug("No fixes were done in file", descriptorPath)
+			log.Debug("No fixes were done in file", descriptorPath)
 		}
 	}
 	return nil
