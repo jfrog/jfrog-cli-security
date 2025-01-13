@@ -96,6 +96,22 @@ func parseSwiftLine(line, directDependencyName, directDependencyVersion, descrip
 	return foundDependency, tempIndex, startLine, startCol
 }
 
+func handleNonRangeMatches(match, name, fixVersion string, index int, submatches []string) string {
+	log.Debug("Fixing dependency", name, "from version", submatches[index], "to", fixVersion)
+	return strings.Replace(match, submatches[index], fixVersion, 1)
+}
+
+func handleRangeMatches(match, name, fixVersion string, submatches []string) string {
+	startVersion := submatches[START_RANGE_INDEX]
+	endVersion := submatches[END_RANGE_INDEX]
+	if version2.NewVersion(fixVersion).Compare(startVersion) < 1 && version2.NewVersion(fixVersion).Compare(endVersion) == 1 {
+		// Replace the start of the range with `fixVersion`
+		log.Debug("Fixing dependency", name, "from start version", startVersion, "to", fixVersion)
+		return strings.Replace(match, startVersion, fixVersion, 1)
+	}
+	return match
+}
+
 func updateDependency(content, name, version, fixVersion string) string {
 	urlPattern := `(?:https://|http://|sso://)?` + regexp.QuoteMeta(strings.TrimSuffix(name, ".git")) + `(?:\.git)?`
 	pattern := `\.package\(url:\s*"` + urlPattern + `",\s*(exact:\s*"(` + version + `)"|from:\s*"(` + version + `)"|"([\d\.]+)"\.\.\s*<?\s*"([\d\.]+)")\)`
@@ -108,24 +124,17 @@ func updateDependency(content, name, version, fixVersion string) string {
 
 		// Handle exact match
 		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "exact") {
-			log.Debug("Fixing dependency", name, "from version", submatches[EXACT_VERSION_INDEX], "to", fixVersion)
-			return strings.Replace(match, submatches[EXACT_VERSION_INDEX], fixVersion, 1)
+			return handleNonRangeMatches(match, name, fixVersion, EXACT_VERSION_INDEX, submatches)
 		}
+
 		// Handle from match
 		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "from") {
-			log.Debug("Fixing dependency", name, "from version", submatches[FROM_VERSION_INDEX], "to", fixVersion)
-			return strings.Replace(match, submatches[FROM_VERSION_INDEX], fixVersion, 1)
+			return handleNonRangeMatches(match, name, fixVersion, FROM_VERSION_INDEX, submatches)
 		}
 
 		// Handle range case
 		if len(submatches) > 5 && submatches[START_RANGE_INDEX] != "" && submatches[END_RANGE_INDEX] != "" {
-			startVersion := submatches[START_RANGE_INDEX]
-			endVersion := submatches[END_RANGE_INDEX]
-			if version2.NewVersion(fixVersion).Compare(startVersion) < 1 && version2.NewVersion(fixVersion).Compare(endVersion) == 1 {
-				// Replace the start of the range with `fixVersion`
-				log.Debug("Fixing dependency", name, "from start version", startVersion, "to", fixVersion)
-				return strings.Replace(match, startVersion, fixVersion, 1)
-			}
+			return handleRangeMatches(match, name, fixVersion, submatches)
 		}
 		return match
 	})
