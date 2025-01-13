@@ -116,7 +116,7 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 	return nil
 }
 
-// ApplyHandlerToScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+// Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
 func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
@@ -145,6 +145,13 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 				// No handler was provided for security violations
 				continue
 			}
+
+			var skipNotApplicable bool
+			if skipNotApplicable, err = shouldSkipNotApplicable(violation, applicabilityStatus); skipNotApplicable {
+				log.Debug("A non-applicable violation was found and will be removed from final results as requested by its policies")
+				continue
+			}
+
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				if e := securityHandler(
 					violation, cves, applicabilityStatus, severity,
@@ -644,4 +651,32 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 		runs = append(runs, result.Scan...)
 	}
 	return
+}
+
+// Resolve the actual technology from multiple sources:
+func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
+	if responseTechnology != "" {
+		// technology returned in the vulnerability/violation obj is the most specific technology
+		return techutils.Technology(responseTechnology)
+	}
+	// if no technology is provided, use the target technology
+	return targetTech
+}
+
+// Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
+func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
+	if applicabilityStatus != jasutils.NotApplicable {
+		return false, nil
+	}
+
+	if len(violation.Policies) == 0 {
+		return false, errors.New("A violation with no policies was provided")
+	}
+
+	for _, policy := range violation.Policies {
+		if !policy.SkipNotApplicable {
+			return false, nil
+		}
+	}
+	return true, nil
 }
