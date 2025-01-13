@@ -59,13 +59,8 @@ func ValidateXrayVersion(t *testing.T, minVersion string) {
 	}
 }
 
-func ValidateXscVersion(t *testing.T, minVersion string) {
-	xscVersion, err := getTestsXscVersion()
-	if err != nil {
-		t.Skip(err)
-	}
-	err = clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion.GetVersion(), minVersion)
-	if err != nil {
+func ValidateXscVersion(t *testing.T, xscVersion, minVersion string) {
+	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion, minVersion); err != nil {
 		t.Skip(err)
 	}
 }
@@ -97,11 +92,6 @@ func removeDirs(dirs ...string) {
 func GetTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
-}
-
-func getTestsXscVersion() (version.Version, error) {
-	xscVersion, err := configTests.XscAuth.GetVersion()
-	return *version.NewVersion(xscVersion), err
 }
 
 func ChangeWD(t *testing.T, newPath string) string {
