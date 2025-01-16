@@ -340,7 +340,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				}},
 				IsDefault: false,
 			},
-			expectedSastIssues: 1,
+			expectedSastIssues: 3,
 		},
 		{
 			name:        "Enable only IaC scanner",
@@ -394,7 +394,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				}},
 				IsDefault: false,
 			},
-			expectedSastIssues:      1,
+			expectedSastIssues:      3,
 			expectedSecretsIssues:   16,
 			expectedIacIssues:       9,
 			expectedCaApplicable:    3,
