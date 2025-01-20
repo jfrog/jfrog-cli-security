@@ -478,6 +478,42 @@ func createTempDirWithPyProjectToml(t *testing.T, tech Technology) (tmpDir strin
 	return
 }
 
+func TestCleanSubDirectoriesForTechUnsupportedMulti(t *testing.T) {
+	workingDirectoryToIndicators := map[string][]string{
+		"project-root": {filepath.Join("project-root", "package.json")},
+		filepath.Join("project-root", "directory"): {filepath.Join("project-root", "directory", "package.json")},
+	}
+
+	testCases := []struct {
+		name                string
+		cleanSubDirectories bool
+		expected            map[string][]string
+	}{
+		{
+			name:                "cleanSubDirectories is true",
+			cleanSubDirectories: true,
+			expected:            map[string][]string{"project-root": {filepath.Join("project-root", "package.json"), filepath.Join("project-root", "directory", "package.json")}},
+		},
+		{
+			name: "cleanSubDirectories is false",
+			expected: map[string][]string{
+				"project-root": {filepath.Join("project-root", "package.json")},
+				filepath.Join("project-root", "directory"): {filepath.Join("project-root", "directory", "package.json")},
+			},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.cleanSubDirectories {
+				unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, JfrogCleanTechSubModulesEnv, "TRUE")
+				defer unsetEnv()
+			}
+			assertTechInformation(t, Npm, workingDirectoryToIndicators, map[string][]Technology{}, map[Technology][]string{}, false, test.expected)
+		})
+	}
+}
+
 func TestGetTechInformationFromWorkingDir(t *testing.T) {
 	projectDir, callback := createTempDirWithPyProjectToml(t, Pip)
 	defer callback()
@@ -636,15 +672,19 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			techInformation, err := getTechInformationFromWorkingDir(test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors, test.techProvidedByUser)
-			assert.NoError(t, err)
-			expectedKeys := maps.Keys(test.expected)
-			actualKeys := maps.Keys(techInformation)
-			assert.ElementsMatch(t, expectedKeys, actualKeys, fmt.Sprintf("expected: %v, actual: %v", expectedKeys, actualKeys))
-			for key, value := range test.expected {
-				assert.ElementsMatch(t, value, techInformation[key], fmt.Sprintf("expected: %v, actual: %v", value, techInformation[key]))
-			}
+			assertTechInformation(t, test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors, test.techProvidedByUser, test.expected)
 		})
+	}
+}
+
+func assertTechInformation(t *testing.T, tech Technology, workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, requestedDescriptors map[Technology][]string, techProvidedByUser bool, expected map[string][]string) {
+	techInformation, err := getTechInformationFromWorkingDir(tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, requestedDescriptors, techProvidedByUser)
+	assert.NoError(t, err)
+	expectedKeys := maps.Keys(expected)
+	actualKeys := maps.Keys(techInformation)
+	assert.ElementsMatch(t, expectedKeys, actualKeys, fmt.Sprintf("expected: %v, actual: %v", expectedKeys, actualKeys))
+	for key, value := range expected {
+		assert.ElementsMatch(t, value, techInformation[key], fmt.Sprintf("expected: %v, actual: %v", value, techInformation[key]))
 	}
 }
 
