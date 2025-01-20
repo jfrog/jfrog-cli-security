@@ -1272,7 +1272,7 @@ func TestSendWaiverRequests(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock server to simulate Artifactory responses
 			testHandler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
+				w.WriteHeader(http.StatusForbidden)
 				_, err := w.Write([]byte(tt.mockResponse))
 				assert.NoError(t, err)
 			}
