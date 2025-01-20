@@ -176,7 +176,7 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateXrayContext(c, serverDetails); err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
@@ -202,8 +202,7 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
@@ -264,7 +263,7 @@ func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.Serv
 	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
 }
 
-func validateXrayContext(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
+func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
 	if serverDetails.XrayUrl == "" {
 		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
 	}
@@ -355,8 +354,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
@@ -468,8 +466,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return "", "", nil, nil, err
 	}
 	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
@@ -726,8 +723,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)

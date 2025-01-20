@@ -69,8 +69,7 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	if err != nil {
 		return
 	}
-	gitInfo, err = gitManager.GetGitContext()
-	return
+	return gitManager.GetGitContext()
 }
 
 func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {

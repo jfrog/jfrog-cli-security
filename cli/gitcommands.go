@@ -53,7 +53,7 @@ func GitAuditCmd(c *components.Context) error {
 	}
 	gitAuditCmd.SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion)
 	// Set violations params
-	if err = validateXrayContext(c, serverDetails); err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	if c.IsFlagSet(flags.Watches) {
