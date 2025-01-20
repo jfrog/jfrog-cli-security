@@ -13,15 +13,13 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
 	outFormat "github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -69,6 +67,7 @@ const (
 	WaiverRequestForbidden = "One or more policies blocking this package do not allow waiver requests."
 	WaiverRequestApproved  = "The waiver request was automatically granted; you can use this package.\nNOTE: The policy owner may review this waiver more thoroughly and contact you if issues are found."
 	WaiverRequestPending   = "A waiver request was opened for review, and the owner was notified.\nYou will receive an email with an update once the status changes."
+	WaiverRequestError     = "An error occurred while processing the waiver request. Please try again later."
 
 	TotalConcurrentRequests = 10
 
@@ -76,8 +75,6 @@ const (
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
-	MinArtiWaiverRequest      = "7.103.0"
-	MinXrayWaiverRequest      = "3.113.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -169,6 +166,7 @@ type PackageStatus struct {
 	BlockingReason    string   `json:"blocking_reason"`
 	DepRelation       string   `json:"dependency_relation"`
 	PkgType           string   `json:"type"`
+	WaiverAllowed     bool     `json:"waiver_allowed"`
 	Policy            []Policy `json:"policies,omitempty"`
 }
 
@@ -285,10 +283,12 @@ func (ca *CurationAuditCommand) Run() (err error) {
 	for projectPath, packagesStatus := range results {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 
-		tech := packagesStatus.packagesStatus[0].PkgType
-		waiversSupported, _ := ca.checkSupportByVersionOrEnv(techutils.Technology(tech), MinXrayWaiverRequest, MinArtiWaiverRequest)
-		if len(packagesStatus.packagesStatus) > 0 && waiversSupported {
-			err = errors.Join(ca.requestWaiver(packagesStatus.packagesStatus))
+		for _, ps := range packagesStatus.packagesStatus {
+			if ps.WaiverAllowed {
+				// If at least one package allows waiver requests, we will ask the user if they want to request a waiver
+				err = errors.Join(ca.requestWaiver(packagesStatus.packagesStatus))
+				break
+			}
 		}
 	}
 	err = errors.Join(err, output.RecordSecurityCommandSummary(output.NewCurationSummary(convertResultsToSummary(results))))
@@ -485,9 +485,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 }
 
 func getSelectedPackages(requestedRows string, blockedPackages []*PackageStatus) (selectedPackages []*PackageStatus, ok bool) {
+	// Accepts the following formats: "all", or a comma-separated list of row numbers, or ranges of row numbers."
 	validFormat := regexp.MustCompile(`^(all|(\d+(-\d+)?)(,\d+(-\d+)?)*$)`)
 	if !validFormat.MatchString(requestedRows) {
-		fmt.Print("Invalid request format.\n\n")
+		log.Output("Invalid request format.\n\n")
 		return nil, false
 	}
 
@@ -495,41 +496,44 @@ func getSelectedPackages(requestedRows string, blockedPackages []*PackageStatus)
 		return blockedPackages, true
 	}
 
-	var indices []int
+	var indices = make(map[int]bool)
 	parts := strings.Split(requestedRows, ",")
+	// Iterate over the parts and add the indices to the list. Relies on the fact that the format is valid.
 	for _, part := range parts {
+		// If the part is a range, mark all the indices in the range as selected
 		if strings.Contains(part, "-") {
 			rangeParts := strings.Split(part, "-")
-			start, _ := strconv.Atoi(rangeParts[0])
-			end, _ := strconv.Atoi(rangeParts[1])
-			for i := start; i <= end; i++ {
-				if slices.Contains(indices, i) {
-					continue
-				}
-				indices = append(indices, i)
+			startRow, _ := strconv.Atoi(rangeParts[0])
+			endRow, _ := strconv.Atoi(rangeParts[1])
+			for i := startRow; i <= endRow; i++ {
+				indices[i] = true
 			}
 		} else {
-			index, err := strconv.Atoi(part)
-			if err != nil || slices.Contains(indices, index) {
-				continue
-			}
-			indices = append(indices, index)
+			// If the part is a single index, mark it as selected
+			i, _ := strconv.Atoi(part)
+			indices[i] = true
 		}
 	}
 
-	for _, index := range indices {
-		if index > 0 && index <= len(blockedPackages) {
-			selectedPackages = append(selectedPackages, blockedPackages[index-1])
-		} else {
-			fmt.Printf("Row number '%d' does not exist in the table. Please enter a valid row number.\n\n", index)
+	// Check if the indices are valid
+	for i := range indices {
+		if i < 1 || i > len(blockedPackages) {
+			log.Error("Invalid row number: %d", i)
 			return nil, false
+		}
+	}
+
+	// Prepare response, preserve original order
+	for i, pkg := range blockedPackages {
+		if indices[i+1] {
+			selectedPackages = append(selectedPackages, pkg)
 		}
 	}
 	return selectedPackages, true
 }
 
 func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg string, serverDetails *config.ServerDetails) (requestStatuses []WaiverResponse, err error) {
-	fmt.Print("Submitting waiver request...\n\n")
+	log.Output("Submitting waiver request...\n\n")
 	rtAuth, err := serverDetails.CreateArtAuthConfig()
 	if err != nil {
 		return nil, err
@@ -541,9 +545,12 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 	clientDetails := rtAuth.CreateHttpClientDetails()
 	clientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = msg
 	for _, pkg := range pkgs {
-		_, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
+		response, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed sending waiver request %v", err)
+		}
+		if err = errorutils.CheckResponseStatusWithBody(response, body, http.StatusForbidden); err != nil {
+			return nil, fmt.Errorf("recieived unexpected response while sending waiver request: %v", err)
 		}
 		var resp struct {
 			Errors []struct {
@@ -552,29 +559,31 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 			} `json:"errors"`
 		}
 		if err := json.Unmarshal(body, &resp); err != nil {
-			return nil, errors.New("failed decoding waiver request status")
+			return nil, fmt.Errorf("failed decoding waiver request status %v", err)
 		}
 
-		var id, status, message string
+		if len(resp.Errors) != 1 {
+			return nil, fmt.Errorf("got unexpected response structure while sending waiver request: %s", body)
+		}
 		parts := strings.Split(resp.Errors[0].Message, "|")
 		if len(parts) != 2 {
-			return nil, errors.New("failed decoding waiver request status")
+			return nil, fmt.Errorf("failed decoding waiver request response: %s", resp.Errors[0].Message)
 		}
-		id, status = parts[0], parts[1]
-		switch status {
+
+		waiverResponse := WaiverResponse{PkgName: pkg.PackageName}
+		waiverResponse.WaiverID, waiverResponse.Status = parts[0], parts[1]
+
+		switch waiverResponse.Status {
 		case "pending":
-			message = WaiverRequestPending
+			waiverResponse.Explanation = WaiverRequestPending
 		case "approved":
-			message = WaiverRequestApproved
+			waiverResponse.Explanation = WaiverRequestApproved
 		case "forbidden":
-			message = WaiverRequestForbidden
+			waiverResponse.Explanation = WaiverRequestForbidden
+		case "error":
+			waiverResponse.Explanation = WaiverRequestError
 		}
-		requestStatuses = append(requestStatuses, WaiverResponse{
-			PkgName:     pkg.PackageName,
-			Status:      status,
-			WaiverID:    id,
-			Explanation: message,
-		})
+		requestStatuses = append(requestStatuses, waiverResponse)
 	}
 	return requestStatuses, nil
 }
@@ -592,7 +601,7 @@ func getWaiverRequestParams(blockedPackages []*PackageStatus) (selectedPackages 
 		if len(requestMsg) >= 5 && len(requestMsg) <= 300 {
 			break
 		}
-		fmt.Print("The reason must be between 5 and 300 characters.\n\n")
+		log.Output("The reason must be between 5 and 300 characters.\n\n")
 	}
 	return selectedPackages, requestMsg
 }
@@ -605,10 +614,13 @@ func (ca *CurationAuditCommand) requestWaiver(blockedPackages []*PackageStatus) 
 	if len(selectedPackages) == 0 {
 		return nil
 	}
-	serverDetails, _ := ca.PackageManagerConfig.ServerDetails()
+	serverDetails, _ := ca.ServerDetails()
+	if serverDetails == nil {
+		return errorutils.CheckError(errors.New("server details are missing"))
+	}
 	pkgStatusTable, err := ca.sendWaiverRequests(selectedPackages, requestMsg, serverDetails)
 	if err != nil {
-		return err
+		return errorutils.CheckErrorf("failed sending waiver request: %v", err)
 	}
 
 	return coreutils.PrintTable(pkgStatusTable, "Waiver request submitted!", "Requested 0 waivers", true)
@@ -817,6 +829,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
+	nc.httpClientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
 	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
 	if err != nil {
 		if getResp == nil {
@@ -849,6 +862,7 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 				Action:            blocked,
 				Policy:            policies,
 				BlockingReason:    blockingReason,
+				WaiverAllowed:     strings.Contains(respError.Errors[0].Message, "[waivers allowed]"),
 				PkgType:           string(nc.tech),
 			}, nil
 		}
