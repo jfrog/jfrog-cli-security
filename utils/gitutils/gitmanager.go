@@ -58,8 +58,33 @@ func (gm *GitManager) getRootRemote() (root *goGit.Remote, err error) {
 	if len(remotes) == 1 {
 		return remotes[0], nil
 	}
-	// TODO: Forked repository remote is not supported yet. (how to handle multiple remotes?)
-	err = fmt.Errorf("multiple (%d) remotes found, currently only one remote is supported, remotes: %s", len(remotes), strings.Join(getRemoteNames(remotes...), ", "))
+	log.Debug(fmt.Sprintf("Multiple (%d) remotes found, detecting the current active branch remote. (remotes: %v)", len(remotes), getRemoteNames(remotes...)))
+	return gm.detectCurrentRemote(remotes)
+}
+
+// Try to resolve the remote of the current active branch in the project.
+func (gm *GitManager) detectCurrentRemote(remotes []*goGit.Remote) (remote *goGit.Remote, err error) {
+	// Get the current branch
+	branchRef, err := gm.localGitRepository.Head()
+	if err != nil {
+		err = fmt.Errorf("failed to get the current branch: %s", err)
+		return
+	}
+	// Get the branch configuration
+	branchConfig, err := gm.localGitRepository.Config()
+	if err != nil {
+		err = fmt.Errorf("failed to get the repository configuration: %s", err)
+		return
+	}
+	// Check if the current branch has a remote
+	if branch, exists := branchConfig.Branches[branchRef.Name().Short()]; exists {
+		// Obtain the referenced remote
+		for _, remote := range remotes {
+			if remote.Config().Name == branch.Remote {
+				return remote, nil
+			}
+		}
+	}
 	return
 }
 
@@ -85,6 +110,7 @@ func (gm *GitManager) IsClean() (bool, error) {
 	return status.IsClean(), nil
 }
 
+// Detect git information
 func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(gm.remote)
 	if err != nil {

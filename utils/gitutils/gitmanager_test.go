@@ -71,6 +71,21 @@ func TestGetGitContext(t *testing.T) {
 				LastCommitAuthor:     "attiasas",
 			},
 		},
+		{
+			name:                  "Forked Project (multiple remotes)",
+			testProjectZipDirPath: filepath.Join(basePath, "forked"),
+			gitInfo: &services.XscGitInfoContext{
+				GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
+				GitRepoName:          "test-security-git",
+				GitProject:           "attiasas",
+				GitProvider:          "github",
+				LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+				LastCommitMessage:    "remove json",
+				LastCommitAuthor:     "attiasas",
+
+				BranchName: "main",
+			},
+		},
 		// Not supported yet
 		{
 			name:                  "Dirty Project (with uncommitted changes)",
@@ -85,21 +100,6 @@ func TestGetGitContext(t *testing.T) {
 			// 	LastCommitAuthor:  "attiasas",
 
 			// 	BranchName: "dirty_branch",
-			// },
-		},
-		{
-			name:                  "Forked Project (multiple remotes)",
-			testProjectZipDirPath: filepath.Join(basePath, "forked"),
-			// gitInfo: &services.XscGitInfoContext{
-			// 	GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
-			// 	GitRepoName:          "test-security-git",
-			// 	GitProject:           "attiasas",
-			// 	GitProvider:          "github",
-			// 	LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
-			// 	LastCommitMessage:    "remove json",
-			// 	LastCommitAuthor:     "attiasas",
-
-			// 	BranchName: "main",
 			// },
 		},
 	}
