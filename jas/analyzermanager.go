@@ -24,7 +24,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.12.0"
+	defaultAnalyzerManagerVersion             = "1.13.2"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -35,6 +35,9 @@ const (
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
+	watchesEnvVariable                        = "AM_WATCHES"
+	projectEnvVariable                        = "AM_PROJECT_VIOLATIONS"
+	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
 	unsupportedOsExitCode                     = 55
@@ -156,18 +159,26 @@ func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVar
 }
 
 func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
+	if err == nil {
+		return
+	}
+	if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[GetAnalyzerManagerExitCode(err)]; exitCodeExists {
+		log.Warn(exitCodeDescription)
+		return nil
+	}
+	return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+}
+
+func GetAnalyzerManagerExitCode(err error) int {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		exitCode := exitError.ExitCode()
-		if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[exitCode]; exitCodeExists {
-			log.Warn(exitCodeDescription)
-			return nil
-		}
+		return exitError.ExitCode()
 	}
 	if err != nil {
-		return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+		// An exit code of -1 is used to indicate that an error occurred before the command was executed or that the exit code could not be determined.
+		return -1
 	}
-	return
+	return 0
 }
 
 // Download the latest AnalyzerManager executable if not cached locally.

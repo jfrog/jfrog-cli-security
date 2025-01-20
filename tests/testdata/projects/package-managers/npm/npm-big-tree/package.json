@@ -1,0 +1,20 @@
+{
+    "name": "zen-website",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "publishConfig": {
+      "registry": "http://artifactory-unified.soleng-us.jfrog.team/artifactory/api/npm/npm/"
+    },
+    "scripts": {
+      "dev": "nodemon ./index.js",
+      "ui": "browser-sync start --config bs-config.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+      "balaganjs": "1.0.0"
+    }
+  }
+  

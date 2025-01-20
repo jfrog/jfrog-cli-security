@@ -27,6 +27,8 @@ type AuditParams interface {
 	InstallCommandName() string
 	InstallCommandArgs() []string
 	SetNpmScope(depType string) *AuditBasicParams
+	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
+	MaxTreeDepth() string
 	OutputFormat() format.OutputFormat
 	DepsRepo() string
 	SetDepsRepo(depsRepo string) *AuditBasicParams
@@ -42,6 +44,7 @@ type AuditParams interface {
 	IsRecursiveScan() bool
 	SkipAutoInstall() bool
 	AllowPartialResults() bool
+	GetXrayVersion() string
 }
 
 type AuditBasicParams struct {
@@ -55,11 +58,12 @@ type AuditBasicParams struct {
 	ignoreConfigFile                 bool
 	isMavenDepTreeInstalled          bool
 	isCurationCmd                    bool
+	maxTreeDepth                     string
 	pipRequirementsFile              string
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
-	scansToPreform                   []SubScanType
+	scansToPerform                   []SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -118,6 +122,15 @@ func (abp *AuditBasicParams) UseJas() bool {
 	return abp.useJas
 }
 
+func (abp *AuditBasicParams) MaxTreeDepth() string {
+	return abp.maxTreeDepth
+}
+
+func (abp *AuditBasicParams) SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams {
+	abp.maxTreeDepth = maxTreeDepth
+	return abp
+}
+
 func (abp *AuditBasicParams) PipRequirementsFile() string {
 	return abp.pipRequirementsFile
 }
@@ -164,12 +177,12 @@ func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicP
 }
 
 func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
-	abp.scansToPreform = scansToPerform
+	abp.scansToPerform = scansToPerform
 	return abp
 }
 
 func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
-	return abp.scansToPreform
+	return abp.scansToPerform
 }
 
 func (abp *AuditBasicParams) Progress() ioUtils.ProgressMgr {

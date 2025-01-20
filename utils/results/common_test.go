@@ -399,6 +399,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			cves:           []services.Cve{{Id: "testCve2"}},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{
+				Reason: "result-msg",
 				Location: formats.Location{
 					File:      "fileName2",
 					StartLine: 1,
@@ -456,7 +457,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
-					Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
 				}},
 			},
 		},
@@ -558,7 +559,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
 			},
 		},
 	}
@@ -697,6 +698,112 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expectedOutput, getFinalApplicabilityStatus(tc.input))
+		})
+	}
+}
+
+func TestShouldSkipNotApplicable(t *testing.T) {
+	testCases := []struct {
+		name                string
+		violation           services.Violation
+		applicabilityStatus jasutils.ApplicabilityStatus
+		shouldSkip          bool
+		errorExpected       bool
+	}{
+		{
+			name:                "Applicable CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.Applicable,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Undetermined CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.ApplicabilityUndetermined,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Not covered CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotCovered,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Missing Context CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.MissingContext,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Not scanned CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotScanned,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name: "Non applicable CVE with skip-non-applicable in ALL policies - SHOULD skip",
+			violation: services.Violation{
+				Policies: []services.Policy{
+					{
+						Policy:            "policy-1",
+						SkipNotApplicable: true,
+					},
+					{
+						Policy:            "policy-2",
+						SkipNotApplicable: true,
+					},
+				},
+			},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          true,
+			errorExpected:       false,
+		},
+		{
+			name: "Non applicable CVE with skip-non-applicable in SOME policies - should NOT skip",
+			violation: services.Violation{
+				Policies: []services.Policy{
+					{
+						Policy:            "policy-1",
+						SkipNotApplicable: true,
+					},
+					{
+						Policy:            "policy-2",
+						SkipNotApplicable: false,
+					},
+				},
+			},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Violation without policy - error expected",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          false,
+			errorExpected:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			shouldSkip, err := shouldSkipNotApplicable(tc.violation, tc.applicabilityStatus)
+			if tc.errorExpected {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tc.shouldSkip {
+				assert.True(t, shouldSkip)
+			} else {
+				assert.False(t, shouldSkip)
+			}
 		})
 	}
 }

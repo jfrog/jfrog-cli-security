@@ -11,24 +11,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetConfigProfile(t *testing.T) {
+const testRepoUrl = "https://github.com/jfrog/test-repository.git"
+
+func TestGetConfigProfileByName(t *testing.T) {
 	testCases := []struct {
 		name        string
 		mockParams  validations.MockServerParams
 		expectError bool
 	}{
 		{
-			name:       "Deprecated XSC service",
+			name:       "Deprecated XSC service - Valid request",
 			mockParams: validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: services.ConfigProfileMinXscVersion},
 		},
 		{
-			name:       "Xsc as inner service in Xray",
-			mockParams: validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: services.ConfigProfileMinXscVersion},
+			name:        "Deprecated XSC service - Xsc version too low - error expected",
+			mockParams:  validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: "1.0.0"},
+			expectError: true,
 		},
 		{
-			name:        "Expected error - Xsc version too low",
-			mockParams:  validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: "1.0.0"},
-			expectError: true,
+			name:       "Xsc as inner service in Xray - valid request",
+			mockParams: validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: services.ConfigProfileMinXscVersion},
 		},
 	}
 
@@ -37,7 +39,50 @@ func TestGetConfigProfile(t *testing.T) {
 			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			configProfile, err := GetConfigProfile(testcase.mockParams.XrayVersion, testcase.mockParams.XscVersion, serverDetails, validations.TestConfigProfileName)
+			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, testcase.mockParams.XscVersion, serverDetails, validations.TestConfigProfileName)
+			if testcase.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, configProfile)
+				return
+			}
+			// Validate results
+			assert.NoError(t, err)
+
+			profileFileContent, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
+			assert.NoError(t, err)
+
+			var configProfileForComparison services.ConfigProfile
+			err = json.Unmarshal(profileFileContent, &configProfileForComparison)
+			assert.NoError(t, err)
+
+			assert.Equal(t, &configProfileForComparison, configProfile)
+		})
+	}
+}
+
+func TestGetConfigProfileByUrl(t *testing.T) {
+	testCases := []struct {
+		name        string
+		mockParams  validations.MockServerParams
+		expectError bool
+	}{
+		{
+			name:        "Xray version too low - error expected",
+			mockParams:  validations.MockServerParams{XrayVersion: "3.108.0"},
+			expectError: true,
+		},
+		{
+			name:       "Valid request",
+			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
+		},
+	}
+
+	for _, testcase := range testCases {
+		t.Run(testcase.name, func(t *testing.T) {
+			mockServer, serverDetails := validations.XrayServer(t, testcase.mockParams)
+			defer mockServer.Close()
+
+			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl)
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)

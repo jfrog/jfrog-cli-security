@@ -15,6 +15,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
@@ -25,6 +26,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"golang.org/x/sync/errgroup"
 
@@ -58,23 +60,21 @@ type ScanCommand struct {
 	spec          *spec.SpecFiles
 	threads       int
 	// The location of the downloaded Xray indexer binary on the local file system.
-	indexerPath            string
-	indexerTempDir         string
-	outputFormat           format.OutputFormat
-	projectKey             string
-	minSeverityFilter      severityutils.Severity
-	watches                []string
-	includeVulnerabilities bool
-	includeLicenses        bool
-	fail                   bool
-	printExtendedTable     bool
-	validateSecrets        bool
-	bypassArchiveLimits    bool
-	fixableOnly            bool
-	progress               ioUtils.ProgressMgr
+	indexerPath         string
+	indexerTempDir      string
+	outputFormat        format.OutputFormat
+	minSeverityFilter   severityutils.Severity
+	fail                bool
+	printExtendedTable  bool
+	validateSecrets     bool
+	bypassArchiveLimits bool
+	fixableOnly         bool
+	progress            ioUtils.ProgressMgr
 	// JAS is only supported for Docker images.
 	commandSupportsJAS bool
 	targetNameOverride string
+
+	resultsContext results.ResultContext
 
 	xrayVersion string
 	xscVersion  string
@@ -132,22 +132,27 @@ func (scanCmd *ScanCommand) SetSpec(spec *spec.SpecFiles) *ScanCommand {
 }
 
 func (scanCmd *ScanCommand) SetProject(project string) *ScanCommand {
-	scanCmd.projectKey = project
+	scanCmd.resultsContext.ProjectKey = project
 	return scanCmd
 }
 
 func (scanCmd *ScanCommand) SetWatches(watches []string) *ScanCommand {
-	scanCmd.watches = watches
+	scanCmd.resultsContext.Watches = watches
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetBaseRepoPath(artifactoryRepoPath string) *ScanCommand {
+	scanCmd.resultsContext.RepoPath = artifactoryRepoPath
 	return scanCmd
 }
 
 func (scanCmd *ScanCommand) SetIncludeVulnerabilities(include bool) *ScanCommand {
-	scanCmd.includeVulnerabilities = include
+	scanCmd.resultsContext.IncludeVulnerabilities = include
 	return scanCmd
 }
 
 func (scanCmd *ScanCommand) SetIncludeLicenses(include bool) *ScanCommand {
-	scanCmd.includeLicenses = include
+	scanCmd.resultsContext.IncludeLicenses = include
 	return scanCmd
 }
 
@@ -178,10 +183,6 @@ func (scanCmd *ScanCommand) SetXrayVersion(xrayVersion string) *ScanCommand {
 func (scanCmd *ScanCommand) SetXscVersion(xscVersion string) *ScanCommand {
 	scanCmd.xscVersion = xscVersion
 	return scanCmd
-}
-
-func (scanCmd *ScanCommand) hasViolationContext() bool {
-	return len(scanCmd.watches) > 0 || scanCmd.projectKey != ""
 }
 
 func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNode, error) {
@@ -217,12 +218,12 @@ func (scanCmd *ScanCommand) Run() (err error) {
 }
 
 func (scanCmd *ScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
-	hasViolationContext := scanCmd.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, scanCmd.serverDetails, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
+	hasViolationContext := scanCmd.resultsContext.HasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, scanCmd.serverDetails, scanCmd.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
-	if summary, err = output.NewBinaryScanSummary(scanResults, scanCmd.serverDetails, scanCmd.includeVulnerabilities, hasViolationContext); err != nil {
+	if summary, err = output.NewBinaryScanSummary(scanResults, scanCmd.serverDetails, scanCmd.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	return output.RecordSecurityCommandSummary(summary)
@@ -250,9 +251,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 
 	if err = output.NewResultsWriter(cmdResults).
 		SetOutputFormat(scanCmd.outputFormat).
-		SetHasViolationContext(scanCmd.hasViolationContext()).
-		SetIncludeVulnerabilities(scanCmd.includeVulnerabilities).
-		SetIncludeLicenses(scanCmd.includeLicenses).
+		SetPlatformUrl(scanCmd.serverDetails.Url).
 		SetPrintExtendedTable(scanCmd.printExtendedTable).
 		SetIsMultipleRootProject(cmdResults.HasMultipleTargets()).
 		PrintScanResults(); err != nil {
@@ -267,7 +266,7 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	}
 	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
-	if scanCmd.fail && !scanCmd.includeVulnerabilities {
+	if scanCmd.fail && !scanCmd.resultsContext.IncludeVulnerabilities {
 		if results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
 			return results.NewFailBuildError()
 		}
@@ -277,21 +276,10 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 }
 
 func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *results.SecurityCommandResults) {
-	xrayManager, cmdResults := initScanCmdResults(
-		cmdType,
-		scanCmd.serverDetails,
-		scanCmd.xrayVersion,
-		scanCmd.xscVersion,
-		scanCmd.multiScanId,
-		scanCmd.startTime,
-		scanCmd.bypassArchiveLimits,
-		scanCmd.validateSecrets,
-		scanCmd.commandSupportsJAS,
-	)
-	if cmdResults.GeneralError != nil {
+	xrayManager, cmdResults := scanCmd.initScanCmdResults(cmdType)
+	if cmdResults.GetErrors() != nil {
 		return
 	}
-	log.Info("JFrog Xray version is:", cmdResults.XrayVersion)
 	// First, Download (if needed) the analyzer manager in a background routine.
 	errGroup := new(errgroup.Group)
 	if cmdResults.EntitledForJas {
@@ -327,34 +315,35 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	return
 }
 
-func initScanCmdResults(cmdType utils.CommandType, serverDetails *config.ServerDetails, xrayVersion, xscVersion, msi string, startTime time.Time, bypassArchiveLimits, validateSecrets, useJas bool) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
+func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayManager *xrayClient.XrayServicesManager, cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(cmdType)
 	// Validate Xray minimum version for graph scan command
-	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, scanCmd.xrayVersion, scangraph.GraphScanMinXrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
-	if bypassArchiveLimits {
+	if scanCmd.bypassArchiveLimits {
 		// Validate Xray minimum version for BypassArchiveLimits flag for indexer
-		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
+		if err := clientutils.ValidateMinimumVersion(clientutils.Xray, scanCmd.xrayVersion, BypassArchiveLimitsMinXrayVersion); err != nil {
 			return xrayManager, cmdResults.AddGeneralError(err, false)
 		}
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(scanCmd.serverDetails)
 	if err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
 	// Initialize general information
-	cmdResults.SetXrayVersion(xrayVersion)
-	cmdResults.SetXscVersion(xscVersion)
-	cmdResults.SetMultiScanId(msi)
-	cmdResults.SetStartTime(startTime)
+	cmdResults.SetXrayVersion(scanCmd.xrayVersion)
+	cmdResults.SetXscVersion(scanCmd.xscVersion)
+	cmdResults.SetMultiScanId(scanCmd.multiScanId)
+	cmdResults.SetStartTime(scanCmd.startTime)
+	cmdResults.SetResultsContext(scanCmd.resultsContext)
 	// Send entitlement request
-	if entitledForJas, err := isEntitledForJas(xrayManager, xrayVersion, useJas); err != nil {
+	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion, scanCmd.commandSupportsJAS); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
 		if entitledForJas {
-			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, xrayVersion, validateSecrets))
+			cmdResults.SetSecretValidation(jas.CheckForSecretValidation(xrayManager, scanCmd.xrayVersion, scanCmd.validateSecrets))
 		}
 	}
 	return
@@ -445,23 +434,21 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				params := &services.XrayGraphScanParams{
 					BinaryGraph:            graph,
 					RepoPath:               getXrayRepoPathFromTarget(file.Target),
-					Watches:                scanCmd.watches,
-					IncludeLicenses:        scanCmd.includeLicenses,
-					IncludeVulnerabilities: scanCmd.includeVulnerabilities,
-					ProjectKey:             scanCmd.projectKey,
+					Watches:                scanCmd.resultsContext.Watches,
+					IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
+					IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+					ProjectKey:             scanCmd.resultsContext.ProjectKey,
 					ScanType:               services.Binary,
 					MultiScanId:            cmdResults.MultiScanId,
 					XscVersion:             cmdResults.XscVersion,
 					XrayVersion:            cmdResults.XrayVersion,
 				}
-
 				if scanCmd.progress != nil {
 					scanCmd.progress.SetHeadlineMsg("Scanning 🔍")
 				}
 				scanGraphParams := scangraph.NewScanGraphParams().
 					SetServerDetails(scanCmd.serverDetails).
 					SetXrayGraphScanParams(params).
-					SetXrayVersion(cmdResults.XrayVersion).
 					SetFixableOnly(scanCmd.fixableOnly).
 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
 				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
@@ -472,7 +459,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(*graphScanResults)
+					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
@@ -483,7 +470,18 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
 				}
 				// Run Jas scans
-				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails, cmdResults.SecretValidation, scanCmd.minSeverityFilter, jas.GetAnalyzerManagerXscEnvVars(cmdResults.MultiScanId, targetResults.GetTechnologies()...))
+				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails,
+					cmdResults.SecretValidation,
+					scanCmd.minSeverityFilter,
+					jas.GetAnalyzerManagerXscEnvVars(
+						cmdResults.MultiScanId,
+						// Passing but empty since not supported for binary scans
+						scanCmd.resultsContext.GitRepoHttpsCloneUrl,
+						scanCmd.resultsContext.ProjectKey,
+						scanCmd.resultsContext.Watches,
+						targetResults.GetTechnologies()...,
+					),
+				)
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
 				} else if scanner == nil {
@@ -495,7 +493,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					ServerDetails:      scanCmd.serverDetails,
 					Scanner:            scanner,
 					Module:             module,
-					ScansToPreform:     utils.GetAllSupportedScans(),
+					ScansToPerform:     utils.GetAllSupportedScans(),
 					SecretsScanType:    secrets.SecretsScannerDockerScanType,
 					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
 					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
@@ -625,5 +623,9 @@ func directDepsListFromVulnerabilities(scanResult ...services.ScanResponse) *[]s
 }
 
 func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileSpec *spec.SpecFiles, threads int, scanOutputFormat format.OutputFormat) error {
-	return NewScanCommand().SetServerDetails(serverDetails).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
+	if err != nil {
+		return err
+	}
+	return NewScanCommand().SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
 }

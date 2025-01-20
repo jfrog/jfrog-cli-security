@@ -206,18 +206,20 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
 	var specFile *spec.SpecFiles
+	repoPath := ""
 	if c.IsFlagSet(flags.SpecFlag) && len(c.GetStringFlagValue(flags.SpecFlag)) > 0 {
 		specFile, err = pluginsCommon.GetFileSystemSpec(c)
 		if err != nil {
 			return err
 		}
 	} else {
-		specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+		repoPath = addTrailingSlashToRepoPathIfNeeded(c)
+		specFile = createDefaultScanSpec(c, repoPath)
 	}
 	err = spec.ValidateSpec(specFile.Files, false, false)
 	if err != nil {
@@ -244,6 +246,7 @@ func ScanCmd(c *components.Context) error {
 		SetSpec(specFile).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -453,7 +456,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return "", "", nil, nil, err
 	}
@@ -472,7 +475,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
-		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
@@ -500,6 +503,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
 		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
 	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
@@ -713,7 +717,7 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	xrayVersion, xscVersion, err := GetJfrogServicesVersion(serverDetails)
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
@@ -727,12 +731,12 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand.SetImageTag(image).
-		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
@@ -746,27 +750,4 @@ func DockerScan(c *components.Context, image string) error {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return progressbar.ExecWithProgress(containerScanCommand)
-}
-
-func GetJfrogServicesVersion(serverDetails *coreConfig.ServerDetails) (xrayVersion, xscVersion string, err error) {
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
-	if err != nil {
-		return
-	}
-	xrayVersion, err = xrayManager.GetVersion()
-	if err != nil {
-		return
-	}
-	log.Debug("Xray version: " + xrayVersion)
-	xscService, err := xsc.CreateXscService(xrayVersion, serverDetails)
-	if err != nil {
-		return
-	}
-	xscVersion, e := xscService.GetVersion()
-	if e != nil {
-		log.Debug("Using Xray: " + e.Error())
-		return
-	}
-	log.Debug("XSC version: " + xscVersion)
-	return
 }

@@ -1,10 +1,10 @@
 package enrich
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,10 +14,10 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
@@ -27,6 +27,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	orderedJson "github.com/virtuald/go-ordered-json"
 )
 
 type FileContext func(string) parallel.TaskFunc
@@ -75,8 +76,8 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	if err != nil {
 		return fmt.Errorf("error reading file: %s", err.Error())
 	}
-	var data map[string]interface{}
-	err = json.Unmarshal(fileContent, &data)
+	var data orderedJson.OrderedObject
+	err = orderedJson.Unmarshal(fileContent, &data)
 	if err != nil {
 		return fmt.Errorf("error parsing JSON: %s", err.Error())
 	}
@@ -93,7 +94,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 			vulnerabilities = append(vulnerabilities, vulnerability)
 		}
 	}
-	data["vulnerabilities"] = vulnerabilities
+	data = append(data, orderedJson.Member{Key: "vulnerabilities", Value: vulnerabilities})
 	return output.PrintJson(data)
 }
 
@@ -265,7 +266,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
-				targetResults.NewScaScanResults(*scanResults)
+				targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *scanResults), *scanResults)
 				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)
 				return
 			}

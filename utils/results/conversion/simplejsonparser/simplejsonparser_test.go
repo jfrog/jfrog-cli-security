@@ -95,6 +95,7 @@ var (
 			IssueId:       "XRAY-3",
 			Summary:       "summary-3",
 			Severity:      "Low",
+			WatchName:     "lic-watch-name",
 			ViolationType: "license",
 			LicenseKey:    "license-1",
 			Components: map[string]services.Component{
@@ -350,7 +351,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
@@ -366,7 +367,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-B",
@@ -385,7 +386,8 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					Cves: []formats.CveRow{{
 						Id: "CVE-2",
 						Applicability: &formats.Applicability{
-							Status: jasutils.Applicable.String(),
+							ScannerDescription: "rule-msg",
+							Status:             jasutils.Applicable.String(),
 							Evidence: []formats.Evidence{{
 								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
 								Reason:   "applic_CVE-2",
@@ -424,7 +426,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 		entitledForJas                bool
 		applicabilityRuns             []*sarif.Run
 		expectedSecurityOutput        []formats.VulnerabilityOrViolationRow
-		expectedLicenseOutput         []formats.LicenseRow
+		expectedLicenseOutput         []formats.LicenseViolationRow
 		expectedOperationalRiskOutput []formats.OperationalRiskViolationRow
 	}{
 		{
@@ -450,6 +452,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 				{
 					Summary: "summary-1",
@@ -465,6 +470,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 				{
 					Summary: "summary-2",
@@ -480,15 +488,23 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 			},
-			expectedLicenseOutput: []formats.LicenseRow{
+			expectedLicenseOutput: []formats.LicenseViolationRow{
 				{
-					LicenseKey: "license-1",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
-						ImpactedDependencyName: "component-B",
-						Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+					LicenseRow: formats.LicenseRow{
+						LicenseKey: "license-1",
+						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+							SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
+							ImpactedDependencyName: "component-B",
+							Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target"}}},
+						},
+					},
+					ViolationContext: formats.ViolationContext{
+						Watch: "lic-watch-name",
 					},
 				},
 			},
@@ -513,7 +529,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
@@ -524,12 +540,15 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 				{
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{Status: jasutils.NotApplicable.String()}}},
+					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-B",
@@ -540,6 +559,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 				{
 					Summary:    "summary-2",
@@ -548,7 +570,8 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					Cves: []formats.CveRow{{
 						Id: "CVE-2",
 						Applicability: &formats.Applicability{
-							Status: jasutils.Applicable.String(),
+							ScannerDescription: "rule-msg",
+							Status:             jasutils.Applicable.String(),
 							Evidence: []formats.Evidence{{
 								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
 								Reason:   "applic_CVE-2",
@@ -565,19 +588,27 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
+					ViolationContext: formats.ViolationContext{
+						Watch: "watch-name",
+					},
 				},
 			},
-			expectedLicenseOutput: []formats.LicenseRow{
+			expectedLicenseOutput: []formats.LicenseViolationRow{
 				{
-					LicenseKey: "license-1",
-					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
-						ImpactedDependencyName: "component-B",
-						// Direct
-						Components: []formats.ComponentRow{{
-							Name:     "component-B",
-							Location: &formats.Location{File: "target"},
-						}},
+					LicenseRow: formats.LicenseRow{
+						LicenseKey: "license-1",
+						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+							SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
+							ImpactedDependencyName: "component-B",
+							// Direct
+							Components: []formats.ComponentRow{{
+								Name:     "component-B",
+								Location: &formats.Location{File: "target"},
+							}},
+						},
+					},
+					ViolationContext: formats.ViolationContext{
+						Watch: "lic-watch-name",
 					},
 				},
 			},
@@ -681,8 +712,10 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 			jasIssues:      issues,
 			expectedOutput: []formats.SourceCodeRow{
 				{
+					Finding:         "result-msg",
 					Location:        formats.Location{File: "file", StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "secret-snippet"},
 					SeverityDetails: formats.SeverityDetails{Severity: "Low", SeverityNumValue: 13},
+					ScannerInfo:     formats.ScannerInfo{RuleId: "secret-rule-id", ScannerDescription: "rule-msg"},
 				},
 			},
 		},

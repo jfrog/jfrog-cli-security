@@ -20,17 +20,27 @@ func ValidateCommandSummaryOutput(t *testing.T, params ValidationParams) {
 }
 
 func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results formats.ResultsSummary) {
-	var vulnerabilities, securityViolations, licenseViolations, opRiskViolations, applicableResults, undeterminedResults, notCoveredResults, notApplicableResults, missingContextResults, sast, iac, secrets int
+	actualValues := validationCountActualValues{
+		// Total
+		Vulnerabilities: results.GetTotalVulnerabilities(),
+		Violations:      results.GetTotalViolations(),
+		// Jas vulnerabilities
+		SastVulnerabilities:    results.GetTotalVulnerabilities(formats.SastResult),
+		SecretsVulnerabilities: results.GetTotalVulnerabilities(formats.SecretsResult),
+		IacVulnerabilities:     results.GetTotalVulnerabilities(formats.IacResult),
+		// Jas violations
+		SastViolations:    results.GetTotalViolations(formats.SastResult),
+		SecretsViolations: results.GetTotalViolations(formats.SecretsResult),
+		IacViolations:     results.GetTotalViolations(formats.IacResult),
+		// Sca vulnerabilities
+		ScaVulnerabilities: results.GetTotalVulnerabilities(formats.ScaSecurityResult),
+		// Sca violations
+		ScaViolations:         results.GetTotalViolations(formats.ScaSecurityResult, formats.ScaLicenseResult, formats.ScaOperationalResult),
+		SecurityViolations:    results.GetTotalViolations(formats.ScaSecurityResult),
+		LicenseViolations:     results.GetTotalViolations(formats.ScaLicenseResult),
+		OperationalViolations: results.GetTotalViolations(formats.ScaOperationalResult),
+	}
 
-	vulnerabilities = results.GetTotalVulnerabilities()
-
-	securityViolations = results.GetTotalViolations(formats.ScaSecurityResult)
-	licenseViolations = results.GetTotalViolations(formats.ScaLicenseResult)
-	opRiskViolations = results.GetTotalViolations(formats.ScaOperationalResult)
-	// Jas Results only available as vulnerabilities
-	sast = results.GetTotalVulnerabilities(formats.SastResult)
-	secrets = results.GetTotalVulnerabilities(formats.SecretsResult)
-	iac = results.GetTotalVulnerabilities(formats.IacResult)
 	// Get applicability status counts
 	for _, scan := range results.Scans {
 		if scan.Vulnerabilities != nil {
@@ -39,34 +49,62 @@ func ValidateSummaryIssuesCount(t *testing.T, params ValidationParams, results f
 					for status, count := range counts {
 						switch status {
 						case jasutils.Applicable.String():
-							applicableResults += count
+							actualValues.ApplicableVulnerabilities += count
 						case jasutils.ApplicabilityUndetermined.String():
-							undeterminedResults += count
+							actualValues.UndeterminedVulnerabilities += count
 						case jasutils.NotCovered.String():
-							notCoveredResults += count
+							actualValues.NotCoveredVulnerabilities += count
 						case jasutils.NotApplicable.String():
-							notApplicableResults += count
+							actualValues.NotApplicableVulnerabilities += count
 						case jasutils.MissingContext.String():
-							missingContextResults += count
+							actualValues.MissingContextVulnerabilities += count
+						}
+					}
+				}
+			}
+			if scan.Vulnerabilities.SecretsResults != nil {
+				for _, counts := range *scan.Vulnerabilities.SecretsResults {
+					for status, count := range counts {
+						if status == jasutils.Inactive.String() {
+							actualValues.InactiveSecretsVulnerabilities += count
+						}
+					}
+				}
+			}
+		}
+		if scan.Violations != nil {
+			if scan.Violations.ScaResults != nil {
+				for _, counts := range scan.Violations.ScaResults.Security {
+					for status, count := range counts {
+						switch status {
+						case jasutils.Applicable.String():
+							actualValues.ApplicableViolations += count
+						case jasutils.ApplicabilityUndetermined.String():
+							actualValues.UndeterminedViolations += count
+						case jasutils.NotCovered.String():
+							actualValues.NotCoveredViolations += count
+						case jasutils.NotApplicable.String():
+							actualValues.NotApplicableViolations += count
+						case jasutils.MissingContext.String():
+							actualValues.MissingContextViolations += count
+						}
+					}
+				}
+			}
+			if scan.Violations.SecretsResults != nil {
+				for _, counts := range *scan.Violations.SecretsResults {
+					for status, count := range counts {
+						if status == jasutils.Inactive.String() {
+							actualValues.InactiveSecretsViolations += count
 						}
 					}
 				}
 			}
 		}
 	}
-
-	ValidateContent(t, params.ExactResultsMatch,
-		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", "summary", params.ExactResultsMatch, params.Vulnerabilities, vulnerabilities)},
-		CountValidation[int]{Expected: params.Sast, Actual: sast, Msg: GetValidationCountErrMsg("sast", "summary", params.ExactResultsMatch, params.Sast, sast)},
-		CountValidation[int]{Expected: params.Secrets, Actual: secrets, Msg: GetValidationCountErrMsg("secrets", "summary", params.ExactResultsMatch, params.Secrets, secrets)},
-		CountValidation[int]{Expected: params.Iac, Actual: iac, Msg: GetValidationCountErrMsg("IaC", "summary", params.ExactResultsMatch, params.Iac, iac)},
-		CountValidation[int]{Expected: params.Applicable, Actual: applicableResults, Msg: GetValidationCountErrMsg("applicable vulnerabilities", "summary", params.ExactResultsMatch, params.Applicable, applicableResults)},
-		CountValidation[int]{Expected: params.Undetermined, Actual: undeterminedResults, Msg: GetValidationCountErrMsg("undetermined vulnerabilities", "summary", params.ExactResultsMatch, params.Undetermined, undeterminedResults)},
-		CountValidation[int]{Expected: params.NotCovered, Actual: notCoveredResults, Msg: GetValidationCountErrMsg("not covered vulnerabilities", "summary", params.ExactResultsMatch, params.NotCovered, notCoveredResults)},
-		CountValidation[int]{Expected: params.NotApplicable, Actual: notApplicableResults, Msg: GetValidationCountErrMsg("not applicable vulnerabilities", "summary", params.ExactResultsMatch, params.NotApplicable, notApplicableResults)},
-		CountValidation[int]{Expected: params.MissingContext, Actual: missingContextResults, Msg: GetValidationCountErrMsg("missing context vulnerabilities", "summary", params.ExactResultsMatch, params.MissingContext, missingContextResults)},
-		CountValidation[int]{Expected: params.SecurityViolations, Actual: securityViolations, Msg: GetValidationCountErrMsg("security violations", "summary", params.ExactResultsMatch, params.SecurityViolations, securityViolations)},
-		CountValidation[int]{Expected: params.LicenseViolations, Actual: licenseViolations, Msg: GetValidationCountErrMsg("license violations", "summary", params.ExactResultsMatch, params.LicenseViolations, licenseViolations)},
-		CountValidation[int]{Expected: params.OperationalViolations, Actual: opRiskViolations, Msg: GetValidationCountErrMsg("operational risk violations", "summary", params.ExactResultsMatch, params.OperationalViolations, opRiskViolations)},
-	)
+	if params.Total != nil {
+		// Not supported in the summary output
+		params.Total.Licenses = 0
+	}
+	ValidateCount(t, "summary", params, actualValues)
 }

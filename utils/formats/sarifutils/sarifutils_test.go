@@ -566,7 +566,7 @@ func TestGetRunRules(t *testing.T) {
 			run: CreateRunWithDummyResults(
 				CreateDummyPassingResult("rule1"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1")},
+			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"))},
 		},
 		{
 			run: CreateRunWithDummyResults(
@@ -576,12 +576,17 @@ func TestGetRunRules(t *testing.T) {
 				CreateDummyPassingResult("rule3"),
 				CreateDummyPassingResult("rule2"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1"), sarif.NewRule("rule2"), sarif.NewRule("rule3")},
+			expectedOutput: []*sarif.ReportingDescriptor{
+				sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule2").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule3").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+			},
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetRunRules(test.run))
+		rules := GetRunRules(test.run)
+		assert.Equal(t, test.expectedOutput, rules)
 	}
 }
 
@@ -635,7 +640,7 @@ func TestGetResultFingerprint(t *testing.T) {
 		},
 		{
 			name:           "Results with fingerprint field",
-			result:         CreateDummyResultWithFingerprint("some_markdown", "masg", jasutils.SastFingerprintKey, "sast_fingerprint"),
+			result:         CreateDummyResultWithFingerprint("some_markdown", "msg", jasutils.SastFingerprintKey, "sast_fingerprint"),
 			expectedOutput: "sast_fingerprint",
 		},
 	}

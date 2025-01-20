@@ -145,9 +145,12 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(utils.Build).SetXrayVersion(xrayVersion)
+	cmdResults := results.NewCommandResults(utils.Build).
+		SetXrayVersion(xrayVersion).
+		SetResultsContext(results.ResultContext{ProjectKey: params.Project, IncludeVulnerabilities: bsc.includeVulnerabilities})
+
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
-	scanResults.NewScaScanResults(services.ScanResponse{
+	scanResults.NewScaScanResults(0, services.ScanResponse{
 		Violations:      buildScanResults.Violations,
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
@@ -155,9 +158,9 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetPlatformUrl(bsc.serverDetails.Url).
+		// In build-scan we always want to print the violations.
 		SetHasViolationContext(true).
-		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
-		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable)
 
@@ -166,14 +169,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		if err = resultsPrinter.PrintScanResults(); err != nil {
 			return
 		}
-	} else {
-		// Print two different tables for violations and vulnerabilities (if needed)
-
+	} else if !noFailBuildPolicy {
 		// If "No Xray Fail build policy...." error received, no need to print violations
-		if !noFailBuildPolicy {
-			if err = resultsPrinter.PrintScanResults(); err != nil {
-				return false, err
-			}
+		if err = resultsPrinter.PrintScanResults(); err != nil {
+			return false, err
 		}
 	}
 	err = bsc.recordResults(cmdResults, params)
