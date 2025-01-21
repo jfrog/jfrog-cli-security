@@ -49,8 +49,8 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		return fmt.Errorf("failed to get git context: %v", err)
 	}
 	if gitInfo == nil {
-		// No Error but no git info = project is dirty
-		return fmt.Errorf("the project in '%s' is dirty. Please commit your changes and try again", gaCmd.repositoryLocalPath)
+		// No Error but no git info = project working tree is dirty
+		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
 	gaCmd.source = *gitInfo
 	// Run the scan

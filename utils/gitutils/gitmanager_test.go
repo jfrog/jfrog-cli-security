@@ -79,11 +79,10 @@ func TestGetGitContext(t *testing.T) {
 				GitRepoName:          "test-security-git",
 				GitProject:           "attiasas",
 				GitProvider:          "github",
+				BranchName:           "main",
 				LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
 				LastCommitMessage:    "remove json",
 				LastCommitAuthor:     "attiasas",
-
-				BranchName: "main",
 			},
 		},
 		// Not supported yet

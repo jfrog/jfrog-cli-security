@@ -200,7 +200,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	cleanUpPolicy()
 	firstPolicyCleaned = true
 
-	// Create policy and watch for the git repo so we will also get violations - This watch DO NOT skip not-applicable results
+	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
 	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))

@@ -14,11 +14,9 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
@@ -36,7 +34,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -259,30 +256,6 @@ func ScanCmd(c *components.Context) error {
 	return commandsCommon.Exec(scanCmd)
 }
 
-func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.ServerDetails, error) {
-	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
-}
-
-func validateConnectionAndViolationContextInputs(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
-	if serverDetails.XrayUrl == "" {
-		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
-	}
-	contextFlag := 0
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		contextFlag++
-	}
-	if isProjectProvided(c) {
-		contextFlag++
-	}
-	if c.GetStringFlagValue(flags.RepoPath) != "" {
-		contextFlag++
-	}
-	if contextFlag > 1 {
-		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
-	}
-	return nil
-}
-
 func getMinimumSeverity(c *components.Context) (severity severityutils.Severity, err error) {
 	flagSeverity := c.GetStringFlagValue(flags.MinSeverity)
 	if flagSeverity == "" {
@@ -293,17 +266,6 @@ func getMinimumSeverity(c *components.Context) (severity severityutils.Severity,
 		return
 	}
 	return
-}
-
-func isProjectProvided(c *components.Context) bool {
-	return getProject(c) != ""
-}
-
-func getProject(c *components.Context) string {
-	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project)
-	}
-	return os.Getenv(coreutils.Project)
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
@@ -330,15 +292,6 @@ func createDefaultScanSpec(c *components.Context, defaultTarget string) *spec.Sp
 func shouldIncludeVulnerabilities(c *components.Context) bool {
 	// If no context was provided by the user, no Violations will be triggered by Xray, so include general vulnerabilities in the command output
 	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
-}
-
-func splitByCommaAndTrim(paramValue string) (res []string) {
-	args := strings.Split(paramValue, ",")
-	res = make([]string, len(args))
-	for i, arg := range args {
-		res[i] = strings.TrimSpace(arg)
-	}
-	return
 }
 
 // Scan published builds with Xray
@@ -373,28 +326,6 @@ func BuildScan(c *components.Context) error {
 		buildScanCmd.SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln))
 	}
 	return commandsCommon.Exec(buildScanCmd)
-}
-
-func getSubScansToPreform(c *components.Context) (subScans []utils.SubScanType, err error) {
-	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
-		// No CA flag provided but sca flag is not provided, error
-		err = pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.WithoutCA, flags.Sca), c)
-		return
-	}
-
-	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
-		// No secrets flag but secret validation is provided, error
-		err = pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
-		return
-	}
-
-	allSubScans := utils.GetAllSupportedScans()
-	for _, subScan := range allSubScans {
-		if shouldAddSubScan(subScan, c) {
-			subScans = append(subScans, subScan)
-		}
-	}
-	return
 }
 
 func AuditCmd(c *components.Context) error {
@@ -443,21 +374,6 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
-}
-
-func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
-	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
-}
-
-func reportErrorIfExists(xrayVersion, xscVersion string, serverDetails *coreConfig.ServerDetails, err error) error {
-	if err == nil || !usage.ShouldReportUsage() {
-		return err
-	}
-	if reportError := xsc.ReportError(xrayVersion, xscVersion, serverDetails, err, "cli"); reportError != nil {
-		log.Debug("failed to report error log:" + reportError.Error())
-	}
-	return err
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
