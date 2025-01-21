@@ -161,6 +161,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 	scanGraphParams := scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
 		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetTechnology(tech).
 		SetFixableOnly(params.fixableOnly).
 		SetSeverityLevel(params.minSeverityFilter.String())
 

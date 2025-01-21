@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.23.3
+go 1.23.4
 
 require (
 	github.com/beevik/etree v1.4.0
@@ -11,8 +11,8 @@ require (
 	github.com/jfrog/froggit-go v1.16.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.57.6
-	github.com/jfrog/jfrog-client-go v1.49.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.57.7
+	github.com/jfrog/jfrog-client-go v1.49.1
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.10.0
@@ -47,6 +47,7 @@ require (
 	github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.0 // indirect
+	github.com/go-git/go-git/v5 v5.13.0 // indirect
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -93,7 +94,7 @@ require (
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
-	github.com/vbauerster/mpb/v8 v8.8.3 // indirect
+	github.com/vbauerster/mpb/v8 v8.9.1 // indirect
 	github.com/xanzy/go-gitlab v0.110.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
