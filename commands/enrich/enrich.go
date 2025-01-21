@@ -84,7 +84,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	}
 	var vulnerabilities []map[string]string
 	xrayResults := cmdResults.GetScaScansXrayResults()
-	if xrayResults == nil || len(xrayResults) == 0 {
+	if len(xrayResults) == 0 {
 		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
 		log.Warn("Received %d results, parsing only first result", len(xrayResults))
@@ -109,7 +109,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 	destination := result.FindElements("//bom")[0]
 	xrayResults := cmdResults.GetScaScansXrayResults()
 	if len(xrayResults) == 0 {
-		return fmt.Errorf("failed while getting sca scan from xray: %s", err.Error())
+		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
 		log.Warn("Received %d results, parsing only first result", len(xrayResults))
 	}
