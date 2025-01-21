@@ -36,11 +36,10 @@ func TestGetGitContext(t *testing.T) {
 				GitRepoName:          "test-security-git",
 				GitProject:           "attiasas",
 				GitProvider:          "github",
+				BranchName:           "main",
 				LastCommitHash:       "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
 				LastCommitMessage:    "remove json",
 				LastCommitAuthor:     "attiasas",
-
-				BranchName: "main",
 			},
 		},
 		{
@@ -49,12 +48,12 @@ func TestGetGitContext(t *testing.T) {
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
 				GitRepoName:          "test-security-git",
-				// TODO: maybe detect provider as bb if ~ in the project name
-				GitProject:        "~assafa",
-				BranchName:        "main",
-				LastCommitHash:    "6abd0162f4e02e358124f74e89b30d1b1ff906bc",
-				LastCommitMessage: "initial commit",
-				LastCommitAuthor:  "attiasas",
+				GitProject:           "~assafa",
+				GitProvider:          "bitbucket",
+				BranchName:           "main",
+				LastCommitHash:       "6abd0162f4e02e358124f74e89b30d1b1ff906bc",
+				LastCommitMessage:    "initial commit",
+				LastCommitAuthor:     "attiasas",
 			},
 		},
 		{
@@ -94,11 +93,10 @@ func TestGetGitContext(t *testing.T) {
 			// 	GitRepoName:       "test-security-git",
 			// 	GitProject:        "attiasas",
 			// 	GitProvider:       "github",
+			// 	BranchName: "dirty_branch",
 			// 	LastCommitUrl:     "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
 			// 	LastCommitMessage: "remove json",
 			// 	LastCommitAuthor:  "attiasas",
-
-			// 	BranchName: "dirty_branch",
 			// },
 		},
 	}
@@ -114,10 +112,6 @@ func TestGetGitContext(t *testing.T) {
 				// Assert no git info
 				assert.Error(t, err, goGit.ErrRepositoryNotExists.Error())
 				return
-			} else if err != nil {
-				// Assert multiple remotes error
-				assert.Error(t, err, "multiple (2) remotes found, currently only one remote is supported, remotes: origin, upstream")
-				return
 			}
 			assert.NoError(t, err)
 			assert.NotNil(t, gitManager)
@@ -132,6 +126,87 @@ func TestGetGitContext(t *testing.T) {
 			// Assert the expected git info
 			require.NoError(t, err)
 			assert.Equal(t, testCase.gitInfo, gitInfo)
+		})
+	}
+}
+
+func TestGetGitProvider(t *testing.T) {
+	testCases := []struct {
+		name     string
+		url      string
+		provider GitProvider
+	}{
+		{
+			name:     "Github",
+			url:      "https://github.com/attiasas/test-security-git.git",
+			provider: Github,
+		},
+		{
+			name:     "Bitbucket",
+			url:      "https://git.id.info/scm/repo-name/repo-name.git",
+			provider: Bitbucket,
+		},
+		{
+			name:     "Bitbucket SSH",
+			url:      "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
+			provider: Bitbucket,
+		},
+		{
+			name:     "Gitlab",
+			url:      "https://gitlab.com/attiasas/test-group/test-security-git.git",
+			provider: Gitlab,
+		},
+		{
+			name:     "Azure",
+			url:      "https://dev.azure.com/attiasas/test-security-git/_git/test-security-git",
+			provider: Azure,
+		},
+		{
+			name:     "Unknown",
+			url:      "ssh://git@git.jfrog.info/assafa/test-security-git.git",
+			provider: Unknown,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			provider := getGitProvider(testCase.url)
+			assert.Equal(t, testCase.provider, provider)
+		})
+	}
+}
+
+func TestGetGitProject(t *testing.T) {
+	testCases := []struct {
+		name    string
+		url     string
+		project string
+	}{
+		{
+			name:    "Https",
+			url:     "https://github.com/attiasas/test-security-git.git",
+			project: "attiasas",
+		},
+		{
+			name:    "SSH",
+			url:     "git@github.com:jfrog/jfrog-cli-security.git",
+			project: "jfrog-cli-security",
+		},
+		{
+			name:    "Bitbucket Https",
+			url:     "https://git.id.info/scm/repo-name/repo-name.git",
+			project: "repo-name",
+		},
+		{
+			name:    "Bitbucket SSH",
+			url:     "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
+			project: "~assafa",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			project := getGitProject(testCase.url)
+			assert.Equal(t, testCase.project, project)
 		})
 	}
 }

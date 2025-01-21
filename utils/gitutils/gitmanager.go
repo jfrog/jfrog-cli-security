@@ -182,6 +182,10 @@ func getGitProject(url string) string {
 		log.Debug(fmt.Sprintf("Failed to get project name from URL: %s", url))
 		return ""
 	}
+	if len(urlParts) > 2 && urlParts[1] == "scm" {
+		// In BB https clone url looks like this: https://git.id.info/scm/repo-name/repo-name.git --> ['git.id.info', 'scm', 'repo-name', 'repo-name']
+		return urlParts[2]
+	}
 	return urlParts[1]
 }
 
@@ -192,7 +196,7 @@ func getGitProvider(url string) GitProvider {
 	if strings.Contains(url, Gitlab.String()) {
 		return Gitlab
 	}
-	if strings.Contains(url, Bitbucket.String()) {
+	if isBitbucketProvider(url) {
 		return Bitbucket
 	}
 	if strings.Contains(url, Azure.String()) {
@@ -201,4 +205,14 @@ func getGitProvider(url string) GitProvider {
 	// Unknown for self-hosted git providers
 	log.Debug(fmt.Sprintf("Unknown git provider for URL: %s", url))
 	return Unknown
+}
+
+func isBitbucketProvider(url string) bool {
+	if urlParts := strings.Split(normalizeGitUrl(url), "/"); len(urlParts) > 2 && urlParts[1] == "scm" {
+		return true
+	}
+	if projectName := getGitProject(url); strings.Contains(projectName, "~") {
+		return true
+	}
+	return strings.Contains(url, Bitbucket.String())
 }
