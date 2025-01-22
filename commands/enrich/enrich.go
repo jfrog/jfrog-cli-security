@@ -8,7 +8,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 
 	"github.com/beevik/etree"
@@ -205,9 +204,6 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 			return
 		}
 	}
-	if err != nil {
-		return err
-	}
 	log.Info("Enrich process completed successfully.")
 	return nil
 }
@@ -263,8 +259,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
 				}
-				rootPath := path.Join("cli", filePath)
-				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager, rootPath)
+				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager, filepath.Base(filePath))
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
