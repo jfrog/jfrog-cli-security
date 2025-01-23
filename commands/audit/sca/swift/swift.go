@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jfrog/gofrog/datastructures"
+	version2 "github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -22,7 +23,12 @@ import (
 const (
 	// VersionForMainModule - We don't have information in swift on the current package, or main module, we only have information on its
 	// dependencies.
-	VersionForMainModule = "0.0.0"
+	VersionForMainModule      = "0.0.0"
+	VERSION_SYNTAX_TYPE_INDEX = 1
+	EXACT_VERSION_INDEX       = 2
+	FROM_VERSION_INDEX        = 3
+	START_RANGE_INDEX         = 4
+	END_RANGE_INDEX           = 5
 )
 
 type Dependencies struct {
@@ -36,7 +42,7 @@ func GetTechDependencyLocation(directDependencyName, directDependencyVersion str
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Logger.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
+			log.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
@@ -90,42 +96,81 @@ func parseSwiftLine(line, directDependencyName, directDependencyVersion, descrip
 	return foundDependency, tempIndex, startLine, startCol
 }
 
+func handleNonRangeMatches(match, name, fixVersion string, index int, submatches []string) string {
+	log.Debug("Fixing dependency", name, "from version", submatches[index], "to", fixVersion)
+	return strings.Replace(match, submatches[index], fixVersion, 1)
+}
+
+func handleRangeMatches(match, name, fixVersion string, submatches []string) string {
+	startVersion := submatches[START_RANGE_INDEX]
+	endVersion := submatches[END_RANGE_INDEX]
+	if version2.NewVersion(fixVersion).Compare(startVersion) < 1 && version2.NewVersion(fixVersion).Compare(endVersion) == 1 {
+		// Replace the start of the range with `fixVersion`
+		log.Debug("Fixing dependency", name, "from start version", startVersion, "to", fixVersion)
+		return strings.Replace(match, startVersion, fixVersion, 1)
+	}
+	return match
+}
+
+func updateDependency(content, name, version, fixVersion string) string {
+	urlPattern := `(?:https://|http://|sso://)?` + regexp.QuoteMeta(strings.TrimSuffix(name, ".git")) + `(?:\.git)?`
+	pattern := `\.package\(url:\s*"` + urlPattern + `",\s*(exact:\s*"(` + version + `)"|from:\s*"(` + version + `)"|"([\d\.]+)"\.\.\s*<?\s*"([\d\.]+)")\)`
+	re := regexp.MustCompile(pattern)
+	result := re.ReplaceAllStringFunc(content, func(match string) string {
+		submatches := re.FindStringSubmatch(match)
+		if len(submatches) == 0 {
+			return match
+		}
+
+		// Handle exact match
+		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "exact") {
+			return handleNonRangeMatches(match, name, fixVersion, EXACT_VERSION_INDEX, submatches)
+		}
+
+		// Handle from match
+		if len(submatches) > VERSION_SYNTAX_TYPE_INDEX && strings.Contains(submatches[VERSION_SYNTAX_TYPE_INDEX], "from") {
+			return handleNonRangeMatches(match, name, fixVersion, FROM_VERSION_INDEX, submatches)
+		}
+
+		// Handle range case
+		if len(submatches) > 5 && submatches[START_RANGE_INDEX] != "" && submatches[END_RANGE_INDEX] != "" {
+			return handleRangeMatches(match, name, fixVersion, submatches)
+		}
+		return match
+	})
+	return result
+}
+
 func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, descriptorPaths ...string) error {
 	for _, descriptorPath := range descriptorPaths {
 		path.Clean(descriptorPath)
 		if !strings.HasSuffix(descriptorPath, "Package.swift") {
-			log.Logger.Warn("Cannot support other files besides Package.swift: %s", descriptorPath)
+			log.Warn("Cannot support other files besides Package.swift: ", descriptorPath)
 			continue
 		}
 		data, err := os.ReadFile(descriptorPath)
-		var newLines []string
 		if err != nil {
+			log.Warn("Error reading file: ", descriptorPath, err)
 			continue
 		}
-		lines := strings.Split(string(data), "\n")
-		foundDependency := false
-		var tempIndex int
-		for index, line := range lines {
-			if strings.Contains(line, dependencyName) {
-				foundDependency = true
-				tempIndex = index
+		updatedContent := updateDependency(string(data), dependencyName, dependencyVersion, fixVersion)
+		if strings.Compare(string(data), updatedContent) != 0 {
+			if err = os.WriteFile(descriptorPath, []byte(updatedContent), 0644); err != nil {
+				return fmt.Errorf("failed to write file: %v", err)
 			}
-			// This means we are in a new dependency (we cannot find dependency name and version together)
-			//nolint:gocritic
-			if index > tempIndex && foundDependency && strings.Contains(line, ".package") {
-				foundDependency = false
-			} else if foundDependency && strings.Contains(line, dependencyVersion) {
-				newLine := strings.Replace(line, dependencyVersion, fixVersion, 1)
-				newLines = append(newLines, newLine)
-				foundDependency = false
-			} else {
-				newLines = append(newLines, line)
+			currentDir, err := coreutils.GetWorkingDirectory()
+			if err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
 			}
-		}
-		output := strings.Join(newLines, "\n")
-		err = os.WriteFile(descriptorPath, []byte(output), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write file: %v", err)
+			_, exePath, err := getSwiftVersionAndExecPath()
+			if err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
+			}
+			if _, err = runSwiftCmd(exePath, currentDir, []string{"build"}); err != nil {
+				return fmt.Errorf("could not run swift build due to %s", err)
+			}
+		} else {
+			log.Debug("No fixes were done in file", descriptorPath)
 		}
 	}
 	return nil

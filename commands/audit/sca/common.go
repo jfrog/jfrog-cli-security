@@ -50,10 +50,14 @@ func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams
 		return
 	}
 	for i := range scanResults.Vulnerabilities {
-		scanResults.Vulnerabilities[i].Technology = technology.String()
+		if scanResults.Vulnerabilities[i].Technology == "" {
+			scanResults.Vulnerabilities[i].Technology = technology.String()
+		}
 	}
 	for i := range scanResults.Violations {
-		scanResults.Violations[i].Technology = technology.String()
+		if scanResults.Violations[i].Technology == "" {
+			scanResults.Violations[i].Technology = technology.String()
+		}
 	}
 	results = append(results, *scanResults)
 	return
