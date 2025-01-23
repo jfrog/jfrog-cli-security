@@ -12,7 +12,7 @@ require (
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.1.11
 	github.com/jfrog/jfrog-cli-core/v2 v2.57.6
-	github.com/jfrog/jfrog-client-go v1.49.0
+	github.com/jfrog/jfrog-client-go v1.49.1
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.10.0
