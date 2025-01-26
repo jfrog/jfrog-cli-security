@@ -94,6 +94,13 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
 }
 
+func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
+	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
+		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
+		IsScanRequested(cmdType, IacScan, requestedScans...) ||
+		IsScanRequested(cmdType, SastScan, requestedScans...)
+}
+
 func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
 	threadPrefix := ""
 	if threadId >= 0 {

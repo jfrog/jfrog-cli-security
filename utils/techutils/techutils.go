@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -20,6 +21,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
+
+const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
 
 type Technology string
 
@@ -582,9 +585,24 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	// Don't allow working directory if sub directory already exists as key for the same technology
-	techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || shouldCleanSubModulesInUnsupportedTechs() {
+		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
+		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	}
 	return
+}
+
+func shouldCleanSubModulesInUnsupportedTechs() bool {
+	// Turn on clean sub modules for tech that we do not support multi-module projects if requested
+	shouldCleanEnvValRaw := os.Getenv(JfrogCleanTechSubModulesEnv)
+	if shouldCleanEnvValRaw == "" {
+		return false
+	}
+	shouldClean, e := strconv.ParseBool(shouldCleanEnvValRaw)
+	if e != nil {
+		log.Warn(fmt.Sprintf("Failed to parse %s: %s", JfrogCleanTechSubModulesEnv, e.Error()))
+	}
+	return shouldClean
 }
 
 func isTechExcludedInWorkingDir(tech Technology, wd string, excludedTechAtWorkingDir map[string][]Technology) bool {

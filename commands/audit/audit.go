@@ -270,6 +270,10 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		log.Info("Not entitled for JAS, skipping advance security scans...")
 		return
 	}
+	if !utils.IsJASRequested(scanResults.CmdType, auditParams.ScansToPerform()...) {
+		log.Debug("JAS scans were not requested, skipping advance security scans...")
+		return
+	}
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		generalError = fmt.Errorf("failed to get server details: %s", err.Error())

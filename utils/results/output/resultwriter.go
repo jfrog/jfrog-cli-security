@@ -275,23 +275,17 @@ func PrintViolationsTable(tables formats.ResultsTables, cmdType utils.CommandTyp
 		if err != nil {
 			return err
 		}
-		if len(tables.OperationalRiskViolationsTable) > 0 {
-			return coreutils.PrintTable(formats.ConvertOperationalRiskTableRowToScanTableRow(tables.OperationalRiskViolationsTable), "Operational Risk Violations", "No operational risk violations were found", printExtended)
-		}
-	} else {
-		err = coreutils.PrintTable(tables.SecurityViolationsTable, "Security Violations", "No security violations were found", printExtended)
-		if err != nil {
-			return err
-		}
-		err = coreutils.PrintTable(tables.LicenseViolationsTable, "License Compliance Violations", "No license compliance violations were found", printExtended)
-		if err != nil {
-			return err
-		}
-		if len(tables.OperationalRiskViolationsTable) > 0 {
-			return coreutils.PrintTable(tables.OperationalRiskViolationsTable, "Operational Risk Violations", "No operational risk violations were found", printExtended)
-		}
+		return coreutils.PrintTable(formats.ConvertOperationalRiskTableRowToScanTableRow(tables.OperationalRiskViolationsTable), "Operational Risk Violations", "No operational risk violations were found", printExtended)
 	}
-	return nil
+	err = coreutils.PrintTable(tables.SecurityViolationsTable, "Security Violations", "No security violations were found", printExtended)
+	if err != nil {
+		return err
+	}
+	err = coreutils.PrintTable(tables.LicenseViolationsTable, "License Compliance Violations", "No license compliance violations were found", printExtended)
+	if err != nil {
+		return err
+	}
+	return coreutils.PrintTable(tables.OperationalRiskViolationsTable, "Operational Risk Violations", "No operational risk violations were found", printExtended)
 }
 
 // PrintLicensesTable prints the licenses in a table.
