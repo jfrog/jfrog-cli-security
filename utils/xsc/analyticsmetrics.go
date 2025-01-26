@@ -2,6 +2,7 @@ package xsc
 
 import (
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"strings"
 	"time"
 
@@ -51,7 +52,7 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 	return
 }
 
-func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, scanError error) {
+func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.ServerDetails, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, scanError error) {
 	if !shouldReportEvents(xscVersion) {
 		return
 	}
@@ -66,7 +67,7 @@ func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.S
 		return
 	}
 
-	event := CreateFinalizedEvent(multiScanId, startTime, totalFindings, scanError)
+	event := CreateFinalizedEvent(multiScanId, startTime, totalFindings, resultsContext, scanError)
 
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
 		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
@@ -86,18 +87,26 @@ func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *
 		cmdResults.MultiScanId,
 		cmdResults.StartTime,
 		getTotalFindings(cmdResults),
+		&cmdResults.ResultContext,
 		cmdResults.GetErrors(),
 	)
 }
 
-func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings int, err error) xscservices.XscAnalyticsGeneralEventFinalize {
+func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, err error) xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(startTime)
 	eventStatus := xscservices.Completed
 	if err != nil {
 		eventStatus = xscservices.Failed
 	}
+
+	var gitRepoUrlKey string
+	if resultsContext != nil {
+		gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
+	}
+
 	return xscservices.XscAnalyticsGeneralEventFinalize{
 		MultiScanId: multiScanId,
+		GitRepoUrl:  gitRepoUrlKey,
 		XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{
 			EventStatus:       eventStatus,
 			TotalFindings:     totalFindings,
@@ -107,7 +116,7 @@ func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings
 }
 
 func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	return CreateFinalizedEvent(cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), cmdResults.GetErrors())
+	return CreateFinalizedEvent(cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
 }
 
 func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails) (*xscservices.XscAnalyticsGeneralEvent, error) {

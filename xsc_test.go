@@ -209,7 +209,7 @@ func getAuditCommandWithXscGitContext(gitInfoContext xscservices.XscGitInfoConte
 				auditCmd.SetGitRepoHttpsCloneUrl(gitInfoContext.GitRepoHttpsCloneUrl)
 				err = progressbar.ExecWithProgress(auditCmd)
 				// Send the final event to the platform.
-				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, err)
+				xsc.SendScanEndedEvent(xrayVersion, xscVersion, serverDetails, multiScanId, startTime, 0, nil, err)
 				return err
 			},
 		}
