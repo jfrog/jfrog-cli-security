@@ -3,6 +3,7 @@ package scan
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -561,7 +562,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		ScanResults: targetResults,
 	}
 	// Determine the scan types based on the command type and target results.
-	jasParams.ApplicableScanType, jasParams.SecretsScanType = getJasScanTypes(cmdType, targetResults, targetCompId, scanThreadId)
+	jasParams.ApplicableScanType, jasParams.SecretsScanType, jasParams.MaliciousScanType = getJasScanTypes(cmdType, targetResults, targetCompId, scanThreadId)
 	// Run Jas scans
 	if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
 		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to add Jas scan tasks: %s", generalError.Error()), false)
@@ -569,21 +570,23 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	return
 }
 
-func getJasScanTypes(cmdType utils.CommandType, targetResults *results.TargetResults, targetCompId string, scanThreadId int) (applicability.ApplicabilityScanType, secrets.SecretsScanType) {
+func getJasScanTypes(cmdType utils.CommandType, targetResults *results.TargetResults, targetCompId string, scanThreadId int) (applicability.ApplicabilityScanType, secrets.SecretsScanType, maliciouscode.MaliciousScanType) {
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	// Default scan types for generic scans
 	secretsScanType := secrets.SecretsScannerGenericScanType
 	applicabilityScanType := applicability.ApplicabilityGenericScanScanType
+	maliciousScanType := maliciouscode.MaliciousScannerType
 	// If the root component is a docker container, we need to use the docker scan types.
 	if isDockerBinary(cmdType, targetResults) {
 		log.Debug(scanLogPrefix + "Found root component is a docker container")
 		secretsScanType = secrets.SecretsScannerDockerScanType
 		applicabilityScanType = applicability.ApplicabilityDockerScanScanType
+		maliciousScanType = maliciouscode.MaliciousDockerScannerType
 	} else {
 		_, _, componentType := techutils.SplitComponentIdRaw(targetCompId)
 		log.Debug(scanLogPrefix+"Found root component is not a docker container, type is: ", componentType)
 	}
-	return applicabilityScanType, secretsScanType
+	return applicabilityScanType, secretsScanType, maliciousScanType
 }
 
 func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResults) bool {

@@ -3,6 +3,7 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 
 	"github.com/jfrog/gofrog/parallel"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -35,6 +36,8 @@ type JasRunnerParams struct {
 	// Diff mode flags
 	SourceResultsToCompare *results.TargetResults
 	DiffMode               bool
+	// Malicious code scan flags
+	MaliciousScanType maliciouscode.MaliciousScanType
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
 	// Contextual Analysis scan flags
@@ -68,6 +71,10 @@ func AddJasScannersTasks(params JasRunnerParams) error {
 	}
 
 	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(&params)); generalError != nil {
+		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
+		errorsCollection = errors.Join(errorsCollection, generalError)
+	}
+	if generalError := addJasScanTaskForModuleIfNeeded(params, utils.MaliciousCodeScan, runMaliciousScan(&params)); generalError != nil {
 		// Scan task addition failure should not impact the other scanners tasks addition, therefore we accumulate the errors and return the overall error at the end.
 		errorsCollection = errors.Join(errorsCollection, generalError)
 	}
@@ -112,6 +119,8 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		case jasutils.Applicability:
 			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
+		case jasutils.MaliciousCode:
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.MaliciousScannerConfig.EnableMaliciousScan
 		}
 		if enabled {
 			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
@@ -168,6 +177,23 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
 		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.IaC, threadId, vulnerabilitiesResults, violationsResults)
+	}
+}
+
+func runMaliciousScan(params *JasRunnerParams) parallel.TaskFunc {
+	return func(threadId int) (err error) {
+		defer func() {
+			params.Runner.JasScannersWg.Done()
+		}()
+		vulnerabilitiesResults, violationsResults, err := maliciouscode.RunMaliciousScan(params.Scanner, params.MaliciousScanType, params.Module, params.TargetCount, threadId, getSourceRunsToCompare(params, jasutils.MaliciousCode)...)
+		params.Runner.ResultsMu.Lock()
+		defer params.Runner.ResultsMu.Unlock()
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		params.ScanResults.AddJasScanResults(jasutils.MaliciousCode, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.MaliciousCode, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.MaliciousCode, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 

@@ -22,6 +22,8 @@ type SimpleJsonResults struct {
 	SecretsViolations         []SourceCodeRow               `json:"secretsViolations"`
 	IacsViolations            []SourceCodeRow               `json:"iacViolations"`
 	SastViolations            []SourceCodeRow               `json:"sastViolations"`
+	MaliciousVulnerabilities  []SourceCodeRow               `json:"maliciousCode"`
+	MaliciousViolations       []SourceCodeRow               `json:"maliciousViolations"`
 	Errors                    []SimpleJsonError             `json:"errors"`
 	Statuses                  ScanStatus                    `json:"scansStatus"`
 	MultiScanId               string                        `json:"multiScanId,omitempty"`
@@ -34,6 +36,7 @@ type ScanStatus struct {
 	IacStatusCode           *int `json:"iacScanStatusCode,omitempty"`
 	SecretsStatusCode       *int `json:"secretsScanStatusCode,omitempty"`
 	ApplicabilityStatusCode *int `json:"ContextualAnalysisScanStatusCode,omitempty"`
+	MaliciousStatusCode     *int `json:"MaliciousStatusCode,omitempty"`
 }
 
 type ViolationContext struct {

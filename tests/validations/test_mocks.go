@@ -157,6 +157,18 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 				return
 			}
 		}
+		if r.RequestURI == "/xray/api/v1/internal/cve_applicability_input_vulnerabilities" {
+			_, err := w.Write([]byte(`{"api_version": "1", "data": [],  "scanners": []}`))
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
+		if r.RequestURI == "/xray/api/v1/system/version" {
+			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)))
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
 		if r.RequestURI == "/xray/api/v1/entitlements/feature/contextual_analysis" {
 			if r.Method == http.MethodGet {
 				apiCallCounts[EntitlementsApi]++

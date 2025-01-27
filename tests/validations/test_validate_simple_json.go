@@ -46,17 +46,19 @@ func ValidateCommandSimpleJsonOutput(t *testing.T, params ValidationParams) {
 func ValidateSimpleJsonIssuesCount(t *testing.T, params ValidationParams, results formats.SimpleJsonResults) {
 	actualValues := validationCountActualValues{
 		// Total
-		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities),
-		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations),
+		Vulnerabilities: len(results.Vulnerabilities) + len(results.SecretsVulnerabilities) + len(results.SastVulnerabilities) + len(results.IacsVulnerabilities) + len(results.MaliciousVulnerabilities),
+		Violations:      len(results.SecurityViolations) + len(results.LicensesViolations) + len(results.OperationalRiskViolations) + len(results.SecretsViolations) + len(results.SastViolations) + len(results.IacsViolations) + len(results.MaliciousViolations),
 		Licenses:        len(results.Licenses),
 		// Jas vulnerabilities
-		SastVulnerabilities:    len(results.SastVulnerabilities),
-		SecretsVulnerabilities: len(results.SecretsVulnerabilities),
-		IacVulnerabilities:     len(results.IacsVulnerabilities),
+		SastVulnerabilities:      len(results.SastVulnerabilities),
+		SecretsVulnerabilities:   len(results.SecretsVulnerabilities),
+		IacVulnerabilities:       len(results.IacsVulnerabilities),
+		MaliciousVulnerabilities: len(results.MaliciousVulnerabilities),
 		// Jas violations
-		SastViolations:    len(results.SastViolations),
-		SecretsViolations: len(results.SecretsViolations),
-		IacViolations:     len(results.IacsViolations),
+		SastViolations:      len(results.SastViolations),
+		SecretsViolations:   len(results.SecretsViolations),
+		IacViolations:       len(results.IacsViolations),
+		MaliciousViolations: len(results.MaliciousViolations),
 		// Sca vulnerabilities
 		ScaVulnerabilities: len(results.Vulnerabilities),
 		// Sca violations

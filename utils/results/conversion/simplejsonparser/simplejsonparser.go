@@ -335,6 +335,21 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(_ *cyclonedx.BOM) (err error
 	return
 }
 
+func (sjc *CmdResultsSimpleJsonConverter) ParseMalicious(maliciousFindings ...[]*sarif.Run) (err error) {
+	if !sjc.entitledForJas {
+		return
+	}
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	maliciousSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.CollectRuns(maliciousFindings...)...)
+	if err != nil || len(maliciousSimpleJson) == 0 {
+		return
+	}
+	sjc.current.MaliciousVulnerabilities = append(sjc.current.MaliciousVulnerabilities, maliciousSimpleJson...)
+	return
+}
+
 func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
 	if !sjc.entitledForJas {
 		return

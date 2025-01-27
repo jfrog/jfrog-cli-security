@@ -496,9 +496,9 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 	}
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, getAuditCmdArgs(params)...)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 43},
+		Total: &validations.TotalCount{Vulnerabilities: 44},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 27, Sast: 1, Iac: 9, Secrets: 6},
+			ValidateScan:                &validations.ScanCount{Sca: 27, Sast: 1, Iac: 9, Secrets: 6, Malicious: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, NotCovered: 22, NotApplicable: 2},
 		},
 	})

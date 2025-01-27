@@ -693,6 +693,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	searchForStrWithSubString(t, filesList, "sast")
 	searchForStrWithSubString(t, filesList, "secrets")
 	searchForStrWithSubString(t, filesList, "applicability")
+	searchForStrWithSubString(t, filesList, "malicious_code")
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {

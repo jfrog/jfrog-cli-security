@@ -69,6 +69,7 @@ const (
 	SastScan                  SubScanType = "sast"
 	SecretsScan               SubScanType = "secrets"
 	SecretTokenValidationScan SubScanType = "secrets_token_validation"
+	MaliciousCodeScan         SubScanType = "malicious_code"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -77,6 +78,7 @@ var subScanTypeToText = map[SubScanType]string{
 	IacScan:                "IaC",
 	SastScan:               "SAST",
 	SecretsScan:            "Secrets",
+	MaliciousCodeScan:      "Malicious Code",
 }
 
 func (subScan SubScanType) ToTextString() string {
@@ -108,7 +110,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
@@ -123,7 +125,8 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
 		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
 		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
+		IsScanRequested(cmdType, SastScan, requestedScans...) ||
+		IsScanRequested(cmdType, MaliciousCodeScan, requestedScans...)
 }
 
 func getScanFindingName(scanType SubScanType) string {

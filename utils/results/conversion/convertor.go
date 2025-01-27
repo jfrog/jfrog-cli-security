@@ -66,6 +66,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseCVEs(enrichedSbom *cyclonedx.BOM, applicableScan ...[]*sarif.Run) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(secrets ...[]*sarif.Run) error
+	ParseMalicious(maliciousFindings ...[]*sarif.Run) error
 	ParseIacs(iacs ...[]*sarif.Run) error
 	ParseSast(sast ...[]*sarif.Run) error
 	// Parse JFrog violations to the format if supported
@@ -203,6 +204,10 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	}
 	// Parsing JAS IAC results
 	if err = parser.ParseIacs(targetResults.JasResults.JasVulnerabilities.IacScanResults); err != nil {
+		return
+	}
+	// Parsing JAS Malicious code results
+	if err = parser.ParseMalicious(targetResults.JasResults.JasVulnerabilities.MaliciousScanResults); err != nil {
 		return
 	}
 	// Parsing JAS SAST results

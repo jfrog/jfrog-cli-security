@@ -73,11 +73,12 @@ type CmdResultsSarifConverter struct {
 
 type currentTargetRuns struct {
 	currentTarget results.ScanTarget
-	// Current run cache information
-	scaCurrentRun     *sarif.Run
-	secretsCurrentRun *sarif.Run
-	iacCurrentRun     *sarif.Run
-	sastCurrentRun    *sarif.Run
+	// Current run cache information, we combine vulnerabilities and violations in the same run
+	scaCurrentRun       *sarif.Run
+	secretsCurrentRun   *sarif.Run
+	iacCurrentRun       *sarif.Run
+	sastCurrentRun      *sarif.Run
+	maliciousCurrentRun *sarif.Run
 }
 
 // Parse parameters for the SCA result
@@ -161,6 +162,10 @@ func (sc *CmdResultsSarifConverter) flush() {
 	// Flush sast if needed
 	if sc.currentTargetConvertedRuns.sastCurrentRun != nil {
 		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.sastCurrentRun)
+	}
+	// Flush malicious if needed
+	if sc.currentTargetConvertedRuns.maliciousCurrentRun != nil {
+		sc.current.Runs = append(sc.current.Runs, sc.currentTargetConvertedRuns.maliciousCurrentRun)
 	}
 	sc.currentTargetConvertedRuns = nil
 }
@@ -429,6 +434,14 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...[]*sarif.Run) (err e
 		return
 	}
 	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.SecretsScan), results.CollectRuns(secrets...)...)...)
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseMalicious(maliciousCode ...[]*sarif.Run) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
+		return
+	}
+	sc.currentTargetConvertedRuns.secretsCurrentRun = combineJasRunsToCurrentRun(sc.currentTargetConvertedRuns.secretsCurrentRun, patchSarifRuns(sc.getVulnerabilitiesConvertParams(utils.MaliciousCodeScan), results.CollectRuns(maliciousCode...)...)...)
 	return
 }
 

@@ -29,6 +29,7 @@ const (
 	CmdStepSecrets            = "Secret Detection Scan"
 	CmdStepSast               = "Static Application Security Testing (SAST)"
 	CmdStepViolations         = "Violations Reporting"
+	CmdStepMaliciousCode      = "Malicious Code"
 )
 
 type SecurityCommandStep string
@@ -195,9 +196,10 @@ type JasScansResults struct {
 }
 
 type JasScanResults struct {
-	SecretsScanResults []*sarif.Run `json:"secrets,omitempty"`
-	IacScanResults     []*sarif.Run `json:"iac,omitempty"`
-	SastScanResults    []*sarif.Run `json:"sast,omitempty"`
+	SecretsScanResults   []*sarif.Run `json:"secrets,omitempty"`
+	IacScanResults       []*sarif.Run `json:"iac,omitempty"`
+	SastScanResults      []*sarif.Run `json:"sast,omitempty"`
+	MaliciousScanResults []*sarif.Run `json:"malicious_code,omitempty"`
 }
 
 type ScanTarget struct {
@@ -581,6 +583,12 @@ func (sr *TargetResults) AddJasScanResults(scanType jasutils.JasScanType, vulner
 			sr.JasResults.JasVulnerabilities.SastScanResults = append(sr.JasResults.JasVulnerabilities.SastScanResults, vulnerabilitiesRuns...)
 			sr.JasResults.JasViolations.SastScanResults = append(sr.JasResults.JasViolations.SastScanResults, violationsRuns...)
 		}
+	case jasutils.MaliciousCode:
+		sr.ResultsStatus.UpdateStatus(CmdStepMaliciousCode, &exitCode)
+		if sr.JasResults != nil {
+			sr.JasResults.JasVulnerabilities.MaliciousScanResults = append(sr.JasResults.JasVulnerabilities.MaliciousScanResults, vulnerabilitiesRuns...)
+			sr.JasResults.JasViolations.MaliciousScanResults = append(sr.JasResults.JasViolations.MaliciousScanResults, violationsRuns...)
+		}
 	}
 }
 
@@ -662,6 +670,8 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 		return jsr.JasVulnerabilities.IacScanResults
 	case jasutils.Sast:
 		return jsr.JasVulnerabilities.SastScanResults
+	case jasutils.MaliciousCode:
+		return jsr.JasVulnerabilities.MaliciousScanResults
 	}
 	return
 }
@@ -674,6 +684,8 @@ func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) 
 		return jsr.JasViolations.IacScanResults
 	case jasutils.Sast:
 		return jsr.JasViolations.SastScanResults
+	case jasutils.MaliciousCode:
+		return jsr.JasViolations.MaliciousScanResults
 	}
 	return
 }

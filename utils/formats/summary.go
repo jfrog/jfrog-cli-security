@@ -9,6 +9,7 @@ const (
 	IacResult            SummaryResultType = "IAC"
 	SecretsResult        SummaryResultType = "Secrets"
 	SastResult           SummaryResultType = "SAST"
+	MaliciousResult      SummaryResultType = "MaliciousCode"
 	ScaResult            SummaryResultType = "SCA"
 	ScaSecurityResult    SummaryResultType = "Security"
 	ScaLicenseResult     SummaryResultType = "License"
@@ -36,10 +37,11 @@ type ScanSummary struct {
 }
 
 type ScanResultSummary struct {
-	ScaResults     *ScaScanResultSummary `json:"sca,omitempty"`
-	IacResults     *ResultSummary        `json:"iac,omitempty"`
-	SecretsResults *ResultSummary        `json:"secrets,omitempty"`
-	SastResults    *ResultSummary        `json:"sast,omitempty"`
+	ScaResults       *ScaScanResultSummary `json:"sca,omitempty"`
+	IacResults       *ResultSummary        `json:"iac,omitempty"`
+	SecretsResults   *ResultSummary        `json:"secrets,omitempty"`
+	SastResults      *ResultSummary        `json:"sast,omitempty"`
+	MaliciousResults *ResultSummary        `json:"malicious_code,omitempty"`
 }
 
 type ScanViolationsSummary struct {
@@ -184,6 +186,9 @@ func (srs *ScanResultSummary) GetTotal(filterTypes ...SummaryResultType) (total 
 	if srs.SastResults != nil && isFilterApply(SastResult, filterTypes) {
 		total += srs.SastResults.GetTotal()
 	}
+	if srs.MaliciousResults != nil && isFilterApply(MaliciousResult, filterTypes) {
+		total += srs.MaliciousResults.GetTotal()
+	}
 	if srs.ScaResults == nil {
 		return
 	}
@@ -228,6 +233,9 @@ func (ss *ScanResultSummary) GetSummaryBySeverity() (summary ResultSummary) {
 	}
 	if ss.SastResults != nil {
 		summary = MergeResultSummaries(summary, *ss.SastResults)
+	}
+	if ss.MaliciousResults != nil {
+		summary = MergeResultSummaries(summary, *ss.MaliciousResults)
 	}
 	return
 }
@@ -305,6 +313,9 @@ func extractIssuesToSummary(issues *ScanResultSummary, destination *ScanResultSu
 	}
 	if issues.SastResults != nil {
 		destination.SastResults = mergeResultSummariesPointers(destination.SastResults, issues.SastResults)
+	}
+	if issues.MaliciousResults != nil {
+		destination.MaliciousResults = mergeResultSummariesPointers(destination.MaliciousResults, issues.MaliciousResults)
 	}
 }
 

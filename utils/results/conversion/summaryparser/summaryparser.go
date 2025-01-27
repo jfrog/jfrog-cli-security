@@ -228,6 +228,21 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(violations violationutils.
 	)
 }
 
+func (sc *CmdResultsSummaryConverter) ParseMalicious(maliciousFindings ...[]*sarif.Run) (err error) {
+	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
+		// JAS results are only supported as vulnerabilities for now
+		return
+	}
+	if err = sc.validateBeforeParse(); err != nil {
+		return
+	}
+
+	if sc.currentScan.Vulnerabilities.MaliciousResults == nil {
+		sc.currentScan.Vulnerabilities.MaliciousResults = &formats.ResultSummary{}
+	}
+	return results.ForEachJasIssue(results.CollectRuns(maliciousFindings...), sc.entitledForJas, sc.getJasHandler(jasutils.MaliciousCode, false))
+}
+
 func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...[]*sarif.Run) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
