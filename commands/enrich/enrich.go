@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -84,7 +84,7 @@ func AppendVulnsToJson(cmdResults *results.SecurityCommandResults) error {
 	var vulnerabilities []map[string]string
 	xrayResults := cmdResults.GetScaScansXrayResults()
 	if len(xrayResults) == 0 {
-		return fmt.Errorf("failed while getting sca scan from xray: %s", err.Error())
+		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
 		log.Warn("Received %d results, parsing only first result", len(xrayResults))
 	}
@@ -108,7 +108,7 @@ func AppendVulnsToXML(cmdResults *results.SecurityCommandResults) error {
 	destination := result.FindElements("//bom")[0]
 	xrayResults := cmdResults.GetScaScansXrayResults()
 	if len(xrayResults) == 0 {
-		return fmt.Errorf("failed while getting sca scan from xray: %s", err.Error())
+		return fmt.Errorf("xray scan results are empty")
 	} else if len(xrayResults) > 1 {
 		log.Warn("Received %d results, parsing only first result", len(xrayResults))
 	}
@@ -187,6 +187,10 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		scanResults.GeneralError = errors.Join(scanResults.GeneralError, fileCollectingErr)
 	}
 
+	if scanResults.GetErrors() != nil {
+		return errorutils.CheckError(scanResults.GetErrors())
+	}
+
 	isXml, err := isXML(scanResults.Targets)
 	if err != nil {
 		return
@@ -199,13 +203,6 @@ func (enrichCmd *EnrichCommand) Run() (err error) {
 		if err = AppendVulnsToJson(scanResults); err != nil {
 			return
 		}
-	}
-
-	if err != nil {
-		return err
-	}
-	if scanResults.GetErrors() != nil {
-		return errorutils.CheckError(scanResults.GetErrors())
 	}
 	log.Info("Enrich process completed successfully.")
 	return nil
@@ -262,7 +259,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", logPrefix, err.Error()), false)
 				}
-				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager)
+				scanResults, err := enrichgraph.RunImportGraphAndGetResults(importGraphParams, xrayManager, filepath.Base(filePath))
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
