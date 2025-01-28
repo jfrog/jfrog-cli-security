@@ -286,7 +286,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		auditParams.minSeverityFilter,
 		jas.GetAnalyzerManagerXscEnvVars(
 			auditParams.GetMultiScanId(),
-			jas.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
+			utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 			auditParams.resultsContext.ProjectKey,
 			auditParams.resultsContext.Watches,
 			scanResults.GetTechnologies()...,
