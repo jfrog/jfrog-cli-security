@@ -15,6 +15,18 @@ const (
 	Gitlab    GitProvider = "gitlab"
 	Bitbucket GitProvider = "bitbucket"
 	Azure     GitProvider = "azure"
+
+	// TODO: Add support for other git providers
+
+	// git clone https://sourceforge.net/projects/svn-sample-repo/
+	SourceForge GitProvider = "sourceforge"
+	// git clone https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name}
+	AWSCodeCommit GitProvider = "codecommit"
+	// git clone https://gerrit.googlesource.com/git-repo
+	Gerrit    GitProvider = "gerrit"
+	// git clone https://gitea.com/gitea/helm-chart.git
+	Gitea    GitProvider = "gitea"
+
 	Unknown   GitProvider = ""
 )
 
