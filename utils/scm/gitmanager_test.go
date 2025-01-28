@@ -1,4 +1,4 @@
-package gitutils
+package scm
 
 import (
 	"path/filepath"
@@ -134,7 +134,7 @@ func TestGetGitProvider(t *testing.T) {
 	testCases := []struct {
 		name     string
 		url      string
-		provider GitProvider
+		provider ScmProvider
 	}{
 		{
 			name:     "Github",

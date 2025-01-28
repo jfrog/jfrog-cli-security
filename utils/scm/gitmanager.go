@@ -1,4 +1,4 @@
-package gitutils
+package scm
 
 import (
 	"fmt"
@@ -9,32 +9,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
-
-const (
-	Github    GitProvider = "github"
-	Gitlab    GitProvider = "gitlab"
-	Bitbucket GitProvider = "bitbucket"
-	Azure     GitProvider = "azure"
-
-	// TODO: Add support for other git providers
-
-	// git clone https://sourceforge.net/projects/svn-sample-repo/
-	SourceForge GitProvider = "sourceforge"
-	// git clone https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name}
-	AWSCodeCommit GitProvider = "codecommit"
-	// git clone https://gerrit.googlesource.com/git-repo
-	Gerrit GitProvider = "gerrit"
-	// git clone https://gitea.com/gitea/helm-chart.git
-	Gitea GitProvider = "gitea"
-
-	Unknown GitProvider = ""
-)
-
-type GitProvider string
-
-func (gp GitProvider) String() string {
-	return string(gp)
-}
 
 type GitManager struct {
 	// repository represents a git repository as a .git dir.
@@ -109,7 +83,7 @@ func getRemoteNames(remotes ...*goGit.Remote) []string {
 }
 
 // IsClean returns true if all the files are in Unmodified status.
-func (gm *GitManager) IsClean() (bool, error) {
+func (gm *GitManager) isClean() (bool, error) {
 	worktree, err := gm.localGitRepository.Worktree()
 	if err != nil {
 		return false, err
@@ -150,7 +124,7 @@ func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err 
 		LastCommitMessage: strings.TrimSpace(lastCommit.Message),
 		LastCommitAuthor:  lastCommit.Author.Name,
 	}
-	isClean, err := gm.IsClean()
+	isClean, err := gm.isClean()
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +153,7 @@ func normalizeGitUrl(url string) string {
 	url = strings.TrimPrefix(url, "http://")
 	url = strings.TrimPrefix(url, "https://")
 	url = strings.TrimPrefix(url, "ssh://")
+	url = strings.TrimPrefix(url, "svn://")
 	return strings.TrimSuffix(url, ".git")
 }
 
@@ -188,7 +163,7 @@ func getGitRepoName(url string) string {
 }
 
 func getGitProject(url string) string {
-	// First part after base Url is the owner/organization name.
+	// First part after base Url is the owner or the organization name.
 	urlParts := strings.Split(normalizeGitUrl(url), "/")
 	if len(urlParts) < 2 {
 		log.Debug(fmt.Sprintf("Failed to get project name from URL: %s", url))
@@ -201,7 +176,7 @@ func getGitProject(url string) string {
 	return urlParts[1]
 }
 
-func getGitProvider(url string) GitProvider {
+func getGitProvider(url string) ScmProvider {
 	if strings.Contains(url, Github.String()) {
 		return Github
 	}
@@ -213,6 +188,9 @@ func getGitProvider(url string) GitProvider {
 	}
 	if strings.Contains(url, Azure.String()) {
 		return Azure
+	}
+	if strings.Contains(url, SourceForge.String()) {
+		return SourceForge
 	}
 	// Unknown for self-hosted git providers
 	log.Debug(fmt.Sprintf("Unknown git provider for URL: %s", url))

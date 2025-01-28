@@ -12,7 +12,7 @@ import (
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/gitutils"
+	"github.com/jfrog/jfrog-cli-security/utils/scm"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -46,7 +46,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 	// Detect git info
 	gitInfo, err := DetectGitInfo(gaCmd.repositoryLocalPath)
 	if err != nil {
-		return fmt.Errorf("failed to get git context: %v", err)
+		return fmt.Errorf("failed to get source control context: %v", err)
 	}
 	if gitInfo == nil {
 		// No Error but no git info = project working tree is dirty
@@ -65,11 +65,11 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 }
 
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
-	gitManager, err := gitutils.NewGitManager(wd)
+	scmManager, err := scm.DetectScmInProject(wd)
 	if err != nil {
 		return
 	}
-	return gitManager.GetGitContext()
+	return scmManager.GetGitContext()
 }
 
 func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
