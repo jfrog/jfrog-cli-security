@@ -47,11 +47,6 @@ func (gap *GitAuditParams) SetWatches(watches []string) *GitAuditParams {
 	return gap
 }
 
-func (gap *GitAuditParams) SetProjectKey(project string) *GitAuditParams {
-	gap.resultsContext.ProjectKey = project
-	return gap
-}
-
 func (gap *GitAuditParams) SetFailBuild(failBuild bool) *GitAuditParams {
 	gap.failBuild = failBuild
 	return gap
