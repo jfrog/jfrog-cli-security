@@ -188,7 +188,7 @@ func getGitRepoName(url string) string {
 }
 
 func getGitProject(url string) string {
-	// First part after base Url is the owner/organization name.
+	// First part after base Url is the owner or the organization name.
 	urlParts := strings.Split(normalizeGitUrl(url), "/")
 	if len(urlParts) < 2 {
 		log.Debug(fmt.Sprintf("Failed to get project name from URL: %s", url))
