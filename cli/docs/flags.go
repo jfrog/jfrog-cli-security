@@ -165,7 +165,7 @@ var commandFlags = map[string][]string{
 		// Connection params
 		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
-		Watches, ScanVuln, Fail,
+		Project, Watches, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
