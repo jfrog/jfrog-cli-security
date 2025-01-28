@@ -23,11 +23,11 @@ const (
 	// git clone https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name}
 	AWSCodeCommit GitProvider = "codecommit"
 	// git clone https://gerrit.googlesource.com/git-repo
-	Gerrit    GitProvider = "gerrit"
+	Gerrit GitProvider = "gerrit"
 	// git clone https://gitea.com/gitea/helm-chart.git
-	Gitea    GitProvider = "gitea"
+	Gitea GitProvider = "gitea"
 
-	Unknown   GitProvider = ""
+	Unknown GitProvider = ""
 )
 
 type GitProvider string
