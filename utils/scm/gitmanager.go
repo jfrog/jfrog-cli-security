@@ -32,6 +32,10 @@ func NewGitManager(localRepositoryWorkingDir string) (gm *GitManager, err error)
 	return
 }
 
+func GitCliExists() (bool) {
+	return true
+}
+
 func (gm *GitManager) getRootRemote() (root *goGit.Remote, err error) {
 	remotes, err := gm.localGitRepository.Remotes()
 	if err != nil {
@@ -189,8 +193,8 @@ func getGitProvider(url string) ScmProvider {
 	if strings.Contains(url, Azure.String()) {
 		return Azure
 	}
-	if strings.Contains(url, SourceForge.String()) {
-		return SourceForge
+	if strings.Contains(url, Gerrit.String()) {
+		return Gerrit
 	}
 	// Unknown for self-hosted git providers
 	log.Debug(fmt.Sprintf("Unknown git provider for URL: %s", url))

@@ -14,17 +14,18 @@ const (
 	// git clone https://git.id.info/scm/repo-name/repo-name.git
 	Bitbucket ScmProvider = "bitbucket"
 	Azure     ScmProvider = "azure"
-	// svn checkout https://svn.code.sf.net/p/svn-sample-repo/code/ svn-sample-repo-code
-	SourceForge ScmProvider = "sourceforge"
+	// git clone https://gerrit.googlesource.com/git-repo
+	Gerrit ScmProvider = "gerrit"
 
 	// TODO: Add support for other git providers
 
 	// git clone https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name}
 	AWSCodeCommit ScmProvider = "codecommit"
-	// git clone https://gerrit.googlesource.com/git-repo
-	Gerrit ScmProvider = "gerrit"
 	// git clone https://gitea.com/gitea/helm-chart.git
 	Gitea ScmProvider = "gitea"
+
+	// svn checkout https://svn.code.sf.net/p/svn-sample-repo/code/ svn-sample-repo-code
+	SourceForge ScmProvider = "sourceforge"
 
 	Unknown ScmProvider = ""
 )
@@ -37,7 +38,7 @@ func (sp ScmProvider) String() string {
 
 const (
 	Git ScmType = "git"
-	Svn ScmType = "svn" // subversion
+	// Svn ScmType = "svn" // subversion
 )
 
 type ScmType string
@@ -48,12 +49,11 @@ func (st ScmType) String() string {
 
 type ScmTypeData struct {
 	indicator string
-	CliExists func() bool
+	ScmApplicable func() bool
 }
 
 var scmTypeData = map[ScmType]ScmTypeData{
 	Git: {".git", func() bool { return true }},
-	Svn: {".svn", func() bool { return true }},
 }
 
 type ScmManager interface {
@@ -61,22 +61,22 @@ type ScmManager interface {
 }
 
 func DetectScmInProject(projectPath string) (manager ScmManager, err error) {
-	// if exists .git directory in path, return the corresponding manager
-	if exists, err := isScmProject(projectPath, Git); err != nil {
-		return nil, err
-	} else if exists {
-		return NewGitManager(projectPath)
-	}
-	// if exists .svn directory in path, return the corresponding manager
-	if exists, err := isScmProject(projectPath, Svn); err != nil {
-		return nil, err
-	} else if exists {
-		return NewSvnManager(projectPath)
+	for scmType, scmData := range scmTypeData {
+		if exists, err := isScmProject(projectPath, scmData); err != nil {
+			return nil, err
+		} else if exists {
+			if scmType == Git {
+				return NewGitManager(projectPath)
+			}
+		}
 	}
 	err = fmt.Errorf("failed to detect source control manager in project path: %s", projectPath)
 	return
 }
 
-func isScmProject(projectPath string, scmType ScmType) (bool, error) {
-	return fileutils.IsDirExists(path.Join(projectPath, scmTypeData[scmType].indicator), false)
+func isScmProject(projectPath string, scmData ScmTypeData) (bool, error) {
+	if cliExists := scmData.ScmApplicable(); !cliExists {
+		return false, nil
+	}
+	return fileutils.IsDirExists(path.Join(projectPath, scmData.indicator), false)
 }
