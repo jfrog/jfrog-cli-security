@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/beevik/etree v1.4.0
+	github.com/go-git/go-git/v5 v5.13.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.10.8
