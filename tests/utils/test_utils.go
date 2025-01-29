@@ -23,7 +23,6 @@ import (
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
@@ -47,14 +46,17 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	return xmlMap
 }
 
-func ValidateXrayVersion(t *testing.T, minVersion string) {
+func GetAndValidateXrayVersion(t *testing.T, minVersion string) {
 	xrayVersion, err := GetTestsXrayVersion()
 	if err != nil {
 		assert.NoError(t, err)
 		return
 	}
-	err = clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion.GetVersion(), minVersion)
-	if err != nil {
+	ValidateXrayVersion(t, xrayVersion.GetVersion(), minVersion)
+}
+
+func ValidateXrayVersion(t *testing.T, xrayVersion, minVersion string) {
+	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion, minVersion); err != nil {
 		t.Skip(err)
 	}
 }
@@ -393,19 +395,39 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, err := fileutils.CreateTempDir()
 	assert.NoError(t, err, "Couldn't create temp dir")
-	actualPath := filepath.Join(filepath.Dir(tempDirPath), filepath.Base(projectPath))
-	coreTests.RenamePath(tempDirPath, actualPath, t)
+	// Make sure the name of the final dir is the name of the project Path
+	actualPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(actualPath))
+	// Copy the project to the temp dir.
 	assert.NoError(t, biutils.CopyDir(projectPath, actualPath, true, nil))
 	return actualPath, func() {
-		assert.NoError(t, fileutils.RemoveTempDir(actualPath), "Couldn't remove temp dir")
+		assert.NoError(t, fileutils.RemoveTempDir(tempDirPath), "Couldn't remove temp dir")
 	}
 }
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, createTempDirCallback := CreateTestProjectInTempDir(t, projectPath)
-	prevWd := ChangeWD(t, tempDirPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
 	return tempDirPath, func() {
-		clientTests.ChangeDirAndAssert(t, prevWd)
+		cleanCwd()
+		createTempDirCallback()
+	}
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZip(t *testing.T, projectPath string) (string, func()) {
+	tempDirWithZip, cleanUp := CreateTestProjectInTempDir(t, projectPath)
+	zipName := fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+	assert.NoError(t, clientUtils.ExtractArchive(tempDirWithZip, zipName, zipName, "", false))
+	return tempDirWithZip, cleanUp
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := CreateTestProjectFromZip(t, projectPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
+	return tempDirPath, func() {
+		cleanCwd()
 		createTempDirCallback()
 	}
 }
