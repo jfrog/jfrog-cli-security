@@ -12,7 +12,8 @@ import (
 
 type GitAuditParams struct {
 	// Git Params
-	source services.XscGitInfoContext
+	source     services.XscGitInfoContext
+	diffTarget string
 	// Connection params
 	serverDetails *config.ServerDetails
 	// Violations params
@@ -35,6 +36,11 @@ type GitAuditParams struct {
 
 func NewGitAuditParams() *GitAuditParams {
 	return &GitAuditParams{}
+}
+
+func (gap *GitAuditParams) SetDiffTarget(diffTarget string) *GitAuditParams {
+	gap.diffTarget = diffTarget
+	return gap
 }
 
 func (gap *GitAuditParams) SetServerDetails(serverDetails *config.ServerDetails) *GitAuditParams {
