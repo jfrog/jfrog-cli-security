@@ -1,6 +1,7 @@
 package scm
 
 import (
+	"errors"
 	"fmt"
 	"path"
 
@@ -9,13 +10,11 @@ import (
 )
 
 const (
-	Github ScmProvider = "github"
-	Gitlab ScmProvider = "gitlab"
-	// git clone https://git.id.info/scm/repo-name/repo-name.git
+	Github    ScmProvider = "github"
+	Gitlab    ScmProvider = "gitlab"
 	Bitbucket ScmProvider = "bitbucket"
 	Azure     ScmProvider = "azure"
-	// git clone https://gerrit.googlesource.com/git-repo
-	Gerrit ScmProvider = "gerrit"
+	Gerrit    ScmProvider = "gerrit"
 
 	// TODO: Add support for other git providers
 
@@ -30,6 +29,7 @@ const (
 	Unknown ScmProvider = ""
 )
 
+// ScmProvider is the type of source control provider
 type ScmProvider string
 
 func (sp ScmProvider) String() string {
@@ -38,7 +38,6 @@ func (sp ScmProvider) String() string {
 
 const (
 	Git ScmType = "git"
-	// Svn ScmType = "svn" // subversion
 )
 
 type ScmType string
@@ -49,12 +48,9 @@ func (st ScmType) String() string {
 
 type ScmTypeData struct {
 	indicator string
-	ScmApplicable func() bool
 }
 
-var scmTypeData = map[ScmType]ScmTypeData{
-	Git: {".git", func() bool { return true }},
-}
+var scmTypeData = map[ScmType]ScmTypeData{Git: {".git"}}
 
 type ScmManager interface {
 	GetGitContext() (gitInfo *services.XscGitInfoContext, err error)
@@ -62,21 +58,18 @@ type ScmManager interface {
 
 func DetectScmInProject(projectPath string) (manager ScmManager, err error) {
 	for scmType, scmData := range scmTypeData {
-		if exists, err := isScmProject(projectPath, scmData); err != nil {
-			return nil, err
-		} else if exists {
-			if scmType == Git {
-				return NewGitManager(projectPath)
-			}
+		if exists, e := isScmProject(projectPath, scmData); !exists || err != nil {
+			err = errors.Join(e, err)
+			continue
+		}
+		if scmType == Git {
+			return NewGitManager(projectPath)
 		}
 	}
-	err = fmt.Errorf("failed to detect source control manager in project path: %s", projectPath)
+	err = errors.Join(err, fmt.Errorf("failed to detect source control manager in project path: %s", projectPath))
 	return
 }
 
 func isScmProject(projectPath string, scmData ScmTypeData) (bool, error) {
-	if cliExists := scmData.ScmApplicable(); !cliExists {
-		return false, nil
-	}
 	return fileutils.IsDirExists(path.Join(projectPath, scmData.indicator), false)
 }

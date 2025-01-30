@@ -32,7 +32,7 @@ func NewGitManager(localRepositoryWorkingDir string) (gm *GitManager, err error)
 	return
 }
 
-func GitCliExists() (bool) {
+func GitCliExists() bool {
 	return true
 }
 
@@ -154,10 +154,10 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 
 // Normalize the URL by removing protocol prefix and any trailing ".git"
 func normalizeGitUrl(url string) string {
+	// jfrog-ignore - false positive, not used for communication
 	url = strings.TrimPrefix(url, "http://")
 	url = strings.TrimPrefix(url, "https://")
 	url = strings.TrimPrefix(url, "ssh://")
-	url = strings.TrimPrefix(url, "svn://")
 	return strings.TrimSuffix(url, ".git")
 }
 

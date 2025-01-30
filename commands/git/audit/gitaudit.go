@@ -12,9 +12,9 @@ import (
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/scm"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-cli-security/utils/scm"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 

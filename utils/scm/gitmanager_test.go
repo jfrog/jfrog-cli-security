@@ -71,6 +71,31 @@ func TestGetGitContext(t *testing.T) {
 			},
 		},
 		{
+			name:                  "Gerrit Project (no owner)",
+			testProjectZipDirPath: filepath.Join(basePath, "gerrit"),
+			gitInfo: &services.XscGitInfoContext{
+				GitRepoHttpsCloneUrl: "https://gerrit.googlesource.com/git-repo",
+				GitRepoName:          "git-repo",
+				GitProject:           "git-repo",
+				GitProvider:          "gerrit",
+				BranchName:           "main",
+				LastCommitHash:       "1711bc23c0ab6ff4a51bf948c703c81073dd3475",
+				LastCommitMessage: `git_config: prefer XDG config location
+
+Currently, repo ignores the XDG path for the git config file, and
+creates a new one in the user's home directory. This commit changes the
+behavior to prefer the XDG path if it exists, which matches git behavior
+and avoids littering the home directory.
+
+Bug: 40012443
+Change-Id: Icd3ec6db6b0832f47417bbe98ff9461306b51297
+Reviewed-on: https://gerrit-review.googlesource.com/c/git-repo/+/448385
+Tested-by: lmaor xenix <25misha52@gmail.com>
+Reviewed-by: Mike Frysinger <vapier@google.com>`,
+				LastCommitAuthor: "flexagoon",
+			},
+		},
+		{
 			name:                  "Forked Project (multiple remotes)",
 			testProjectZipDirPath: filepath.Join(basePath, "forked"),
 			gitInfo: &services.XscGitInfoContext{
@@ -162,6 +187,11 @@ func TestGetGitProvider(t *testing.T) {
 			provider: Azure,
 		},
 		{
+			name:     "Gerrit",
+			url:      "https://gerrit.googlesource.com/git-repo",
+			provider: Gerrit,
+		},
+		{
 			name:     "Unknown",
 			url:      "ssh://git@git.jfrog.info/assafa/test-security-git.git",
 			provider: Unknown,
@@ -201,6 +231,11 @@ func TestGetGitProject(t *testing.T) {
 			name:    "Bitbucket SSH",
 			url:     "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
 			project: "~assafa",
+		},
+		{
+			name:    "Gerrit - No project name",
+			url:     "https://gerrit.googlesource.com/git-repo",
+			project: "git-repo",
 		},
 	}
 	for _, testCase := range testCases {
