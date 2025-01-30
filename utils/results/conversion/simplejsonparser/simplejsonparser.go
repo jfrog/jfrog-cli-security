@@ -324,30 +324,28 @@ func getLicenseKey(licenseKey, issueId string) string {
 func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) results.ParseScaViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		violationOpRiskData := getOperationalRiskViolationReadableData(violation)
-		for compIndex := 0; compIndex < len(impactedPackagesName); compIndex++ {
-			operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
-				ViolationContext: formats.ViolationContext{
-					Watch:    violation.WatchName,
-					Policies: results.ConvertPolicesToString(violation.Policies),
-				},
-				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
-					ImpactedDependencyName:    impactedPackagesName,
-					ImpactedDependencyVersion: impactedPackagesVersion,
-					ImpactedDependencyType:    impactedPackagesType,
-					Components:                directComponents,
-				},
-				IsEol:         violationOpRiskData.isEol,
-				Cadence:       violationOpRiskData.cadence,
-				Commits:       violationOpRiskData.commits,
-				Committers:    violationOpRiskData.committers,
-				NewerVersions: violationOpRiskData.newerVersions,
-				LatestVersion: violationOpRiskData.latestVersion,
-				RiskReason:    violationOpRiskData.riskReason,
-				EolMessage:    violationOpRiskData.eolMessage,
-			}
-			*operationalRiskViolationsRows = append(*operationalRiskViolationsRows, *operationalRiskViolationsRow)
+		operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
+			ViolationContext: formats.ViolationContext{
+				Watch:    violation.WatchName,
+				Policies: results.ConvertPolicesToString(violation.Policies),
+			},
+			ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+				SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, pretty),
+				ImpactedDependencyName:    impactedPackagesName,
+				ImpactedDependencyVersion: impactedPackagesVersion,
+				ImpactedDependencyType:    impactedPackagesType,
+				Components:                directComponents,
+			},
+			IsEol:         violationOpRiskData.isEol,
+			Cadence:       violationOpRiskData.cadence,
+			Commits:       violationOpRiskData.commits,
+			Committers:    violationOpRiskData.committers,
+			NewerVersions: violationOpRiskData.newerVersions,
+			LatestVersion: violationOpRiskData.latestVersion,
+			RiskReason:    violationOpRiskData.riskReason,
+			EolMessage:    violationOpRiskData.eolMessage,
 		}
+		*operationalRiskViolationsRows = append(*operationalRiskViolationsRows, *operationalRiskViolationsRow)
 		return nil
 	}
 }
