@@ -62,7 +62,7 @@ func TestGetGitContext(t *testing.T) {
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "https://gitlab.com/attiasas/test-group/test-security-git.git",
 				GitRepoName:          "test-security-git",
-				GitProject:           "attiasas",
+				GitProject:           "attiasas/test-group",
 				GitProvider:          "gitlab",
 				BranchName:           "main",
 				LastCommitHash:       "ada14e9f525d8cbfb3c8c31ebe345d85ec342480",
@@ -192,6 +192,11 @@ func TestGetGitProvider(t *testing.T) {
 			provider: Gerrit,
 		},
 		{
+			name:     "Gitea",
+			url:      "https://gitea.com/gitea/helm-chart.git",
+			provider: Gitea,
+		},
+		{
 			name:     "Unknown",
 			url:      "ssh://git@git.jfrog.info/assafa/test-security-git.git",
 			provider: Unknown,
@@ -226,6 +231,11 @@ func TestGetGitProject(t *testing.T) {
 			name:    "Bitbucket Https",
 			url:     "https://git.id.info/scm/repo-name/repo-name.git",
 			project: "repo-name",
+		},
+		{
+			name:    "Gitlab Project (group tree structure)",
+			url:     "https://gitlab.com/attiasas/test-group/test-security-git.git",
+			project: "attiasas/test-group",
 		},
 		{
 			name:    "Bitbucket SSH",
