@@ -23,7 +23,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
