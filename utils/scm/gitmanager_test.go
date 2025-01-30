@@ -140,7 +140,7 @@ Reviewed-by: Mike Frysinger <vapier@google.com>`,
 			}
 			assert.NoError(t, err)
 			assert.NotNil(t, gitManager)
-			gitInfo, err := gitManager.GetGitContext()
+			gitInfo, err := gitManager.GetSourceControlContext()
 
 			if testCase.gitInfo == nil {
 				// Dirty project, we can't assert the git info
@@ -159,7 +159,7 @@ func TestGetGitProvider(t *testing.T) {
 	testCases := []struct {
 		name     string
 		url      string
-		provider ScmProvider
+		provider ScProvider
 	}{
 		{
 			name:     "Github",

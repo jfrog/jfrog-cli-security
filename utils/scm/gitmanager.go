@@ -32,10 +32,6 @@ func NewGitManager(localRepositoryWorkingDir string) (gm *GitManager, err error)
 	return
 }
 
-func GitCliExists() bool {
-	return true
-}
-
 func (gm *GitManager) getRootRemote() (root *goGit.Remote, err error) {
 	remotes, err := gm.localGitRepository.Remotes()
 	if err != nil {
@@ -101,7 +97,7 @@ func (gm *GitManager) isClean() (bool, error) {
 }
 
 // Detect git information
-func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err error) {
+func (gm *GitManager) GetSourceControlContext() (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(gm.remote)
 	if err != nil {
 		return nil, err
@@ -180,7 +176,7 @@ func getGitProject(url string) string {
 	return urlParts[1]
 }
 
-func getGitProvider(url string) ScmProvider {
+func getGitProvider(url string) ScProvider {
 	if strings.Contains(url, Github.String()) {
 		return Github
 	}
