@@ -15,7 +15,7 @@ import (
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/repository"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/repository"
 	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	commonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
@@ -54,7 +54,7 @@ func InitXrayTest(t *testing.T, minVersion string) {
 	if !*configTests.TestXray {
 		t.Skip(getSkipTestMsg("Xray commands", "--test.xray"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func GetTestServerDetails() *config.ServerDetails {
@@ -65,12 +65,7 @@ func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	if !*configTests.TestXsc {
 		t.Skip(getSkipTestMsg("XSC integration", "--test.xsc"))
 	}
-	xrayVersion, err := testUtils.GetTestsXrayVersion()
-	assert.NoError(t, err)
-	// validate XSC is enabled at the given server
-	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails)
-	assert.NoError(t, err)
-	xscVersion, err := xscService.GetVersion()
+	xrayVersion, xscVersion, err := getXrayAndXscTestVersions(t)
 	if err != nil {
 		t.Skip("Skipping XSC integration tests. XSC is not enabled at the given server.")
 	}
@@ -79,79 +74,88 @@ func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	}
 	// Make sure the audit request will work with xsc and not xray
 	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
-	return xrayVersion.GetVersion(), xscVersion, func() {
+	return xrayVersion, xscVersion, func() {
 		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
+}
+
+func getXrayAndXscTestVersions(t *testing.T) (string, string, error) {
+	xrayVersion, err := testUtils.GetTestsXrayVersion()
+	assert.NoError(t, err)
+	xscService, err := xsc.CreateXscServiceBackwardCompatible(xrayVersion.GetVersion(), configTests.XscDetails)
+	assert.NoError(t, err)
+	xscVersion, err := xscService.GetVersion()
+	return xrayVersion.GetVersion(), xscVersion, err
 }
 
 func InitAuditGeneralTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditGeneral {
 		t.Skip(getSkipTestMsg("Audit command general integration", "--test.audit"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditJasTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditJas {
 		t.Skip(getSkipTestMsg("Audit command JFrog Artifactory Security integration", "--test.audit.Jas"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditJavaScriptTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditJavaScript {
 		t.Skip(getSkipTestMsg("Audit command JavaScript technologies (Npm, Pnpm, Yarn) integration", "--test.audit.JavaScript"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditJavaTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditJava {
 		t.Skip(getSkipTestMsg("Audit command Java technologies (Maven, Gradle) integration", "--test.audit.Java"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditCTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditCTypes {
 		t.Skip(getSkipTestMsg("Audit command C/C++/C# technologies (Nuget/DotNet, Conan) integration", "--test.audit.C"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditGoTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditGo {
 		t.Skip(getSkipTestMsg("Audit command Go technologies (GoLang) integration", "--test.audit.Go"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditCocoapodsTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditCocoapods {
 		t.Skip(getSkipTestMsg("Audit command Cocoapods technologies integration", "--test.audit.Cocoapods"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditSwiftTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditSwift {
 		t.Skip(getSkipTestMsg("Audit command Swift technologies integration", "--test.audit.Swift"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitAuditPythonTest(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditPython {
 		t.Skip(getSkipTestMsg("Audit command Python technologies (Pip, PipEnv, Poetry) integration", "--test.audit.Python"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitScanTest(t *testing.T, minVersion string) {
 	if !*configTests.TestScan {
 		t.Skip(getSkipTestMsg("Other scan commands integration", "--test.scan"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
 func InitNativeDockerTest(t *testing.T) (mockCli *coreTests.JfrogCli, cleanUp func()) {
@@ -171,12 +175,22 @@ func InitEnrichTest(t *testing.T, minVersion string) {
 	if !*configTests.TestEnrich {
 		t.Skip(getSkipTestMsg("Enrich command integration", "--test.enrich"))
 	}
-	testUtils.ValidateXrayVersion(t, minVersion)
+	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
-func InitGitTest(t *testing.T) {
+func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	if !*configTests.TestGit {
 		t.Skip(getSkipTestMsg("Git commands integration", "--test.git"))
+	}
+	xrayVersion, xscVersion, err := getXrayAndXscTestVersions(t)
+	assert.NoError(t, err)
+	if minXrayVersion != "" {
+		testUtils.ValidateXrayVersion(t, xrayVersion, minXrayVersion)
+	}
+	// Make sure the request will work with xsc and not xray
+	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
+	return xrayVersion, xscVersion, func() {
+		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
 }
 

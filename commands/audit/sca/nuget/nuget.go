@@ -21,7 +21,7 @@ import (
 	"github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/dotnet"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"

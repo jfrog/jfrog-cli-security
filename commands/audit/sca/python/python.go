@@ -9,7 +9,7 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
-	utils "github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/python"
+	utils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/python"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
