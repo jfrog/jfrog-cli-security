@@ -176,7 +176,10 @@ func getGitProject(url string) string {
 			// In BB ssh clone url looks like this: https://git.id.info/scm/repo-name/repo-name.git --> ['git.id.info', 'scm', 'repo-name', 'repo-name']
 			continue
 		}
-
+		// Aws code commit clone url looks like this: https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name} --> ['git-codecommit.{region}.amazonaws.com', 'v1', 'repos', '{repository_name}']
+		if len(urlParts) > 3 && ((i == 1 && urlParts[i] == "v1") || (i == 2 && urlParts[i] == "repos")) {
+			continue
+		}
 		projectPathComponents = append(projectPathComponents, urlParts[i])
 	}
 	if len(projectPathComponents) == 0 {
@@ -206,6 +209,9 @@ func getGitProvider(url string) ScProvider {
 	}
 	if strings.Contains(url, Gitea.String()) {
 		return Gitea
+	}
+	if strings.Contains(url, AWSCodeCommit.String()) {
+		return AWSCodeCommit
 	}
 	// Unknown for self-hosted git providers
 	log.Debug(fmt.Sprintf("Unknown git provider for URL: %s", url))

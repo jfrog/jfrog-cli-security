@@ -197,6 +197,11 @@ func TestGetGitProvider(t *testing.T) {
 			provider: Gitea,
 		},
 		{
+			name:     "AWS CodeCommit",
+			url:      "https://git-codecommit.us-west-2.amazonaws.com/v1/repos/test-repo",
+			provider: AWSCodeCommit,
+		},
+		{
 			name:     "Unknown",
 			url:      "ssh://git@git.jfrog.info/assafa/test-security-git.git",
 			provider: Unknown,
@@ -246,6 +251,11 @@ func TestGetGitProject(t *testing.T) {
 			name:    "Gerrit - No project name",
 			url:     "https://gerrit.googlesource.com/git-repo",
 			project: "git-repo",
+		},
+		{
+			name:    "codecommit",
+			url:     "https://git-codecommit.us-west-2.amazonaws.com/v1/repos/test-repo",
+			project: "test-repo",
 		},
 	}
 	for _, testCase := range testCases {

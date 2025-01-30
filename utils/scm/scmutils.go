@@ -10,21 +10,13 @@ import (
 )
 
 const (
-	Github    ScProvider = "github"
-	Gitlab    ScProvider = "gitlab"
-	Bitbucket ScProvider = "bitbucket"
-	Azure     ScProvider = "azure"
-	Gerrit    ScProvider = "gerrit"
-
-	// TODO: Add support for other git providers
-
-	// git clone https://git-codecommit.{region}.amazonaws.com/v1/repos/{repository_name}
+	Github        ScProvider = "github"
+	Gitlab        ScProvider = "gitlab"
+	Bitbucket     ScProvider = "bitbucket"
+	Azure         ScProvider = "azure"
+	Gerrit        ScProvider = "gerrit"
+	Gitea         ScProvider = "gitea"
 	AWSCodeCommit ScProvider = "codecommit"
-	// git clone https://gitea.com/gitea/helm-chart.git
-	Gitea ScProvider = "gitea"
-
-	// svn checkout https://svn.code.sf.net/p/svn-sample-repo/code/ svn-sample-repo-code
-	SourceForge ScProvider = "sourceforge"
 
 	Unknown ScProvider = ""
 )
