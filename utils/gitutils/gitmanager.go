@@ -122,7 +122,6 @@ func (gm *GitManager) IsClean() (bool, error) {
 	return status.IsClean(), nil
 }
 
-
 func (gm *GitManager) Diff(reference string) (err error) {
 	// Get the current branch
 	currentBranch, err := gm.localGitRepository.Head()
@@ -203,6 +202,7 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 
 // Normalize the URL by removing protocol prefix and any trailing ".git"
 func normalizeGitUrl(url string) string {
+	// jfrog-ignore - false positive, not used for communication
 	url = strings.TrimPrefix(url, "http://")
 	url = strings.TrimPrefix(url, "https://")
 	url = strings.TrimPrefix(url, "ssh://")
