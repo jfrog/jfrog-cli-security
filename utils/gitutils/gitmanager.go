@@ -122,6 +122,33 @@ func (gm *GitManager) IsClean() (bool, error) {
 	return status.IsClean(), nil
 }
 
+
+func (gm *GitManager) Diff(reference string) (err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	// Get the commit object of the reference
+	referenceCommit, err := gm.localGitRepository.CommitObject(currentCommit.Hash)
+	if err != nil {
+		return
+	}
+	// Get the diff between the current branch and the reference
+	diff, err := currentCommit.Patch(referenceCommit)
+	if err != nil {
+		return
+	}
+	// Print the diff
+	fmt.Println(diff)
+	return
+}
+
 // Detect git information
 func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(gm.remote)
