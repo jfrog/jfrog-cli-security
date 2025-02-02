@@ -234,8 +234,31 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.git
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich
  
+
+  Git_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Git Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git
+
   Code_Coverage:
     name: Generate Code Coverage Report
     if: github.event_name == 'pull_request_target'
