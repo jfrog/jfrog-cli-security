@@ -43,6 +43,7 @@ func (st ScType) String() string {
 
 // ScmTypeData holds the data for each source control manager type
 type ScmTypeData struct {
+	// file that indicates the source control manager type at the root of the project
 	indicator string
 }
 
@@ -69,7 +70,6 @@ func DetectScmInProject(projectPath string) (manager ScmManager, err error) {
 func isScmProject(projectPath string, scmData ScmTypeData) (bool, error) {
 	return fileutils.IsDirExists(path.Join(projectPath, scmData.indicator), false)
 }
-
 
 // Normalize the URL by removing protocol prefix and any trailing ".git"
 func normalizeGitUrl(url string) string {
