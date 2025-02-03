@@ -96,7 +96,7 @@ func (gm *GitManager) isClean() (bool, error) {
 	if !isClean {
 		log.Debug(fmt.Sprintf("Git status: %v", status))
 	}
-	return status.IsClean(), nil
+	return isClean, nil
 }
 
 // Detect git information
