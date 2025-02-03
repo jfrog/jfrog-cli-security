@@ -92,7 +92,10 @@ func (gm *GitManager) isClean() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
+	isClean := status.IsClean()
+	if !isClean {
+		log.Debug(fmt.Sprintf("Git status: %v", status))
+	}
 	return status.IsClean(), nil
 }
 

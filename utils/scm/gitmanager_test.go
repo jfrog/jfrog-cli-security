@@ -79,20 +79,9 @@ func TestGetGitContext(t *testing.T) {
 				GitProject:           "git-repo",
 				GitProvider:          "gerrit",
 				BranchName:           "main",
-				LastCommitHash:       "1711bc23c0ab6ff4a51bf948c703c81073dd3475",
-				LastCommitMessage: `git_config: prefer XDG config location
-
-Currently, repo ignores the XDG path for the git config file, and
-creates a new one in the user's home directory. This commit changes the
-behavior to prefer the XDG path if it exists, which matches git behavior
-and avoids littering the home directory.
-
-Bug: 40012443
-Change-Id: Icd3ec6db6b0832f47417bbe98ff9461306b51297
-Reviewed-on: https://gerrit-review.googlesource.com/c/git-repo/+/448385
-Tested-by: lmaor xenix <25misha52@gmail.com>
-Reviewed-by: Mike Frysinger <vapier@google.com>`,
-				LastCommitAuthor: "flexagoon",
+				LastCommitHash:       "5658fc3dff435f4f17811ecea3baa2f3d6e9b5dc",
+				LastCommitMessage:    `add ignore`,
+				LastCommitAuthor:     "attiasas",
 			},
 		},
 		{
