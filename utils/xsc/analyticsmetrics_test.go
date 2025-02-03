@@ -149,7 +149,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 	}{
 		{
 			name:         "No audit results",
-			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time},
+			auditResults: &results.SecurityCommandResults{CommandMetaData: results.CommandMetaData{MultiScanId: "msi", StartTime: time}},
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{EventStatus: xscservices.Completed},
 			},
@@ -178,7 +178,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 		},
 		{
 			name:         "Scan failed no findings.",
-			auditResults: &results.SecurityCommandResults{MultiScanId: "msi", StartTime: time, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
+			auditResults: &results.SecurityCommandResults{CommandMetaData: results.CommandMetaData{MultiScanId: "msi", StartTime: time}, Targets: []*results.TargetResults{{Errors: []error{errors.New("an error")}}}},
 			expected: xscservices.XscAnalyticsGeneralEventFinalize{
 				XscAnalyticsBasicGeneralEvent: xscservices.XscAnalyticsBasicGeneralEvent{TotalFindings: 0, EventStatus: xscservices.Failed},
 			},

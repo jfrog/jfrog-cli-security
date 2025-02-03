@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	goGit "github.com/go-git/go-git/v5"
-
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/diff"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -122,32 +123,6 @@ func (gm *GitManager) IsClean() (bool, error) {
 	return status.IsClean(), nil
 }
 
-func (gm *GitManager) Diff(reference string) (err error) {
-	// Get the current branch
-	currentBranch, err := gm.localGitRepository.Head()
-	if err != nil {
-		return
-	}
-	// Get the commit object of the current branch
-	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
-	if err != nil {
-		return
-	}
-	// Get the commit object of the reference
-	referenceCommit, err := gm.localGitRepository.CommitObject(currentCommit.Hash)
-	if err != nil {
-		return
-	}
-	// Get the diff between the current branch and the reference
-	diff, err := currentCommit.Patch(referenceCommit)
-	if err != nil {
-		return
-	}
-	// Print the diff
-	fmt.Println(diff)
-	return
-}
-
 // Detect git information
 func (gm *GitManager) GetGitContext() (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(gm.remote)
@@ -198,6 +173,39 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 		log.Warn(fmt.Sprintf("Multiple URLs found for remote, using the first one: %s from options: %v", remote.Config().URLs[0], remote.Config().URLs))
 	}
 	return remote.Config().URLs[0], nil
+}
+
+func (gm *GitManager) Diff(reference string) (changes []diff.FilePatch, err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	// Get the commit object of the reference
+	referenceCommit, err := gm.localGitRepository.CommitObject(plumbing.NewHash(reference))
+	if err != nil {
+		return
+	}
+	// Get the diff between the current branch and the reference
+	diff, err := currentCommit.Patch(referenceCommit)
+	if err != nil {
+		return
+	}
+	changes = diff.FilePatches()
+	return
+}
+
+func (gm *GitManager) ScanRelevantDiff(reference string) (changes ChangesRelevantToScan, err error) {
+	diff, err := gm.Diff(reference)
+	if err != nil {
+		return
+	}
+	return detectRelevantChanges(diff)
 }
 
 // Normalize the URL by removing protocol prefix and any trailing ".git"

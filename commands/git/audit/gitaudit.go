@@ -72,7 +72,7 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	return gitManager.GetGitContext()
 }
 
-func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
+func toAuditParams(params GitAuditParams, changes *gitutils.ChangesRelevantToScan) *sourceAudit.AuditParams {
 	auditParams := sourceAudit.NewAuditParams()
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
@@ -90,6 +90,9 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
+	if changedPaths := changes.GetChangedFilesPaths(); len(changedPaths) > 0 {
+		log.Debug(fmt.Sprintf("Diff targets: %v", changedPaths))
+	}
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
 	// Cmd information
@@ -100,6 +103,15 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 }
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
+	// Get diff targets to scan if needed
+	diffTargets, err := getDiffTargets(params)
+	if err != nil {
+		return results.NewCommandResults(utils.SourceCode).AddGeneralError(err, false)
+	}
+	if diffTargets != nil && !diffTargets.HasChanges() {
+		log.Warn("No changes detected in the diff, skipping the scan")
+		return results.NewCommandResults(utils.SourceCode)
+	}
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
 	event.GitInfo = &params.source
@@ -112,11 +124,26 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	)
 	params.multiScanId = multiScanId
 	params.startTime = startTime
-	// Run the scan
-	scanResults = sourceAudit.RunAudit(toAuditParams(params))
+	// Run the scan and filter results not in diff
+	scanResults = filterResultsNotInDiff(sourceAudit.RunAudit(toAuditParams(params, diffTargets)), diffTargets)
 	// Send scan ended event
 	xsc.SendScanEndedWithResults(params.serverDetails, scanResults)
 	return scanResults
+}
+
+func getDiffTargets(params GitAuditParams) (changes *gitutils.ChangesRelevantToScan, err error) {
+	if params.diffTarget == "" {
+		return
+	}
+	log.Info(fmt.Sprintf("Diff mode: comparing against target '%s'", params.diffTarget))
+	gitManager, err := gitutils.NewGitManager(params.repositoryLocalPath)
+	if err != nil {
+		return
+	}
+	if relevantChanges, err := gitManager.ScanRelevantDiff(params.diffTarget); err == nil {
+		changes = &relevantChanges
+	}
+	return 
 }
 
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {

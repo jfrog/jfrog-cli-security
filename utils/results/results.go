@@ -19,7 +19,15 @@ import (
 
 // SecurityCommandResults is a struct that holds the results of a security scan/audit command.
 type SecurityCommandResults struct {
-	// General fields describing the command metadata
+	CommandMetaData
+	// Results for each target in the command
+	Targets      []*TargetResults `json:"targets"`
+	targetsMutex sync.Mutex       `json:"-"`
+	errorsMutex  sync.Mutex       `json:"-"`
+}
+
+// General fields describing the command metadata
+type CommandMetaData struct {
 	XrayVersion      string            `json:"xray_version"`
 	XscVersion       string            `json:"xsc_version,omitempty"`
 	EntitledForJas   bool              `json:"jas_entitled"`
@@ -29,12 +37,8 @@ type SecurityCommandResults struct {
 	StartTime        time.Time         `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
-	// Results for each target in the command
-	Targets      []*TargetResults `json:"targets"`
-	targetsMutex sync.Mutex       `json:"-"`
 	// GeneralError that occurred during the command execution
-	GeneralError error      `json:"general_error,omitempty"`
-	errorsMutex  sync.Mutex `json:"-"`
+	GeneralError error `json:"general_error,omitempty"`
 }
 
 // We have three types of results: vulnerabilities, violations and licenses.
@@ -130,7 +134,7 @@ func (st ScanTarget) String() (str string) {
 }
 
 func NewCommandResults(cmdType utils.CommandType) *SecurityCommandResults {
-	return &SecurityCommandResults{CmdType: cmdType, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
+	return &SecurityCommandResults{CommandMetaData: CommandMetaData{CmdType: cmdType}, targetsMutex: sync.Mutex{}, errorsMutex: sync.Mutex{}}
 }
 
 func (r *SecurityCommandResults) SetStartTime(startTime time.Time) *SecurityCommandResults {
@@ -288,7 +292,6 @@ func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResult
 	if r.EntitledForJas {
 		targetResults.JasResults = &JasScansResults{JasVulnerabilities: JasScanResults{}, JasViolations: JasScanResults{}}
 	}
-
 	r.targetsMutex.Lock()
 	r.Targets = append(r.Targets, targetResults)
 	r.targetsMutex.Unlock()

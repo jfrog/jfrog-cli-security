@@ -14,9 +14,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func TestGetGitContext(t *testing.T) {
-	basePath := filepath.Join("..", "..", "tests", "testdata", "git", "projects")
+var testDir = filepath.Join("..", "..", "tests", "testdata", "git", "projects")
 
+func TestGetGitContext(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		testProjectZipDirPath string
@@ -26,11 +26,11 @@ func TestGetGitContext(t *testing.T) {
 		{
 			name:                  "No Git Info",
 			NoDotGitFolder:        true,
-			testProjectZipDirPath: filepath.Join(basePath, "nogit"),
+			testProjectZipDirPath: filepath.Join(testDir, "nogit"),
 		},
 		{
 			name:                  "Clean Project (after clone)",
-			testProjectZipDirPath: filepath.Join(basePath, "clean"),
+			testProjectZipDirPath: filepath.Join(testDir, "clean"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
 				GitRepoName:          "test-security-git",
@@ -44,7 +44,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Self-Hosted Git Project (and SSO credentials)",
-			testProjectZipDirPath: filepath.Join(basePath, "selfhosted"),
+			testProjectZipDirPath: filepath.Join(testDir, "selfhosted"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
 				GitRepoName:          "test-security-git",
@@ -58,7 +58,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Gitlab Project (group tree structure)",
-			testProjectZipDirPath: filepath.Join(basePath, "gitlab"),
+			testProjectZipDirPath: filepath.Join(testDir, "gitlab"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "https://gitlab.com/attiasas/test-group/test-security-git.git",
 				GitRepoName:          "test-security-git",
@@ -72,7 +72,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Forked Project (multiple remotes)",
-			testProjectZipDirPath: filepath.Join(basePath, "forked"),
+			testProjectZipDirPath: filepath.Join(testDir, "forked"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
 				GitRepoName:          "test-security-git",
@@ -87,7 +87,7 @@ func TestGetGitContext(t *testing.T) {
 		// Not supported yet
 		{
 			name:                  "Dirty Project (with uncommitted changes)",
-			testProjectZipDirPath: filepath.Join(basePath, "dirty"),
+			testProjectZipDirPath: filepath.Join(testDir, "dirty"),
 			// gitInfo: &services.XscGitInfoContext{
 			// 	GitRepoHttpsCloneUrl:        "https://github.com/attiasas/test-security-git.git",
 			// 	GitRepoName:       "test-security-git",
@@ -207,6 +207,39 @@ func TestGetGitProject(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			project := getGitProject(testCase.url)
 			assert.Equal(t, testCase.project, project)
+		})
+	}
+}
+
+
+func TestDetectRelevantChanges(t *testing.T) {
+	testCases := []struct {
+		name     string
+		testZipDir string
+		targetReference string
+		expectedChanges ChangesRelevantToScan
+	}{
+		{
+			name: "No relevant changes",
+			testZipDir: "clean",
+			targetReference: "861b7aff93eeb9be4806f1d9cc668e3d702d90b6",
+			expectedChanges: ChangesRelevantToScan{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Create the project from the zip
+			projectPath, cleanUpProject := securityTestUtils.CreateTestProjectFromZip(t, filepath.Join(testDir, "clean"))
+			defer cleanUpProject()
+			// Prepare the git manager at the project path
+			gitManager, err := NewGitManager(projectPath)
+			require.NoError(t, err)
+			// Get the relevant changes
+			changes, err := gitManager.ScanRelevantDiff(testCase.targetReference)
+			require.NoError(t, err)
+			// Assert the expected changes
+			assert.Equal(t, testCase.expectedChanges, changes)
 		})
 	}
 }
