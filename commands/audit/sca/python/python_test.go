@@ -175,16 +175,16 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "poetry", "my-poetry-project"))
 	defer cleanUp()
 	expectedPoetryUniqueDeps := []string{
-		PythonPackageTypeIdentifier + "wcwidth:0.2.8",
+		PythonPackageTypeIdentifier + "wcwidth:0.2.13",
 		PythonPackageTypeIdentifier + "colorama:0.4.6",
-		PythonPackageTypeIdentifier + "packaging:23.2",
+		PythonPackageTypeIdentifier + "packaging:24.2",
 		PythonPackageTypeIdentifier + "python:",
 		PythonPackageTypeIdentifier + "pluggy:0.13.1",
 		PythonPackageTypeIdentifier + "py:1.11.0",
 		PythonPackageTypeIdentifier + "atomicwrites:1.4.1",
-		PythonPackageTypeIdentifier + "attrs:23.1.0",
-		PythonPackageTypeIdentifier + "more-itertools:10.1.0",
-		PythonPackageTypeIdentifier + "numpy:1.26.1",
+		PythonPackageTypeIdentifier + "attrs:25.1.0",
+		PythonPackageTypeIdentifier + "more-itertools:10.6.0",
+		PythonPackageTypeIdentifier + "numpy:1.26.4",
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
 	// Run getModulesDependencyTrees
@@ -202,7 +202,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pytest:5.4.3")
 		// Test sub child module
 		if assert.NotNil(t, childNode) {
-			tests.GetAndAssertNode(t, childNode.Nodes, "packaging:23.2")
+			tests.GetAndAssertNode(t, childNode.Nodes, "packaging:24.2")
 		}
 	}
 }
