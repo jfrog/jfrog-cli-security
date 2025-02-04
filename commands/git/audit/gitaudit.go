@@ -143,7 +143,7 @@ func getDiffTargets(params GitAuditParams) (changes *gitutils.ChangesRelevantToS
 	if relevantChanges, err := gitManager.ScanRelevantDiff(params.diffTarget); err == nil {
 		changes = &relevantChanges
 	}
-	return 
+	return
 }
 
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {

@@ -211,17 +211,16 @@ func TestGetGitProject(t *testing.T) {
 	}
 }
 
-
 func TestDetectRelevantChanges(t *testing.T) {
 	testCases := []struct {
-		name     string
-		testZipDir string
+		name            string
+		testZipDir      string
 		targetReference string
 		expectedChanges ChangesRelevantToScan
 	}{
 		{
-			name: "No relevant changes",
-			testZipDir: "clean",
+			name:            "No relevant changes",
+			testZipDir:      "clean",
 			targetReference: "861b7aff93eeb9be4806f1d9cc668e3d702d90b6",
 			expectedChanges: ChangesRelevantToScan{},
 		},

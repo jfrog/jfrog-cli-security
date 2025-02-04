@@ -28,10 +28,7 @@ func filterResultsNotInDiff(scanResults *results.SecurityCommandResults, changes
 }
 
 func getDescriptorsFromDiff(diffTargets []string) (descriptors []string) {
-	for _, target := range diffTargets {
-		descriptors = append(descriptors, target)
-	}
-	return
+	return append(descriptors, diffTargets...)
 }
 
 // Filter SCA results that are not in the diff, if at least one SCA descriptor is in the diff, the target is in the diff
