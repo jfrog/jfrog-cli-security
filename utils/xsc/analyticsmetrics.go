@@ -67,7 +67,7 @@ func SendScanEndedEvent(xrayVersion, xscVersion string, serviceDetails *config.S
 		return
 	}
 
-	event := CreateFinalizedEvent(multiScanId, startTime, totalFindings, resultsContext, scanError)
+	event := CreateFinalizedEvent(xrayVersion, multiScanId, startTime, totalFindings, resultsContext, scanError)
 
 	if err = xscService.UpdateAnalyticsGeneralEvent(event); err != nil {
 		log.Debug(fmt.Sprintf("failed updating general event in XSC service for multi_scan_id %s, error: %s \"", multiScanId, err.Error()))
@@ -92,7 +92,7 @@ func SendScanEndedWithResults(serviceDetails *config.ServerDetails, cmdResults *
 	)
 }
 
-func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, err error) xscservices.XscAnalyticsGeneralEventFinalize {
+func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, totalFindings int, resultsContext *results.ResultContext, err error) xscservices.XscAnalyticsGeneralEventFinalize {
 	totalDuration := time.Since(startTime)
 	eventStatus := xscservices.Completed
 	if err != nil {
@@ -100,8 +100,10 @@ func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings
 	}
 
 	var gitRepoUrlKey string
-	if resultsContext != nil {
-		gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
+	if resultsContext != nil && resultsContext.GitRepoHttpsCloneUrl != "" {
+		if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.GitRepoKeyAnalyticsMinVersion); e == nil {
+			gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
+		}
 	}
 
 	return xscservices.XscAnalyticsGeneralEventFinalize{
@@ -116,7 +118,7 @@ func CreateFinalizedEvent(multiScanId string, startTime time.Time, totalFindings
 }
 
 func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
-	return CreateFinalizedEvent(cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
+	return CreateFinalizedEvent(cmdResults.XrayVersion, cmdResults.MultiScanId, cmdResults.StartTime, getTotalFindings(cmdResults), &cmdResults.ResultContext, cmdResults.GetErrors())
 }
 
 func GetScanEvent(xrayVersion, xscVersion, multiScanId string, serviceDetails *config.ServerDetails) (*xscservices.XscAnalyticsGeneralEvent, error) {
