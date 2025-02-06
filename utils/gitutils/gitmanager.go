@@ -175,6 +175,37 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 	return remote.Config().URLs[0], nil
 }
 
+func (gm *GitManager) GetCommonAncestor(reference string) (ancestorCommit string, err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	// Get the commit object of the reference
+	referenceCommit, err := gm.localGitRepository.CommitObject(plumbing.NewHash(reference))
+	if err != nil {
+		return
+	}
+	// Get the common ancestor commit
+	log.Debug(fmt.Sprintf("Finding common ancestor between %s and %s", currentBranch.Name().Short(), reference))
+	ancestorCommitHash, err := currentCommit.MergeBase(referenceCommit)
+	if err != nil {
+		return
+	}
+	if len(ancestorCommitHash) == 0 {
+		err = fmt.Errorf("no common ancestor found between %s and %s", currentBranch.Name().Short(), reference)
+	} else if len(ancestorCommitHash) > 1 {
+		err = fmt.Errorf("multiple common ancestors found between %s and %s", currentBranch.Name().Short(), reference)
+	}
+	ancestorCommit = ancestorCommitHash[0].Hash.String()
+	return
+}
+
 func (gm *GitManager) Diff(reference string) (changes []diff.FilePatch, err error) {
 	// Get the current branch
 	currentBranch, err := gm.localGitRepository.Head()

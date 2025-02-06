@@ -135,8 +135,14 @@ func getDiffTargets(params GitAuditParams) (changes *gitutils.ChangesRelevantToS
 	if params.diffTarget == "" {
 		return
 	}
-	log.Info(fmt.Sprintf("Diff mode: comparing against target '%s'", params.diffTarget))
 	gitManager, err := gitutils.NewGitManager(params.repositoryLocalPath)
+	if params.calculateCommonAncestorAsTarget {
+		log.Info(fmt.Sprintf("Diff mode: check for common ancestor with target '%s'", params.diffTarget))
+		if params.diffTarget, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
+			return
+		}
+	}
+	log.Info(fmt.Sprintf("Diff mode: comparing against target '%s'", params.diffTarget))
 	if err != nil {
 		return
 	}

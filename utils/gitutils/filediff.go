@@ -2,6 +2,7 @@ package gitutils
 
 import (
 	"fmt"
+	// "strings"
 
 	goDiff "github.com/go-git/go-git/v5/plumbing/format/diff"
 
@@ -124,12 +125,45 @@ func detectRelevantChanges(filePatches []goDiff.FilePatch) (changes ChangesRelev
 	return
 }
 
-func processFileChunksForRelevantChanges(fileChunks []goDiff.Chunk /*isNewFile*/, _ bool) (changes []Range) {
+func processFileChunksForRelevantChanges(fileChunks []goDiff.Chunk /*isNewFile*/, _ bool) (relevantChanges []Range) {
 	// SARIF locations start at 1
-	// row, col := 1, 1
+	row, col := 1, 1
 	for _, diffChunk := range fileChunks {
 		chunkContent := diffChunk.Content()
 		log.Debug(fmt.Sprintf("Chunk (type = %d): \"%s\"", diffChunk.Type(), chunkContent))
+		switch diffChunk.Type() {
+		case goDiff.Add:
+			// Added content
+			// Add the range of the added content
+			relevantChanges = append(relevantChanges, Range{StartRow: row, StartCol: col, EndRow: row, EndCol: col + len(chunkContent)})
+			// Move the cursor to the end of the added content
+
+		case goDiff.Delete:
+			// Deleted content
+			// Move the cursor to the end of the deleted content
+
+		case goDiff.Equal:
+			// Unchanged content
+			// Move the cursor to the end of the unchanged content
+
+		}
+	}
+	return
+}
+
+// func createRangeAtChunk(cursorRow, cursorCol int, chunk string) Range {
+// 	return Range{StartRow: row, StartCol: col, EndRow: row, EndCol: col + len(chunk)}
+// }
+
+func getCursorNewPosition(cursorRow, cursorCol int, chunk string) (newRow, newCol int) {
+	newRow, newCol = cursorRow, cursorCol
+	for _, char := range chunk {
+		if char == '\n' {
+			newRow++
+			newCol = 1
+		} else {
+			newCol++
+		}
 	}
 	return
 }
