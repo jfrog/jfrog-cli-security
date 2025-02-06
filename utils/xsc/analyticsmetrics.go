@@ -2,9 +2,10 @@ package xsc
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"strings"
 	"time"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -100,10 +101,8 @@ func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, 
 	}
 
 	var gitRepoUrlKey string
-	if resultsContext != nil && resultsContext.GitRepoHttpsCloneUrl != "" {
-		if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.GitRepoKeyAnalyticsMinVersion); e == nil {
-			gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
-		}
+	if resultsContext != nil && resultsContext.GitRepoHttpsCloneUrl != "" && checkVersionForGitRepoKeyAnalytics(xrayVersion) {
+		gitRepoUrlKey = utils.GetGitRepoUrlKey(resultsContext.GitRepoHttpsCloneUrl)
 	}
 
 	return xscservices.XscAnalyticsGeneralEventFinalize{
@@ -115,6 +114,17 @@ func CreateFinalizedEvent(xrayVersion, multiScanId string, startTime time.Time, 
 			TotalScanDuration: totalDuration.String(),
 		},
 	}
+}
+
+func checkVersionForGitRepoKeyAnalytics(xrayVersion string) bool {
+	// TODO: Private patch, remove when not needed anymore
+	if xrayVersion == "3.111.13" {
+		return true
+	}
+	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.GitRepoKeyAnalyticsMinVersion); e == nil {
+		return true
+	}
+	return false
 }
 
 func createFinalizedEvent(cmdResults *results.SecurityCommandResults) xscservices.XscAnalyticsGeneralEventFinalize {
