@@ -219,9 +219,15 @@ func TestDetectRelevantChanges(t *testing.T) {
 		expectedChanges ChangesRelevantToScan
 	}{
 		{
-			name:            "No relevant changes",
+			name:            "No relevant changes (commit reference)",
 			testZipDir:      "clean",
 			targetReference: "861b7aff93eeb9be4806f1d9cc668e3d702d90b6",
+			expectedChanges: ChangesRelevantToScan{},
+		},
+		{
+			name:			"No relevant changes (branch reference)",
+			testZipDir:		"clean",
+			targetReference: "main",
 			expectedChanges: ChangesRelevantToScan{},
 		},
 	}
