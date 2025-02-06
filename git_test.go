@@ -11,6 +11,7 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -161,7 +162,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")
