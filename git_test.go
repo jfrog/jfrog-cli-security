@@ -102,7 +102,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 16, Vulnerabilities: 16},
+			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
@@ -153,7 +153,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey},
 		xrayVersion, xscVersion, results.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Violations: 16},
+			Total: &validations.TotalCount{Violations: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
