@@ -285,7 +285,7 @@ func runDotnetRestore(wd string, params utils.AuditParams, toolType bidotnet.Too
 		}
 	}
 	log.Info(command.String())
-	output, err := command.CombinedOutput()
+	output, err := command.CombinedOutput() // add comment
 	if err != nil {
 		err = errorutils.CheckErrorf("'dotnet restore' command failed: %s - %s", err.Error(), output)
 	}
