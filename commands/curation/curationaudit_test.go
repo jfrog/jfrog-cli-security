@@ -510,6 +510,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -557,6 +558,7 @@ type testCase struct {
 	expectedError            string
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
+	allowInsecureTls         bool
 }
 
 func (tc testCase) getPathToTests() string {
@@ -827,6 +829,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 					totalNumberOfPackages: 1,
 				},
 			},
+			allowInsecureTls: true,
 		},
 	}
 	return tests
