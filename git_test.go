@@ -11,6 +11,7 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -102,7 +103,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 16, Vulnerabilities: 16},
+			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
@@ -153,7 +154,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey},
 		xrayVersion, xscVersion, results.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Violations: 16},
+			Total: &validations.TotalCount{Violations: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
@@ -161,7 +162,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")

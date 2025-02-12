@@ -203,7 +203,7 @@ func TestCreateFinalizedEvent(t *testing.T) {
 func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *results.SecurityCommandResults {
 	vulnerabilities := []services.Vulnerability{{IssueId: "XRAY-ID", Severity: "medium", Cves: []services.Cve{{Id: "CVE-123"}}, Components: map[string]services.Component{"issueId_2_direct_dependency": {}}}}
 
-	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true)
+	cmdResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).SetXrayVersion(utils.GitRepoKeyAnalyticsMinVersion)
 	cmdResults.StartTime = time.Now()
 	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
