@@ -164,6 +164,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseMalicious(_ results.ScanTarget, i
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
+	for i := range maliciousFindings {
+		if shouldUpdateStatus(sjc.current.Statuses.MaliciousStatusCode, &maliciousFindings[i].StatusCode) {
+			sjc.current.Statuses.MaliciousStatusCode = &maliciousFindings[i].StatusCode
+		}
+	}
 	maliciousSimpleJson, err := PrepareSimpleJsonJasIssues(sjc.entitledForJas, sjc.pretty, results.ScanResultsToRuns(maliciousFindings)...)
 	if err != nil || len(maliciousSimpleJson) == 0 {
 		return

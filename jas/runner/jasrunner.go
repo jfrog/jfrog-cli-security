@@ -59,26 +59,25 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
 		runAllScanners = true
 	}
-	//if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType, params.TargetOutputDir)); generalError != nil {
-	//	return
-	//}
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.ContextualAnalysisScan, runContextualScan(params.Runner, params.Scanner, params.ScanResults, params.Module, params.DirectDependencies, params.ThirdPartyApplicabilityScan, params.ApplicableScanType, params.TargetOutputDir)); generalError != nil {
+		return
+	}
 	if params.ThirdPartyApplicabilityScan {
 		// Don't execute other scanners when scanning third party dependencies.
 		return
 	}
-	//if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
-	//	return
-	//}
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
+		return
+	}
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.MaliciousCodeScan, runMaliciousScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.MaliciousScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
 	if !runAllScanners {
 		return
 	}
-	//if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); generalError != nil {
-	//	return
-	//}
-	return
+	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.IacScan, runIacScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir)); generalError != nil {
+		return
+	}
 	return addJasScanTaskForModuleIfNeeded(params, utils.SastScan, runSastScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.TargetOutputDir, params.SignedDescriptions))
 }
 
