@@ -205,17 +205,17 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 		SetSubScansPerformed(auditCmd.ScansToPerform())
 }
 
-func ProcessResultsAndOutput(cmdResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
+func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
 	if err = outputWriter.PrintScanResults(); err != nil {
 		// Error printing the results, return the error and the scan results errors.
-		return errors.Join(err, cmdResults.GetErrors())
+		return errors.Join(err, auditResults.GetErrors())
 	}
-	if err = cmdResults.GetErrors(); err != nil {
+	if err = auditResults.GetErrors(); err != nil {
 		// Return the scan results errors.
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if failBuild && !cmdResults.ResultContext.IncludeVulnerabilities && results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
+	if failBuild && !auditResults.ResultContext.IncludeVulnerabilities && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
 		err = results.NewFailBuildError()
 	}
 	return
