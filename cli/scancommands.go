@@ -406,6 +406,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).

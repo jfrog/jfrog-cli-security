@@ -56,6 +56,8 @@ type ResultContext struct {
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
 	IncludeLicenses bool `json:"include_licenses"`
+	// If requested, the results will include sbom
+	IncludeSbom bool `json:"include_sbom,omitempty"`
 	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
