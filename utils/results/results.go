@@ -437,8 +437,9 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 
 func (sr *TargetResults) NewScaScanResults(errorCode int, sbom Sbom, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
-		sr.ScaResults = &ScaScanResults{TargetSbom: sbom}
+		sr.ScaResults = &ScaScanResults{}
 	}
+	sr.ScaResults.TargetSbom = sbom
 	for _, response := range responses {
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}

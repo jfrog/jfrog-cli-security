@@ -58,9 +58,11 @@ type vulnerabilityScanTableRow struct {
 
 type SbomTableRow struct {
 	Component   string `col-name:"Component"`
-	PackageType string `col-name:"Type"`
-	Direct      bool   `col-name:"Relation"`
 	Version     string `col-name:"Version"`
+	PackageType string `col-name:"Type"`
+	Relation    string `col-name:"Relation"`
+	// For sorting
+	Direct bool
 }
 
 type licenseTableRow struct {

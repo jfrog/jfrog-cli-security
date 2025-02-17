@@ -92,11 +92,16 @@ func (tc *CmdResultsTableConverter) ParseSbom(target results.ScanTarget, sbom re
 
 func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
 	for _, entry := range rows {
+		relation := "Direct"
+		if !entry.Direct {
+			relation = "Transitive"
+		}
 		tableRows = append(tableRows, formats.SbomTableRow{
 			Component:   entry.Component,
 			PackageType: entry.Type,
 			Direct:      entry.Direct,
 			Version:     entry.Version,
+			Relation:    relation,
 		})
 	}
 	// Sort the table by direct dependencies, then by component name

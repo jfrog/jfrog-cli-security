@@ -134,6 +134,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		PlatformUrl:            rw.platformUrl,
 		IsMultipleRoots:        rw.isMultipleRoots,
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
+		IncludeSbom:            rw.commandResults.IncludeSbom(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
 		HasViolationContext:    rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
