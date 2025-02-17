@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -18,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -670,7 +673,7 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	}
 
 	if len(violation.Policies) == 0 {
-		return false, errors.New("A violation with no policies was provided")
+		return false, errors.New("a violation with no policies was provided")
 	}
 
 	for _, policy := range violation.Policies {
@@ -679,4 +682,71 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 		}
 	}
 	return true, nil
+}
+
+func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
+	if graph == nil || len(graph.Nodes) == 0 {
+		return
+	}
+	parsed := map[string]SbomEntry{}
+	// Recursively parse the tree
+	for _, node := range graph.Nodes {
+		parseBinaryNode(node, parsed, true)
+	}
+	sbom.Components = maps.Values(parsed)
+	return
+}
+
+func DepTreeToSbom(fullDepTrees []*xrayCmdUtils.GraphNode) (sbom Sbom) {
+	if len(fullDepTrees) == 0 {
+		// No dependencies
+		return
+	}
+	parsed := map[string]SbomEntry{}
+	// Recursively parse the tree
+	for _, projectTree := range fullDepTrees {
+		// First node is the root (project node), skip it
+		for _, directNode := range projectTree.Nodes {
+			// First node is direct, the rest are transitive
+			parseNode(directNode, parsed, true)
+		}
+	}
+	sbom.Components = maps.Values(parsed)
+	return
+}
+
+func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct bool) {
+	if parsedEntry, exists := parsed[node.Id]; exists {
+		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+		if direct {
+			parsedEntry.Direct = true
+			parsed[node.Id] = parsedEntry
+		}
+		return
+	}
+	// If the node is not parsed yet, parse it and its children
+	component, version, packageType := techutils.SplitComponentId(node.Id)
+	entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
+	parsed[node.Id] = entry
+	for _, child := range node.Nodes {
+		parseNode(child, parsed, false)
+	}
+}
+
+func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomEntry, direct bool) {
+	if parsedEntry, exists := parsed[node.Id]; exists {
+		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+		if direct {
+			parsedEntry.Direct = true
+			parsed[node.Id] = parsedEntry
+		}
+		return
+	}
+	// If the node is not parsed yet, parse it and its children
+	component, version, packageType := techutils.SplitComponentId(node.Id)
+	entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
+	parsed[node.Id] = entry
+	for _, child := range node.Nodes {
+		parseBinaryNode(child, parsed, false)
+	}
 }

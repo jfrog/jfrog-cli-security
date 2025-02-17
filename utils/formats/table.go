@@ -7,6 +7,8 @@ package formats
 type ResultsTables struct {
 	// Licenses
 	LicensesTable []licenseTableRow
+	// SBOM (Software Bill of Materials)
+	SbomTable []SbomTableRow
 	// Sca tables
 	SecurityVulnerabilitiesTable   []scaVulnerabilityOrViolationTableRow
 	SecurityViolationsTable        []scaVulnerabilityOrViolationTableRow
@@ -52,6 +54,13 @@ type vulnerabilityScanTableRow struct {
 	ImpactedPackageType    string                   `col-name:"Type"`
 	cves                   []cveTableRow            `embed-table:"true"`
 	issueId                string                   `col-name:"Issue ID" extended:"true"`
+}
+
+type SbomTableRow struct {
+	Component   string `col-name:"Component"`
+	PackageType string `col-name:"Type"`
+	Direct      bool   `col-name:"Relation"`
+	Version     string `col-name:"Version"`
 }
 
 type licenseTableRow struct {
