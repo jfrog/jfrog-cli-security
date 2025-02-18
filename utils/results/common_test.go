@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 func TestViolationFailBuild(t *testing.T) {
@@ -804,6 +805,126 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 			} else {
 				assert.False(t, shouldSkip)
 			}
+		})
+	}
+}
+
+func TestDepTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		depTrees     []*xrayCmdUtils.GraphNode
+		expectedSbom Sbom
+	}{
+		{
+			name:         "no deps",
+			depTrees:     []*xrayCmdUtils.GraphNode{},
+			expectedSbom: Sbom{},
+		},
+		{
+			name: "one tree with one node",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id:    "root",
+					Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://A:1.0.1"}},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id:    "npm://D:2.0.0",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id: "npm://B:1.0.0",
+						},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "go://B:1.0.0"}},
+						},
+						{
+							Id: "npm://C:1.0.1",
+						},
+					},
+				},
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:2.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+						},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := DepTreeToSbom(test.depTrees)
+			SortSbom(sbom.Components)
+			assert.Equal(t, test.expectedSbom, sbom)
 		})
 	}
 }

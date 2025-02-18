@@ -1,8 +1,6 @@
 package tableparser
 
 import (
-	"sort"
-
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/maps"
 
@@ -91,6 +89,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(target results.ScanTarget, sbom re
 }
 
 func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
+	results.SortSbom(rows)
 	for _, entry := range rows {
 		relation := "Direct"
 		if !entry.Direct {
@@ -104,12 +103,5 @@ func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTa
 			Relation:    relation,
 		})
 	}
-	// Sort the table by direct dependencies, then by component name
-	sort.Slice(tableRows, func(i, j int) bool {
-		if tableRows[i].Direct == tableRows[j].Direct {
-			return tableRows[i].Component < tableRows[j].Component
-		}
-		return tableRows[i].Direct
-	})
 	return
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -749,4 +750,23 @@ func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomE
 	for _, child := range node.Nodes {
 		parseBinaryNode(child, parsed, false)
 	}
+}
+
+func SortSbom(components []SbomEntry) {
+	sort.Slice(components, func(i, j int) bool {
+		if components[i].Direct == components[j].Direct {
+			if components[i].Component == components[j].Component {
+				if components[i].Version == components[j].Version {
+					// Last order by type
+					return components[i].Type < components[j].Type
+				}
+				// Third order by version
+				return components[i].Version < components[j].Version
+			}
+			// Second order by component
+			return components[i].Component < components[j].Component
+		}
+		// First order by direct components
+		return components[i].Direct
+	})
 }
