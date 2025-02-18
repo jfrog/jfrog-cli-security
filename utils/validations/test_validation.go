@@ -305,7 +305,7 @@ func ValidateTotalCount(t *testing.T, outputType string, exactMatch bool, params
 		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", outputType, exactMatch, params.Vulnerabilities, vulnerabilities)},
 		CountValidation[int]{Expected: params.Violations, Actual: violations, Msg: GetValidationCountErrMsg("violations", outputType, exactMatch, params.Violations, violations)},
 		CountValidation[int]{Expected: params.Licenses, Actual: license, Msg: GetValidationCountErrMsg("licenses", outputType, exactMatch, params.Licenses, license)},
-		CountValidation[int]{Expected: params.SbomComponents, Actual: license, Msg: GetValidationCountErrMsg("sbom components", outputType, exactMatch, params.SbomComponents, sbomComponents)},
+		CountValidation[int]{Expected: params.SbomComponents, Actual: sbomComponents, Msg: GetValidationCountErrMsg("sbom components", outputType, exactMatch, params.SbomComponents, sbomComponents)},
 	)
 }
 
