@@ -73,7 +73,7 @@ func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViola
 	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom results.Sbom) (err error) {
 	for _, entry := range sbom.Components {
 		if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
 			if entry.Direct && !parsedEntry.Direct {
