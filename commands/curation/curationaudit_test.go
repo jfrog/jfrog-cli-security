@@ -508,7 +508,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
 	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
-	curationCmd.SetInsecureTls(true)
+	// curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
 	cmdResults = map[string]*CurationReport{}
