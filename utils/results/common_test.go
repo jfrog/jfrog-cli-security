@@ -928,3 +928,112 @@ func TestDepTreeToSbom(t *testing.T) {
 		})
 	}
 }
+
+func TestCompTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		compTrees    *xrayCmdUtils.BinaryGraphNode
+		expectedSbom Sbom
+	}{
+		{
+			name:         "no deps",
+			compTrees:    &xrayCmdUtils.BinaryGraphNode{},
+			expectedSbom: Sbom{},
+		},
+		{
+			name: "one tree with one node",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id:    "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://A:1.0.1"}},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id:    "npm://D:2.0.0",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id: "npm://B:1.0.0",
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "go://B:1.0.0"}},
+					},
+					{
+						Id: "npm://C:1.0.1",
+					},
+					{
+						Id:    "npm://A:2.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := CompTreeToSbom(test.compTrees)
+			SortSbom(sbom.Components)
+			assert.Equal(t, test.expectedSbom, sbom)
+		})
+	}
+}
