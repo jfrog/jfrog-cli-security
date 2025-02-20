@@ -508,7 +508,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
 	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
-	// curationCmd.SetInsecureTls(true)
+	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
 	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
 	cmdResults = map[string]*CurationReport{}
@@ -799,7 +799,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 			tech:          techutils.Dotnet,
 			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
-				"curated-nuget": filepath.Join("resources", "feed.json"),
+				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
 				"index.json":    filepath.Join("resources", "index.json"),
 				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
 			},

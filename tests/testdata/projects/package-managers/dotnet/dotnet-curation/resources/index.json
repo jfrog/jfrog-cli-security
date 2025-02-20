@@ -1,8 +1,4 @@
 {
-  "version": "3.0.0",
-  "resources": [
-    { "@id": "127.0.0.1:80/api/curation/audit/api/nuget/v3/curated-nuget/index.json", "@type": "PackageBaseAddress/3.0.0" }
-  ],
   "count": 2,
   "items": [
     {
