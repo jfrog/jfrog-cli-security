@@ -148,7 +148,7 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionP
 		log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
 
 		var configFile *os.File
-		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, false, allowInsecureConnections)
+		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, true, allowInsecureConnections)
 		if err != nil {
 			err = fmt.Errorf("failed while attempting to generate a configuration file for setting up Artifactory as a resolution server")
 			return
