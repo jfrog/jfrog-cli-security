@@ -82,20 +82,20 @@ var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.J
 var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (bool, error){
 	techutils.Npm: func(ca *CurationAuditCommand) (bool, error) { return true, nil },
 	techutils.Pip: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinXrayPassThroughSupport, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Pip, MinArtiPassThroughSupport)
 	},
 	techutils.Maven: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Maven, MinXrayPassThroughSupport, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Maven, MinArtiPassThroughSupport)
 	},
 	techutils.Go: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Go, MinXrayPassThroughSupport, MinArtiGolangSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Go, MinArtiGolangSupport)
 	},
 	techutils.Nuget: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinXrayPassThroughSupport, MinArtiNuGetSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
 	},
 }
 
-func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minXrayVersion, minArtiVersion string) (bool, error) {
+func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Technology, minArtiVersion string) (bool, error) {
 	if flag, err := clientutils.GetBoolEnvValue(utils.CurationSupportFlag, false); flag {
 		return true, nil
 	} else if err != nil {
@@ -111,7 +111,7 @@ func (ca *CurationAuditCommand) checkSupportByVersionOrEnv(tech techutils.Techno
 		return false, err
 	}
 
-	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, minXrayVersion)
+	xrayVersionErr := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, MinXrayPassThroughSupport)
 	rtVersionErr := clientutils.ValidateMinimumVersion(clientutils.Artifactory, artiVersion, minArtiVersion)
 	if xrayVersionErr != nil || rtVersionErr != nil {
 		return false, errors.Join(xrayVersionErr, rtVersionErr)
