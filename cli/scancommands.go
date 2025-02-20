@@ -393,6 +393,9 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
+		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
+	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return "", "", nil, nil, err
