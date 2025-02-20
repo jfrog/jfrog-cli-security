@@ -92,6 +92,7 @@ func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *s
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	if changedPaths := changes.GetChangedFilesPaths(); len(changedPaths) > 0 {
 		log.Debug(fmt.Sprintf("Diff targets: %v", changedPaths))
+		auditParams.SetFilesToScan(changedPaths)
 	}
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
