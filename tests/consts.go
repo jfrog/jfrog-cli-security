@@ -163,8 +163,8 @@ func AddTimestampToGlobalVars() {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
-	if *ciRunId != "" {
-		uniqueSuffix = "-" + *ciRunId + uniqueSuffix
+	if *CiRunId != "" {
+		uniqueSuffix = "-" + *CiRunId + uniqueSuffix
 	}
 	// Artifactory accepts only lowercase repository names
 	uniqueSuffix = strings.ToLower(uniqueSuffix)
