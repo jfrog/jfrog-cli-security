@@ -195,6 +195,9 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if rw.shouldPrintSecretValidationExtraMessage() {
 		log.Output("This table contains multiple secret types, such as tokens, generic password, ssh keys and more, token validation is only supported on tokens.")
 	}
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.MaliciousCodeScan, jasutils.MaliciousCode); err != nil {
+		return
+	}
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
 		return
 	}
@@ -332,6 +335,14 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 		} else {
 			return coreutils.PrintTable(tables.SastVulnerabilitiesTable, "Static Application Security Testing (SAST)",
 				"✨ No Static Application Security Testing vulnerabilities were found ✨", false)
+		}
+	case jasutils.MaliciousCode:
+		if violations {
+			return coreutils.PrintTable(tables.MaliciousViolationsTable, "Malicious Code Violations",
+				"✨ No Malicious Code violations were found ✨", false)
+		} else {
+			return coreutils.PrintTable(tables.MaliciousVulnerabilitiesTable, "Malicious Code Detection",
+				"✨ No Malicious Code vulnerabilities were found ✨", false)
 		}
 	}
 	return nil

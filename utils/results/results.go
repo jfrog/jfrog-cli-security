@@ -98,9 +98,10 @@ type JasScansResults struct {
 }
 
 type JasScanResults struct {
-	SecretsScanResults []ScanResult[[]*sarif.Run] `json:"secrets,omitempty"`
-	IacScanResults     []ScanResult[[]*sarif.Run] `json:"iac,omitempty"`
-	SastScanResults    []ScanResult[[]*sarif.Run] `json:"sast,omitempty"`
+	SecretsScanResults   []ScanResult[[]*sarif.Run] `json:"secrets,omitempty"`
+	IacScanResults       []ScanResult[[]*sarif.Run] `json:"iac,omitempty"`
+	SastScanResults      []ScanResult[[]*sarif.Run] `json:"sast,omitempty"`
+	MaliciousScanResults []ScanResult[[]*sarif.Run] `json:"malicious_code,omitempty"`
 }
 
 type ScanTarget struct {
@@ -457,6 +458,9 @@ func (jsr *JasScansResults) AddJasScanResults(scanType jasutils.JasScanType, vul
 	case jasutils.Sast:
 		jsr.JasVulnerabilities.SastScanResults = append(jsr.JasVulnerabilities.SastScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
 		jsr.JasViolations.SastScanResults = append(jsr.JasViolations.SastScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
+	case jasutils.MaliciousCode:
+		jsr.JasVulnerabilities.MaliciousScanResults = append(jsr.JasVulnerabilities.MaliciousScanResults, ScanResult[[]*sarif.Run]{Scan: vulnerabilitiesRuns, StatusCode: exitCode})
+		jsr.JasViolations.MaliciousScanResults = append(jsr.JasViolations.MaliciousScanResults, ScanResult[[]*sarif.Run]{Scan: violationsRuns, StatusCode: exitCode})
 	}
 }
 
@@ -490,6 +494,13 @@ func (jsr *JasScansResults) GetVulnerabilitiesResults(scanType jasutils.JasScanT
 			}
 			results = append(results, scan.Scan...)
 		}
+	case jasutils.MaliciousCode:
+		for _, scan := range jsr.JasVulnerabilities.MaliciousScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
 	}
 	return
 }
@@ -512,6 +523,13 @@ func (jsr *JasScansResults) GetViolationsResults(scanType jasutils.JasScanType) 
 		}
 	case jasutils.Sast:
 		for _, scan := range jsr.JasViolations.SastScanResults {
+			if scan.IsScanFailed() {
+				continue
+			}
+			results = append(results, scan.Scan...)
+		}
+	case jasutils.MaliciousCode:
+		for _, scan := range jsr.JasViolations.MaliciousScanResults {
 			if scan.IsScanFailed() {
 				continue
 			}

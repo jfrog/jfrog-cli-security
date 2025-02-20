@@ -38,6 +38,8 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
 		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
 		SastViolationsTable:            formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastViolations),
+		MaliciousVulnerabilitiesTable:  formats.ConvertToMaliciousTableRow(simpleJsonFormat.MaliciousVulnerabilities),
+		MaliciousViolationsTable:       formats.ConvertToMaliciousTableRow(simpleJsonFormat.MaliciousViolations),
 	}, nil
 }
 
@@ -59,6 +61,10 @@ func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, sca
 
 func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets)
+}
+
+func (tc *CmdResultsTableConverter) ParseMalicious(target results.ScanTarget, isViolationsResults bool, maliciousFindings []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseMalicious(target, isViolationsResults, maliciousFindings)
 }
 
 func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {

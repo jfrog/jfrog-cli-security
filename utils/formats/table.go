@@ -21,6 +21,9 @@ type ResultsTables struct {
 	// Secrets
 	SecretsVulnerabilitiesTable []secretsTableRow
 	SecretsViolationsTable      []secretsTableRow
+
+	MaliciousVulnerabilitiesTable []maliciousTableRow
+	MaliciousViolationsTable      []maliciousTableRow
 }
 
 // Used for vulnerabilities and security violations
@@ -153,6 +156,14 @@ type secretsTableRow struct {
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
 	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
 	watch           string `col-name:"Watch Name" omitempty:"true"`
+}
+
+type maliciousTableRow struct {
+	severity      string `col-name:"Severity"`
+	file          string `col-name:"File"`
+	lineColumn    string `col-name:"Line:Column"`
+	evidence      string `col-name:"Evidence"`
+	maliciousType string `col-name:"Malicious Code Type"`
 }
 
 type iacOrSastTableRow struct {

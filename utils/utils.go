@@ -50,6 +50,7 @@ const (
 	IacScan                      SubScanType        = "iac"
 	SastScan                     SubScanType        = "sast"
 	SecretsScan                  SubScanType        = "secrets"
+	MaliciousCodeScan            SubScanType        = "malicious_code"
 	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
 	ViolationTypeSecurity        ViolationIssueType = "security"
 	ViolationTypeLicense         ViolationIssueType = "license"
@@ -84,7 +85,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
@@ -99,7 +100,8 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
 		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
 		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
+		IsScanRequested(cmdType, SastScan, requestedScans...) ||
+		IsScanRequested(cmdType, MaliciousCodeScan, requestedScans...)
 }
 
 func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
