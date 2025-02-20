@@ -277,7 +277,7 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 	require.NoError(t, err)
 	// Create new default security policy.
 	policyParams := xrayUtils.PolicyParams{
-		Name:  fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Name:  fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
 		Type:  xrayUtils.Security,
 		Rules: rules,
 	}
@@ -326,7 +326,7 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 	require.NoError(t, err)
 	// Create new default watch.
 	watchParams := assignParams(xrayUtils.NewWatchParams())
-	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
+	watchParams.Name = fmt.Sprintf("%s-%s-%s", watchName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10))
 	watchParams.Active = true
 	// Assign the policy to the watch.
 	watchParams.Policies = []xrayUtils.AssignedPolicy{
@@ -370,7 +370,7 @@ func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severi
 	require.NoError(t, err)
 	// Create new default policy.
 	policyParams := xrayUtils.PolicyParams{
-		Name: fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Name: fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
 		Type: xrayUtils.Security,
 		Rules: []xrayUtils.PolicyRule{{
 			Name:     "sec_rule",

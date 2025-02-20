@@ -11,6 +11,7 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
@@ -94,7 +95,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	_, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -102,7 +103,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Licenses: 3, Violations: 16, Vulnerabilities: 16},
+			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
@@ -112,16 +113,19 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
 		CVEs:            []string{"any"}, Licenses: []string{"any"},
+		Watches: []string{watchName},
 	})
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
 		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
+		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
 	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
 		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
 		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
+		Watches:         []string{watchName},
 	})
 	defer cleanSastUpIgnoreRule()
 
@@ -153,7 +157,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 		auditCommandTestParams{Format: string(format.SimpleJson), ProjectKey: *securityTests.JfrogTestProjectKey},
 		xrayVersion, xscVersion, results.NewFailBuildError().Error(),
 		validations.ValidationParams{
-			Total: &validations.TotalCount{Violations: 16},
+			Total: &validations.TotalCount{Violations: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
 			Violations: &validations.ViolationCount{ValidateScan: &validations.ScanCount{Sca: 1, Sast: 1, Secrets: 1}},
 		},
@@ -161,7 +165,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 }
 
 func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
-	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
+	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, securityUtils.GitRepoKeyAnalyticsMinVersion)
 	defer testCleanUp()
 
 	projectPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues")

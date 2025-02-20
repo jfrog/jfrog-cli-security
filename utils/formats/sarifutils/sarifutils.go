@@ -141,6 +141,7 @@ func CopyRules(rules ...*sarif.ReportingDescriptor) (copied []*sarif.ReportingDe
 		cloned.Name = copyStrAttribute(rule.Name)
 		cloned.ShortDescription = copyMultiMsgAttribute(rule.ShortDescription)
 		cloned.FullDescription = copyMultiMsgAttribute(rule.FullDescription)
+		cloned.DefaultConfiguration = rule.DefaultConfiguration
 		cloned.Help = copyMultiMsgAttribute(rule.Help)
 		cloned.Properties = rule.Properties
 		cloned.MessageStrings = rule.MessageStrings
