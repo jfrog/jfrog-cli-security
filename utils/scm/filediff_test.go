@@ -1,3 +1,3 @@
-package gitutils
+package scm
 
 import ()

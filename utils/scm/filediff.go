@@ -1,4 +1,4 @@
-package gitutils
+package scm
 
 import (
 	"fmt"

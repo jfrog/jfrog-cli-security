@@ -72,7 +72,7 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	return scmManager.GetSourceControlContext()
 }
 
-func toAuditParams(params GitAuditParams, changes *gitutils.ChangesRelevantToScan) *sourceAudit.AuditParams {
+func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *sourceAudit.AuditParams {
 	auditParams := sourceAudit.NewAuditParams()
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
@@ -131,11 +131,11 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	return scanResults
 }
 
-func getDiffTargets(params GitAuditParams) (changes *gitutils.ChangesRelevantToScan, err error) {
+func getDiffTargets(params GitAuditParams) (changes *scm.ChangesRelevantToScan, err error) {
 	if params.diffTarget == "" {
 		return
 	}
-	gitManager, err := gitutils.NewGitManager(params.repositoryLocalPath)
+	gitManager, err := scm.NewGitManager(params.repositoryLocalPath)
 	if params.calculateCommonAncestorAsTarget {
 		log.Info(fmt.Sprintf("Diff mode: check for common ancestor with target '%s'", params.diffTarget))
 		if params.diffTarget, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {

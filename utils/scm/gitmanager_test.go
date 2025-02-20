@@ -72,7 +72,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Gerrit Project (no owner)",
-			testProjectZipDirPath: filepath.Join(basePath, "gerrit"),
+			testProjectZipDirPath: filepath.Join(testDir, "gerrit"),
 			gitInfo: &services.XscGitInfoContext{
 				GitRepoHttpsCloneUrl: "https://gerrit.googlesource.com/git-repo",
 				GitRepoName:          "git-repo",
@@ -269,8 +269,8 @@ func TestDetectRelevantChanges(t *testing.T) {
 			expectedChanges: ChangesRelevantToScan{},
 		},
 		{
-			name:			"No relevant changes (branch reference)",
-			testZipDir:		"clean",
+			name:            "No relevant changes (branch reference)",
+			testZipDir:      "clean",
 			targetReference: "main",
 			expectedChanges: ChangesRelevantToScan{},
 		},

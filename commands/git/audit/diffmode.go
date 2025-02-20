@@ -1,12 +1,12 @@
 package audit
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils/gitutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/scm"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func filterResultsNotInDiff(scanResults *results.SecurityCommandResults, changes *gitutils.ChangesRelevantToScan) (onlyResultsInDiff *results.SecurityCommandResults) {
+func filterResultsNotInDiff(scanResults *results.SecurityCommandResults, changes *scm.ChangesRelevantToScan) (onlyResultsInDiff *results.SecurityCommandResults) {
 	if changes == nil || !changes.HasFileChanges() {
 		log.Debug("No diff targets to filter results")
 		return scanResults
@@ -42,6 +42,6 @@ func filterScaResultsNotInDiff(scaResults *results.ScaScanResults, changedDescri
 	return scaResults
 }
 
-func filterJasResultsNotInDiff(jasResults *results.JasScansResults, changes *gitutils.ChangesRelevantToScan) (filterResults *results.JasScansResults) {
+func filterJasResultsNotInDiff(jasResults *results.JasScansResults, changes *scm.ChangesRelevantToScan) (filterResults *results.JasScansResults) {
 	return jasResults
 }
