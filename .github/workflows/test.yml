@@ -66,7 +66,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -covermode atomic -coverprofile=cover-unit-tests --test.unit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -115,7 +115,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
 
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
@@ -234,7 +234,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
  
 
   Git_Commands_Integration_Tests:
@@ -257,7 +257,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
 
   Code_Coverage:
     name: Generate Code Coverage Report
