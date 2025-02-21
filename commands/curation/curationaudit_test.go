@@ -881,7 +881,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 
 func getResourceToServe(resourcesToServe map[string]string, pathToRes string) string {
 	for key, value := range resourcesToServe {
-		if strings.HasSuffix(pathToRes, key) {
+		if strings.HasSuffix(strings.TrimSuffix(pathToRes, "/"), key) {
 			return value
 		}
 	}
