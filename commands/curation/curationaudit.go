@@ -284,7 +284,7 @@ func (ca *CurationAuditCommand) Run() (err error) {
 		err = errors.Join(err, printResult(ca.OutputFormat(), projectPath, packagesStatus.packagesStatus))
 
 		for _, ps := range packagesStatus.packagesStatus {
-			if ps.WaiverAllowed {
+			if ps.WaiverAllowed && !utils.IsCI() {
 				// If at least one package allows waiver requests, we will ask the user if they want to request a waiver
 				err = errors.Join(ca.requestWaiver(packagesStatus.packagesStatus))
 				break
