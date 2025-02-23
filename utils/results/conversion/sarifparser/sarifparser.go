@@ -227,6 +227,11 @@ func (sc *CmdResultsSarifConverter) ParseLicenses(_ results.ScanTarget, _ result
 	return
 }
 
+func (sc *CmdResultsSarifConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+	// Not supported in Sarif format
+	return
+}
+
 func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return

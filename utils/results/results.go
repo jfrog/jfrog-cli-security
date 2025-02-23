@@ -56,6 +56,8 @@ type ResultContext struct {
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
 	IncludeLicenses bool `json:"include_licenses"`
+	// If requested, the results will include sbom
+	IncludeSbom bool `json:"include_sbom,omitempty"`
 	// The active watches defined on the project_key and git_repository values above that were fetched from the platform
 	PlatformWatches *xrayApi.ResourcesWatchesBody `json:"platform_watches,omitempty"`
 }
@@ -87,8 +89,26 @@ type ScaScanResults struct {
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
+	// Sbom
+	TargetSbom Sbom `json:"sbom,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
+}
+
+// Software Bill of Materials (SBOM) is a structured list of components in a piece of software.
+type Sbom struct {
+	Components []SbomEntry `json:"components,omitempty"`
+}
+type SbomEntry struct {
+	Component string `json:"component"`
+	Version   string `json:"version"`
+	Type      string `json:"type"`
+	// Direct dependency or transitive dependency
+	Direct bool `json:"direct"`
+}
+
+func (se SbomEntry) String() string {
+	return fmt.Sprintf("%s:%s (%s)", se.Component, se.Version, se.Type)
 }
 
 type JasScansResults struct {
@@ -195,6 +215,10 @@ func (r *SecurityCommandResults) IncludesVulnerabilities() bool {
 // Is the result includes licenses
 func (r *SecurityCommandResults) IncludesLicenses() bool {
 	return r.ResultContext.IncludeLicenses
+}
+
+func (r *SecurityCommandResults) IncludeSbom() bool {
+	return r.ResultContext.IncludeSbom
 }
 
 func (r *SecurityCommandResults) GetTargetsPaths() (paths []string) {
@@ -411,10 +435,11 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) NewScaScanResults(errorCode int, sbom Sbom, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
+	sr.ScaResults.TargetSbom = sbom
 	for _, response := range responses {
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}

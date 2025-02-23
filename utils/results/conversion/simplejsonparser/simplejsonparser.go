@@ -133,6 +133,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseLicenses(target results.ScanTarge
 	return
 }
 
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+	// Not supported in the simple-json
+	return
+}
+
 func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sjc.entitledForJas {
 		return

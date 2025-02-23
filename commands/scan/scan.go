@@ -156,6 +156,11 @@ func (scanCmd *ScanCommand) SetIncludeLicenses(include bool) *ScanCommand {
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetIncludeSbom(include bool) *ScanCommand {
+	scanCmd.resultsContext.IncludeSbom = include
+	return scanCmd
+}
+
 func (scanCmd *ScanCommand) ServerDetails() (*config.ServerDetails, error) {
 	return scanCmd.serverDetails, nil
 }
@@ -459,7 +464,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
+					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), results.CompTreeToSbom(graph), *graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
