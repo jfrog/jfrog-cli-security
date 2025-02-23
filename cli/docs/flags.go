@@ -136,6 +136,9 @@ const (
 	RepoName        = "repo-name"
 	Months          = "months"
 	DetailedSummary = "detailed-summary"
+
+	// Unique git audit flags
+	CommonAncestor = "common-ancestor"
 )
 
 // Mapping between security commands (key) and their flags (key).
@@ -167,6 +170,7 @@ var commandFlags = map[string][]string{
 		// Violations params
 		Project, Watches, ScanVuln, Fail,
 		// Scan params
+		CommonAncestor,
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
 		// Output params
@@ -280,6 +284,8 @@ var flagsMap = map[string]components.Flag{
 	Secrets:          components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
 	WithoutCA:        components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
 	SecretValidation: components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
+
+	CommonAncestor: components.NewBoolFlag(CommonAncestor, "Set to true to compare against the common ancestor of the current and the target commit.", components.WithBoolDefaultValue(true)),
 
 	// Git flags
 	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	goGit "github.com/go-git/go-git/v5"
-
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/diff"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -149,4 +150,68 @@ func getRemoteUrl(remote *goGit.Remote) (remoteUrl string, err error) {
 		log.Warn(fmt.Sprintf("Multiple URLs found for remote, using the first one: %s from options: %v", remote.Config().URLs[0], remote.Config().URLs))
 	}
 	return remote.Config().URLs[0], nil
+}
+
+func (gm *GitManager) GetCommonAncestor(reference string) (ancestorCommit string, err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	// Get the commit object of the reference
+	referenceCommit, err := gm.localGitRepository.CommitObject(plumbing.NewHash(reference))
+	if err != nil {
+		return
+	}
+	// Get the common ancestor commit
+	log.Debug(fmt.Sprintf("Finding common ancestor between %s and %s", currentBranch.Name().Short(), reference))
+	ancestorCommitHash, err := currentCommit.MergeBase(referenceCommit)
+	if err != nil {
+		return
+	}
+	if len(ancestorCommitHash) == 0 {
+		err = fmt.Errorf("no common ancestor found between %s and %s", currentBranch.Name().Short(), reference)
+	} else if len(ancestorCommitHash) > 1 {
+		err = fmt.Errorf("multiple common ancestors found between %s and %s", currentBranch.Name().Short(), reference)
+	}
+	ancestorCommit = ancestorCommitHash[0].Hash.String()
+	return
+}
+
+func (gm *GitManager) Diff(reference string) (changes []diff.FilePatch, err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	// Get the commit object of the reference
+	referenceCommit, err := gm.localGitRepository.CommitObject(plumbing.NewHash(reference))
+	if err != nil {
+		return
+	}
+	// Get the diff between the current branch and the reference
+	diff, err := currentCommit.Patch(referenceCommit)
+	if err != nil {
+		return
+	}
+	changes = diff.FilePatches()
+	return
+}
+
+func (gm *GitManager) ScanRelevantDiff(reference string) (changes ChangesRelevantToScan, err error) {
+	diff, err := gm.Diff(reference)
+	if err != nil {
+		return
+	}
+	return detectRelevantChanges(diff)
 }

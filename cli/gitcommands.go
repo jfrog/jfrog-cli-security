@@ -42,6 +42,13 @@ func getGitNameSpaceCommands() []components.Command {
 
 func GitAuditCmd(c *components.Context) error {
 	gitAuditCmd := audit.NewGitAuditCommand()
+
+	if len(c.Arguments) > 0 {
+		// Diff mode
+		gitAuditCmd.SetDiffTarget(c.Arguments[0])
+		gitAuditCmd.SetUseCommonAncestorAsTarget(c.GetBoolFlagValue(flags.CommonAncestor))
+	}
+
 	// Set connection params
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
