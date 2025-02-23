@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -801,9 +800,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			tech:          techutils.Dotnet,
 			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
-				"curated-nuget": filepath.Join("resources", "feed.json"),
-				"index.json":    filepath.Join("resources", "index.json"),
-				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
+				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
+				"index.json":               filepath.Join("resources", "index.json"),
+				"13.0.3":                   filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
 			},
 			requestToFail: map[string]bool{
 				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
@@ -855,7 +854,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 		}
 		if r.Method == http.MethodGet {
 			if resourceToServe != nil {
-				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
+				if pathToRes := getResourceToServe(resourceToServe, r.RequestURI); pathToRes != "" && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
@@ -880,6 +879,15 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 	})
 	config.XrayUrl = config.Url + "xray/"
 	return serverMock, config
+}
+
+func getResourceToServe(resourcesToServe map[string]string, pathToRes string) string {
+	for key, value := range resourcesToServe {
+		if strings.HasSuffix(strings.TrimSuffix(pathToRes, "/"), key) {
+			return value
+		}
+	}
+	return ""
 }
 
 func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
