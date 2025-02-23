@@ -938,7 +938,7 @@ func TestCompTreeToSbom(t *testing.T) {
 		{
 			name:         "no deps",
 			compTrees:    &xrayCmdUtils.BinaryGraphNode{},
-			expectedSbom: Sbom{},
+			expectedSbom: Sbom{Components: []SbomEntry{}},
 		},
 		{
 			name: "one tree with one node",
@@ -950,6 +950,24 @@ func TestCompTreeToSbom(t *testing.T) {
 				Components: []SbomEntry{
 					{
 						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree rpm",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id:    "npm://root:1.0.0",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "rpm://OS-1:A:1111:1.0.1"}},
+				Path:  "file.rpm",
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "root", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "1111:1.0.1", Type: "RPM", Direct: false,
 					},
 				},
 			},
@@ -969,6 +987,9 @@ func TestCompTreeToSbom(t *testing.T) {
 					},
 					{
 						Id: "npm://B:1.0.0",
+					},
+					{
+						Id: "npm://No-Version",
 					},
 				},
 			},

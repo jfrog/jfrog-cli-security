@@ -229,6 +229,9 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
+	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
+		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
+	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
@@ -245,6 +248,7 @@ func ScanCmd(c *components.Context) error {
 		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
@@ -655,6 +659,9 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
+	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
+		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
+	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return err
@@ -668,6 +675,7 @@ func DockerScan(c *components.Context, image string) error {
 		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).

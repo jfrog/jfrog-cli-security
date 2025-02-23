@@ -686,14 +686,20 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 }
 
 func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
-	if graph == nil || len(graph.Nodes) == 0 {
+	if graph == nil {
 		return
 	}
-	parsed := map[string]SbomEntry{}
 	// Recursively parse the tree
-	for _, node := range graph.Nodes {
-		parseBinaryNode(node, parsed, true)
+	parsed := map[string]SbomEntry{}
+	if strings.HasSuffix(graph.Path, ".rpm") {
+		// For rmp package manager, root is also included in the graph
+		parseBinaryNode(graph, parsed, true)
+	} else {
+		for _, node := range graph.Nodes {
+			parseBinaryNode(node, parsed, true)
+		}
 	}
+
 	sbom.Components = maps.Values(parsed)
 	return
 }
@@ -745,8 +751,11 @@ func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomE
 	}
 	// If the node is not parsed yet, parse it and its children
 	component, version, packageType := techutils.SplitComponentId(node.Id)
-	entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
-	parsed[node.Id] = entry
+	if version != "" {
+		// For docker images, binary graph also contains layer information not relevant for the sbom
+		entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
+		parsed[node.Id] = entry
+	}
 	for _, child := range node.Nodes {
 		parseBinaryNode(child, parsed, false)
 	}

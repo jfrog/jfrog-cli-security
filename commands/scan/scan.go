@@ -156,6 +156,11 @@ func (scanCmd *ScanCommand) SetIncludeLicenses(include bool) *ScanCommand {
 	return scanCmd
 }
 
+func (scanCmd *ScanCommand) SetIncludeSbom(include bool) *ScanCommand {
+	scanCmd.resultsContext.IncludeSbom = include
+	return scanCmd
+}
+
 func (scanCmd *ScanCommand) ServerDetails() (*config.ServerDetails, error) {
 	return scanCmd.serverDetails, nil
 }

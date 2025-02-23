@@ -145,7 +145,7 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
@@ -154,7 +154,7 @@ var commandFlags = map[string][]string{
 		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
+		ServerId, Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
 	Audit: {
 		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
