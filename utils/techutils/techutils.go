@@ -13,6 +13,8 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	"github.com/owenrumney/go-sarif/v2/sarif"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -93,6 +95,11 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
+}
+
+type TechnologyHandler interface {
+	// Get the locations of the direct dependency in the given files.
+	GetTechDependencyLocations(directDependencyName, directDependencyVersion string, filesToSearch ...string) ([]*sarif.Location, error)
 }
 
 type TechData struct {
