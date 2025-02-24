@@ -481,6 +481,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 						scanCmd.resultsContext.Watches,
 						targetResults.GetTechnologies()...,
 					),
+					[]string{},
 				)
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)

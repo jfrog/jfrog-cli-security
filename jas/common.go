@@ -42,11 +42,12 @@ type JasScanner struct {
 	ServerDetails         *config.ServerDetails
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
+	FilesToScan           []string
 	Exclusions            []string
 	MinSeverity           severityutils.Severity
 }
 
-func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, minSeverity severityutils.Severity, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, minSeverity severityutils.Severity, envVars map[string]string, filesToScan []string, exclusions ...string) (scanner *JasScanner, err error) {
 	if serverDetails == nil {
 		err = errors.New(NoServerDetailsError)
 		return
@@ -75,6 +76,7 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 		return fileutils.RemoveTempDir(tempDir)
 	}
 	scanner.ServerDetails = serverDetails
+	scanner.FilesToScan = filesToScan
 	scanner.Exclusions = exclusions
 	scanner.MinSeverity = minSeverity
 	return
@@ -289,7 +291,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars("", "", "", []string{}))
+	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars("", "", "", []string{}), []string{})
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
@@ -318,7 +320,10 @@ func ShouldSkipScanner(module jfrogappsconfig.Module, scanType jasutils.JasScanT
 	return false
 }
 
-func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner) ([]string, error) {
+func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, filesToScan ...string) ([]string, error) {
+	if len(filesToScan) > 0 {
+		return filesToScan, nil
+	}
 	root, err := filepath.Abs(module.SourceRoot)
 	if err != nil {
 		return []string{}, errorutils.CheckError(err)

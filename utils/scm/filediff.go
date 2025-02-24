@@ -125,7 +125,7 @@ func detectRelevantChanges(filePatches []goDiff.FilePatch) (changes ChangesRelev
 	return
 }
 
-func processFileChunksForRelevantChanges(fileChunks []goDiff.Chunk, /*isNewFile*/_ bool) (relevantChanges []Range) {
+func processFileChunksForRelevantChanges(fileChunks []goDiff.Chunk /*isNewFile*/, _ bool) (relevantChanges []Range) {
 	// SARIF locations start at 1
 	row, col := 1, 1
 	for _, diffChunk := range fileChunks {

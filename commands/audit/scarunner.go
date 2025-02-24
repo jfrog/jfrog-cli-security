@@ -95,6 +95,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		if partialScan, filterDescriptors := getTargetDescriptorsToScan(targetResult.ScaResults, auditParams.filesToScan); partialScan {
+			// Diff mode, scan only the files affected by the diff.
 			if len(filterDescriptors) == 0 {
 				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
 				continue
