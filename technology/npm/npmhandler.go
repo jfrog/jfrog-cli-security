@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -12,9 +14,7 @@ const (
 	PackageJson = "package.json"
 )
 
-type NpmHandler struct {
-
-}
+type NpmHandler struct {}
 
 func (nh *NpmHandler) GetTechDependencyLocations(directDependencyName, directDependencyVersion string, filesToSearch ...string) (locations []*sarif.Location, err error) {
 	for _, file := range getFilesToSearch(filesToSearch...) {
@@ -25,12 +25,6 @@ func (nh *NpmHandler) GetTechDependencyLocations(directDependencyName, directDep
 		locations = append(locations, fileLocations...)
 	}
 	return
-}
-
-// getDependencyLocations returns the locations of the dependency in the file
-func getDependencyLocations(file, directDependencyName, _ string) (locations []*sarif.Location, err error) {
-	regex := fmt.Sprintf(`"%s":\s*".*?"`, directDependencyName)
-	
 }
 
 // getFilesToSearch returns the npm related files to search for the dependency
@@ -44,5 +38,41 @@ func getFilesToSearch(filesToSearch ...string) (out []string) {
 			out = append(out, file)
 		}
 	}
-	return filesToSearch
+	return out
+}
+
+// getDependencyLocations returns the locations of the dependency in the file
+func getDependencyLocations(file, directDependencyName, _ string) (locations []*sarif.Location, err error) {
+	content, err := fileutils.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	text := string(content)
+	// Regex pattern to match `"json": "version"`
+	pattern := fmt.Sprintf(`"(%s)"\s*:\s*"(.*?)"`, directDependencyName)
+	re := regexp.MustCompile(pattern)
+
+	// Find all matches
+	matches := re.FindAllStringIndex(text, -1)
+	if matches == nil {
+		return nil, fmt.Errorf("dependency '%s' not found", directDependencyName)
+	}
+
+	for _, match := range matches {
+		startIdx := match[0]
+		endIdx := match[1]
+
+		// Calculate row and column positions
+		startRow := strings.Count(text[:startIdx], "\n") + 1
+		lastNewline := strings.LastIndex(text[:startIdx], "\n")
+		startCol := startIdx - lastNewline
+
+		endRow := strings.Count(text[:endIdx], "\n") + 1
+		lastNewlineEnd := strings.LastIndex(text[:endIdx], "\n")
+		endCol := endIdx - lastNewlineEnd
+
+		locations = append(locations, sarifutils.CreateLocation(file, startRow, startCol, endRow, endCol, directDependencyName))
+	}
+
+	return locations, nil
 }
