@@ -122,9 +122,9 @@ func (gm *GitManager) GetSourceControlContext() (gitInfo *services.XscGitInfoCon
 			GitRepoName:          getGitRepoName(remoteUrl),
 			GitProject:           getGitProject(remoteUrl),
 			BranchName:           currentBranch.Name().Short(),
-			LastCommitHash:       lastCommit.Hash.String(),
-			LastCommitMessage:    strings.TrimSpace(lastCommit.Message),
-			LastCommitAuthor:     lastCommit.Author.Name,
+			CommitHash:           lastCommit.Hash.String(),
+			CommitMessage:        strings.TrimSpace(lastCommit.Message),
+			CommitAuthor:         lastCommit.Author.Name,
 		},
 	}
 	isClean, err := gm.isClean()
