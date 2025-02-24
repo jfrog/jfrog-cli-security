@@ -111,7 +111,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/orz25/jfrog-client-go v0.0.0-20250224104603-04cf756e89c1
+replace github.com/jfrog/jfrog-client-go => github.com/orz25/jfrog-client-go v0.0.0-20250224130403-35b5a2c26fe1
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 

@@ -187,8 +187,8 @@ github.com/nwaples/rardecode v1.1.3 h1:cWCaZwfM5H7nAD6PyEdcVnczzV8i/JtotnyW/dD9l
 github.com/nwaples/rardecode v1.1.3/go.mod h1:5DzqNKiOdpKKBH87u8VlvAnPZMXcGRhxWkRpHbbfGS0=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
-github.com/orz25/jfrog-client-go v0.0.0-20250224104603-04cf756e89c1 h1:z6quOZOCPKsyzeagy02mxBjk+pkUFycuSxiQzIokYdw=
-github.com/orz25/jfrog-client-go v0.0.0-20250224104603-04cf756e89c1/go.mod h1:hDoUcW6LZme83YNFbdSRImV+di1x0GP+Nlw7fctkwtE=
+github.com/orz25/jfrog-client-go v0.0.0-20250224130403-35b5a2c26fe1 h1:RebP95L8OBTuIAXyrMxKK2e1leBdtQx2zm/bW1VoAIM=
+github.com/orz25/jfrog-client-go v0.0.0-20250224130403-35b5a2c26fe1/go.mod h1:hDoUcW6LZme83YNFbdSRImV+di1x0GP+Nlw7fctkwtE=
 github.com/owenrumney/go-sarif v1.1.1/go.mod h1:dNDiPlF04ESR/6fHlPyq7gHKmrM0sHUvAGjsoh8ZH0U=
 github.com/owenrumney/go-sarif/v2 v2.3.0 h1:wP5yEpI53zr0v5cBmagXzLbHZp9Oylyo3AJDpfLBITs=
 github.com/owenrumney/go-sarif/v2 v2.3.0/go.mod h1:MSqMMx9WqlBSY7pXoOZWgEsVB4FDNfhcaXDA1j6Sr+w=
