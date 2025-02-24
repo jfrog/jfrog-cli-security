@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -97,7 +99,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
 				continue
 			} else {
-				log.Info(fmt.Sprintf("'%s' SCA scan will be performed on the following descriptors: %v", targetResult.Target, filterDescriptors))
+				log.Info(fmt.Sprintf("Partial SCA scan will be performed on the following descriptors: %v", filterDescriptors))
 			}
 		}
 		// Get the dependency tree for the technology in the working directory.
@@ -114,15 +116,14 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// TODO: get dependency from the changes and filter tree only to contain the changed dependencies
 		// Filter the dependency tree to contain only the changed dependencies.
 
-
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
-			_ = targetResult.AddTargetError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
 		if taskErr != nil {
-			_ = targetResult.AddTargetError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
 			auditParallelRunner.ScaScansWg.Done()
 		}
 	}
@@ -133,13 +134,15 @@ func getTargetDescriptorsToScan(scaResults *results.ScaScanResults, filesToScan 
 	if len(filesToScan) == 0 {
 		return false, scaResults.Descriptors
 	}
-	var filteredDescriptors []string
-	for _, descriptor := range scaResults.Descriptors {
-		if slices.Contains(filesToScan, descriptor) {
-			filteredDescriptors = append(filteredDescriptors, descriptor)
+	filteredDescriptors := datastructures.MakeSet[string]()
+	for _, fileToScan := range filesToScan {
+		for _, descriptor := range scaResults.Descriptors {
+			if strings.HasSuffix(descriptor, fileToScan) {
+				filteredDescriptors.Add(descriptor)
+			}
 		}
 	}
-	return true, filteredDescriptors
+	return true, filteredDescriptors.ToSlice()
 
 }
 
