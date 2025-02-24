@@ -39,12 +39,14 @@ var (
 	versionApiUrl = "/%s/%ssystem/version"
 
 	TestMockGitInfo = xscservices.XscGitInfoContext{
-		GitRepoHttpsCloneUrl: "https://github.com/jfrog/dummy-repo.git",
-		GitProvider:          "github",
-		GitRepoName:          "dummy-repo",
-		GitProject:           "jfrog",
-		BranchName:           "dev",
-		LastCommitHash:       "4be861f9a585d8ae5dde0b9550669972ee05c9d7",
+		Source: xscservices.CommitContext{
+			GitRepoHttpsCloneUrl: "https://github.com/jfrog/dummy-repo.git",
+			GitRepoName:          "dummy-repo",
+			GitProject:           "jfrog",
+			BranchName:           "dev",
+			LastCommitHash:       "4be861f9a585d8ae5dde0b9550669972ee05c9d7",
+		},
+		GitProvider: "github",
 	}
 )
 

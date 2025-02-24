@@ -116,16 +116,16 @@ func (gm *GitManager) GetSourceControlContext() (gitInfo *services.XscGitInfoCon
 	// Create the gitInfo object with known git information
 	gitInfo = &services.XscGitInfoContext{
 		GitProvider: getGitProvider(remoteUrl).String(),
-		// Use Clone URLs as Repo Url, on browsers it will redirect to repository URLS.
-		GitRepoHttpsCloneUrl: remoteUrl,
-		GitRepoName:          getGitRepoName(remoteUrl),
-		GitProject:           getGitProject(remoteUrl),
-
-		BranchName: currentBranch.Name().Short(),
-
-		LastCommitHash:    lastCommit.Hash.String(),
-		LastCommitMessage: strings.TrimSpace(lastCommit.Message),
-		LastCommitAuthor:  lastCommit.Author.Name,
+		Source: services.CommitContext{
+			// Use Clone URLs as Repo Url, on browsers it will redirect to repository URLS.
+			GitRepoHttpsCloneUrl: remoteUrl,
+			GitRepoName:          getGitRepoName(remoteUrl),
+			GitProject:           getGitProject(remoteUrl),
+			BranchName:           currentBranch.Name().Short(),
+			LastCommitHash:       lastCommit.Hash.String(),
+			LastCommitMessage:    strings.TrimSpace(lastCommit.Message),
+			LastCommitAuthor:     lastCommit.Author.Name,
+		},
 	}
 	isClean, err := gm.isClean()
 	if err != nil {
