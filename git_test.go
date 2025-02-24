@@ -95,7 +95,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
@@ -111,19 +111,19 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 
 	// Create an ignore rules for the git repo
 	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		CVEs:            []string{"any"}, Licenses: []string{"any"},
 		Watches: []string{watchName},
 	})
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
 	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
 		Watches:         []string{watchName},
 	})
@@ -178,7 +178,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			cleanUpPolicy()
 		}
 	}()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer func() {
 		if !firstWatchCleaned {
 			cleanUpWatch()
@@ -207,7 +207,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
-	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.

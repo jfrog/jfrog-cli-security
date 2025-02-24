@@ -117,6 +117,16 @@ func TestSendStartScanEvent(t *testing.T) {
 			reportUsage: true,
 			expectedMsi: "diff-msi",
 		},
+		{
+			name: "Xray version with new AddGeneralEvent",
+			mockParams: validations.MockServerParams{
+				XrayVersion: "3.116.0",
+				XscVersion:  xscservices.AnalyticsMetricsMinXscVersion,
+				ReturnMsi:   "diff-msi",
+			},
+			reportUsage: true,
+			expectedMsi: "diff-msi",
+		},
 	}
 
 	for _, testCase := range testCases {
