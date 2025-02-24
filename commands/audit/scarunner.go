@@ -92,6 +92,14 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", targetResult.Target))
 			continue
 		}
+		if partialScan, filterDescriptors := getTargetDescriptorsToScan(targetResult.ScaResults, auditParams.filesToScan); partialScan {
+			if len(filterDescriptors) == 0 {
+				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
+				continue
+			} else {
+				log.Info(fmt.Sprintf("'%s' SCA scan will be performed on the following descriptors: %v", targetResult.Target, filterDescriptors))
+			}
+		}
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(targetResult, auditParams)
 		if bdtErr != nil {
@@ -103,6 +111,10 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
+		// TODO: get dependency from the changes and filter tree only to contain the changed dependencies
+		// Filter the dependency tree to contain only the changed dependencies.
+
+
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()
@@ -115,6 +127,20 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 	}
 	return
+}
+
+func getTargetDescriptorsToScan(scaResults *results.ScaScanResults, filesToScan []string) (bool, []string) {
+	if len(filesToScan) == 0 {
+		return false, scaResults.Descriptors
+	}
+	var filteredDescriptors []string
+	for _, descriptor := range scaResults.Descriptors {
+		if slices.Contains(filesToScan, descriptor) {
+			filteredDescriptors = append(filteredDescriptors, descriptor)
+		}
+	}
+	return true, filteredDescriptors
+
 }
 
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
