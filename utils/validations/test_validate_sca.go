@@ -56,7 +56,7 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 		}
 	}
 
-	ValidateTotalCount(t, "json", params.ExactResultsMatch, params.Total, vulnerabilities, violations, licenses)
+	ValidateTotalCount(t, "json", params.ExactResultsMatch, params.Total, vulnerabilities, violations, licenses, 0)
 	if params.Violations != nil {
 		ValidateScaViolationCount(t, "json", params.ExactResultsMatch, params.Violations.ValidateType, securityViolations, licenseViolations, operationalViolations)
 		if params.Violations.ValidateApplicabilityStatus != nil || params.Violations.ValidateScan != nil {
