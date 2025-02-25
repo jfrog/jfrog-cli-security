@@ -227,7 +227,7 @@ var flagsMap = map[string]components.Flag{
 	Watches:       components.NewStringFlag(Watches, "A comma-separated(,) list of Xray watches, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --repo-path options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
 	RepoPath:      components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
-	Sbom:          components.NewBoolFlag(Sbom, fmt.Sprintf("For displaying the SBOM for this project, set to true. Relevant only with --%s flag. Must be executed with --%s=table", Sca, OutputFormat)),
+	Sbom:          components.NewBoolFlag(Sbom, fmt.Sprintf("For displaying the SBOM for this project, set to true. Relevant only with --%s flag. Ignored if provided 'format' is not 'table'.", Sca)),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",

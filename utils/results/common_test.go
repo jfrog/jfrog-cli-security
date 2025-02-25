@@ -886,6 +886,9 @@ func TestDepTreeToSbom(t *testing.T) {
 						{
 							Id: "npm://C:1.0.1",
 						},
+						{
+							Id: "npm://D:1.0.0",
+						},
 					},
 				},
 				{
@@ -893,7 +896,7 @@ func TestDepTreeToSbom(t *testing.T) {
 					Nodes: []*xrayCmdUtils.GraphNode{
 						{
 							Id:    "npm://A:2.0.1",
-							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}, {Id: "npm://D:1.2.3"}},
 						},
 					},
 				},
@@ -910,10 +913,16 @@ func TestDepTreeToSbom(t *testing.T) {
 						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
 					},
 					{
+						Component: "D", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
 						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
 					},
 					{
 						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+					},
+					{
+						Component: "D", Version: "1.2.3", Type: "npm", Direct: false,
 					},
 				},
 			},
