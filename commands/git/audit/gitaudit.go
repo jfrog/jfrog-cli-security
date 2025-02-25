@@ -105,6 +105,9 @@ func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *s
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Get diff targets to scan if needed
+	getTargetIfDiffMode(params)
+	return results.NewCommandResults(utils.SourceCode)
+
 	diffTargets, err := getDiffTargets(params)
 	if err != nil {
 		return results.NewCommandResults(utils.SourceCode).AddGeneralError(err, false)
@@ -113,6 +116,9 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 		log.Warn("No changes detected in the diff, skipping the scan")
 		return results.NewCommandResults(utils.SourceCode)
 	}
+	log.Debug(fmt.Sprintf("Diff targets: %v", diffTargets))
+	// TODO: delete this line
+	return results.NewCommandResults(utils.SourceCode)
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
 	event.GitInfo = &params.source
@@ -132,22 +138,42 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	return scanResults
 }
 
+func getTargetIfDiffMode(params GitAuditParams) (changes []scm.FileDiffGenerator, err error) {
+	if params.diffTarget == "" {
+		return
+	}
+	gitManager, err := scm.NewGitManager(params.repositoryLocalPath)
+	if err != nil {
+		return
+	}
+	if params.commonAncestor, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
+		return
+	}
+	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
+	diff, err := gitManager.Diff(params.diffTarget)
+	if err != nil {
+		return
+	}
+	changes = scm.FilePatchToFileDiffGenerator(diff...)
+	for _, analyzedFile := range changes {
+		log.Info(fmt.Sprintf("Analyzing file: %s", analyzedFile.String()))
+	}
+	return
+}
+
 func getDiffTargets(params GitAuditParams) (changes *scm.ChangesRelevantToScan, err error) {
 	if params.diffTarget == "" {
 		return
 	}
 	gitManager, err := scm.NewGitManager(params.repositoryLocalPath)
-	if params.calculateCommonAncestorAsTarget {
-		log.Info(fmt.Sprintf("Diff mode: check for common ancestor with target '%s'", params.diffTarget))
-		if params.diffTarget, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
-			return
-		}
-	}
-	log.Info(fmt.Sprintf("Diff mode: comparing against target '%s'", params.diffTarget))
 	if err != nil {
 		return
 	}
-	if relevantChanges, err := gitManager.ScanRelevantDiff(params.diffTarget); err == nil {
+	if params.commonAncestor, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
+		return
+	}
+	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
+	if relevantChanges, err := gitManager.ScanRelevantDiff(params.diffTarget, params.commonAncestor); err == nil {
 		changes = &relevantChanges
 	}
 	return

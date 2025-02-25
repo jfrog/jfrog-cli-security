@@ -12,9 +12,8 @@ import (
 
 type GitAuditParams struct {
 	// Git Params
-	source                          services.XscGitInfoContext
-	diffTarget                      string
-	calculateCommonAncestorAsTarget bool
+	source     services.XscGitInfoContext
+	diffTarget string
 	// Connection params
 	serverDetails *config.ServerDetails
 	// Violations params
@@ -33,6 +32,8 @@ type GitAuditParams struct {
 	repositoryLocalPath string
 	multiScanId         string
 	startTime           time.Time
+
+	commonAncestor string
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -41,11 +42,6 @@ func NewGitAuditParams() *GitAuditParams {
 
 func (gap *GitAuditParams) SetDiffTarget(diffTarget string) *GitAuditParams {
 	gap.diffTarget = diffTarget
-	return gap
-}
-
-func (gap *GitAuditParams) SetUseCommonAncestorAsTarget(commonAncesto bool) *GitAuditParams {
-	gap.calculateCommonAncestorAsTarget = commonAncesto
 	return gap
 }
 

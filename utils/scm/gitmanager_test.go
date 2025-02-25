@@ -285,7 +285,7 @@ func TestDetectRelevantChanges(t *testing.T) {
 			gitManager, err := NewGitManager(projectPath)
 			require.NoError(t, err)
 			// Get the relevant changes
-			changes, err := gitManager.ScanRelevantDiff(testCase.targetReference)
+			changes, err := gitManager.ScanRelevantDiff(testCase.targetReference, "")
 			require.NoError(t, err)
 			// Assert the expected changes
 			assert.Equal(t, testCase.expectedChanges, changes)

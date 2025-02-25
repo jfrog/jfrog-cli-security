@@ -204,14 +204,44 @@ func (gm *GitManager) Diff(reference string) (changes []diff.FilePatch, err erro
 	if err != nil {
 		return
 	}
+	log.Debug(fmt.Sprintf("Diff stats between %s and %s:\n%v", currentBranch.Name().Short(), reference, diff.Stats()))
 	changes = diff.FilePatches()
 	return
 }
 
-func (gm *GitManager) ScanRelevantDiff(reference string) (changes ChangesRelevantToScan, err error) {
+func (gm *GitManager) DiffGetAddedContent(reference string) (changes ChangesRelevantToScan, err error) {
 	diff, err := gm.Diff(reference)
 	if err != nil {
 		return
 	}
-	return detectRelevantChanges(diff)
+	log.Debug(fmt.Sprintf("Checking for added content in the diff between the cwd and %s", reference))
+	return detectRelevantChanges(diff, false)
+}
+
+func (gm *GitManager) DiffGetRemovedContent(reference string) (changes ChangesRelevantToScan, err error) {
+	diff, err := gm.Diff(reference)
+	if err != nil {
+		return
+	}
+	log.Debug(fmt.Sprintf("Checking for removed content in the diff between the cwd and %s", reference))
+	return detectRelevantChanges(diff, true)
+}
+
+func (gm *GitManager) ScanRelevantDiff(reference, commonAncestor string) (changes ChangesRelevantToScan, err error) {
+	// Get the current branch
+	currentBranch, err := gm.localGitRepository.Head()
+	if err != nil {
+		return
+	}
+	// Get the commit object of the current branch
+	currentCommit, err := gm.localGitRepository.CommitObject(currentBranch.Hash())
+	if err != nil {
+		return
+	}
+	if currentCommit.Hash.String() == commonAncestor {
+		// Source code is the code at the cwd and the common ancestor, target is after it. relevant changes are added content up to reference
+		return gm.DiffGetAddedContent(reference)
+	}
+	// Source code and target have a common ancestor
+	return gm.DiffGetRemovedContent(commonAncestor)
 }

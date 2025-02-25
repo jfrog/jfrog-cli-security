@@ -46,7 +46,6 @@ func GitAuditCmd(c *components.Context) error {
 	if len(c.Arguments) > 0 {
 		// Diff mode
 		gitAuditCmd.SetDiffTarget(c.Arguments[0])
-		gitAuditCmd.SetUseCommonAncestorAsTarget(c.GetBoolFlagValue(flags.CommonAncestor))
 	}
 
 	// Set connection params
