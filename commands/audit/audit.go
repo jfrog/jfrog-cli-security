@@ -301,6 +301,8 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		),
 		auditParams.Exclusions()...,
 	)
+	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.configProfile)
+
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
