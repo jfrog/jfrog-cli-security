@@ -13,6 +13,7 @@ import (
 
 const testRepoUrl = "https://github.com/jfrog/test-repository.git"
 
+// TODO eran update test (comparison file)
 func TestGetConfigProfileByName(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -60,6 +61,7 @@ func TestGetConfigProfileByName(t *testing.T) {
 	}
 }
 
+// TODO eran update test (comparison file)
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string

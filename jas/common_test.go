@@ -158,6 +158,7 @@ func TestAddScoreToRunRules(t *testing.T) {
 	}
 }
 
+// TODO eran update test
 func TestConvertToFilesExcludePatterns(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -175,7 +176,7 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, convertToFilesExcludePatterns(test.excludePatterns))
+		assert.Equal(t, test.expectedOutput, filerUniqueAndConvertToFilesExcludePatterns(test.excludePatterns))
 	}
 }
 

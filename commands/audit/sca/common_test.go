@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO eran fix test and add new testcase
 func TestGetExcludePattern(t *testing.T) {
 	tests := []struct {
 		name     string
