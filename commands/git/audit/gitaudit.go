@@ -72,12 +72,12 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	return scmManager.GetSourceControlContext()
 }
 
-func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
+func toAuditParams(params GitAuditParams, changes *scm.DiffContent) *sourceAudit.AuditParams {
 	auditParams := sourceAudit.NewAuditParams()
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
 	// Violations params
-	resultContext := sourceAudit.CreateAuditResultsContext(
+	auditParams.SetResultsContext(sourceAudit.CreateAuditResultsContext(
 		params.serverDetails,
 		params.xrayVersion,
 		params.resultsContext.Watches,
@@ -87,11 +87,15 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		false,
-	)
-	auditParams.SetResultsContext(resultContext)
-	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
+	))
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
+	if changes != nil && changes.HasChanges() {
+		if changedPaths := changes.GetChangedFilesPaths(); len(changedPaths) > 0 {
+			log.Debug(fmt.Sprintf("Diff targets: %v", changedPaths))
+			auditParams.SetFilesToScan(changedPaths)
+		}
+	}
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
 	// Cmd information
@@ -102,6 +106,18 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 }
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
+	// Get diff targets to scan if needed
+	diffTargets, err := getDiffTargets(params)
+	if err != nil {
+		return results.NewCommandResults(utils.SourceCode).AddGeneralError(err, false)
+	}
+	if diffTargets != nil && !diffTargets.HasChanges() {
+		log.Warn("No relevant changes detected in the diff, nothing to scan")
+		// Set entitled to avoid printing extra messages
+		return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	}
+	log.Debug(fmt.Sprintf("Diff targets: %v", diffTargets))
+	return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
 	event.GitInfo = &params.source
@@ -114,11 +130,34 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	)
 	params.multiScanId = multiScanId
 	params.startTime = startTime
-	// Run the scan
-	scanResults = sourceAudit.RunAudit(toAuditParams(params))
+	// Run the scan and filter results not in diff
+	scanResults = filterResultsNotInDiff(sourceAudit.RunAudit(toAuditParams(params, diffTargets)), diffTargets)
 	// Send scan ended event
 	xsc.SendScanEndedWithResults(params.serverDetails, scanResults)
 	return scanResults
+}
+
+func getDiffTargets(params GitAuditParams) (diffTargets *scm.DiffContent, err error) {
+	if params.diffTarget == "" {
+		return
+	}
+	gitManager, err := scm.NewGitManager(params.repositoryLocalPath)
+	if err != nil {
+		return
+	}
+	if params.commonAncestor, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
+		return
+	}
+	if params.source.LastCommitHash == params.commonAncestor {
+		// TODO: talk with technical writer about this error message
+		err = fmt.Errorf("the target commit must share a common ancestor with the source commit, but the common ancestor cannot be the source commit itself")
+		return
+	}
+	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
+	if changes, err := gitManager.DiffGetRemovedContent(params.commonAncestor); err == nil {
+		diffTargets = &changes
+	}
+	return
 }
 
 func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {

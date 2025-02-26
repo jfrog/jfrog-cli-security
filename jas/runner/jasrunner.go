@@ -32,6 +32,7 @@ type JasRunnerParams struct {
 	AllowPartialResults bool
 
 	ScansToPerform []utils.SubScanType
+	FilesToScan    []string
 
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType

@@ -60,7 +60,7 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 }
 
 func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
+	if err = ssm.createConfigFile(module, ssm.scanner.FilesToScan, ssm.scanner.Exclusions...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
@@ -80,15 +80,17 @@ type secretsScanConfiguration struct {
 	SkippedDirs []string `yaml:"skipped-folders"`
 }
 
-func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
-	roots, err := jas.GetSourceRoots(module, module.Scanners.Secrets)
-	if err != nil {
-		return err
+func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, filesToScan []string, exclusions ...string) (err error) {
+	scanTarget := filesToScan
+	if len(scanTarget) == 0 {
+		if scanTarget, err = jas.GetSourceRoots(module, module.Scanners.Secrets); err != nil {
+			return
+		}
 	}
 	configFileContent := secretsScanConfig{
 		Scans: []secretsScanConfiguration{
 			{
-				Roots:       roots,
+				Roots:       scanTarget,
 				Output:      s.resultsFileName,
 				Type:        string(s.scanType),
 				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),

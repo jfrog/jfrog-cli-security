@@ -25,6 +25,8 @@ type AuditParams struct {
 	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
 	startTime                   time.Time
+	// Diff mode, scan only the files affected by the diff.
+	filesToScan []string
 }
 
 func NewAuditParams() *AuditParams {
@@ -132,4 +134,13 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		IncludeLicenses:        params.resultsContext.IncludeLicenses,
 		ScanType:               services.Dependency,
 	}
+}
+
+func (params *AuditParams) SetFilesToScan(filesToScan []string) *AuditParams {
+	params.filesToScan = filesToScan
+	return params
+}
+
+func (params *AuditParams) FilesToScan() []string {
+	return params.filesToScan
 }
