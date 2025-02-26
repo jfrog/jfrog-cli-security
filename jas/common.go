@@ -346,7 +346,7 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 
 func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
 	if len(exclusions) > 0 {
-		return filerUniqueAndConvertToFilesExcludePatterns(exclusions)
+		return filterUniqueAndConvertToFilesExcludePatterns(exclusions)
 	}
 
 	// Adding exclusions from jfrog-apps-config IF no exclusions provided from other source (flags, env vars, config profile)
@@ -363,7 +363,7 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 // This function convert every exclude pattern to a file exclude pattern form.
 // Checks are being made since some of the exclude patters we get here might already be in a file exclude pattern
 // Additionally, we keep patterns without duplications
-func filerUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
+func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	for _, excludePattern := range excludePatterns {
 		if !strings.HasPrefix(excludePattern, "**/") {
