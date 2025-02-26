@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -110,10 +111,10 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
-			_ = targetResult.AddTargetError(fmt.Errorf("Failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
 		if taskErr != nil {
-			_ = targetResult.AddTargetError(fmt.Errorf("Failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
+			_ = targetResult.AddTargetError(fmt.Errorf("failed to create SCA scan task: %s", taskErr.Error()), auditParams.AllowPartialResults())
 			auditParallelRunner.ScaScansWg.Done()
 		}
 	}
@@ -140,7 +141,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), results.DepTreeToSbom(treeResult.FullDepTrees), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {

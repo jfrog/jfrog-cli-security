@@ -150,7 +150,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetResultsContext(results.ResultContext{ProjectKey: params.Project, IncludeVulnerabilities: bsc.includeVulnerabilities})
 
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
-	scanResults.NewScaScanResults(0, services.ScanResponse{
+	scanResults.NewScaScanResults(0, results.Sbom{}, services.ScanResponse{
 		Violations:      buildScanResults.Violations,
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,

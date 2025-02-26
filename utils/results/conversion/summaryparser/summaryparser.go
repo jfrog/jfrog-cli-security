@@ -254,6 +254,11 @@ func (sc *CmdResultsSummaryConverter) ParseLicenses(_ results.ScanTarget, _ resu
 	return
 }
 
+func (sc *CmdResultsSummaryConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+	// Not supported in the summary
+	return
+}
+
 func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now

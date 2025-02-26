@@ -134,6 +134,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		PlatformUrl:            rw.platformUrl,
 		IsMultipleRoots:        rw.isMultipleRoots,
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
+		IncludeSbom:            rw.commandResults.IncludeSbom(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
 		HasViolationContext:    rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
@@ -215,10 +216,15 @@ func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTabl
 			return
 		}
 	}
-	if !rw.commandResults.IncludesLicenses() {
+	if rw.commandResults.IncludesLicenses() {
+		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
+			return
+		}
+	}
+	if !rw.commandResults.IncludeSbom() {
 		return
 	}
-	return PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType)
+	return PrintSbomTable(tableContent, rw.commandResults.CmdType)
 }
 
 func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTables, subScan utils.SubScanType, scanType jasutils.JasScanType) (err error) {
@@ -300,6 +306,12 @@ func PrintLicensesTable(tables formats.ResultsTables, printExtended bool, cmdTyp
 		return coreutils.PrintTable(formats.ConvertLicenseTableRowToScanTableRow(tables.LicensesTable), "Licenses", "No licenses were found", printExtended)
 	}
 	return coreutils.PrintTable(tables.LicensesTable, "Licenses", "No licenses were found", printExtended)
+}
+
+func PrintSbomTable(tables formats.ResultsTables, cmdType utils.CommandType) error {
+	// Space before the tables
+	log.Output()
+	return coreutils.PrintTable(tables.SbomTable, "Software Bill of Materials (SBOM)", "No components were found", false)
 }
 
 func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType jasutils.JasScanType, violations bool) error {
