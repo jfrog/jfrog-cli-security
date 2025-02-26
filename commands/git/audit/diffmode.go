@@ -6,8 +6,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
-func filterResultsNotInDiff(scanResults *results.SecurityCommandResults, changes *scm.ChangesRelevantToScan) (onlyResultsInDiff *results.SecurityCommandResults) {
-	if changes == nil || !changes.HasFileChanges() {
+func filterResultsNotInDiff(scanResults *results.SecurityCommandResults, changes *scm.DiffContent) (onlyResultsInDiff *results.SecurityCommandResults) {
+	if changes == nil || !changes.HasChanges() {
 		log.Debug("No diff targets to filter results")
 		return scanResults
 	}
@@ -42,6 +42,6 @@ func filterScaResultsNotInDiff(scaResults *results.ScaScanResults, changedDescri
 	return scaResults
 }
 
-func filterJasResultsNotInDiff(jasResults *results.JasScansResults, changes *scm.ChangesRelevantToScan) (filterResults *results.JasScansResults) {
+func filterJasResultsNotInDiff(jasResults *results.JasScansResults, changes *scm.DiffContent) (filterResults *results.JasScansResults) {
 	return jasResults
 }

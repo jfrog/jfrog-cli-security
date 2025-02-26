@@ -72,12 +72,12 @@ func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
 	return scmManager.GetSourceControlContext()
 }
 
-func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *sourceAudit.AuditParams {
+func toAuditParams(params GitAuditParams, changes *scm.DiffContent) *sourceAudit.AuditParams {
 	auditParams := sourceAudit.NewAuditParams()
 	// Connection params
 	auditParams.SetServerDetails(params.serverDetails).SetInsecureTls(params.serverDetails.InsecureTls).SetXrayVersion(params.xrayVersion).SetXscVersion(params.xscVersion)
 	// Violations params
-	resultContext := sourceAudit.CreateAuditResultsContext(
+	auditParams.SetResultsContext(sourceAudit.CreateAuditResultsContext(
 		params.serverDetails,
 		params.xrayVersion,
 		params.resultsContext.Watches,
@@ -85,14 +85,15 @@ func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *s
 		params.resultsContext.ProjectKey,
 		params.source.GitRepoHttpsCloneUrl,
 		params.resultsContext.IncludeVulnerabilities,
-		params.resultsContext.IncludeLicenses)
-	auditParams.SetResultsContext(resultContext)
-	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
+		params.resultsContext.IncludeLicenses,
+	))
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
-	if changedPaths := changes.GetChangedFilesPaths(); len(changedPaths) > 0 {
-		log.Debug(fmt.Sprintf("Diff targets: %v", changedPaths))
-		auditParams.SetFilesToScan(changedPaths)
+	if changes != nil && changes.HasChanges() {
+		if changedPaths := changes.GetChangedFilesPaths(); len(changedPaths) > 0 {
+			log.Debug(fmt.Sprintf("Diff targets: %v", changedPaths))
+			auditParams.SetFilesToScan(changedPaths)
+		}
 	}
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
@@ -105,20 +106,17 @@ func toAuditParams(params GitAuditParams, changes *scm.ChangesRelevantToScan) *s
 
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Get diff targets to scan if needed
-	getTargetIfDiffMode(params)
-	return results.NewCommandResults(utils.SourceCode)
-
 	diffTargets, err := getDiffTargets(params)
 	if err != nil {
 		return results.NewCommandResults(utils.SourceCode).AddGeneralError(err, false)
 	}
 	if diffTargets != nil && !diffTargets.HasChanges() {
-		log.Warn("No changes detected in the diff, skipping the scan")
-		return results.NewCommandResults(utils.SourceCode)
+		log.Warn("No relevant changes detected in the diff, nothing to scan")
+		// Set entitled to avoid printing extra messages
+		return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
 	}
 	log.Debug(fmt.Sprintf("Diff targets: %v", diffTargets))
-	// TODO: delete this line
-	return results.NewCommandResults(utils.SourceCode)
+	return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
 	event.GitInfo = &params.source
@@ -138,7 +136,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 	return scanResults
 }
 
-func getTargetIfDiffMode(params GitAuditParams) (changes []scm.FileDiffGenerator, err error) {
+func getDiffTargets(params GitAuditParams) (diffTargets *scm.DiffContent, err error) {
 	if params.diffTarget == "" {
 		return
 	}
@@ -149,32 +147,14 @@ func getTargetIfDiffMode(params GitAuditParams) (changes []scm.FileDiffGenerator
 	if params.commonAncestor, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
-	diff, err := gitManager.Diff(params.diffTarget)
-	if err != nil {
-		return
-	}
-	changes = scm.FilePatchToFileDiffGenerator(diff...)
-	for _, analyzedFile := range changes {
-		log.Info(fmt.Sprintf("Analyzing file: %s", analyzedFile.String()))
-	}
-	return
-}
-
-func getDiffTargets(params GitAuditParams) (changes *scm.ChangesRelevantToScan, err error) {
-	if params.diffTarget == "" {
-		return
-	}
-	gitManager, err := scm.NewGitManager(params.repositoryLocalPath)
-	if err != nil {
-		return
-	}
-	if params.commonAncestor, err = gitManager.GetCommonAncestor(params.diffTarget); err != nil {
+	if params.source.LastCommitHash == params.commonAncestor {
+		// TODO: talk with technical writer about this error message
+		err = fmt.Errorf("the target commit must share a common ancestor with the source commit, but the common ancestor cannot be the source commit itself")
 		return
 	}
 	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
-	if relevantChanges, err := gitManager.ScanRelevantDiff(params.diffTarget, params.commonAncestor); err == nil {
-		changes = &relevantChanges
+	if changes, err := gitManager.DiffGetRemovedContent(params.commonAncestor); err == nil {
+		diffTargets = &changes
 	}
 	return
 }
