@@ -7,13 +7,13 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
-	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	"github.com/stretchr/testify/assert"
 )
 
-const testRepoUrl = "https://github.com/jfrog/test-repository.git"
+const (
+	testRepoUrl = "https://github.com/jfrog/test-repository.git"
+)
 
-// TODO eran update test (comparison file)
 func TestGetConfigProfileByName(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -21,17 +21,13 @@ func TestGetConfigProfileByName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:       "Deprecated XSC service - Valid request",
-			mockParams: validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: services.ConfigProfileMinXscVersion},
-		},
-		{
-			name:        "Deprecated XSC service - Xsc version too low - error expected",
-			mockParams:  validations.MockServerParams{XrayVersion: "3.0.0", XscVersion: "1.0.0"},
+			name:        "Xsc as inner service in Xray - Xray version too low - invalid request",
+			mockParams:  validations.MockServerParams{XrayVersion: "3.111.0"},
 			expectError: true,
 		},
 		{
 			name:       "Xsc as inner service in Xray - valid request",
-			mockParams: validations.MockServerParams{XrayVersion: xscutils.MinXrayVersionXscTransitionToXray, XscVersion: services.ConfigProfileMinXscVersion},
+			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion},
 		},
 	}
 
@@ -40,7 +36,7 @@ func TestGetConfigProfileByName(t *testing.T) {
 			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
-			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, testcase.mockParams.XscVersion, serverDetails, validations.TestConfigProfileName)
+			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, serverDetails, validations.TestConfigProfileName)
 			if testcase.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, configProfile)
@@ -61,7 +57,6 @@ func TestGetConfigProfileByName(t *testing.T) {
 	}
 }
 
-// TODO eran update test (comparison file)
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -75,7 +70,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 		},
 		{
 			name:       "Valid request",
-			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
+			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion},
 		},
 	}
 
