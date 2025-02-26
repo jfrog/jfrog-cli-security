@@ -61,13 +61,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		return
 	}
 	if configProfile := auditParams.AuditBasicParams.GetConfigProfile(); configProfile != nil {
-		/* TODO eran delete - this is validated when the profile is fetched [len(modules) == 1]
-		if len(auditParams.configProfile.Modules) < 1 {
-			// Verify Modules are not nil and contain at least one modules
-			return fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", auditParams.configProfile.ProfileName)
-		}
-
-		*/
 		if !configProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
 			log.Debug(fmt.Sprintf("Skipping SCA scan as requested by '%s' config profile...", configProfile.ProfileName))
 			return
