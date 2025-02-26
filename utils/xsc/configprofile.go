@@ -9,10 +9,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func GetConfigProfileByName(xrayVersion, xscVersion string, serverDetails *config.ServerDetails, profileName string) (*services.ConfigProfile, error) {
-	// If Xray version >= 1.107.13 (After Xsc migration to Xray), xscVersion is 3.999.999 and will always suffice this condition
-	if err := clientutils.ValidateMinimumVersion(clientutils.Xsc, xscVersion, services.ConfigProfileMinXscVersion); err != nil {
-		log.Info(fmt.Sprintf("Minimal Xsc version required to utilize config profile by url is '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileMinXscVersion))
+func GetConfigProfileByName(xrayVersion string, serverDetails *config.ServerDetails, profileName string) (*services.ConfigProfile, error) {
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileNewSchemaMinXrayVersion); err != nil {
+		log.Info(fmt.Sprintf("Minimal Xray version required to use a configProfile is by name '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileNewSchemaMinXrayVersion))
 		return nil, err
 	}
 
@@ -28,8 +27,8 @@ func GetConfigProfileByName(xrayVersion, xscVersion string, serverDetails *confi
 }
 
 func GetConfigProfileByUrl(xrayVersion string, serverDetails *config.ServerDetails, cloneRepoUrl string) (*services.ConfigProfile, error) {
-	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileByUrlMinXrayVersion); err != nil {
-		log.Info(fmt.Sprintf("Minimal Xray version required to utilize config profile by url is '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileByUrlMinXrayVersion))
+	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.ConfigProfileNewSchemaMinXrayVersion); err != nil {
+		log.Info(fmt.Sprintf("Minimal Xray version required to use a configProfile is by url '%s'. All configurations will be induced from provided Env vars and files", services.ConfigProfileNewSchemaMinXrayVersion))
 		return nil, err
 	}
 	xscService, err := CreateXscService(serverDetails)
