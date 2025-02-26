@@ -86,6 +86,7 @@ func toAuditParams(params GitAuditParams, changes *scm.DiffContent) *sourceAudit
 		params.source.GitRepoHttpsCloneUrl,
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
+		false,
 	))
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)

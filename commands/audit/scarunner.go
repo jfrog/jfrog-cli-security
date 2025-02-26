@@ -167,7 +167,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), results.DepTreeToSbom(treeResult.FullDepTrees), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {

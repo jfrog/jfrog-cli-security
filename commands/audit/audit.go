@@ -40,6 +40,7 @@ type AuditCommand struct {
 	targetRepoPath         string
 	IncludeVulnerabilities bool
 	IncludeLicenses        bool
+	IncludeSbom            bool
 	Fail                   bool
 	PrintExtendedTable     bool
 	Threads                int
@@ -80,6 +81,11 @@ func (auditCmd *AuditCommand) SetIncludeLicenses(include bool) *AuditCommand {
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetIncludeSbom(include bool) *AuditCommand {
+	auditCmd.IncludeSbom = include
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) SetFail(fail bool) *AuditCommand {
 	auditCmd.Fail = fail
 	return auditCmd
@@ -96,13 +102,14 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
 	context = results.ResultContext{
 		RepoPath:               artifactoryRepoPath,
 		Watches:                watches,
 		ProjectKey:             projectKey,
 		IncludeVulnerabilities: shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
 		IncludeLicenses:        includeLicenses,
+		IncludeSbom:            includeSbom,
 	}
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
@@ -173,6 +180,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.gitRepoHttpsCloneUrl,
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
+			auditCmd.IncludeSbom,
 		)).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
