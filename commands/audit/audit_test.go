@@ -328,45 +328,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			expectedCaNotCovered:    4,
 			expectedCaNotApplicable: 2,
 		},
-		/* TODO eran - enable after fixing it
-		{
-			name:        "Sca and Applicability enabled with exclusion in Applicability",
-			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
-			configProfile: services.ConfigProfile{
-				ProfileName: "Sca&Applicability-with-exclusions",
-				Modules: []services.Module{{
-					ModuleId:     1,
-					ModuleName:   "Sca&Applicability-with-exclusions-module",
-					PathFromRoot: ".",
-					ScanConfig: services.ScanConfig{
-						ScaScannerConfig: services.ScaScannerConfig{
-							EnableScaScan: true,
-						},
-						ContextualAnalysisScannerConfig: services.CaScannerConfig{
-							EnableCaScan: true,
-							ExcludePatterns: []string{"*"},
-						},
-						SastScannerConfig: services.SastScannerConfig{
-							EnableSastScan: false,
-						},
-						SecretsScannerConfig: services.SecretsScannerConfig{
-							EnableSecretsScan: false,
-						},
-						IacScannerConfig: services.IacScannerConfig{
-							EnableIacScan: false,
-						},
-					},
-				}},
-				IsDefault: false,
-			},
-			// TODO eran - when putting the exclude we only have this change: expectedCaApplicable=2, expectedCaNotApplicable=3
-			expectedCaApplicable:    3,
-			expectedCaUndetermined:  6,
-			expectedCaNotCovered:    4,
-			expectedCaNotApplicable: 2,
-		},
-
-		*/
+		// TODO Add testcase for Sca and Applicability with exclusions after resolving the Glob patterns issues
 		{
 			name:        "Enable only secrets scanner",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
@@ -524,7 +486,6 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			},
 			expectedIacIssues: 9,
 		},
-		/* TODO eran enable after fixing it
 		{
 			name:        "Iac is enabled with exclusions",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),
@@ -549,16 +510,14 @@ func TestAuditWithConfigProfile(t *testing.T) {
 						},
 						IacScannerConfig: services.IacScannerConfig{
 							EnableIacScan:   true,
-							ExcludePatterns: []string{"k8s-oss"}, // TODO eran when excluding k8s-oss 5 are expected to be found, but 9 found in fact
+							ExcludePatterns: []string{"*iac/gcp*"},
 						},
 					},
 				}},
 				IsDefault: false,
 			},
-			expectedIacIssues: 5,
+			expectedIacIssues: 0,
 		},
-
-		*/
 		{
 			name:        "Enable All Scanners",
 			testDirPath: filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas"),

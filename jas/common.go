@@ -370,7 +370,7 @@ func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []st
 			excludePattern = "**/" + excludePattern
 		}
 		if !strings.HasSuffix(excludePattern, "/**") {
-			excludePattern = excludePattern + "/**"
+			excludePattern += "/**"
 		}
 		uniqueExcludePatterns.Add(excludePattern)
 	}
