@@ -666,6 +666,7 @@ func TestCreateResultsContext(t *testing.T) {
 			jfrogProjectKey        string
 			includeVulnerabilities bool
 			includeLicenses        bool
+			includeSbom            bool
 
 			expectedArtifactoryRepoPath    string
 			expectedHttpCloneUrl           string
@@ -673,13 +674,16 @@ func TestCreateResultsContext(t *testing.T) {
 			expectedJfrogProjectKey        string
 			expectedIncludeVulnerabilities bool
 			expectedIncludeLicenses        bool
+			expectedIncludeSbom            bool
 		}{
 			{
 				name:            "Only Vulnerabilities",
 				includeLicenses: true,
+				includeSbom:     true,
 				// Since no violation context is provided, the includeVulnerabilities flag should be set to true even if not provided
 				expectedIncludeVulnerabilities: true,
 				expectedIncludeLicenses:        true,
+				expectedIncludeSbom:            true,
 			},
 			{
 				name:            "Watches",
@@ -711,25 +715,28 @@ func TestCreateResultsContext(t *testing.T) {
 				jfrogProjectKey:        mockProjectKey,
 				includeVulnerabilities: true,
 				includeLicenses:        true,
+				includeSbom:            true,
 
 				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
 				expectedWatches:                mockWatches,
 				expectedJfrogProjectKey:        mockProjectKey,
 				expectedIncludeVulnerabilities: true,
 				expectedIncludeLicenses:        true,
+				expectedIncludeSbom:            true,
 			},
 		}
 		for _, testCase := range testCases {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
 				mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
-				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses)
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
 				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
 				assert.Equal(t, testCase.expectedWatches, context.Watches)
 				assert.Equal(t, testCase.expectedJfrogProjectKey, context.ProjectKey)
 				assert.Equal(t, testCase.expectedIncludeVulnerabilities, context.IncludeVulnerabilities)
 				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
+				assert.Equal(t, testCase.expectedIncludeSbom, context.IncludeSbom)
 			})
 		}
 	}

@@ -41,6 +41,7 @@ type AuditCommand struct {
 	targetRepoPath         string
 	IncludeVulnerabilities bool
 	IncludeLicenses        bool
+	IncludeSbom            bool
 	Fail                   bool
 	PrintExtendedTable     bool
 	Threads                int
@@ -81,6 +82,11 @@ func (auditCmd *AuditCommand) SetIncludeLicenses(include bool) *AuditCommand {
 	return auditCmd
 }
 
+func (auditCmd *AuditCommand) SetIncludeSbom(include bool) *AuditCommand {
+	auditCmd.IncludeSbom = include
+	return auditCmd
+}
+
 func (auditCmd *AuditCommand) SetFail(fail bool) *AuditCommand {
 	auditCmd.Fail = fail
 	return auditCmd
@@ -97,13 +103,14 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
 	context = results.ResultContext{
 		RepoPath:               artifactoryRepoPath,
 		Watches:                watches,
 		ProjectKey:             projectKey,
 		IncludeVulnerabilities: shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
 		IncludeLicenses:        includeLicenses,
+		IncludeSbom:            includeSbom,
 	}
 	if err := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, services.MinXrayVersionGitRepoKey); err != nil {
 		// Git repo key is not supported by the Xray version.
@@ -174,6 +181,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.gitRepoHttpsCloneUrl,
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
+			auditCmd.IncludeSbom,
 		)).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
@@ -193,12 +201,12 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	return ProcessResultsAndOutput(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
 }
 
-func (auditCmd *AuditCommand) getResultWriter(auditResults *results.SecurityCommandResults) *output.ResultsWriter {
+func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
-	if !auditResults.EntitledForJas {
+	if !cmdResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'Malicious Code Scan', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
-	return output.NewResultsWriter(auditResults).
+	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
@@ -228,29 +236,29 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Runs an audit scan based on the provided auditParams.
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
-func RunAudit(auditParams *AuditParams) (auditResults *results.SecurityCommandResults) {
+func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
 	// Initialize Results struct
-	if auditResults = initAuditCmdResults(auditParams); auditResults.GeneralError != nil {
+	if cmdResults = initAuditCmdResults(auditParams); cmdResults.GeneralError != nil {
 		return
 	}
-	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(auditResults.GetTargetsPaths())
+	jfrogAppsConfig, err := jas.CreateJFrogAppsConfig(cmdResults.GetTargetsPaths())
 	if err != nil {
-		return auditResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to create JFrogAppsConfig: %s", err.Error()), false)
 	}
 	// Initialize the parallel runner
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	// Add the JAS scans to the parallel runner
 	var jasScanner *jas.JasScanner
 	var generalJasScanErr error
-	if jasScanner, generalJasScanErr = RunJasScans(auditParallelRunner, auditParams, auditResults, jfrogAppsConfig); generalJasScanErr != nil {
-		auditResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(auditResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
+	if jasScanner, generalJasScanErr = RunJasScans(auditParallelRunner, auditParams, cmdResults, jfrogAppsConfig); generalJasScanErr != nil {
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
 	}
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	if generalScaScanError := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, auditResults); generalScaScanError != nil {
-		auditResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(auditResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
+	if generalScaScanError := buildDepTreeAndRunScaScan(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
+		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}
 	go func() {
 		auditParallelRunner.ScaScansWg.Wait()
@@ -258,7 +266,7 @@ func RunAudit(auditParams *AuditParams) (auditResults *results.SecurityCommandRe
 		// Wait for all jas scanners to complete before cleaning up scanners temp dir
 		auditParallelRunner.JasScannersWg.Wait()
 		if jasScanner != nil && jasScanner.ScannerDirCleanupFunc != nil {
-			auditResults.AddGeneralError(jasScanner.ScannerDirCleanupFunc(), false)
+			cmdResults.AddGeneralError(jasScanner.ScannerDirCleanupFunc(), false)
 		}
 		auditParallelRunner.Runner.Done()
 	}()

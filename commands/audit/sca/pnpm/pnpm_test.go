@@ -44,7 +44,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			name:      "With transitive dependencies",
 			treeDepth: "1",
 			expectedUniqueDeps: []string{
-				"npm://axios:1.7.9",
+				"npm://axios:1.8.1",
 				"npm://balaganjs:1.0.0",
 				"npm://yargs:13.3.0",
 				"npm://zen-website:1.0.0",
@@ -54,7 +54,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 				Nodes: []*xrayUtils.GraphNode{
 					{
 						Id:    "npm://balaganjs:1.0.0",
-						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.7.9"}, {Id: "npm://yargs:13.3.0"}},
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.8.1"}, {Id: "npm://yargs:13.3.0"}},
 					},
 				},
 			},
