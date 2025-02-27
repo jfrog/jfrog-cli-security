@@ -1,6 +1,7 @@
 package jas
 
 import (
+	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"testing"
@@ -158,7 +159,7 @@ func TestAddScoreToRunRules(t *testing.T) {
 	}
 }
 
-func TestConvertToFilesExcludePatterns(t *testing.T) {
+func TestFilterUniqueAndConvertToFilesExcludePatterns(t *testing.T) {
 	tests := []struct {
 		name            string
 		excludePatterns []string
@@ -166,16 +167,19 @@ func TestConvertToFilesExcludePatterns(t *testing.T) {
 	}{
 		{
 			excludePatterns: []string{},
-			expectedOutput:  []string{},
+			expectedOutput:  []string(nil),
 		},
 		{
 			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
-			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*venv*/**", "**/*test*/**"},
+			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**"},
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, convertToFilesExcludePatterns(test.excludePatterns))
+		filteredExcludePatterns := filterUniqueAndConvertToFilesExcludePatterns(test.excludePatterns)
+		// Sort is needed since we create the response slice from a Set (unordered)
+		slices.Sort(filteredExcludePatterns)
+		assert.EqualValues(t, test.expectedOutput, filteredExcludePatterns)
 	}
 }
 

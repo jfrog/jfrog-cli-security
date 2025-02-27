@@ -60,7 +60,7 @@ func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, sc
 }
 
 func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
+	if err = ssm.createConfigFile(module, append(ssm.scanner.Exclusions, ssm.scanner.ScannersExclusions.SecretsExcludePatterns...)...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
