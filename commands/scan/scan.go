@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -500,6 +501,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					Module:             module,
 					ScansToPerform:     utils.GetAllSupportedScans(),
 					SecretsScanType:    secrets.SecretsScannerDockerScanType,
+					MaliciousScanType:  maliciouscode.MaliciousScannerDockerScanType,
 					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
 					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
 					ScanResults:        targetResults,
