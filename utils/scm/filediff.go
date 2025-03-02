@@ -38,6 +38,24 @@ func (f FileChanges) String() string {
 	return fmt.Sprintf("%s: %v", f.Path, f.Ranges)
 }
 
+func (f FileChanges) Contains(startRow, startCol, endRow, endCol int) bool {
+	for _, r := range f.Ranges {
+		if r.Contains(startRow, startCol, endRow, endCol) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f FileChanges) Overlaps(startRow, startCol, endRow, endCol int) bool {
+	for _, r := range f.Ranges {
+		if r.Overlaps(startRow, startCol, endRow, endCol) {
+			return true
+		}
+	}
+	return false
+}
+
 type DiffContent struct {
 	ChangedFiles []FileChanges
 }
@@ -53,7 +71,7 @@ func (dc DiffContent) GetChangedFilesPaths() (paths []string) {
 	return
 }
 
-// Source is always after the target in the branches working tree.
+// Source is always after the target common ancestor in the branches working tree.
 // i.e, to get to the target from the source, you need to go back in the history. (remove content)
 // This method will the ranges of the removed content from the file patches
 func FilePatchToDiffContent(filePatches ...goDiff.FilePatch) (content DiffContent) {
@@ -71,7 +89,7 @@ func FilePatchToDiffContent(filePatches ...goDiff.FilePatch) (content DiffConten
 			// Parse cursor based on the operation
 			switch chunk.Type() {
 			case goDiff.Delete:
-				// Deleted content = content that was added in the source (target is always a commit behind)
+				// Deleted content = content that was added in the source (target is always behind source)
 				change.EndRow, change.EndCol = getCursorNewPosition(startRow, startCol, chunk.Content())
 				// Move the cursor to the end of the deleted content
 				startRow, startCol = change.EndRow, change.EndCol

@@ -100,6 +100,19 @@ func (gm *GitManager) isClean() (bool, error) {
 	return isClean, nil
 }
 
+func (gm *GitManager) CheckoutToHash(hash string) error {
+	log.Debug("Running git checkout to hash:", hash)
+	checkoutConfig := &goGit.CheckoutOptions{
+		Hash:  plumbing.NewHash(hash),
+		Force: true,
+	}
+	worktree, err := gm.localGitRepository.Worktree()
+	if err != nil {
+		return err
+	}
+	return worktree.Checkout(checkoutConfig)
+}
+
 // Detect git information
 func (gm *GitManager) GetSourceControlContext() (gitInfo *services.XscGitInfoContext, err error) {
 	remoteUrl, err := getRemoteUrl(gm.remote)

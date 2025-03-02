@@ -117,7 +117,7 @@ func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandRes
 		return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
 	}
 	log.Debug(fmt.Sprintf("Diff targets: %v", diffTargets))
-	return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
+	// return results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true)
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
 	event.GitInfo = &params.source
@@ -155,6 +155,7 @@ func getDiffTargets(params GitAuditParams) (diffTargets *scm.DiffContent, err er
 	}
 	log.Info(fmt.Sprintf("Diff mode: comparing '%s' against target '%s' (common ancestor '%s')", params.source.LastCommitHash, params.diffTarget, params.commonAncestor))
 	if changes, err := gitManager.DiffGetRemovedContent(params.commonAncestor); err == nil {
+		// TODO: make sure its compatible with exclude paths
 		diffTargets = &changes
 	}
 	return
