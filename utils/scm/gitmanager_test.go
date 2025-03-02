@@ -265,10 +265,10 @@ func TestDiffGetRemovedContent(t *testing.T) {
 		expectedError   string
 	}{
 		{
-			name: 		  "Not valid target reference",
-			testZipDir:   "clean",
+			name:            "Not valid target reference",
+			testZipDir:      "clean",
 			targetReference: "a57ea78854a46cee64ba6747b3b3b3b3b3b3b3b3",
-			expectedError: "object not found",
+			expectedError:   "object not found",
 		},
 		{
 			name:            "No relevant changes (commit reference)",
@@ -318,8 +318,8 @@ func TestDiffGetRemovedContent(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple commit differences with relevant changes (commit reference)",
-			testZipDir: "clean",
+			name:            "multiple commit differences with relevant changes (commit reference)",
+			testZipDir:      "clean",
 			targetReference: "adcdec709cc8aecbcfb340cd32bf9d6e8236c02b",
 			expectedChanges: DiffContent{
 				ChangedFiles: []FileChanges{
