@@ -27,6 +27,8 @@ type ResultConvertParams struct {
 	PatchBinaryPaths bool
 	// Control if the output should include licenses information
 	IncludeLicenses bool
+	// Control if the output should include SBOM information (relevant only for Table)
+	IncludeSbom bool
 	// Control and override converting command results as multi target results, if nil will be determined by the results.HasMultipleTargets()
 	IsMultipleRoots *bool
 	// The requested scans to be included in the results, if empty all scans will be included
@@ -54,6 +56,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// Parse SCA content to the current scan target
 	ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
+	ParseSbom(target results.ScanTarget, sbom results.Sbom) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
 	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
@@ -141,6 +144,11 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			if err = parser.ParseLicenses(actualTarget, scaResults); err != nil {
 				return
 			}
+		}
+	}
+	if params.IncludeSbom {
+		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.TargetSbom); err != nil {
+			return
 		}
 	}
 	return
