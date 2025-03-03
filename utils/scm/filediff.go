@@ -2,6 +2,7 @@ package scm
 
 import (
 	"fmt"
+	"strings"
 
 	goDiff "github.com/go-git/go-git/v5/plumbing/format/diff"
 
@@ -86,18 +87,23 @@ func FilePatchToDiffContent(filePatches ...goDiff.FilePatch) (content DiffConten
 		for _, chunk := range filePatch.Chunks() {
 			// Create the content for the chunk
 			change := Range{StartRow: startRow, StartCol: startCol}
+			content := chunk.Content()
+			er, ec := getContentEndPosition(startRow, startCol, content)
+			log.Info(fmt.Sprintf("Chunk type: %d, content: '%s'\nStartRow: %d, StartCol: %d (EndRow: %d, EndCol: %d)", chunk.Type(), content, change.StartRow, change.StartCol, er, ec))
 			// Parse cursor based on the operation
 			switch chunk.Type() {
+				// TODO: if remove + add, edge (start or end) can be the same for both, we should trim the shared content as changed
 			case goDiff.Delete:
+				
 				// Deleted content = content that was added in the source (target is always behind source)
-				change.EndRow, change.EndCol = getCursorNewPosition(startRow, startCol, chunk.Content())
+				change.EndRow, change.EndCol = getContentEndPosition(startRow, startCol, content)
 				// Move the cursor to the end of the deleted content
-				startRow, startCol = change.EndRow, change.EndCol
+				startRow, startCol = getCursorNewPosition(startRow, startCol, content)
 				// Add the range of the content
 				changes.Ranges = append(changes.Ranges, change)
 			case goDiff.Equal:
 				// Unchanged content, Move the cursor to the end of the unchanged content
-				startRow, startCol = getCursorNewPosition(startRow, startCol, chunk.Content())
+				startRow, startCol = getCursorNewPosition(startRow, startCol, content)
 			}
 		}
 		if len(changes.Ranges) > 0 {
@@ -128,15 +134,41 @@ func getFilePathFromFiles(filePatch goDiff.FilePatch) string {
 	return fromPath
 }
 
-func getCursorNewPosition(cursorRow, cursorCol int, chunk string) (newRow, newCol int) {
-	newRow, newCol = cursorRow, cursorCol
-	for _, char := range chunk {
+func getContentEndPosition(startRow, startCol int, content string) (endRow, endCol int) {
+	endRow, endCol = startRow, startCol
+	for i, char := range content {
 		if char == '\n' {
-			newRow++
-			newCol = 1
+			if i < len(content)-1 {
+				// New line should take into account only if it is not the last character
+				endRow++
+				endCol = 1
+			}
 		} else {
-			newCol++
+			endCol++
 		}
 	}
 	return
+}
+
+func getCursorNewPosition(cursorRow, cursorCol int, chunk string) (newRow, newCol int) {
+	newRow, newCol = getContentEndPosition(cursorRow, cursorCol, chunk)
+	if chunk[len(chunk)-1] == '\n' {
+		// new position should take into account the new line character
+		newRow++
+		newCol = 1
+	}
+	return
+}
+
+// Function to find the shared substring where the suffix of str1 matches the prefix of str2
+func findSharedSubstring(str1, str2 string) string {
+	maxLength := min(len(str1), len(str2))
+
+	// Iterate to find the longest matching suffix-prefix
+	for i := 1; i <= maxLength; i++ {
+		if strings.HasSuffix(str1, str2[:i]) {
+			return str2[:i] // Return the shared substring
+		}
+	}
+	return "" // No shared substring
 }
