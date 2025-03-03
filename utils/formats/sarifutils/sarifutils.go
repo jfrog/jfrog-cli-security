@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	WatchSarifPropertyKey      = "watch"
-	PoliciesSarifPropertyKey   = "policies"
-	JasIssueIdSarifPropertyKey = "issueId"
-	CWEPropertyKey             = "CWE"
+	WatchSarifPropertyKey           = "watch"
+	PoliciesSarifPropertyKey        = "policies"
+	JasIssueIdSarifPropertyKey      = "issueId"
+	CWEPropertyKey                  = "CWE"
+	SarifImpactPathsRulePropertyKey = "impactPaths"
 )
 
 // Specific JFrog Sarif Utils
