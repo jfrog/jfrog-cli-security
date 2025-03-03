@@ -112,18 +112,7 @@ func TestBuildDependencyTree(t *testing.T) {
 		{
 			name:    "Prod",
 			depType: "prodOnly",
-			expectedUniqueDeps: []string{
-				"npm://jfrog-cli-tests:v1.0.0",
-				"npm://xml:1.0.1",
-			},
-			expectedTree: &xrayUtils.GraphNode{
-				Id:    "npm://jfrog-cli-tests:v1.0.0",
-				Nodes: []*xrayUtils.GraphNode{{Id: "npm://xml:1.0.1"}},
-			},
-		},
-		{
-			name:    "Dev",
-			depType: "devOnly",
+
 			expectedUniqueDeps: []string{
 				"npm://jfrog-cli-tests:v1.0.0",
 				"npm://json:9.0.6",
@@ -131,6 +120,18 @@ func TestBuildDependencyTree(t *testing.T) {
 			expectedTree: &xrayUtils.GraphNode{
 				Id:    "npm://jfrog-cli-tests:v1.0.0",
 				Nodes: []*xrayUtils.GraphNode{{Id: "npm://json:9.0.6"}},
+			},
+		},
+		{
+			name:    "Dev",
+			depType: "devOnly",
+			expectedUniqueDeps: []string{
+				"npm://jfrog-cli-tests:v1.0.0",
+				"npm://xml:1.0.1",
+			},
+			expectedTree: &xrayUtils.GraphNode{
+				Id:    "npm://jfrog-cli-tests:v1.0.0",
+				Nodes: []*xrayUtils.GraphNode{{Id: "npm://xml:1.0.1"}},
 			},
 		},
 	}
