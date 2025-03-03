@@ -98,7 +98,7 @@ var packageTypes = map[string]string{
 }
 
 type TechnologyHandler interface {
-	// Get the locations of the direct dependency in the given files.
+	// Get the locations of the direct dependency in the given files. if none were given, search at the cwd
 	GetTechDependencyLocations(directDependencyName, directDependencyVersion string, filesToSearch ...string) ([]*sarif.Location, error)
 }
 

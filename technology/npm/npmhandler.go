@@ -14,7 +14,7 @@ const (
 	PackageJson = "package.json"
 )
 
-type NpmHandler struct {}
+type NpmHandler struct{}
 
 func (nh *NpmHandler) GetTechDependencyLocations(directDependencyName, directDependencyVersion string, filesToSearch ...string) (locations []*sarif.Location, err error) {
 	for _, file := range getFilesToSearch(filesToSearch...) {
@@ -42,36 +42,38 @@ func getFilesToSearch(filesToSearch ...string) (out []string) {
 }
 
 // getDependencyLocations returns the locations of the dependency in the file
-func getDependencyLocations(file, directDependencyName, _ string) (locations []*sarif.Location, err error) {
+func getDependencyLocations(file, directDependencyName, dependencyVersion string) (locations []*sarif.Location, err error) {
 	content, err := fileutils.ReadFile(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file '%s': %v", file, err)
 	}
-	text := string(content)
-	// Regex pattern to match `"json": "version"`
-	pattern := fmt.Sprintf(`"(%s)"\s*:\s*"(.*?)"`, directDependencyName)
+	// Prepare regular expression to match the dependency.
+	var pattern string
+	if dependencyVersion == "" {
+		// If version is not provided, prepare a regex to match all versions.
+		pattern = fmt.Sprintf(`"%s"\s*:\s*"([^"]+)"`, regexp.QuoteMeta(directDependencyName))
+	} else {
+		// If version is provided, match the specific version.
+		pattern = fmt.Sprintf(`"%s"\s*:\s*"%s"`, regexp.QuoteMeta(directDependencyName), regexp.QuoteMeta(dependencyVersion))
+	}
+
+	// Compile the regex.
 	re := regexp.MustCompile(pattern)
 
-	// Find all matches
-	matches := re.FindAllStringIndex(text, -1)
-	if matches == nil {
-		return nil, fmt.Errorf("dependency '%s' not found", directDependencyName)
-	}
+	// Split the contents into lines for processing.
+	lines := strings.Split(string(content), "\n")
 
-	for _, match := range matches {
-		startIdx := match[0]
-		endIdx := match[1]
-
-		// Calculate row and column positions
-		startRow := strings.Count(text[:startIdx], "\n") + 1
-		lastNewline := strings.LastIndex(text[:startIdx], "\n")
-		startCol := startIdx - lastNewline
-
-		endRow := strings.Count(text[:endIdx], "\n") + 1
-		lastNewlineEnd := strings.LastIndex(text[:endIdx], "\n")
-		endCol := endIdx - lastNewlineEnd
-
-		locations = append(locations, sarifutils.CreateLocation(file, startRow, startCol, endRow, endCol, directDependencyName))
+	for lineNumber, line := range lines {
+		// Find all match locations in the line.
+		matchIndices := re.FindStringIndex(line)
+		if matchIndices != nil {
+			// Get the matched snippet
+			matchedSnippet := line[matchIndices[0]:matchIndices[1]]
+			// Rows and Cols are 1-indexed
+			row := lineNumber + 1
+			startCol := matchIndices[0] + 1
+			locations = append(locations, sarifutils.CreateLocation(file, row, startCol, row, startCol+len(matchedSnippet), matchedSnippet))
+		}
 	}
 
 	return locations, nil

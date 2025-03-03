@@ -9,9 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "xml": "1.0.1"
+    "json": "9.0.6"
   },
   "devDependencies": {
-    "json": "9.0.6"
+    "xml": "1.0.1"
   }
 }
