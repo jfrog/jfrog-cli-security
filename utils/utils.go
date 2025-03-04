@@ -30,6 +30,7 @@ const (
 	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL                    = "https://jfrog.com/xray/"
 	EntitlementsMinVersion        = "3.66.5"
+	NewJasBinaryMinVersion        = "3.85.7"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"

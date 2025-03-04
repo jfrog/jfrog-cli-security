@@ -14,11 +14,9 @@ import (
 )
 
 const (
-	maliciousScanCommand   = "mal"
-	maliciousDocsUrlSuffix = "malicious"
-
-	MaliciousScannerType           MaliciousScanType = "malicious-scan"        // #nosec
-	MaliciousScannerDockerScanType MaliciousScanType = "malicious-docker-scan" // #nosec
+	maliciousScanCommand                     = "mal"
+	maliciousDocsUrlSuffix                   = "malicious"
+	MaliciousScannerType   MaliciousScanType = "malicious-scan" // #nosec
 )
 
 type MaliciousScanType string

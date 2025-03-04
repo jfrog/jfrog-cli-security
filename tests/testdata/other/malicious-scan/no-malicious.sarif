@@ -3,7 +3,7 @@
     {
       "tool": {
         "driver": {
-          "name": "JFrog Terraform scanner",
+          "name": "JFrog Malicious scanner",
           "rules": [],
           "version": ""
         }
