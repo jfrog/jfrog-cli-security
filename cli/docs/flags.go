@@ -52,7 +52,7 @@ const (
 	Iac       = "iac"
 	Sast      = "sast"
 	Secrets   = "secrets"
-	Malicious = "malicious_code"
+	Malicious = "malicious-code"
 	WithoutCA = "without-contextual-analysis"
 )
 
