@@ -36,12 +36,12 @@ func TestNpmGetTechDependencyLocations(t *testing.T) {
 			name:                 "dependency all versions",
 			directDependencyName: "json",
 			filesToSearch: []string{
-				filepath.Join("package.json"),
+				"package.json",
 				filepath.Join("..", "npm-big-tree", "package.json"),
 				filepath.Join("..", "npm-no-lock", "package.json"),
 			},
 			expectedLocations: []*sarif.Location{
-				sarifutils.CreateLocation(filepath.Join("package.json"), 15, 5, 15, 20, "\"json\": \"9.0.6\""),
+				sarifutils.CreateLocation("package.json", 15, 5, 15, 20, "\"json\": \"9.0.6\""),
 				sarifutils.CreateLocation(filepath.Join("..", "npm-no-lock", "package.json"), 12, 5, 12, 20, "\"json\": \"9.0.3\""),
 			},
 		},
@@ -50,19 +50,19 @@ func TestNpmGetTechDependencyLocations(t *testing.T) {
 			directDependencyName:    "json",
 			directDependencyVersion: "9.0.6",
 			filesToSearch: []string{
-				filepath.Join("package.json"),
+				"package.json",
 				filepath.Join("..", "npm-scripts", "package.json"),
 				filepath.Join("..", "npm-no-lock", "package.json"),
 			},
 			expectedLocations: []*sarif.Location{
-				sarifutils.CreateLocation(filepath.Join("package.json"), 15, 5, 15, 20, "\"json\": \"9.0.6\""),
+				sarifutils.CreateLocation("package.json", 15, 5, 15, 20, "\"json\": \"9.0.6\""),
 			},
 		},
 		{
 			name:                 "search at cwd (no files to search)",
 			directDependencyName: "xml",
 			expectedLocations: []*sarif.Location{
-				sarifutils.CreateLocation(filepath.Join("package.json"), 12, 5, 12, 19, "\"xml\": \"1.0.1\""),
+				sarifutils.CreateLocation("package.json", 12, 5, 12, 19, "\"xml\": \"1.0.1\""),
 			},
 		},
 	}
