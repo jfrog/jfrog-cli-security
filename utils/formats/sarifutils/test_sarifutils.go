@@ -78,6 +78,11 @@ func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties,
 	return run
 }
 
+func CreateDummyRule(ruleId, ruleDescription, summary, markdownDescription string, properties sarif.Properties) *sarif.ReportingDescriptor {
+	return sarif.NewRule(ruleId).WithProperties(properties).WithDescription(ruleDescription).WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription))
+
+}
+
 func CreateDummyResultInPath(fileName string) *sarif.Result {
 	return CreateResultWithOneLocation(fileName, 0, 0, 0, 0, "snippet", "rule", "level")
 }
