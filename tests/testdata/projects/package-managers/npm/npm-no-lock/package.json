@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "json": "9.0.6"
+    "json": "9.0.3"
   },
   "devDependencies": {
     "xml": "1.0.1"
