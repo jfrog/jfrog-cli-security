@@ -16,11 +16,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
