@@ -149,7 +149,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 			}
 		}
 		if r.RequestURI == "/xray/api/v1/internal/cve_applicability_input_vulnerabilities" {
-			_, err := w.Write([]byte(fmt.Sprintf(`{"api_version": "1", "data": [],  "scanners": []}`)))
+			_, err := w.Write([]byte(`{"api_version": "1", "data": [],  "scanners": []}`))
 			if !assert.NoError(t, err) {
 				return
 			}
