@@ -69,8 +69,10 @@ func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.SecretsScan, runSecretsScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.SecretsScanType, params.TargetOutputDir)); generalError != nil {
 		return
 	}
-	if generalError = addJasScanTaskForModuleIfNeeded(params, utils.MaliciousCodeScan, runMaliciousScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.MaliciousScanType, params.TargetOutputDir)); generalError != nil && params.MaliciousScanType != "" {
-		return
+	if params.MaliciousScanType != "" {
+		if generalError = addJasScanTaskForModuleIfNeeded(params, utils.MaliciousCodeScan, runMaliciousScan(params.Runner, params.Scanner, params.ScanResults.JasResults, params.Module, params.MaliciousScanType, params.TargetOutputDir)); generalError != nil {
+			return
+		}
 	}
 	if !runAllScanners {
 		return
