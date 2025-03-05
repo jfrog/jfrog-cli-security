@@ -71,7 +71,7 @@ func TestParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 	// Arrange
 	MaliciouscanManager := newMaliciousScanManager(scanner, MaliciousScannerType, "temoDirPath")
-	MaliciouscanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "Malicious-scan", "no-Malicious.sarif")
+	MaliciouscanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "malicious-scan", "no-malicious.sarif")
 
 	// Act
 	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(MaliciouscanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, maliciousDocsUrlSuffix, scanner.MinSeverity)
@@ -92,7 +92,7 @@ func TestParseResults_ResultsContainMalicious(t *testing.T) {
 	assert.NoError(t, err)
 
 	MaliciouscanManager := newMaliciousScanManager(scanner, MaliciousScannerType, "temoDirPath")
-	MaliciouscanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "Malicious-scan", "contain-Malicious.sarif")
+	MaliciouscanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "malicious-scan", "contain-malicious.sarif")
 
 	// Act
 	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(MaliciouscanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, maliciousDocsUrlSuffix, severityutils.Medium)
