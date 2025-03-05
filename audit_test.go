@@ -410,8 +410,8 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 		filepath.Join("package-managers", "maven", "maven"), filepath.Join("package-managers", "nuget", "single4.0"),
 		filepath.Join("package-managers", "python", "pip", "pip-project"), filepath.Join("jas", "jas"))
 	// Configure a new server named "default"
-	// securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
-	// defer securityTestUtils.CleanTestsHomeEnv()
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
