@@ -193,6 +193,14 @@ func TestGetDirectDependenciesFormatted(t *testing.T) {
 }
 
 func TestGetScaIssueSarifRule(t *testing.T) {
+	impactPathsTC1 := [][]formats.ComponentRow{
+		{
+			{
+				Name:    "example-package",
+				Version: "1.0.0",
+			},
+		},
+	}
 	testCases := []struct {
 		name                string
 		impactPaths         [][]formats.ComponentRow
@@ -204,29 +212,14 @@ func TestGetScaIssueSarifRule(t *testing.T) {
 		expectedRule        *sarif.ReportingDescriptor
 	}{
 		{
-			name: "rule with impact paths",
-			impactPaths: [][]formats.ComponentRow{
-				{
-					{
-						Name:    "example-package",
-						Version: "1.0.0",
-						Location: &formats.Location{
-							File:        "file.go",
-							StartLine:   10,
-							StartColumn: 5,
-							EndLine:     10,
-							EndColumn:   15,
-							Snippet:     "example snippet",
-						},
-					},
-				},
-			},
+			name:                "rule with impact paths",
+			impactPaths:         impactPathsTC1,
 			ruleId:              "rule-id",
 			ruleDescription:     "rule-description",
 			maxCveScore:         "7.5",
 			summary:             "summary",
 			markdownDescription: "markdown-description",
-			expectedRule:        sarifutils.CreateDummyRule([][]formats.ComponentRow{{createComponentRow("example-package", "1.0.0", "file.go", 10, 5, 10, 15, "example snippet")}}, "rule-id", "rule-description", "summary", "markdown-description", "7.5"),
+			expectedRule:        sarifutils.CreateDummyRule(impactPathsTC1, "rule-id", "rule-description", "summary", "markdown-description", "7.5"),
 		},
 	}
 
@@ -235,22 +228,6 @@ func TestGetScaIssueSarifRule(t *testing.T) {
 			output := getScaIssueSarifRule(tc.impactPaths, tc.ruleId, tc.ruleDescription, tc.maxCveScore, tc.summary, tc.markdownDescription)
 			assert.Equal(t, tc.expectedRule, output)
 		})
-	}
-}
-
-// Helper function to create a ComponentRow
-func createComponentRow(name, version, file string, startLine, startColumn, endLine, endColumn int, snippet string) formats.ComponentRow {
-	return formats.ComponentRow{
-		Name:    name,
-		Version: version,
-		Location: &formats.Location{
-			File:        file,
-			StartLine:   startLine,
-			StartColumn: startColumn,
-			EndLine:     endLine,
-			EndColumn:   endColumn,
-			Snippet:     snippet,
-		},
 	}
 }
 
