@@ -179,6 +179,20 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow
 	return
 }
 
+func ConvertToMaliciousTableRow(rows []SourceCodeRow) (tableRows []maliciousTableRow) {
+	for i := range rows {
+		tableRows = append(tableRows, maliciousTableRow{
+			severity:      rows[i].Severity,
+			file:          rows[i].File,
+			lineColumn:    strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			evidence:      rows[i].Snippet,
+			maliciousType: rows[i].Finding,
+		})
+
+	}
+	return
+}
+
 func ConvertToIacOrSastTableRow(rows []SourceCodeRow) (tableRows []iacOrSastTableRow) {
 	for i := range rows {
 		tableRows = append(tableRows, iacOrSastTableRow{
