@@ -43,8 +43,8 @@ type AuditPython struct {
 	IsCurationCmd       bool
 }
 
-func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
-	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(auditPython)
+func BuildDependencyTree(params xrayutils2.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params)
 	if errGetTree != nil {
 		err = errGetTree
 		return
@@ -69,7 +69,7 @@ func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.
 	return
 }
 
-func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getDependencies(params xrayutils2.AuditParams) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -99,25 +99,33 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 	if err != nil {
 		return
 	}
-
-	restoreEnv, err := runPythonInstall(auditPython)
-	defer func() {
-		err = errors.Join(err, restoreEnv())
-	}()
-	if err != nil {
+	if len(params.Technologies()) == 0 {
+		err = errors.New("no technology was provided")
 		return
+	}
+	pythonTool := pythonutils.PythonTool(params.Technologies()[0])
+
+	if !params.SkipAutoInstall() {
+		restoreEnv, restoreEnvErr := runPythonInstall(params, pythonTool)
+		defer func() {
+			restoreEnvErr = errors.Join(restoreEnvErr, restoreEnv())
+		}()
+		if restoreEnvErr != nil {
+			err = restoreEnvErr
+			return
+		}
 	}
 
 	localDependenciesPath, err := config.GetJfrogDependenciesPath()
 	if err != nil {
 		return
 	}
-	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(auditPython.Tool, tempDirPath, localDependenciesPath, log.GetLogger())
+	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(pythonTool, tempDirPath, localDependenciesPath, log.GetLogger())
 	if err != nil {
 		sca.LogExecutableVersion("python")
-		sca.LogExecutableVersion(string(auditPython.Tool))
+		sca.LogExecutableVersion(string(pythonTool))
 	}
-	if !auditPython.IsCurationCmd {
+	if !params.IsCurationCmd() {
 		return
 	}
 	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
@@ -181,29 +189,31 @@ type pypiMetaData struct {
 	Version string `json:"version"`
 }
 
-func runPythonInstall(auditPython *AuditPython) (restoreEnv func() error, err error) {
-	switch auditPython.Tool {
+func runPythonInstall(params xrayutils2.AuditParams, tool pythonutils.PythonTool) (restoreEnv func() error, err error) {
+	switch tool {
 	case pythonutils.Pip:
-		return installPipDeps(auditPython)
+		return installPipDeps(params)
 	case pythonutils.Pipenv:
-		return installPipenvDeps(auditPython)
+		return installPipenvDeps(params)
 	case pythonutils.Poetry:
-		return installPoetryDeps(auditPython)
+		return installPoetryDeps(params)
 	}
 	return
 }
 
-func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPoetryDeps(params xrayutils2.AuditParams) (restoreEnv func() error, err error) {
 	restoreEnv = func() error {
 		return nil
 	}
-	if auditPython.RemotePypiRepo != "" {
-		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo, false)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(serverDetails, params.DepsRepo(), false)
 		if err != nil {
 			return restoreEnv, err
 		}
 		if password != "" {
-			err = utils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, auditPython.RemotePypiRepo)
+			err = utils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DepsRepo())
 			if err != nil {
 				return restoreEnv, err
 			}
@@ -214,7 +224,7 @@ func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 	return restoreEnv, err
 }
 
-func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPipenvDeps(params xrayutils2.AuditParams) (restoreEnv func() error, err error) {
 	// Set virtualenv path to venv dir
 	err = os.Setenv("WORKON_HOME", ".jfrog")
 	if err != nil {
@@ -223,23 +233,33 @@ func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 	restoreEnv = func() error {
 		return os.Unsetenv("WORKON_HOME")
 	}
-	if auditPython.RemotePypiRepo != "" {
-		return restoreEnv, runPipenvInstallFromRemoteRegistry(auditPython.Server, auditPython.RemotePypiRepo)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return
+		}
+		return restoreEnv, runPipenvInstallFromRemoteRegistry(serverDetails, params.DepsRepo())
 	}
 	// Run 'pipenv install -d'
 	_, err = executeCommand("pipenv", "install", "-d")
 	return restoreEnv, err
 }
 
-func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPipDeps(params xrayutils2.AuditParams) (restoreEnv func() error, err error) {
 	restoreEnv, err = SetPipVirtualEnvPath()
 	if err != nil {
 		return
 	}
 
 	remoteUrl := ""
-	if auditPython.RemotePypiRepo != "" {
-		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo, auditPython.IsCurationCmd)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return
+		}
+		remoteUrl, err = utils.GetPypiRepoUrl(serverDetails, params.DepsRepo(), params.IsCurationCmd())
 		if err != nil {
 			return
 		}
@@ -247,7 +267,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 
 	var curationCachePip string
 	var reportFileName string
-	if auditPython.IsCurationCmd {
+	if params.IsCurationCmd() {
 		// upgrade pip version to 23.0.0, as it is required for the curation command.
 		if err = upgradePipVersion(CurationPipMinimumVersion); err != nil {
 			log.Warn(fmt.Sprintf("Failed to upgrade pip version, err: %v", err))
@@ -258,11 +278,11 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		reportFileName = pythonReportFile
 	}
 
-	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
+	pipInstallArgs := getPipInstallArgs(params.PipRequirementsFile(), remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
 	var reqErr error
 	_, err = executeCommand("python", pipInstallArgs...)
-	if err != nil && auditPython.PipRequirementsFile == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
+	if err != nil && params.PipRequirementsFile() == "" {
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
 		_, reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
@@ -272,7 +292,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := sca.GetMsgToUserForCurationBlock(auditPython.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := sca.GetMsgToUserForCurationBlock(params.IsCurationCmd(), techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}
