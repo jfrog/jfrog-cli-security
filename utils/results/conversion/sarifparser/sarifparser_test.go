@@ -226,7 +226,7 @@ func TestGetScaIssueSarifRule(t *testing.T) {
 			maxCveScore:         "7.5",
 			summary:             "summary",
 			markdownDescription: "markdown-description",
-			expectedRule:        sarifutils.CreateDummyRule("rule-id", "rule-description", "summary", "markdown-description", sarif.Properties{"properties": createComponentRow("example-package", "1.0.0", "file.go", 10, 5, 10, 15, "example snippet")}),
+			expectedRule:        sarifutils.CreateDummyRule([][]formats.ComponentRow{{createComponentRow("example-package", "1.0.0", "file.go", 10, 5, 10, 15, "example snippet")}}, "rule-id", "rule-description", "summary", "markdown-description", "7.5"),
 		},
 	}
 
