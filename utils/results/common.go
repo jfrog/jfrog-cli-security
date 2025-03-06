@@ -12,6 +12,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -98,7 +99,7 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target, vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -131,7 +132,7 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
 		// Prepare violation information
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target, violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)
 			continue
@@ -212,7 +213,7 @@ func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, hand
 		return nil
 	}
 	for _, license := range licenses {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
+		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target, license.Components)
 		if err != nil {
 			return err
 		}
@@ -227,7 +228,7 @@ func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, hand
 	return nil
 }
 
-func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+func SplitComponents(target ScanTarget, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
 		return
@@ -246,7 +247,7 @@ func SplitComponents(target string, impactedPackages map[string]services.Compone
 }
 
 // Gets a slice of the direct dependencies or packages of the scanned component, that depends on the vulnerable package, and converts the impact paths.
-func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.ImpactPathNode) (components []formats.ComponentRow, impactPathsRows [][]formats.ComponentRow) {
+func getDirectComponentsAndImpactPaths(target ScanTarget, impactPaths [][]services.ImpactPathNode) (components []formats.ComponentRow, impactPathsRows [][]formats.ComponentRow) {
 	componentsMap := make(map[string]formats.ComponentRow)
 
 	// The first node in the impact path is the scanned component itself. The second one is the direct dependency.
@@ -259,7 +260,7 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
 			compName, compVersion, _ := techutils.SplitComponentId(componentId)
-			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target)}
+			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(target.Technology, compName, compVersion, impactPath[impactPathIndex].FullPath, target.Target)}
 		}
 
 		// Convert the impact path
@@ -269,7 +270,7 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
 				Name:     nodeCompName,
 				Version:  nodeCompVersion,
-				Location: getComponentLocation(pathNode.FullPath),
+				Location: getComponentLocation(target.Technology, nodeCompName, nodeCompVersion, pathNode.FullPath),
 			})
 		}
 		impactPathsRows = append(impactPathsRows, compImpactPathRows)
@@ -281,7 +282,21 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 	return
 }
 
-func getComponentLocation(pathsByPriority ...string) *formats.Location {
+func getComponentLocation(tech techutils.Technology, compName, compVersion string, pathsByPriority ...string) *formats.Location {
+	// Search location at descriptors
+	locations, err := sca.GetTechDependencyLocations(tech, compName, compVersion, pathsByPriority...)
+	if err == nil && len(locations) > 0 {
+		location := locations[0]
+		return &formats.Location{
+			File:        sarifutils.GetLocationFileName(location),
+			StartLine:   sarifutils.GetLocationStartLine(location),
+			StartColumn: sarifutils.GetLocationStartColumn(location),
+			EndLine:     sarifutils.GetLocationEndLine(location),
+			EndColumn:   sarifutils.GetLocationEndColumn(location),
+			Snippet:     sarifutils.GetLocationSnippetText(location),
+		}
+	}
+	// Fallback to given paths without region
 	for _, path := range pathsByPriority {
 		if path != "" {
 			return &formats.Location{File: path}

@@ -508,8 +508,10 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	return sarif.NewLocation().
-		WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filePath))).WithLogicalLocations(logicalLocations)
+
+	return sarifutils.CreateLocation(fmt.Sprintf("file://%s", filePath), component.Location.StartLine, component.Location.StartColumn, component.Location.EndLine, component.Location.EndColumn, component.Location.Snippet).WithLogicalLocations(logicalLocations)
+	// return sarif.NewLocation().
+	// 	WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filePath))).WithLogicalLocations(logicalLocations)
 }
 
 func getScaIssueMarkdownDescription(directDependencies []formats.ComponentRow, cveScore string, applicableStatus jasutils.ApplicabilityStatus, fixedVersions []string) (string, error) {

@@ -47,15 +47,9 @@ func getDependencyLocations(file, directDependencyName, dependencyVersion string
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file '%s': %v", file, err)
 	}
-	// Prepare regular expression to match the dependency.
-	var pattern string
-	if dependencyVersion == "" {
-		// If version is not provided, prepare a regex to match all versions.
-		pattern = fmt.Sprintf(`"%s"\s*:\s*"([^"]+)"`, regexp.QuoteMeta(directDependencyName))
-	} else {
-		// If version is provided, match the specific version.
-		pattern = fmt.Sprintf(`"%s"\s*:\s*"%s"`, regexp.QuoteMeta(directDependencyName), regexp.QuoteMeta(dependencyVersion))
-	}
+
+	// Prepare regular expression to match all possible ways to specify a version.
+	pattern := fmt.Sprintf(`"%s"\s*:\s*"([~^]?\d+(?:\.\d+)?(?:\.\d+)?)"`, regexp.QuoteMeta(directDependencyName))
 
 	// Compile the regex.
 	re := regexp.MustCompile(pattern)
@@ -65,13 +59,32 @@ func getDependencyLocations(file, directDependencyName, dependencyVersion string
 
 	for lineNumber, line := range lines {
 		// Find all match locations in the line.
-		matchIndices := re.FindStringIndex(line)
-		if matchIndices != nil {
+		matches := re.FindStringSubmatch(line)
+		if matches != nil {
+			detectedVersion := matches[1] // Extract detected version from match
+
+			// Normalize the given dependency version by allowing optional ~ or ^ prefix
+			if dependencyVersion != "" {
+				allowedPrefixes := []string{"", "~", "^"}
+				matchFound := false
+				for _, prefix := range allowedPrefixes {
+					if strings.HasPrefix(prefix+dependencyVersion, detectedVersion) {
+						matchFound = true
+						break
+					}
+				}
+				if !matchFound {
+					continue // Skip if the provided version does not match the detected version
+				}
+			}
+
 			// Get the matched snippet
-			matchedSnippet := line[matchIndices[0]:matchIndices[1]]
+			matchIndex := re.FindStringIndex(line)
+			matchedSnippet := line[matchIndex[0]:matchIndex[1]]
+
 			// Rows and Cols are 1-indexed
 			row := lineNumber + 1
-			startCol := matchIndices[0] + 1
+			startCol := matchIndex[0] + 1
 			locations = append(locations, sarifutils.CreateLocation(file, row, startCol, row, startCol+len(matchedSnippet), matchedSnippet))
 		}
 	}
