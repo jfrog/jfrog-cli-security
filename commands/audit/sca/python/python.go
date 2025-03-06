@@ -103,8 +103,10 @@ func getDependencies(params xrayutils2.AuditParams) (dependenciesGraph map[strin
 		err = errors.New("no technology was provided")
 		return
 	}
-	pythonTool := pythonutils.PythonTool(params.Technologies()[0])
-
+	pythonTool := pythonutils.Pip
+	if len(params.Technologies()) > 0 {
+		pythonTool = pythonutils.PythonTool(params.Technologies()[0])
+	}
 	if !params.SkipAutoInstall() {
 		restoreEnv, restoreEnvErr := runPythonInstall(params, pythonTool)
 		defer func() {

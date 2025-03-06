@@ -218,7 +218,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 		shouldBeInstalled           bool
 		successfulTreeBuiltExpected bool
 	}{
-		//pip
+		// pip
 		{
 			name:                        "not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
@@ -242,7 +242,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			successfulTreeBuiltExpected: true,
 		},
 
-		//pipenv
+		// pipenv
 		{
 			name:                        "not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "python", "pipenv", "pipenv", "pipenvproject"),
@@ -266,7 +266,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			successfulTreeBuiltExpected: true,
 		},
 
-		//poetry
+		// poetry
 		{
 			name:                        "not installed | install required - install command",
 			testDir:                     filepath.Join("projects", "package-managers", "poetry", "poetry"),
