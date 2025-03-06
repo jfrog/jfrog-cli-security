@@ -99,10 +99,6 @@ func getDependencies(params xrayutils2.AuditParams) (dependenciesGraph map[strin
 	if err != nil {
 		return
 	}
-	if len(params.Technologies()) == 0 {
-		err = errors.New("no technology was provided")
-		return
-	}
 	pythonTool := pythonutils.Pip
 	if len(params.Technologies()) > 0 {
 		pythonTool = pythonutils.PythonTool(params.Technologies()[0])
@@ -210,6 +206,9 @@ func installPoetryDeps(params xrayutils2.AuditParams) (restoreEnv func() error, 
 	if params.DepsRepo() != "" {
 		var serverDetails *config.ServerDetails
 		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return restoreEnv, err
+		}
 		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(serverDetails, params.DepsRepo(), false)
 		if err != nil {
 			return restoreEnv, err
