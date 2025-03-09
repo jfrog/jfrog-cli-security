@@ -570,15 +570,8 @@ func GetScaIssueId(depName, version, issueId string) string {
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
 }
 
-// Convert to PascalCase
 func IdToFriendlyName(input string) string {
-	parts := strings.Split(input, "_")
-	for i, part := range parts {
-		if len(part) > 0 {
-			parts[i] = strings.ToUpper(string(part[0])) + part[1:]
-		}
-	}
-	return strings.Join(parts, "")
+	return strings.Join(strings.Split(input, "_"), "-")
 }
 
 // GetUniqueKey returns a unique string key of format "vulnerableDependency:vulnerableVersion:xrayID:fixVersionExist"
