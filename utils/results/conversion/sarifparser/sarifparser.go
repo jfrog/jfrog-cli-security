@@ -483,6 +483,7 @@ func getScaIssueSarifRule(ruleId, ruleDescription, maxCveScore, summary, markdow
 	cveRuleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
 	return sarif.NewRule(ruleId).
 		WithDescription(ruleDescription).
+		WithFullDescription(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
 		WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
 		WithProperties(cveRuleProperties.Properties)
 }
