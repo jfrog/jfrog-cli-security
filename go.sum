@@ -120,8 +120,8 @@ github.com/jedib0t/go-pretty/v6 v6.6.5 h1:9PgMJOVBedpgYLI56jQRJYqngxYAAzfEUua+3N
 github.com/jedib0t/go-pretty/v6 v6.6.5/go.mod h1:Uq/HrbhuFty5WSVNfjpQQe47x16RwVGXIveNGEyGtHs=
 github.com/jfrog/archiver/v3 v3.6.1 h1:LOxnkw9pOn45DzCbZNFV6K0+6dCsQ0L8mR3ZcujO5eI=
 github.com/jfrog/archiver/v3 v3.6.1/go.mod h1:VgR+3WZS4N+i9FaDwLZbq+jeU4B4zctXL+gL4EMzfLw=
-github.com/jfrog/build-info-go v1.10.9 h1:mdJ+wlLw2ReFsqC7rifJVlRYLEqYk38uXDYAOZASuGE=
-github.com/jfrog/build-info-go v1.10.9/go.mod h1:JcISnovFXKx3wWf3p1fcMmlPdt6adxScXvoJN4WXqIE=
+github.com/jfrog/build-info-go v1.10.10 h1:2nOFjV7SX1uisi2rQK7fb4Evm7YkSOdmssrm6Tf4ipc=
+github.com/jfrog/build-info-go v1.10.10/go.mod h1:JcISnovFXKx3wWf3p1fcMmlPdt6adxScXvoJN4WXqIE=
 github.com/jfrog/froggit-go v1.16.2 h1:F//S83iXH14qsCwYzv0zB2JtjS2pJVEsUoEmYA+37dQ=
 github.com/jfrog/froggit-go v1.16.2/go.mod h1:5VpdQfAcbuyFl9x/x8HGm7kVk719kEtW/8YJFvKcHPA=
 github.com/jfrog/gofrog v1.7.6 h1:QmfAiRzVyaI7JYGsB7cxfAJePAZTzFz0gRWZSE27c6s=
@@ -132,6 +132,8 @@ github.com/jfrog/jfrog-cli-artifactory v0.1.12 h1:Nj6D1605/rr097LVQGZjJL4xOFEdAT
 github.com/jfrog/jfrog-cli-artifactory v0.1.12/go.mod h1:7wqnff7YstYHJbe/T3lKj+fJ5GxImlTjJp8nSZGcYm4=
 github.com/jfrog/jfrog-cli-core/v2 v2.58.0 h1:tPjwJdWNv9PTz1ma5TjrMd9Uu0btcQg8eBCpc5h/rn4=
 github.com/jfrog/jfrog-cli-core/v2 v2.58.0/go.mod h1:Hx2houXADsNv0eRh4w5XCS2uSsPNPn1OmiSDdwGFB7g=
+github.com/jfrog/jfrog-client-go v1.28.1-0.20250309113753-9cb691a755b5 h1:Q9dVmb8sz2SXlqbtIuvIajIWFZwkp4269VXFaSqP1yM=
+github.com/jfrog/jfrog-client-go v1.28.1-0.20250309113753-9cb691a755b5/go.mod h1:2tQPwRhGS/F357BOKFfZrQbjd4XbzHPYUQm/OFNwLHg=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
 github.com/k0kubun/pp v3.0.1+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
@@ -187,8 +189,6 @@ github.com/nwaples/rardecode v1.1.3 h1:cWCaZwfM5H7nAD6PyEdcVnczzV8i/JtotnyW/dD9l
 github.com/nwaples/rardecode v1.1.3/go.mod h1:5DzqNKiOdpKKBH87u8VlvAnPZMXcGRhxWkRpHbbfGS0=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
-github.com/orz25/jfrog-client-go v0.0.0-20250224130403-35b5a2c26fe1 h1:RebP95L8OBTuIAXyrMxKK2e1leBdtQx2zm/bW1VoAIM=
-github.com/orz25/jfrog-client-go v0.0.0-20250224130403-35b5a2c26fe1/go.mod h1:hDoUcW6LZme83YNFbdSRImV+di1x0GP+Nlw7fctkwtE=
 github.com/owenrumney/go-sarif v1.1.1/go.mod h1:dNDiPlF04ESR/6fHlPyq7gHKmrM0sHUvAGjsoh8ZH0U=
 github.com/owenrumney/go-sarif/v2 v2.3.0 h1:wP5yEpI53zr0v5cBmagXzLbHZp9Oylyo3AJDpfLBITs=
 github.com/owenrumney/go-sarif/v2 v2.3.0/go.mod h1:MSqMMx9WqlBSY7pXoOZWgEsVB4FDNfhcaXDA1j6Sr+w=
