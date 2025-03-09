@@ -486,7 +486,9 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
 	cveRuleProperties := sarif.NewPropertyBag()
 	cveRuleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
-	cveRuleProperties.Add(sarifutils.SarifImpactPathsRulePropertyKey, impactPaths)
+	if len(impactPaths) > 0 {
+		cveRuleProperties.Add(sarifutils.SarifImpactPathsRulePropertyKey, impactPaths)
+	}
 	return sarif.NewRule(ruleId).
 		WithDescription(ruleDescription).
 		WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
