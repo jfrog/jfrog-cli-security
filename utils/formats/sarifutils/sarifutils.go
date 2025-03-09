@@ -83,7 +83,34 @@ func CombineReports(reports ...*sarif.Report) (combined *sarif.Report, err error
 	}
 	for _, report := range reports {
 		for _, run := range report.Runs {
+			if existingRun := reportContainsRun(GetRunToolName(run), combined); existingRun != nil {
+				AggregateMultipleRunsIntoSingle([]*sarif.Run{run}, existingRun)
+			} else {
+				combined.AddRun(run)
+			}
+		}
+	}
+	return
+}
+
+func CombineMultipleRunsWithSameTool(report *sarif.Report) (combined *sarif.Report, err error) {
+	if combined, err = NewReport(); err != nil {
+		return
+	}
+	for _, run := range report.Runs {
+		if existingRun := reportContainsRun(GetRunToolName(run), combined); existingRun != nil {
+			AggregateMultipleRunsIntoSingle([]*sarif.Run{run}, existingRun)
+		} else {
 			combined.AddRun(run)
+		}
+	}
+	return
+}
+
+func reportContainsRun(toolName string, report *sarif.Report) (run *sarif.Run) {
+	for _, r := range report.Runs {
+		if GetRunToolName(r) == toolName {
+			return r
 		}
 	}
 	return

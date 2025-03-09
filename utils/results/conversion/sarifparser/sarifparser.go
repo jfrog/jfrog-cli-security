@@ -105,7 +105,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
 		return sarifutils.NewReport()
 	}
-	return sc.current, nil
+	return sarifutils.CombineMultipleRunsWithSameTool(sc.current)
 }
 
 func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
