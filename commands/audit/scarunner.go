@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
@@ -93,6 +94,15 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", targetResult.Target))
 			continue
 		}
+		if partialScan, filterDescriptors := getTargetDescriptorsToScan(targetResult.ScaResults, auditParams.filesToScan); partialScan {
+			// Diff mode, scan only the files affected by the diff.
+			if len(filterDescriptors) == 0 {
+				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
+				continue
+			} else {
+				log.Info(fmt.Sprintf("Partial SCA scan will be performed on the following descriptors: %v", filterDescriptors))
+			}
+		}
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(targetResult, auditParams)
 		if bdtErr != nil {
@@ -104,6 +114,8 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
+		// TODO: get dependency from the changes and filter tree only to contain the changed dependencies
+		// Filter the dependency tree to contain only the changed dependencies.
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()
@@ -116,6 +128,23 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 	}
 	return
+}
+
+// Find if the given sca descriptors matches some of the files to scan
+func getTargetDescriptorsToScan(scaResults *results.ScaScanResults, filesToScan []string) (bool, []string) {
+	if len(filesToScan) == 0 {
+		return false, scaResults.Descriptors
+	}
+	filteredDescriptors := datastructures.MakeSet[string]()
+	for _, fileToScan := range filesToScan {
+		for _, descriptor := range scaResults.Descriptors {
+			if strings.HasSuffix(descriptor, fileToScan) {
+				filteredDescriptors.Add(descriptor)
+			}
+		}
+	}
+	return true, filteredDescriptors.ToSlice()
+
 }
 
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
