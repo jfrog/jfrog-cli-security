@@ -19,9 +19,9 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
