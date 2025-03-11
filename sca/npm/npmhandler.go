@@ -31,11 +31,15 @@ func (nh *NpmHandler) GetTechDependencyLocations(directDependencyName, directDep
 // If no files are provided, the default is to search for package.json at the current directory
 func getFilesToSearch(filesToSearch ...string) (out []string) {
 	if len(filesToSearch) == 0 {
-		return []string{PackageJson}
+		if fileutils.IsPathExists(PackageJson, false) {
+			out = append(out, PackageJson)
+		}
+		return
 	}
 	for _, file := range filesToSearch {
-		if strings.HasSuffix(strings.TrimSuffix(file, "/"), PackageJson) {
-			out = append(out, file)
+		potentialPath := strings.TrimSuffix(file, "/")
+		if strings.HasSuffix(potentialPath, PackageJson) {
+			out = append(out, potentialPath)
 		}
 	}
 	return out
@@ -61,7 +65,8 @@ func getDependencyLocations(file, directDependencyName, dependencyVersion string
 		// Find all match locations in the line.
 		matches := re.FindStringSubmatch(line)
 		if matches != nil {
-			detectedVersion := matches[1] // Extract detected version from match
+			// Extract detected version from match
+			detectedVersion := matches[1]
 
 			// Normalize the given dependency version by allowing optional ~ or ^ prefix
 			if dependencyVersion != "" {
@@ -74,7 +79,8 @@ func getDependencyLocations(file, directDependencyName, dependencyVersion string
 					}
 				}
 				if !matchFound {
-					continue // Skip if the provided version does not match the detected version
+					// Skip if the provided version does not match the detected version
+					continue
 				}
 			}
 
@@ -82,7 +88,7 @@ func getDependencyLocations(file, directDependencyName, dependencyVersion string
 			matchIndex := re.FindStringIndex(line)
 			matchedSnippet := line[matchIndex[0]:matchIndex[1]]
 
-			// Rows and Cols are 1-indexed
+			// Rows and Cols values are 1-based. (min value is 1)
 			row := lineNumber + 1
 			startCol := matchIndex[0] + 1
 			locations = append(locations, sarifutils.CreateLocation(file, row, startCol, row, startCol+len(matchedSnippet), matchedSnippet))

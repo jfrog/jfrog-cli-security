@@ -286,6 +286,7 @@ func getComponentLocation(tech techutils.Technology, compName, compVersion strin
 	// Search location at descriptors
 	locations, err := sca.GetTechDependencyLocations(tech, compName, compVersion, pathsByPriority...)
 	if err == nil && len(locations) > 0 {
+		// Use only one of the detected locations (not supporting multiple locations for now)
 		location := locations[0]
 		return &formats.Location{
 			File:        sarifutils.GetLocationFileName(location),
