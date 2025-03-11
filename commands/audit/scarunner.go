@@ -114,8 +114,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
-		// TODO: get dependency from the changes and filter tree only to contain the changed dependencies
-		// Filter the dependency tree to contain only the changed dependencies.
+		// TODO: Filter the dependency tree to contain only the changed dependencies. (for now: scan all if one change occur or nothing if no related changes)
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()
