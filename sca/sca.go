@@ -8,8 +8,7 @@ import (
 )
 
 func GetTechDependencyLocations(tech techutils.Technology, directDependencyName, directDependencyVersion string, filesToSearch ...string) ([]*sarif.Location, error) {
-	switch tech {
-	case techutils.Npm:
+	if tech == techutils.Npm {
 		nh := npm.NpmHandler{}
 		return nh.GetTechDependencyLocations(directDependencyName, directDependencyVersion, filesToSearch...)
 	}
