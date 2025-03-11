@@ -570,7 +570,8 @@ func GetScaIssueId(depName, version, issueId string) string {
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
 }
 
-func IdToFriendlyName(input string) string {
+// replaces underscore with dash
+func IdToName(input string) string {
 	return strings.Join(strings.Split(input, "_"), "-")
 }
 
