@@ -652,7 +652,7 @@ func TestCreateResultsContext(t *testing.T) {
 		expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided := false
 		if len(test.expectedPlatformWatches.GitRepositoryWatches) > 0 {
 			// We should include the value of gitRepoUrl only if a watch is assigned to this git_repository
-			testCaseExpectedGitRepoHttpsCloneUrl = validations.TestMockGitInfo.GitRepoHttpsCloneUrl
+			testCaseExpectedGitRepoHttpsCloneUrl = validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl
 		} else {
 			// If only the git repo url is provided but not supported or there are no defined watches, the expected includeVulnerabilities flag should be set to true even if not provided
 			expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided = true
@@ -704,13 +704,13 @@ func TestCreateResultsContext(t *testing.T) {
 			},
 			{
 				name:                           "Git Clone Url",
-				httpCloneUrl:                   validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				httpCloneUrl:                   validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
 				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
 				expectedIncludeVulnerabilities: expectedIncludeVulnerabilitiesIfOnlyGitRepoUrlProvided,
 			},
 			{
 				name:                   "All",
-				httpCloneUrl:           validations.TestMockGitInfo.GitRepoHttpsCloneUrl,
+				httpCloneUrl:           validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
 				watches:                mockWatches,
 				jfrogProjectKey:        mockProjectKey,
 				includeVulnerabilities: true,
