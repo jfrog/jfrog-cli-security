@@ -83,7 +83,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.Watches,
 		params.resultsContext.RepoPath,
 		params.resultsContext.ProjectKey,
-		params.source.GitRepoHttpsCloneUrl,
+		params.source.Source.GitRepoHttpsCloneUrl,
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		false,

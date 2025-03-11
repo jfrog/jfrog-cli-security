@@ -45,7 +45,7 @@ func SendNewScanEvent(xrayVersion, xscVersion string, serviceDetails *config.Ser
 		log.Debug(fmt.Sprintf("failed to create xsc manager for analytics metrics service, error: %s ", err.Error()))
 		return
 	}
-	if multiScanId, err = xscService.AddAnalyticsGeneralEvent(*event); err != nil {
+	if multiScanId, err = xscService.AddAnalyticsGeneralEvent(*event, xrayVersion); err != nil {
 		log.Debug(fmt.Sprintf("failed sending general event request to XSC service, error: %s ", err.Error()))
 		return
 	}
