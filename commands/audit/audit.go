@@ -352,7 +352,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				Module:                      *module,
 				ConfigProfile:               auditParams.configProfile,
 				ScansToPerform:              auditParams.ScansToPerform(),
-				FilesToScan: auditParams.filesToScan,
+				FilesToScan:                 auditParams.filesToScan,
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
