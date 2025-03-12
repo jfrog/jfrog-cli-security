@@ -192,6 +192,107 @@ func TestGetDirectDependenciesFormatted(t *testing.T) {
 	}
 }
 
+func TestGetScaIssueSarifRule(t *testing.T) {
+	impactPathsTC1 := [][]formats.ComponentRow{
+		{
+			{
+				Name:    "example-package",
+				Version: "1.0.0",
+			},
+			{
+				Name:    "dependency1",
+				Version: "1.0.0",
+			},
+		},
+	}
+	impactPathsTC2 := [][]formats.ComponentRow{
+		{
+			{
+				Name:    "example-package",
+				Version: "2.0.0",
+			},
+			{
+				Name:    "dependency1",
+				Version: "1.0.0",
+			},
+			{
+				Name:    "dependency2",
+				Version: "2.0.0",
+			},
+		},
+	}
+	impactPathsTC3 := [][]formats.ComponentRow{
+		{
+			{
+				Name:    "example-package-1",
+				Version: "1.0.0",
+			},
+			{
+				Name:    "dependency1",
+				Version: "1.0.0",
+			},
+		},
+		{
+			{
+				Name:    "example-package-2",
+				Version: "2.0.0",
+			},
+			{
+				Name:    "dependency2",
+				Version: "2.0.0",
+			},
+		},
+	}
+	testCases := []struct {
+		name                string
+		impactPaths         [][]formats.ComponentRow
+		ruleId              string
+		ruleDescription     string
+		maxCveScore         string
+		summary             string
+		markdownDescription string
+		expectedRule        *sarif.ReportingDescriptor
+	}{
+		{
+			name:                "rule with impact paths",
+			impactPaths:         impactPathsTC1,
+			ruleId:              "rule-id-tc1",
+			ruleDescription:     "rule-description-tc1",
+			maxCveScore:         "7.5",
+			summary:             "summary-tc1",
+			markdownDescription: "markdown-description-tc1",
+			expectedRule:        sarifutils.CreateDummyRule(impactPathsTC1, "rule-id-tc1", "rule-description-tc1", "summary-tc1", "markdown-description-tc1", "7.5"),
+		},
+		{
+			name:                "rule with impact paths with multiple dependencies",
+			impactPaths:         impactPathsTC2,
+			ruleId:              "rule-id-tc2",
+			ruleDescription:     "rule-description-tc2",
+			maxCveScore:         "8.0",
+			summary:             "summary-tc2",
+			markdownDescription: "markdown-description-tc2",
+			expectedRule:        sarifutils.CreateDummyRule(impactPathsTC2, "rule-id-tc2", "rule-description-tc2", "summary-tc2", "markdown-description-tc2", "8.0"),
+		},
+		{
+			name:                "rule with multiple impact paths",
+			impactPaths:         impactPathsTC3,
+			ruleId:              "rule-id-tc3",
+			ruleDescription:     "rule-description-tc3",
+			maxCveScore:         "9.0",
+			summary:             "summary-tc3",
+			markdownDescription: "markdown-description-tc3",
+			expectedRule:        sarifutils.CreateDummyRule(impactPathsTC3, "rule-id-tc3", "rule-description-tc3", "summary-tc3", "markdown-description-tc3", "9.0"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			output := getScaIssueSarifRule(tc.impactPaths, tc.ruleId, tc.ruleDescription, tc.maxCveScore, tc.summary, tc.markdownDescription)
+			assert.Equal(t, tc.expectedRule, output)
+		})
+	}
+}
+
 func TestGetScaLicenseViolationMarkdown(t *testing.T) {
 	testCases := []struct {
 		name               string
