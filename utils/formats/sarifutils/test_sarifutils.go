@@ -84,7 +84,8 @@ func CreateDummyRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescripti
 	var ruleProperties = sarif.NewPropertyBag()
 	ruleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
 	ruleProperties.Add(SarifImpactPathsRulePropertyKey, impactPaths)
-	return sarif.NewRule(ruleId).WithProperties(ruleProperties.Properties).WithDescription(ruleDescription).WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription))
+	description := sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)
+	return sarif.NewRule(ruleId).WithName(ruleId).WithProperties(ruleProperties.Properties).WithDescription(ruleDescription).WithHelp(description).WithFullDescription(description)
 
 }
 
