@@ -570,6 +570,11 @@ func GetScaIssueId(depName, version, issueId string) string {
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
 }
 
+// replaces underscore with dash
+func IdToName(input string) string {
+	return strings.Join(strings.Split(input, "_"), "-")
+}
+
 // GetUniqueKey returns a unique string key of format "vulnerableDependency:vulnerableVersion:xrayID:fixVersionExist"
 func GetUniqueKey(vulnerableDependency, vulnerableVersion, xrayID string, fixVersionExist bool) string {
 	return strings.Join([]string{vulnerableDependency, vulnerableVersion, xrayID, strconv.FormatBool(fixVersionExist)}, ":")

@@ -15,8 +15,8 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
