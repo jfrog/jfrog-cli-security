@@ -123,41 +123,6 @@ func WithMinSeverity(minSeverity severityutils.Severity) JasScannerOption {
 	}
 }
 
-// func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, minSeverity severityutils.Severity, envVars map[string]string, filesToScan []string, exclusions ...string) (scanner *JasScanner, err error) {
-// 	if serverDetails == nil {
-// 		err = errors.New(NoServerDetailsError)
-// 		return
-// 	}
-// 	if len(serverDetails.Url) == 0 {
-// 		if len(serverDetails.XrayUrl) != 0 {
-// 			log.Debug("Xray URL provided without platform URL")
-// 		} else {
-// 			if len(serverDetails.ArtifactoryUrl) != 0 {
-// 				log.Debug("Artifactory URL provided without platform URL")
-// 			}
-// 			log.Warn(NoServerUrlWarn)
-// 			return
-// 		}
-// 	}
-// 	scanner = &JasScanner{}
-// 	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {
-// 		return scanner, err
-// 	}
-// 	var tempDir string
-// 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
-// 		return
-// 	}
-// 	scanner.TempDir = tempDir
-// 	scanner.ScannerDirCleanupFunc = func() error {
-// 		return fileutils.RemoveTempDir(tempDir)
-// 	}
-// 	scanner.ServerDetails = serverDetails
-// 	scanner.FilesToScan = filesToScan
-// 	scanner.Exclusions = exclusions
-// 	scanner.MinSeverity = minSeverity
-// 	return
-// }
-
 func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
