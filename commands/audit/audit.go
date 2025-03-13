@@ -296,20 +296,22 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	jasScanner, err = jas.CreateJasScanner(
-		serverDetails,
-		scanResults.SecretValidation,
-		auditParams.minSeverityFilter,
-		jas.GetAnalyzerManagerXscEnvVars(
+	scannerOptions := []jas.JasScannerOption{
+		jas.WithEnvVars(scanResults.SecretValidation, jas.GetAnalyzerManagerXscEnvVars(
 			auditParams.GetMultiScanId(),
 			utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 			auditParams.resultsContext.ProjectKey,
 			auditParams.resultsContext.Watches,
 			scanResults.GetTechnologies()...,
-		),
-		auditParams.filesToScan,
-		auditParams.Exclusions()...,
-	)
+		)),
+		jas.WithMinSeverity(auditParams.minSeverityFilter),
+		jas.WithExclusions(auditParams.Exclusions()...),
+		jas.WithFilesToScan(auditParams.filesToScan),
+	}
+	if auditParams.resultsToCompare != nil {
+		scannerOptions = append(scannerOptions, jas.WithResultsToCompare(auditParams.resultsToCompare))
+	}
+	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
