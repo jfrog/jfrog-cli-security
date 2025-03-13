@@ -499,14 +499,20 @@ func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDesc
 
 func getComponentSarifLocation(cmtType utils.CommandType, component formats.ComponentRow) *sarif.Location {
 	filePath := ""
+	physicalLocation := sarif.NewPhysicalLocation()
 	if component.Location != nil {
 		filePath = component.Location.File
+		if component.Location.StartLine != 0 || component.Location.EndLine != 0 || component.Location.StartColumn != 0 || component.Location.EndColumn != 0 {
+			// Region is not empty, add it to the location
+			physicalLocation.WithRegion(sarif.NewRegion().WithStartLine(component.Location.StartLine).WithStartColumn(component.Location.StartColumn).WithEndLine(component.Location.EndLine).WithEndColumn(component.Location.EndColumn).WithSnippet(sarif.NewArtifactContent().WithText(component.Location.Snippet)))
+		}
 	}
 	if strings.TrimSpace(filePath) == "" {
 		// For tech that we don't support fetching the package descriptor related to the component
 		filePath = "Package-Descriptor"
 	}
-	var logicalLocations []*sarif.LogicalLocation
+	location := sarif.NewLocation().WithPhysicalLocation(physicalLocation.WithArtifactLocation(sarif.NewSimpleArtifactLocation(fmt.Sprintf("file://%s", filePath))))
+
 	if cmtType == utils.DockerImage {
 		// Docker image - extract layer hash from component name
 		algorithm, layer := getLayerContentFromComponentId(component.Name)
@@ -515,11 +521,11 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			if algorithm != "" {
 				logicalLocation.Properties = map[string]interface{}{"algorithm": algorithm}
 			}
-			logicalLocations = append(logicalLocations, logicalLocation)
+			location.WithLogicalLocations([]*sarif.LogicalLocation{logicalLocation})
 		}
 	}
 
-	return sarifutils.CreateLocation(fmt.Sprintf("file://%s", filePath), component.Location.StartLine, component.Location.StartColumn, component.Location.EndLine, component.Location.EndColumn, component.Location.Snippet).WithLogicalLocations(logicalLocations)
+	return location
 }
 
 func getScaIssueMarkdownDescription(directDependencies []formats.ComponentRow, cveScore string, applicableStatus jasutils.ApplicabilityStatus, fixedVersions []string) (string, error) {
