@@ -206,7 +206,7 @@ func clearOrRedirectLocalCacheIfNeeded(t *testing.T, projectType project.Project
 			assert.NoError(t, coreutils.SetPermissionsRecursively(goTempCachePath, 0755))
 			createTempDirCallback()
 		}
-	case project.Pip:
+	case project.Pip, project.Pipenv:
 		pipTempCachePath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 		envVarCallbackFunc := clientTests.SetEnvWithCallbackAndAssert(t, securityTests.PipCacheEnvVar, pipTempCachePath)
 		callbackFunc = func() {

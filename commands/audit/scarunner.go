@@ -86,6 +86,13 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Make sure to return to the original working directory, buildDependencyTree may change it
 		generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 	}()
+	if len(auditParams.Technologies()) == 0 {
+		var technologies []string
+		for _, tech := range cmdResults.GetTechnologies() {
+			technologies = append(technologies, tech.String())
+		}
+		auditParams.SetTechnologies(technologies)
+	}
 	// Perform SCA scans
 	for _, targetResult := range cmdResults.Targets {
 		if targetResult.Technology == "" {
