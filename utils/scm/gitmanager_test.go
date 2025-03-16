@@ -14,9 +14,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-func TestGetGitContext(t *testing.T) {
-	basePath := filepath.Join("..", "..", "tests", "testdata", "git", "projects")
+var testDir = filepath.Join("..", "..", "tests", "testdata", "git", "projects")
 
+func TestGetGitContext(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		testProjectZipDirPath string
@@ -26,11 +26,11 @@ func TestGetGitContext(t *testing.T) {
 		{
 			name:                  "No Git Info",
 			NoDotGitFolder:        true,
-			testProjectZipDirPath: filepath.Join(basePath, "nogit"),
+			testProjectZipDirPath: filepath.Join(testDir, "nogit"),
 		},
 		{
 			name:                  "Clean Project (after clone)",
-			testProjectZipDirPath: filepath.Join(basePath, "clean"),
+			testProjectZipDirPath: filepath.Join(testDir, "clean"),
 			gitInfo: &services.XscGitInfoContext{
 				Source: services.CommitContext{
 					GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
@@ -46,7 +46,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Self-Hosted Git Project (and SSO credentials)",
-			testProjectZipDirPath: filepath.Join(basePath, "selfhosted"),
+			testProjectZipDirPath: filepath.Join(testDir, "selfhosted"),
 			gitInfo: &services.XscGitInfoContext{
 				Source: services.CommitContext{
 					GitRepoHttpsCloneUrl: "ssh://git@git.jfrog.info/~assafa/test-security-git.git",
@@ -62,7 +62,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Gitlab Project (group tree structure)",
-			testProjectZipDirPath: filepath.Join(basePath, "gitlab"),
+			testProjectZipDirPath: filepath.Join(testDir, "gitlab"),
 			gitInfo: &services.XscGitInfoContext{
 				Source: services.CommitContext{
 					GitRepoHttpsCloneUrl: "https://gitlab.com/attiasas/test-group/test-security-git.git",
@@ -78,7 +78,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Gerrit Project (no owner)",
-			testProjectZipDirPath: filepath.Join(basePath, "gerrit"),
+			testProjectZipDirPath: filepath.Join(testDir, "gerrit"),
 			gitInfo: &services.XscGitInfoContext{
 				Source: services.CommitContext{
 					GitRepoHttpsCloneUrl: "https://gerrit.googlesource.com/git-repo",
@@ -94,7 +94,7 @@ func TestGetGitContext(t *testing.T) {
 		},
 		{
 			name:                  "Forked Project (multiple remotes)",
-			testProjectZipDirPath: filepath.Join(basePath, "forked"),
+			testProjectZipDirPath: filepath.Join(testDir, "forked"),
 			gitInfo: &services.XscGitInfoContext{
 				Source: services.CommitContext{
 					GitRepoHttpsCloneUrl: "https://github.com/attiasas/test-security-git.git",
@@ -111,7 +111,7 @@ func TestGetGitContext(t *testing.T) {
 		// Not supported yet
 		{
 			name:                  "Dirty Project (with uncommitted changes)",
-			testProjectZipDirPath: filepath.Join(basePath, "dirty"),
+			testProjectZipDirPath: filepath.Join(testDir, "dirty"),
 			// gitInfo: &services.XscGitInfoContext{
 			// 	GitRepoHttpsCloneUrl:        "https://github.com/attiasas/test-security-git.git",
 			// 	GitRepoName:       "test-security-git",
@@ -261,6 +261,135 @@ func TestGetGitProject(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			project := getGitProject(testCase.url)
 			assert.Equal(t, testCase.project, project)
+		})
+	}
+}
+
+func TestDiffGetRemovedContent(t *testing.T) {
+	testCases := []struct {
+		name            string
+		testZipDir      string
+		sourceReference string
+		targetReference string
+		expectedChanges DiffContent
+		expectedError   string
+	}{
+		{
+			name:            "Not valid target reference",
+			testZipDir:      "clean",
+			targetReference: "a57ea78854a46cee64ba6747b3b3b3b3b3b3b3b3",
+			expectedError:   "object not found",
+		},
+		{
+			name:            "No relevant changes (commit reference)",
+			testZipDir:      "clean",
+			targetReference: "5fc36ff0666e5ce9dba6c0a1c539ee640cabe0b0",
+			expectedChanges: DiffContent{},
+		},
+		{
+			name:            "No relevant changes (branch reference)",
+			testZipDir:      "clean",
+			targetReference: "main",
+			expectedChanges: DiffContent{},
+		},
+		{
+			name:            "single commit differences with relevant changes (commit reference)",
+			testZipDir:      "clean",
+			sourceReference: "861b7aff93eeb9be4806f1d9cc668e3d702d90b6",
+			targetReference: "2c51295ce6600ade6058c0819d4f4fae759f4d85",
+			expectedChanges: DiffContent{
+				ChangedFiles: []FileChanges{
+					{
+						Path: "README.md",
+						// Appended content
+						Ranges: []Range{{StartRow: 12, StartCol: 1, EndRow: 13, EndCol: 92}},
+					},
+					{
+						Path: "npm_app/index.js",
+						// Appended content
+						Ranges: []Range{{StartRow: 2, StartCol: 1, EndRow: 4, EndCol: 75}},
+					},
+					{
+						Path: "npm_app/package-lock.json",
+						// Changed content
+						Ranges: []Range{
+							{StartRow: 12, StartCol: 21, EndRow: 81, EndCol: 1},
+							{StartRow: 93, StartCol: 1, EndRow: 128, EndCol: 1},
+							{StartRow: 131, StartCol: 1, EndRow: 197, EndCol: 1},
+							{StartRow: 202, StartCol: 1, EndRow: 231, EndCol: 1},
+						},
+					},
+					{
+						Path: "npm_app/package.json",
+						// Changed content
+						Ranges: []Range{{StartRow: 12, StartCol: 18, EndRow: 13, EndCol: 24}},
+					},
+				},
+			},
+		},
+		{
+			name:            "multiple commit differences with relevant changes (commit reference)",
+			testZipDir:      "clean",
+			targetReference: "adcdec709cc8aecbcfb340cd32bf9d6e8236c02b",
+			expectedChanges: DiffContent{
+				ChangedFiles: []FileChanges{
+					{
+						Path: ".gitignore",
+						// Added file
+						Ranges: []Range{{StartRow: 1, StartCol: 1, EndRow: 21, EndCol: 4}},
+					},
+					{
+						Path: "README.md",
+						// Changed content and appended content
+						Ranges: []Range{
+							{StartRow: 7, StartCol: 1, EndRow: 9, EndCol: 1},
+							{StartRow: 10, StartCol: 1, EndRow: 15, EndCol: 82},
+						},
+					},
+					{
+						Path: "npm_app/index.js",
+						// Added file
+						Ranges: []Range{{StartRow: 1, StartCol: 1, EndRow: 4, EndCol: 75}},
+					},
+					{
+						Path: "npm_app/package-lock.json",
+						// Added file
+						Ranges: []Range{{StartRow: 1, StartCol: 1, EndRow: 229, EndCol: 1}},
+					},
+					{
+						Path: "npm_app/package.json",
+						// Added file
+						Ranges: []Range{{StartRow: 1, StartCol: 1, EndRow: 16, EndCol: 1}},
+					},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Create the project from the zip
+			projectPath, cleanUpProject := securityTestUtils.CreateTestProjectFromZip(t, filepath.Join(testDir, "clean"))
+			defer cleanUpProject()
+			// Prepare the git manager at the project path
+			gitManager, err := NewGitManager(projectPath)
+			require.NoError(t, err)
+			// checkout the source reference
+			if testCase.sourceReference != "" {
+				require.NoError(t, gitManager.CheckoutToHash(testCase.sourceReference))
+			}
+			// Get the relevant changes
+			changes, err := gitManager.DiffGetRemovedContent(testCase.targetReference)
+			if len(testCase.expectedError) > 0 {
+				// Assert the expected error
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, testCase.expectedError)
+				return
+			}
+			// Assert the expected changes
+			require.NoError(t, err)
+			// Assert the expected changes
+			assert.Equal(t, testCase.expectedChanges, changes)
 		})
 	}
 }
