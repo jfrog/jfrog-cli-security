@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
@@ -89,7 +90,12 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if len(auditParams.Technologies()) == 0 {
 		var technologies []string
 		for _, tech := range cmdResults.GetTechnologies() {
-			technologies = append(technologies, tech.String())
+			if tech == techutils.Maven {
+				// On Maven we use '--mvn' flag
+				technologies = append(technologies, flags.Mvn)
+			} else {
+				technologies = append(technologies, tech.String())
+			}
 		}
 		auditParams.SetTechnologies(technologies)
 	}
