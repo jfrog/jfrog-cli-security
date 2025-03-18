@@ -297,19 +297,20 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	}
 	auditParallelRunner.ResultsMu.Lock()
 	scannerOptions := []jas.JasScannerOption{
-		jas.WithEnvVars(scanResults.SecretValidation, jas.GetAnalyzerManagerXscEnvVars(
-			auditParams.GetMultiScanId(),
-			utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
-			auditParams.resultsContext.ProjectKey,
-			auditParams.resultsContext.Watches,
-			scanResults.GetTechnologies()...,
-		)),
+		jas.WithEnvVars(
+			scanResults.SecretValidation,
+			auditParams.diffMode,
+			jas.GetAnalyzerManagerXscEnvVars(
+				auditParams.GetMultiScanId(),
+				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
+				auditParams.resultsContext.ProjectKey,
+				auditParams.resultsContext.Watches,
+				scanResults.GetTechnologies()...,
+			),
+		),
 		jas.WithMinSeverity(auditParams.minSeverityFilter),
 		jas.WithExclusions(auditParams.Exclusions()...),
-		jas.WithFilesToScan(auditParams.filesToScan),
-	}
-	if auditParams.resultsToCompare != nil {
-		scannerOptions = append(scannerOptions, jas.WithResultsToCompare(auditParams.resultsToCompare))
+		jas.WithResultsToCompare(auditParams.resultsToCompare),
 	}
 	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
 	auditParallelRunner.ResultsMu.Unlock()
@@ -354,7 +355,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				Module:                      *module,
 				ConfigProfile:               auditParams.configProfile,
 				ScansToPerform:              auditParams.ScansToPerform(),
-				FilesToScan:                 auditParams.filesToScan,
+				TargetResultsToCompare:      scanner.GetResultsToCompare(targetResult.ScanTarget),
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,

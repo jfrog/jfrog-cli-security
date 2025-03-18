@@ -26,7 +26,7 @@ type AuditParams struct {
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Diff mode, scan only the files affected by the diff.
-	diffMode bool
+	diffMode         bool
 	filesToScan      []string
 	resultsToCompare *results.SecurityCommandResults
 }

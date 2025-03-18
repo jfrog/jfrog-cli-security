@@ -476,7 +476,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				}
 				// Run Jas scans
 				scanner, err := jas.NewJasScanner(scanCmd.serverDetails,
-					jas.WithEnvVars(cmdResults.SecretValidation,
+					jas.WithEnvVars(cmdResults.SecretValidation, false,
 						jas.GetAnalyzerManagerXscEnvVars(
 							cmdResults.MultiScanId,
 							// Passing but empty since not supported for binary scans

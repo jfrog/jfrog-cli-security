@@ -43,6 +43,7 @@ type JasScanner struct {
 	ServerDetails         *config.ServerDetails
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
+	DiffMode              bool
 	FilesToScan           []string
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
@@ -88,7 +89,7 @@ func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOpt
 	return
 }
 
-func WithEnvVars(validateSecrets bool, envVars map[string]string) JasScannerOption {
+func WithEnvVars(validateSecrets, diffMode bool, envVars map[string]string) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
 		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, envVars)
 		return
@@ -105,6 +106,13 @@ func WithResultsToCompare(resultsToCompare *results.SecurityCommandResults) JasS
 func WithFilesToScan(filesToScan []string) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
 		scanner.FilesToScan = filesToScan
+		return
+	}
+}
+
+func WithDiffMode(diffMode bool) JasScannerOption {
+	return func(scanner *JasScanner) (err error) {
+		scanner.DiffMode = diffMode
 		return
 	}
 }
@@ -130,6 +138,10 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, va
 	}
 	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
+}
+
+func (a *JasScanner) GetResultsToCompare(target results.ScanTarget) (resultsToCompare *results.TargetResults) {
+	panic("unimplemented")
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
