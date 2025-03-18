@@ -26,6 +26,7 @@ type AuditParams struct {
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Diff mode, scan only the files affected by the diff.
+	diffMode bool
 	filesToScan      []string
 	resultsToCompare *results.SecurityCommandResults
 }
@@ -153,4 +154,13 @@ func (params *AuditParams) SetResultsToCompare(resultsToCompare *results.Securit
 
 func (params *AuditParams) ResultsToCompare() *results.SecurityCommandResults {
 	return params.resultsToCompare
+}
+
+func (params *AuditParams) SetDiffMode(diffMode bool) *AuditParams {
+	params.diffMode = diffMode
+	return params
+}
+
+func (params *AuditParams) DiffMode() bool {
+	return params.diffMode
 }
