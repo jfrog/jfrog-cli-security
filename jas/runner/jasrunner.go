@@ -135,7 +135,7 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId)
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId, getTargetResultsToCompare(params, jasutils.Secrets)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -206,6 +206,13 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		}
 		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Applicability, caScanResults)
 	}
+}
+
+func getTargetResultsToCompare(params *JasRunnerParams, scanType jasutils.JasScanType) []*sarif.Run {
+	if params.TargetResultsToCompare == nil {
+		return nil
+	}
+	return params.TargetResultsToCompare.GetJasScansResults(scanType)
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results

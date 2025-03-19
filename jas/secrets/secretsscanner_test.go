@@ -19,7 +19,8 @@ import (
 func TestNewSecretsScanManager(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	require.NoError(t, err)
 
 	assert.NotEmpty(t, secretScanManager)
 	assert.NotEmpty(t, secretScanManager.configFileName)
@@ -33,7 +34,8 @@ func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
 	require.NoError(t, err)
-	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir)
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir)
+	require.NoError(t, err)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -60,7 +62,8 @@ func TestRunAnalyzerManager_ReturnsGeneralError(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	require.NoError(t, err)
 	assert.Error(t, secretScanManager.runAnalyzerManager())
 }
 
@@ -70,7 +73,8 @@ func TestParseResults_EmptyResults(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	require.NoError(t, err)
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "no-secrets.sarif")
 
 	// Act
@@ -94,7 +98,8 @@ func TestParseResults_ResultsContainSecrets(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 
-	secretScanManager := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, "temoDirPath")
+	require.NoError(t, err)
 	secretScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "secrets-scan", "contain-secrets.sarif")
 
 	// Act
