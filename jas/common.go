@@ -140,8 +140,11 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, va
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
-func (a *JasScanner) GetResultsToCompare(target results.ScanTarget) (resultsToCompare *results.TargetResults) {
-	panic("unimplemented")
+func (js *JasScanner) GetResultsToCompare(target results.ScanTarget) (resultsToCompare *results.TargetResults) {
+	if js.ResultsToCompare == nil {
+		return
+	}
+	return js.ResultsToCompare.GetTargetResults(target.Target)
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {

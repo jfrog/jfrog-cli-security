@@ -235,6 +235,15 @@ func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
 	return
 }
 
+func (r *SecurityCommandResults) GetTargetResults(target string) *TargetResults {
+	for _, scan := range r.Targets {
+		if scan.Target == target {
+			return scan
+		}
+	}
+	return nil
+}
+
 func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scan := range r.Targets {
 		results = append(results, scan.GetScaScansXrayResults()...)
