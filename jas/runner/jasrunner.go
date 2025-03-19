@@ -152,7 +152,7 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId)
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId, getTargetResultsToCompare(params, jasutils.IaC)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
