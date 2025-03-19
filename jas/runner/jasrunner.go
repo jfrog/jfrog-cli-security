@@ -135,7 +135,7 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId, getTargetResultsToCompare(params, jasutils.Secrets)...)
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(params.Scanner, params.SecretsScanType, params.Module, threadId, getTargetRunsToCompare(params, jasutils.Secrets)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -152,7 +152,7 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId, getTargetResultsToCompare(params, jasutils.IaC)...)
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(params.Scanner, params.Module, threadId, getTargetRunsToCompare(params, jasutils.IaC)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -169,7 +169,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		defer func() {
 			params.Runner.JasScannersWg.Done()
 		}()
-		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, threadId)
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(params.Scanner, params.Module, params.SignedDescriptions, threadId, getTargetRunsToCompare(params, jasutils.Sast)...)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
 		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
@@ -208,7 +208,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 	}
 }
 
-func getTargetResultsToCompare(params *JasRunnerParams, scanType jasutils.JasScanType) []*sarif.Run {
+func getTargetRunsToCompare(params *JasRunnerParams, scanType jasutils.JasScanType) []*sarif.Run {
 	if params.TargetResultsToCompare == nil {
 		return nil
 	}

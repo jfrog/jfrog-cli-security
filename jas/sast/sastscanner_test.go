@@ -17,7 +17,8 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	assert.NoError(t, err)
 
 	// Assert
 	if assert.NotNil(t, sastScanManager) {
@@ -36,7 +37,8 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
 	// Act
@@ -58,7 +60,8 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", false)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false)
+	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
 	// Act

@@ -26,12 +26,12 @@ const (
 type SecretsScanType string
 
 type SecretScanManager struct {
-	scanner         *jas.JasScanner
-	scanType        SecretsScanType
+	scanner  *jas.JasScanner
+	scanType SecretsScanType
 
 	resultsToCompareFileName string
-	configFileName  string
-	resultsFileName string
+	configFileName           string
+	resultsFileName          string
 }
 
 // The getSecretsScanResults function runs the secrets scan flow, which includes the following steps:
@@ -89,11 +89,11 @@ type secretsScanConfig struct {
 }
 
 type secretsScanConfiguration struct {
-	Roots       []string `yaml:"roots"`
-	Output      string   `yaml:"output"`
-	PathToResultsToCompare string `yaml:"source-result-file"`
-	Type        string   `yaml:"type"`
-	SkippedDirs []string `yaml:"skipped-folders"`
+	Roots                  []string `yaml:"roots"`
+	Output                 string   `yaml:"output"`
+	PathToResultsToCompare string   `yaml:"source-result-file"`
+	Type                   string   `yaml:"type"`
+	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
 func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
@@ -104,11 +104,11 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 	configFileContent := secretsScanConfig{
 		Scans: []secretsScanConfiguration{
 			{
-				Roots:       roots,
-				Output:      s.resultsFileName,
+				Roots:                  roots,
+				Output:                 s.resultsFileName,
 				PathToResultsToCompare: s.resultsToCompareFileName,
-				Type:        string(s.scanType),
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),
+				Type:                   string(s.scanType),
+				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),
 			},
 		},
 	}
