@@ -82,10 +82,11 @@ type iacScanConfig struct {
 }
 
 type iacScanConfiguration struct {
-	Roots       []string `yaml:"roots"`
-	Output      string   `yaml:"output"`
-	Type        string   `yaml:"type"`
-	SkippedDirs []string `yaml:"skipped-folders"`
+	Roots                  []string `yaml:"roots"`
+	Output                 string   `yaml:"output"`
+	PathToResultsToCompare string   `yaml:"source-result-file"`
+	Type                   string   `yaml:"type"`
+	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
 func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
@@ -96,10 +97,11 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclu
 	configFileContent := iacScanConfig{
 		Scans: []iacScanConfiguration{
 			{
-				Roots:       roots,
-				Output:      iac.resultsFileName,
-				Type:        iacScannerType,
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
+				Roots:                  roots,
+				Output:                 iac.resultsFileName,
+				PathToResultsToCompare: iac.resultsToCompareFileName,
+				Type:                   iacScannerType,
+				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
 			},
 		},
 	}

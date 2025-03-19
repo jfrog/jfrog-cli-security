@@ -87,12 +87,13 @@ type sastScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots           []string       `yaml:"roots,omitempty"`
-	Type            string         `yaml:"type,omitempty"`
-	Language        string         `yaml:"language,omitempty"`
-	ExcludePatterns []string       `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules   []string       `yaml:"excluded-rules,omitempty"`
-	SastParameters  sastParameters `yaml:"sast_parameters,omitempty"`
+	Roots                  []string       `yaml:"roots,omitempty"`
+	Type                   string         `yaml:"type,omitempty"`
+	PathToResultsToCompare string         `yaml:"source-result-file"`
+	Language               string         `yaml:"language,omitempty"`
+	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
+	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
+	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
 }
 
 type sastParameters struct {
@@ -111,10 +112,11 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
-				Type:          sastScannerType,
-				Roots:         roots,
-				Language:      sastScanner.Language,
-				ExcludedRules: sastScanner.ExcludedRules,
+				Type:                   sastScannerType,
+				Roots:                  roots,
+				PathToResultsToCompare: ssm.resultsToCompareFileName,
+				Language:               sastScanner.Language,
+				ExcludedRules:          sastScanner.ExcludedRules,
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},
