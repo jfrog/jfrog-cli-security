@@ -44,7 +44,6 @@ type JasScanner struct {
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
 	DiffMode              bool
-	FilesToScan           []string
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
 	MinSeverity           severityutils.Severity
@@ -89,9 +88,9 @@ func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOpt
 	return
 }
 
-func WithEnvVars(validateSecrets, diffMode bool, envVars map[string]string) JasScannerOption {
+func WithEnvVars(validateSecrets bool, diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
-		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, envVars)
+		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, diffMode, envVars)
 		return
 	}
 }
@@ -99,20 +98,6 @@ func WithEnvVars(validateSecrets, diffMode bool, envVars map[string]string) JasS
 func WithResultsToCompare(resultsToCompare *results.SecurityCommandResults) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
 		scanner.ResultsToCompare = resultsToCompare
-		return
-	}
-}
-
-func WithFilesToScan(filesToScan []string) JasScannerOption {
-	return func(scanner *JasScanner) (err error) {
-		scanner.FilesToScan = filesToScan
-		return
-	}
-}
-
-func WithDiffMode(diffMode bool) JasScannerOption {
-	return func(scanner *JasScanner) (err error) {
-		scanner.DiffMode = diffMode
 		return
 	}
 }
@@ -131,12 +116,15 @@ func WithMinSeverity(minSeverity severityutils.Severity) JasScannerOption {
 	}
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
+func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, diffMode JasDiffScanEnvValue, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
 		return nil, err
 	}
 	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
+	if diffMode != NotDiffScanEnvValue {
+		amBasicVars[DiffScanEnvVariable] = string(diffMode)
+	}
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
@@ -313,14 +301,26 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	}
 }
 
+func SaveScanToCompareAsReport(fileName string, runs ...*sarif.Run) error {
+	report, err := sarifutils.NewReport()
+	if err != nil {
+		return err
+	}
+	report.Runs = runs
+	sarifData, err := utils.GetAsJsonBytes(report, false, false)
+	if err != nil {
+		return err
+	}
+	return errorutils.CheckError(os.WriteFile(fileName, sarifData, 0644))
+}
+
 func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType jasutils.JasScanType) error {
 	yamlData, err := yaml.Marshal(&fileContent)
 	if errorutils.CheckError(err) != nil {
 		return err
 	}
 	log.Debug(scanType.String() + " scanner input YAML:\n" + string(yamlData))
-	err = os.WriteFile(fileName, yamlData, 0644)
-	return errorutils.CheckError(err)
+	return errorutils.CheckError(os.WriteFile(fileName, yamlData, 0644))
 }
 
 var FakeServerDetails = config.ServerDetails{

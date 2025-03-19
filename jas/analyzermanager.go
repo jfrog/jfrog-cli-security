@@ -11,6 +11,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -45,9 +46,18 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	DiffScanEnvVariable                       = "AM_DIFF_SCAN"
 	// #nosec G101 -- Not credentials.
 	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
+
+const (
+	NotDiffScanEnvValue        JasDiffScanEnvValue = ""
+	FirstScanDiffScanEnvValue  JasDiffScanEnvValue = "first_scan"
+	SecondScanDiffScanEnvValue JasDiffScanEnvValue = "second_scan"
+)
+
+type JasDiffScanEnvValue string
 
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
@@ -91,6 +101,16 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		err = errorutils.CheckError(err)
 	}
 	return
+}
+
+func GetDiffScanTypeValue(diffScan bool, resultsToCompare *results.SecurityCommandResults) JasDiffScanEnvValue {
+	if !diffScan {
+		return NotDiffScanEnvValue
+	}
+	if resultsToCompare == nil {
+		return FirstScanDiffScanEnvValue
+	}
+	return SecondScanDiffScanEnvValue
 }
 
 func GetAnalyzerManagerDownloadPath() (string, error) {

@@ -184,6 +184,7 @@ func TestGetJasEnvVars(t *testing.T) {
 		name            string
 		serverDetails   *config.ServerDetails
 		validateSecrets bool
+		diffMode        JasDiffScanEnvValue
 		extraEnvVars    map[string]string
 		expectedOutput  map[string]string
 	}{
@@ -256,10 +257,28 @@ func TestGetJasEnvVars(t *testing.T) {
 				jfTokenEnvVariable:           "token",
 			},
 		},
+		{
+			name: "Valid server details with diff mode",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			diffMode: FirstScanDiffScanEnvValue,
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:      "url",
+				jfUserEnvVariable:             "user",
+				jfPasswordEnvVariable:         "password",
+				jfTokenEnvVariable:            "token",
+				JfSecretValidationEnvVariable: "false",
+				DiffScanEnvVariable:           string(FirstScanDiffScanEnvValue),
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.extraEnvVars)
+			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.diffMode, test.extraEnvVars)
 			assert.NoError(t, err)
 			for expectedKey, expectedValue := range test.expectedOutput {
 				assert.Equal(t, expectedValue, envVars[expectedKey])

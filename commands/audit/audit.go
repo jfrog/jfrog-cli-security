@@ -299,7 +299,7 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
 			scanResults.SecretValidation,
-			auditParams.diffMode,
+			jas.GetDiffScanTypeValue(auditParams.diffMode, auditParams.resultsToCompare),
 			jas.GetAnalyzerManagerXscEnvVars(
 				auditParams.GetMultiScanId(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
