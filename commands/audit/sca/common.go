@@ -31,6 +31,10 @@ var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree f
 
 func GetExcludePattern(params utils.AuditParams) string {
 	exclusions := params.Exclusions()
+	if configProfile := params.GetConfigProfile(); configProfile != nil {
+		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
+	}
+
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}

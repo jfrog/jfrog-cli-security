@@ -123,7 +123,7 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
-	if err = asm.createConfigFile(module, asm.scanner.Exclusions...); err != nil {
+	if err = asm.createConfigFile(module, append(asm.scanner.Exclusions, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns...)...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
