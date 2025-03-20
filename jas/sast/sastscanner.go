@@ -89,7 +89,8 @@ type sastScanConfig struct {
 type scanConfiguration struct {
 	Roots                  []string       `yaml:"roots,omitempty"`
 	Type                   string         `yaml:"type,omitempty"`
-	PathToResultsToCompare string         `yaml:"source-result-file"`
+	Output                 string         `yaml:"output,omitempty"`
+	PathToResultsToCompare string         `yaml:"source-result-file,omitempty"`
 	Language               string         `yaml:"language,omitempty"`
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
 	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
@@ -114,6 +115,7 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 			{
 				Type:                   sastScannerType,
 				Roots:                  roots,
+				Output:                 ssm.resultsFileName,
 				PathToResultsToCompare: ssm.resultsToCompareFileName,
 				Language:               sastScanner.Language,
 				ExcludedRules:          sastScanner.ExcludedRules,
