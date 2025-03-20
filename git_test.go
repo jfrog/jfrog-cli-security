@@ -197,6 +197,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			Violations: &validations.ViolationCount{
 				ValidateScan:                &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2},
 				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 3, NotCovered: 5},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 3, NotCovered: 5},
 			},
 			ExactResultsMatch: true,
 		},
