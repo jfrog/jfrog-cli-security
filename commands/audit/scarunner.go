@@ -95,7 +95,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		if partialScan, filterDescriptors := getTargetDescriptorsToScan(targetResult.ScaResults, auditParams.filesToScan); partialScan {
-			// Diff mode, scan only the files affected by the diff.
+			// Diff mode, scan only the files affected by the diff. (for now: scan all if one change occur or nothing if no related changes)
 			if len(filterDescriptors) == 0 {
 				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
 				continue
@@ -114,7 +114,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
-		// TODO: Filter the dependency tree to contain only the changed dependencies. (for now: scan all if one change occur or nothing if no related changes)
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
 		// defer auditParallelRunner.ScaScansWg.Done()

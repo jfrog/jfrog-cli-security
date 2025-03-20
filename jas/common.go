@@ -129,12 +129,17 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, di
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
 }
 
-func (js *JasScanner) GetResultsToCompare(target results.ScanTarget) (resultsToCompare *results.TargetResults) {
+func (js *JasScanner) GetResultsToCompare(target string) (resultsToCompare *results.TargetResults) {
 	if js.ResultsToCompare == nil {
 		return
 	}
-	return js.ResultsToCompare.Targets[0]
-	return js.ResultsToCompare.GetTargetResults(target.Target)
+	sourceBasePath := js.ResultsToCompare.GetCommonParentPath()
+	for _, potential := range js.ResultsToCompare.Targets {
+		if target == utils.GetRelativePath(potential.Target, sourceBasePath) {
+			return potential
+		}
+	}
+	return nil
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
