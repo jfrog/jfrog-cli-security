@@ -625,7 +625,7 @@ func TestShouldDisqualifyEvidence(t *testing.T) {
 func TestGetDirectComponents(t *testing.T) {
 	tests := []struct {
 		name                        string
-		target                      string
+		target                      ScanTarget
 		impactPaths                 [][]services.ImpactPathNode
 		expectedDirectComponentRows []formats.ComponentRow
 		expectedConvImpactPaths     [][]formats.ComponentRow
@@ -638,14 +638,14 @@ func TestGetDirectComponents(t *testing.T) {
 		},
 		{
 			name:                        "one direct component with target",
-			target:                      filepath.Join("root", "dir", "file"),
+			target:                      ScanTarget{Target: filepath.Join("root", "dir", "file")},
 			impactPaths:                 [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack2:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{{Name: "jfrog:pack2", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}}},
 			expectedConvImpactPaths:     [][]formats.ComponentRow{{{Name: "jfrog:pack1", Version: "1.2.3"}, {Name: "jfrog:pack2", Version: "1.2.3"}}},
 		},
 		{
 			name:        "multiple direct components",
-			target:      filepath.Join("root", "dir", "file"),
+			target:      ScanTarget{Target: filepath.Join("root", "dir", "file")},
 			impactPaths: [][]services.ImpactPathNode{{services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack21:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}, {services.ImpactPathNode{ComponentId: "gav://jfrog:pack1:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack22:1.2.3"}, services.ImpactPathNode{ComponentId: "gav://jfrog:pack3:1.2.3"}}},
 			expectedDirectComponentRows: []formats.ComponentRow{
 				{Name: "jfrog:pack21", Version: "1.2.3", Location: &formats.Location{File: filepath.Join("root", "dir", "file")}},
