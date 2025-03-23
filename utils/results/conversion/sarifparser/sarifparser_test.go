@@ -55,6 +55,17 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://Package-Descriptor")),
 			).WithLogicalLocations([]*sarif.LogicalLocation{sarifutils.CreateLogicalLocationWithProperty("3a8bca98bcad879bca98b9acd", "layer", "algorithm", "sha256")}),
 		},
+		{
+			name: "Component with location and region",
+			component: formats.ComponentRow{
+				Name:     "example-package",
+				Version:  "1.0.0",
+				Location: &formats.Location{File: filepath.Join("dir", "file.txt"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "Snippet"},
+			},
+			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
+				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(fmt.Sprintf("file://%s", filepath.Join("dir", "file.txt")))).WithRegion(sarif.NewRegion().WithStartLine(1).WithStartColumn(2).WithEndLine(3).WithEndColumn(4).WithSnippet(sarif.NewArtifactContent().WithText("Snippet"))),
+			),
+		},
 	}
 
 	for _, tc := range testCases {
