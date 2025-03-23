@@ -3,6 +3,7 @@ package utils
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
@@ -74,4 +75,45 @@ func GetCurationNugetCacheFolder() (string, error) {
 		return "", err
 	}
 	return filepath.Join(curationFolder, "nuget"), nil
+}
+
+func GetRelativePath(fullPathWd, baseWd string) string {
+	fullPathWd = strings.TrimSuffix(fullPathWd, string(os.PathSeparator))
+	if fullPathWd == baseWd {
+		return ""
+	}
+
+	return strings.TrimPrefix(fullPathWd, baseWd+string(os.PathSeparator))
+}
+
+// Calculate the common parent directory of the given paths.
+// Examples:
+//  1. [dir/dir, dir/directory] -> dir
+//  2. [dir, directory] -> ""
+//  3. [dir/dir2, dir/dir2/dir3, dir/dir2/dir3/dir4] -> dir/dir2
+func GetCommonParentDir(paths ...string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	commonParent := paths[0]
+	for _, path := range paths[1:] {
+		commonParent = getCommonParentDir(commonParent, path)
+	}
+	return commonParent
+}
+
+func getCommonParentDir(path1, path2 string) string {
+	for {
+		if path1 == path2 {
+			return path1
+		}
+		if path1 == "" || path2 == "" {
+			return ""
+		}
+		if len(path1) > len(path2) {
+			path1 = filepath.Dir(path1)
+		} else {
+			path2 = filepath.Dir(path2)
+		}
+	}
 }

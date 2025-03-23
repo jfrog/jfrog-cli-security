@@ -24,7 +24,8 @@ func TestNewIacScanManager(t *testing.T) {
 	assert.NoError(t, err)
 	// Act
 
-	iacScanManager := newIacScanManager(scanner, "temoDirPath")
+	iacScanManager, err := newIacScanManager(scanner, "temoDirPath")
+	assert.NoError(t, err)
 
 	// Assert
 	if assert.NotNil(t, iacScanManager) {
@@ -41,7 +42,8 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String())
 	require.NoError(t, err)
-	iacScanManager := newIacScanManager(scanner, scannerTempDir)
+	iacScanManager, err := newIacScanManager(scanner, scannerTempDir)
+	require.NoError(t, err)
 
 	currWd, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -66,7 +68,8 @@ func TestIacParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	iacScanManager := newIacScanManager(scanner, "temoDirPath")
+	iacScanManager, err := newIacScanManager(scanner, "temoDirPath")
+	require.NoError(t, err)
 	iacScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "iac-scan", "no-violations.sarif")
 
 	// Act
@@ -87,7 +90,8 @@ func TestIacParseResults_ResultsContainIacViolations(t *testing.T) {
 	// Arrange
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	iacScanManager := newIacScanManager(scanner, "temoDirPath")
+	iacScanManager, err := newIacScanManager(scanner, "temoDirPath")
+	require.NoError(t, err)
 	assert.NoError(t, biutils.CopyDir(filepath.Join(jas.GetTestDataPath(), "iac-scan"), tempDirPath, true, nil))
 	iacScanManager.resultsFileName = filepath.Join(tempDirPath, "contains-iac-issues.sarif")
 

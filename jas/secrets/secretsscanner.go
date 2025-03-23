@@ -26,22 +26,27 @@ const (
 type SecretsScanType string
 
 type SecretScanManager struct {
-	scanner         *jas.JasScanner
-	scanType        SecretsScanType
-	configFileName  string
-	resultsFileName string
+	scanner  *jas.JasScanner
+	scanType SecretsScanType
+
+	resultsToCompareFileName string
+	configFileName           string
+	resultsFileName          string
 }
 
 // The getSecretsScanResults function runs the secrets scan flow, which includes the following steps:
 // Creating an SecretScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int, sourceResultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
 		return
 	}
-	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
+	secretScanManager, err := newSecretsScanManager(scanner, scanType, scannerTempDir, sourceResultsToCompare...)
+	if err != nil {
+		return
+	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
 	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		return
@@ -50,13 +55,23 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	return
 }
 
-func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string) (manager *SecretScanManager) {
-	return &SecretScanManager{
+func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string, sourceResultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
+	manager = &SecretScanManager{
 		scanner:         scanner,
 		scanType:        scanType,
 		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
 	}
+	if len(sourceResultsToCompare) == 0 {
+		// No source scan to compare
+		return
+	}
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "source.sarif")
+	// Save the source scan to compare as a report
+	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, sourceResultsToCompare...); err != nil {
+		return
+	}
+	return
 }
 
 func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
@@ -74,10 +89,11 @@ type secretsScanConfig struct {
 }
 
 type secretsScanConfiguration struct {
-	Roots       []string `yaml:"roots"`
-	Output      string   `yaml:"output"`
-	Type        string   `yaml:"type"`
-	SkippedDirs []string `yaml:"skipped-folders"`
+	Roots                  []string `yaml:"roots"`
+	Output                 string   `yaml:"output"`
+	PathToResultsToCompare string   `yaml:"source-result-file"`
+	Type                   string   `yaml:"type"`
+	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
 func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
@@ -88,10 +104,11 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module, excl
 	configFileContent := secretsScanConfig{
 		Scans: []secretsScanConfiguration{
 			{
-				Roots:       roots,
-				Output:      s.resultsFileName,
-				Type:        string(s.scanType),
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),
+				Roots:                  roots,
+				Output:                 s.resultsFileName,
+				PathToResultsToCompare: s.resultsToCompareFileName,
+				Type:                   string(s.scanType),
+				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Secrets, exclusions...),
 			},
 		},
 	}
