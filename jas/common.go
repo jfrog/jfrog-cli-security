@@ -91,7 +91,6 @@ func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOpt
 func WithEnvVars(validateSecrets bool, diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
 	return func(scanner *JasScanner) (err error) {
 		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, diffMode, envVars)
-		log.Debug(fmt.Sprintf("Jas scanner env vars: %v", scanner.EnvVars))
 		return
 	}
 }
