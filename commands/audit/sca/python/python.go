@@ -34,18 +34,6 @@ const (
 	CurationPipMinimumVersion = "23.0.0"
 )
 
-/* TODO eran delete at the end
-type AuditPython struct {
-	Server              *config.ServerDetails
-	Tool                pythonutils.PythonTool
-	RemotePypiRepo      string
-	PipRequirementsFile string
-	InstallCommandArgs  []string
-	IsCurationCmd       bool
-}
-
-*/
-
 func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
 	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params)
 	if errGetTree != nil {
@@ -103,13 +91,6 @@ func getDependencies(params utils.AuditParams) (dependenciesGraph map[string][]s
 		return
 	}
 
-	// TODO eran - is it possible to not have the technology here so we need to place pip first? is that even correct doing that?
-	/*
-		pythonTool := pythonutils.Pip
-		if len(params.Technologies()) > 0 {
-			pythonTool = pythonutils.PythonTool(params.Technologies()[0])
-		}
-	*/
 	pythonTool := pythonutils.PythonTool(params.Technologies()[0])
 	if !params.SkipAutoInstall() {
 		var restoreEnv func() error

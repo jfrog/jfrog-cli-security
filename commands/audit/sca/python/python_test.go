@@ -27,7 +27,6 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Pip)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
 	assert.NoError(t, err)
@@ -56,7 +55,6 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	//params.SetTechnologies([]string{string(techutils.Pip)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetInstallCommandArgs([]string{"--force-reinstall"})
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
@@ -69,7 +67,6 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Pip)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetIsCurationCmd(true)
 	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&params)
@@ -103,7 +100,6 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Pip)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
@@ -129,7 +125,6 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Pip)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetPipRequirementsFile("requirements.txt")
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
@@ -159,7 +154,6 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Pipenv)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Pipenv.String())
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
 	if err != nil {
@@ -197,7 +191,6 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	// params.SetTechnologies([]string{string(techutils.Poetry)}) // TODO eran delete
 	params.AddTechnologyIfNotExist(techutils.Poetry.String())
 	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
 	if err != nil {
