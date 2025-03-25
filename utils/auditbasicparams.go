@@ -21,7 +21,6 @@ type AuditParams interface {
 	SetInsecureTls(insecureTls bool) *AuditBasicParams
 	Technologies() []string
 	SetTechnologies(technologies []string) *AuditBasicParams
-	AddTechnologyIfNotExist(technology string) *AuditBasicParams
 	Progress() ioUtils.ProgressMgr
 	SetProgress(progress ioUtils.ProgressMgr)
 	Args() []string
@@ -174,16 +173,6 @@ func (abp *AuditBasicParams) Technologies() []string {
 
 func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicParams {
 	abp.technologies = technologies
-	return abp
-}
-
-func (abp *AuditBasicParams) AddTechnologyIfNotExist(technology string) *AuditBasicParams {
-	for _, tech := range abp.technologies {
-		if tech == technology {
-			return abp
-		}
-	}
-	abp.technologies = append(abp.technologies, technology)
 	return abp
 }
 

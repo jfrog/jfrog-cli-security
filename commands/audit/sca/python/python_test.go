@@ -27,8 +27,7 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pip.String())
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -55,9 +54,8 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetInstallCommandArgs([]string{"--force-reinstall"})
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -67,9 +65,8 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetIsCurationCmd(true)
-	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -100,8 +97,7 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pip.String())
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -125,9 +121,8 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pip.String())
 	params.SetPipRequirementsFile("requirements.txt")
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -154,8 +149,7 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Pipenv.String())
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pipenv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,8 +185,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 	}
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
-	params.AddTechnologyIfNotExist(techutils.Poetry.String())
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Poetry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,25 +203,38 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 }
 
 func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
+	// This feature is currently supported and tested for Pip and Poetry only
 	testcases := []struct {
 		name                             string
 		testDir                          string
-		technology                       string
+		technology                       techutils.Technology
 		installBeforeFetchingInitialDeps bool
 	}{
+		// pip
 		{
 			name:                             "pip: project not installed | install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
-			technology:                       techutils.Pip.String(),
+			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: false,
 		},
 		{
 			name:                             "pip: project installed before dep tree construction| install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
-			technology:                       techutils.Pip.String(),
+			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: true,
 		},
-		// TODO add similar test cases for pipenv and poetry
+		{
+			name:                             "poetry: project not installed | install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
+			technology:                       techutils.Poetry,
+			installBeforeFetchingInitialDeps: false,
+		},
+		{
+			name:                             "poetry: project installed before dep tree construction| install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
+			technology:                       techutils.Poetry,
+			installBeforeFetchingInitialDeps: true,
+		},
 	}
 
 	for _, test := range testcases {
@@ -239,27 +245,25 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			// Create virtual env according to package manager if needed
 			if !test.installBeforeFetchingInitialDeps {
 				// If we install before calling BuildDependencyTree a virtual environment is going to be created, and we don't have to do it manually
-				switch test.technology {
-				case techutils.Pip.String():
+				if test.technology == techutils.Pip {
 					restoreEnv, err := SetPipVirtualEnvPath()
 					defer func() {
-						assert.NoError(t, restoreEnv(), "restoring env after pip virtual env creation failed")
+						assert.NoError(t, restoreEnv(), "restoring env after setting pip virtual env creation failed")
 					}()
 					require.NoError(t, err)
-				default:
 				}
 			}
 
 			// Setting scan params
-			params := (&clisecurityutils.AuditBasicParams{}).SetSkipAutoInstall(true).AddTechnologyIfNotExist(test.technology)
-			if test.technology == techutils.Pip.String() {
+			params := (&clisecurityutils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			if test.technology == techutils.Pip {
 				params.SetPipRequirementsFile("requirements.txt")
 			}
 
 			if test.installBeforeFetchingInitialDeps {
 				restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
 				defer func() {
-					assert.NoError(t, restoreEnv(), "restoring env after pip virtual env creation failed")
+					assert.NoError(t, restoreEnv(), "restoring env after setting "+test.technology+" virtual env creation failed")
 				}()
 				require.NoError(t, err)
 			}
@@ -269,12 +273,21 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			assert.NoError(t, err)
 			// We use the dependencies graph and not the list of dependencies since the list includes only direct dependencies
 			dependenciesGraphBeforeBuildDepTree, _, err := pythonutils.GetPythonDependencies(pythonutils.PythonTool(test.technology), testDir, localDependenciesPath, log.GetLogger())
-			print(dependenciesGraphBeforeBuildDepTree)
-			dependenciesBeforeBuildDepTree := maps.Keys(dependenciesGraphBeforeBuildDepTree)
 			assert.NoError(t, err)
 
+			var dependenciesBeforeBuildDepTree []string
+			switch test.technology {
+			case techutils.Pip:
+				dependenciesBeforeBuildDepTree = maps.Keys(dependenciesGraphBeforeBuildDepTree)
+			case techutils.Poetry:
+				if len(dependenciesGraphBeforeBuildDepTree) != 0 {
+					mapKey := maps.Keys(dependenciesGraphBeforeBuildDepTree)[0]
+					dependenciesBeforeBuildDepTree = dependenciesGraphBeforeBuildDepTree[mapKey]
+				}
+			}
+
 			// Build dependency tree
-			_, uniqueDeps, _, err := BuildDependencyTree(params)
+			_, uniqueDeps, _, err := BuildDependencyTree(params, test.technology)
 			require.NoError(t, err)
 			var trimmedUniqueDeps []string
 			for _, dep := range uniqueDeps {

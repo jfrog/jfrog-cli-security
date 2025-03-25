@@ -34,8 +34,8 @@ const (
 	CurationPipMinimumVersion = "23.0.0"
 )
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
-	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params)
+func BuildDependencyTree(params utils.AuditParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
 	if errGetTree != nil {
 		err = errGetTree
 		return
@@ -60,7 +60,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*clientutil
 	return
 }
 
-func getDependencies(params utils.AuditParams) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getDependencies(params utils.AuditParams, technology techutils.Technology) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -91,8 +91,8 @@ func getDependencies(params utils.AuditParams) (dependenciesGraph map[string][]s
 		return
 	}
 
-	pythonTool := pythonutils.PythonTool(params.Technologies()[0])
-	if !params.SkipAutoInstall() {
+	pythonTool := pythonutils.PythonTool(technology)
+	if technology == techutils.Pipenv || !params.SkipAutoInstall() {
 		var restoreEnv func() error
 		restoreEnv, err = runPythonInstall(params, pythonTool)
 		defer func() {
