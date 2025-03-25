@@ -246,6 +246,7 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 						assert.NoError(t, restoreEnv(), "restoring env after pip virtual env creation failed")
 					}()
 					require.NoError(t, err)
+				default:
 				}
 			}
 
