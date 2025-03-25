@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
-
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -87,18 +85,30 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		// Make sure to return to the original working directory, buildDependencyTree may change it
 		generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
 	}()
-	if len(auditParams.Technologies()) == 0 {
-		var technologies []string
-		for _, tech := range cmdResults.GetTechnologies() {
-			if tech == techutils.Maven {
-				// On Maven we use '--mvn' flag
-				technologies = append(technologies, flags.Mvn)
-			} else {
-				technologies = append(technologies, tech.String())
+	/* TODO eran delete the special case for maven
+	The code part from which this was copied is not trying to do the same, therefore this check for Maven is redundant.
+	if we look at cli-security/cli/scancommands.go, AuditCmd we can see a loop that is referring maven specifically.
+	in this loop we iterate all existing Technology types and check if a flag specifying each technology is provided.
+	If so we add this technology to the audit params we use for the command execution.
+	The reason for the specific reference for Maven is: the flag for Maven is 'mvn' and not similar to the name of the technology like the rest of the technologies
+	Therefore, we check for the 'mvn' bool flag instead of 'maven' bool flag.
+	This is NOT relevant here since the Technology is still Maven (techutils.Maven) and not the flags.mvn.
+	*/
+	/*
+		if len(auditParams.Technologies()) == 0 {
+			var technologies []string
+			for _, tech := range cmdResults.GetTechnologies() {
+				if tech == techutils.Maven {
+					// On Maven we use '--mvn' flag
+					technologies = append(technologies, flags.Mvn)
+				} else {
+					technologies = append(technologies, tech.String())
+				}
 			}
+			auditParams.SetTechnologies(technologies)
 		}
-		auditParams.SetTechnologies(technologies)
-	}
+	*/
+
 	// Perform SCA scans
 	for _, targetResult := range cmdResults.Targets {
 		if targetResult.Technology == "" {
@@ -249,6 +259,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
+		// TODO eran - if we changed python to work with auditParams do we want it here as well?
 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  artifactoryServerDetails,
 			DepsRepo:                params.DepsRepo(),
@@ -268,6 +279,8 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	case techutils.Go:
 		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
+		// TODO eran - consider adding the tech here and not prior to this step in buildDepTreeAndRunScaScan. make sure to filer before adding to avoid duplicates (we can have dup if we came from CLI and not frogbot since we have tech flags)
+		params.AddTechnologyIfNotExist(tech.String())
 		depTreeResult.FullDepTrees, uniqueDeps,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(params)
 	case techutils.Nuget:
