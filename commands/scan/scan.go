@@ -269,9 +269,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	if err = cmdResults.GetErrors(); err != nil {
 		return
 	}
-	// If includeVulnerabilities is false it means that context was provided, so we need to check for build violations.
 	// If user provided --fail=false, don't fail the build.
-	if scanCmd.fail && !scanCmd.resultsContext.IncludeVulnerabilities {
+	if scanCmd.fail {
 		if results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
 			return results.NewFailBuildError()
 		}
