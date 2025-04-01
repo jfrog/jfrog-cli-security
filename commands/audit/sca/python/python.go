@@ -101,6 +101,9 @@ func getDependencies(params utils.AuditParams, technology techutils.Technology) 
 		if err != nil {
 			return
 		}
+	} else {
+		log.Debug(fmt.Sprintf("JF_SKIP_AUTO_INSTALL was set to 'true' with one of the following technologies: %s, %s. Skipping installation...\n"+
+			"NOTE: in this case all dependencies must be manually pre-installed by the user", techutils.Pip, techutils.Poetry))
 	}
 
 	localDependenciesPath, err := config.GetJfrogDependenciesPath()
