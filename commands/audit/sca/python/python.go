@@ -35,6 +35,7 @@ const (
 )
 
 func BuildDependencyTree(params utils.AuditParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	log.Debug("This execution contains Erant recent changes for skip-auto-install")
 	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
 	if errGetTree != nil {
 		err = errGetTree
