@@ -408,11 +408,14 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	// Adding exclusions from jfrog-apps-config IF no exclusions provided from other source (flags, env vars, config profile)
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
+		log.Debug("Using scanner exclude patterns:", strings.Join(scanner.ExcludePatterns, ","))
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
 	}
 	if len(excludePatterns) == 0 {
+		log.Debug("No exclude patterns provided, using default exclude patterns", strings.Join(utils.DefaultJasExcludePatterns, ","))
 		return utils.DefaultJasExcludePatterns
 	}
+	log.Debug("Using exclude patterns:", strings.Join(excludePatterns, ","))
 	return excludePatterns
 }
 
@@ -422,6 +425,11 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	for _, excludePattern := range excludePatterns {
+
+		// Add ignore for the pattern as-is, not only the pattern as a directory
+		uniqueExcludePatterns.Add(excludePattern)
+
+		// Avoid adding the pattern as a directory twice
 		if !strings.HasPrefix(excludePattern, "**/") {
 			excludePattern = "**/" + excludePattern
 		}
