@@ -269,8 +269,8 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	if err = cmdResults.GetErrors(); err != nil {
 		return
 	}
-	// If violation context was proivded it means that context was provided, so we need to check for build violations.
-	// If user provided --fail=false, don't fail the build.
+	// We consider failing the build only when --fail=true. If user provided --fail=false, don't fail the build even when fail-build rules are applied.
+	// If violation context was provided, we need to all existing violations for fail-build rules.
 	if scanCmd.fail && scanCmd.resultsContext.HasViolationContext() {
 		if results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
 			return results.NewFailBuildError()
