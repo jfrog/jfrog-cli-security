@@ -1,13 +1,13 @@
 package main
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -87,6 +87,7 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	)
 }
 
+// TODO eran fix this flaky test - remove Ubuntu restriction in local
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	if !coreutils.IsLinux() {
 		t.Skip("Skipping test. This test only runs on Linux to avoid flaky tests when running in parallel tests.")
