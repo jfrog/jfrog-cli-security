@@ -222,8 +222,8 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	// TODO eran fix the failBuild condition here as well and fix all relevant tests accordingly (run in CI)
-	if failBuild && !auditResults.ResultContext.IncludeVulnerabilities && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	// TODO eran fix the failBuild condition here as well and fix all relevant tests accordingly (run in CI) - fixed
+	if failBuild && auditResults.HasViolationContext() && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
 		err = results.NewFailBuildError()
 	}
 	return
