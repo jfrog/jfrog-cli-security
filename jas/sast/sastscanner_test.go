@@ -9,8 +9,8 @@ import (
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -39,13 +39,13 @@ func TestNewSastScanManager(t *testing.T) {
 func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	tempDir, cleanUpTempDir :=  coreTests.CreateTempDirWithCallbackAndAssert(t)
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
 	require.NoError(t, err)
-	
+
 	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 

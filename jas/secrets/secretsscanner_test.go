@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
-	"github.com/jfrog/jfrog-cli-security/jas"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/jas"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/stretchr/testify/assert"
@@ -36,13 +36,13 @@ func TestNewSecretsScanManager(t *testing.T) {
 func TestNewSecretsScanManagerWithFilesToCompare(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	tempDir, cleanUpTempDir :=  coreTests.CreateTempDirWithCallbackAndAssert(t)
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
 	require.NoError(t, err)
-	
+
 	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 

@@ -41,13 +41,13 @@ func TestNewIacScanManager(t *testing.T) {
 func TestNewIacScanManagerWithFilesToCompare(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
-	tempDir, cleanUpTempDir :=  coreTests.CreateTempDirWithCallbackAndAssert(t)
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
 	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
 	require.NoError(t, err)
-	
+
 	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
 	require.NoError(t, err)
 
