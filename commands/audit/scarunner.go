@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
+	"strings"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
