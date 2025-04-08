@@ -3,6 +3,8 @@ package jas
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/gofrog/datastructures"
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,7 +48,16 @@ type JasScanner struct {
 	DiffMode              bool
 	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
-	MinSeverity           severityutils.Severity
+	// This field contains scanner specific exclude patterns from Config Profile
+	ScannersExclusions SpecificScannersExcludePatterns
+	MinSeverity        severityutils.Severity
+}
+
+type SpecificScannersExcludePatterns struct {
+	ContextualAnalysisExcludePatterns []string
+	SastExcludePatterns               []string
+	SecretsExcludePatterns            []string
+	IacExcludePatterns                []string
 }
 
 type JasScannerOption func(f *JasScanner) error
@@ -399,8 +410,10 @@ func GetSourceRoots(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scan
 
 func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.Scanner, exclusions ...string) []string {
 	if len(exclusions) > 0 {
-		return convertToFilesExcludePatterns(exclusions)
+		return filterUniqueAndConvertToFilesExcludePatterns(exclusions)
 	}
+
+	// Adding exclusions from jfrog-apps-config IF no exclusions provided from other source (flags, env vars, config profile)
 	excludePatterns := module.ExcludePatterns
 	if scanner != nil {
 		excludePatterns = append(excludePatterns, scanner.ExcludePatterns...)
@@ -411,12 +424,21 @@ func GetExcludePatterns(module jfrogappsconfig.Module, scanner *jfrogappsconfig.
 	return excludePatterns
 }
 
-func convertToFilesExcludePatterns(excludePatterns []string) []string {
-	patterns := []string{}
+// This function convert every exclude pattern to a file exclude pattern form.
+// Checks are being made since some of the exclude patters we get here might already be in a file exclude pattern
+// Additionally, we keep patterns without duplications
+func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []string {
+	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	for _, excludePattern := range excludePatterns {
-		patterns = append(patterns, "**/"+excludePattern+"/**")
+		if !strings.HasPrefix(excludePattern, "**/") {
+			excludePattern = "**/" + excludePattern
+		}
+		if !strings.HasSuffix(excludePattern, "/**") {
+			excludePattern += "/**"
+		}
+		uniqueExcludePatterns.Add(excludePattern)
 	}
-	return patterns
+	return uniqueExcludePatterns.ToSlice()
 }
 
 func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion string, validateSecrets bool) bool {
@@ -477,4 +499,14 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, e
 		return "", err
 	}
 	return scannerTempDir, nil
+}
+
+func UpdateJasScannerWithExcludePatternsFromProfile(scanner *JasScanner, profile *clientservices.ConfigProfile) {
+	if profile == nil {
+		return
+	}
+	scanner.ScannersExclusions.ContextualAnalysisExcludePatterns = profile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.ExcludePatterns
+	scanner.ScannersExclusions.SastExcludePatterns = profile.Modules[0].ScanConfig.SastScannerConfig.ExcludePatterns
+	scanner.ScannersExclusions.SecretsExcludePatterns = profile.Modules[0].ScanConfig.SecretsScannerConfig.ExcludePatterns
+	scanner.ScannersExclusions.IacExcludePatterns = profile.Modules[0].ScanConfig.IacScannerConfig.ExcludePatterns
 }

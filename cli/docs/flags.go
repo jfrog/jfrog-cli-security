@@ -35,16 +35,18 @@ const (
 )
 
 const (
-	Mvn    = "mvn"
-	Gradle = "gradle"
-	Npm    = "npm"
-	Pnpm   = "pnpm"
-	Yarn   = "yarn"
-	Nuget  = "nuget"
-	Go     = "go"
-	Pip    = "pip"
-	Pipenv = "pipenv"
-	Poetry = "poetry"
+	Mvn       = "mvn"
+	Gradle    = "gradle"
+	Npm       = "npm"
+	Pnpm      = "pnpm"
+	Yarn      = "yarn"
+	Nuget     = "nuget"
+	Go        = "go"
+	Pip       = "pip"
+	Pipenv    = "pipenv"
+	Poetry    = "poetry"
+	Swift     = "swift"
+	Cocoapods = "cocoapods"
 )
 
 const (
@@ -159,7 +161,7 @@ var commandFlags = map[string][]string{
 	Audit: {
 		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
-		Pnpm, Yarn, Go, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
+		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
 	},
 	GitAudit: {
@@ -267,6 +269,8 @@ var flagsMap = map[string]components.Flag{
 	Pipenv:       components.NewBoolFlag(Pipenv, "Set to true to request audit for a Pipenv project."),
 	Poetry:       components.NewBoolFlag(Poetry, "Set to true to request audit for a Poetry project."),
 	Go:           components.NewBoolFlag(Go, "Set to true to request audit for a Go project."),
+	Swift:        components.NewBoolFlag(Swift, "Set to true to request audit for a Swift project."),
+	Cocoapods:    components.NewBoolFlag(Cocoapods, "Set to true to request audit for a Cocoapods project."),
 	DepType:      components.NewStringFlag(DepType, "[npm] Defines npm dependencies type. Possible values are: all, devOnly and prodOnly."),
 	MaxTreeDepth: components.NewStringFlag(MaxTreeDepth, "[pnpm] Max depth of the generated dependencies tree for SCA scan.", components.WithStrDefaultValue("Infinity")),
 	ThirdPartyContextualAnalysis: components.NewBoolFlag(

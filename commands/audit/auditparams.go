@@ -7,7 +7,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
@@ -22,7 +21,6 @@ type AuditParams struct {
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
 	threads                     int
-	configProfile               *xscservices.ConfigProfile
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Diff mode, scan only the files affected by the diff.
@@ -113,11 +111,6 @@ func (params *AuditParams) SetThreads(threads int) *AuditParams {
 
 func (params *AuditParams) SetResultsContext(resultsContext results.ResultContext) *AuditParams {
 	params.resultsContext = resultsContext
-	return params
-}
-
-func (params *AuditParams) SetConfigProfile(configProfile *xscservices.ConfigProfile) *AuditParams {
-	params.configProfile = configProfile
 	return params
 }
 
