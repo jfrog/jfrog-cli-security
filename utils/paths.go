@@ -89,7 +89,7 @@ func GetRelativePath(fullPathWd, baseWd string) string {
 // Calculate the common parent directory of the given paths.
 // Examples:
 //  1. [dir/dir, dir/directory] -> dir
-//  2. [dir, directory] -> ""
+//  2. [dir, directory] -> "."
 //  3. [dir/dir2, dir/dir2/dir3, dir/dir2/dir3/dir4] -> dir/dir2
 func GetCommonParentDir(paths ...string) string {
 	if len(paths) == 0 {
