@@ -235,15 +235,6 @@ func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
 	return
 }
 
-func (r *SecurityCommandResults) GetTargetResults(target string) *TargetResults {
-	for _, scan := range r.Targets {
-		if scan.Target == target {
-			return scan
-		}
-	}
-	return nil
-}
-
 func (r *SecurityCommandResults) GetCommonParentPath() string {
 	return utils.GetCommonParentDir(r.GetTargetsPaths()...)
 }

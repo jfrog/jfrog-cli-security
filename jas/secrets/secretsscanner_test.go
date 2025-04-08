@@ -5,12 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/stretchr/testify/require"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +29,26 @@ func TestNewSecretsScanManager(t *testing.T) {
 	assert.NotEmpty(t, secretScanManager.configFileName)
 	assert.NotEmpty(t, secretScanManager.resultsFileName)
 	assert.Equal(t, &jas.FakeServerDetails, secretScanManager.scanner.ServerDetails)
+
+	assert.Empty(t, secretScanManager.resultsToCompareFileName)
+}
+
+func TestNewSecretsScanManagerWithFilesToCompare(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir :=  coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	require.NoError(t, err)
+	
+	secretScanManager, err := newSecretsScanManager(scanner, SecretsScannerType, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	require.NoError(t, err)
+
+	// Check if path value exists and file is created
+	assert.NotEmpty(t, secretScanManager.resultsToCompareFileName)
+	assert.True(t, fileutils.IsPathExists(secretScanManager.resultsToCompareFileName, false))
 }
 
 func TestSecretsScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
