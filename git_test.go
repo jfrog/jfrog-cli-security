@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"path/filepath"
 	"testing"
 
@@ -86,14 +87,10 @@ func TestGitAuditSimpleJson(t *testing.T) {
 	)
 }
 
-// TODO eran fix this flaky test - remove Ubuntu restriction in local
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
-	/*
-		if !coreutils.IsLinux() {
-			t.Skip("Skipping test. This test only runs on Linux to avoid flaky tests when running in parallel tests.")
-		}
-
-	*/
+	if !coreutils.IsLinux() {
+		t.Skip("Skipping test. This test only runs on Linux to avoid flaky tests when running in parallel tests.")
+	}
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
