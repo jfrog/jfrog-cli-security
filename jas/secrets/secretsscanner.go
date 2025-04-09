@@ -19,8 +19,9 @@ const (
 	secretsScanCommand   = "sec"
 	secretsDocsUrlSuffix = "secrets"
 
-	SecretsScannerType           SecretsScanType = "secrets-scan"        // #nosec
-	SecretsScannerDockerScanType SecretsScanType = "secrets-docker-scan" // #nosec
+	SecretsScannerType            SecretsScanType = "secrets-scan"         // #nosec
+	SecretsScannerDockerScanType  SecretsScanType = "secrets-docker-scan"  // #nosec
+	SecretsScannerGenericScanType SecretsScanType = "secrets-generic-scan" // #nosec
 )
 
 type SecretsScanType string

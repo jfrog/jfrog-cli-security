@@ -70,9 +70,8 @@ type ScanCommand struct {
 	bypassArchiveLimits bool
 	fixableOnly         bool
 	progress            ioUtils.ProgressMgr
-	// JAS is only supported for Docker images.
-	commandSupportsJAS bool
-	targetNameOverride string
+	forceJasDockerScan  bool
+	targetNameOverride  string
 
 	resultsContext results.ResultContext
 
@@ -97,8 +96,8 @@ func (scanCmd *ScanCommand) SetFixableOnly(fixable bool) *ScanCommand {
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetRunJasScans(run bool) *ScanCommand {
-	scanCmd.commandSupportsJAS = run
+func (scanCmd *ScanCommand) SetRunJasDockerScanOverride(run bool) *ScanCommand {
+	scanCmd.forceJasDockerScan = run
 	return scanCmd
 }
 
@@ -343,7 +342,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	cmdResults.SetStartTime(scanCmd.startTime)
 	cmdResults.SetResultsContext(scanCmd.resultsContext)
 	// Send entitlement request
-	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion, scanCmd.commandSupportsJAS); err != nil {
+	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
@@ -354,11 +353,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	return
 }
 
-func isEntitledForJas(xrayManager *xrayClient.XrayServicesManager, xrayVersion string, useJas bool) (bool, error) {
-	if !useJas {
-		// No jas scans are needed
-		return false, nil
-	}
+func isEntitledForJas(xrayManager *xrayClient.XrayServicesManager, xrayVersion string) (bool, error) {
 	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }
 
@@ -470,6 +465,18 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if !cmdResults.EntitledForJas {
 					return
 				}
+
+				// Determine what type of scan to perform using jas_binary
+				componentType := strings.Split(graph.Id, ":")[0]
+				if scanCmd.forceJasDockerScan || componentType == "docker" {
+					log.Debug("Found root component is a docker container")
+					cmdResults.JasPackageScanType = "docker"
+				} else {
+					log.Debug("Found root component is not a docker container, type is: ", componentType)
+					cmdResults.JasPackageScanType = "generic"
+
+				}
+
 				module, err := getJasModule(targetResults)
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
@@ -493,13 +500,17 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					log.Debug("Jas scanner was not created, skipping advance security scans...")
 					return
 				}
+				secretsScanType := secrets.SecretsScannerGenericScanType
+				if cmdResults.JasPackageScanType == "docker" {
+					secretsScanType = secrets.SecretsScannerDockerScanType
+				}
 				jasParams := runner.JasRunnerParams{
 					Runner:             jasFileProducerConsumer,
 					ServerDetails:      scanCmd.serverDetails,
 					Scanner:            scanner,
 					Module:             module,
 					ScansToPerform:     utils.GetAllSupportedScans(),
-					SecretsScanType:    secrets.SecretsScannerDockerScanType,
+					SecretsScanType:    secretsScanType,
 					DirectDependencies: directDepsListFromVulnerabilities(*graphScanResults),
 					ApplicableScanType: applicability.ApplicabilityDockerScanScanType,
 					ScanResults:        targetResults,
