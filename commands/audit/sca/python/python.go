@@ -91,11 +91,6 @@ func getDependencies(params utils.AuditParams, technology techutils.Technology) 
 		return
 	}
 
-	// TODO Walkme log
-	log.Debug(fmt.Sprintf("WALKME LOG #5: detected technology: %s", technology))
-	log.Debug(fmt.Sprintf("WALKME LOG #6: value of skipAutoInstall in auditParams in dep-tree-construction: %t", params.SkipAutoInstall()))
-	log.Debug(fmt.Sprintf("WALKME LOG #7: should enter installation process? (technology == techutils.Pipenv || !params.SkipAutoInstall()): %t", technology == techutils.Pipenv || !params.SkipAutoInstall()))
-	// TODO Walme log end
 	pythonTool := pythonutils.PythonTool(technology)
 	if technology == techutils.Pipenv || !params.SkipAutoInstall() {
 		var restoreEnv func() error
