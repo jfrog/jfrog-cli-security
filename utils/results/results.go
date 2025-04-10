@@ -235,6 +235,10 @@ func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
 	return
 }
 
+func (r *SecurityCommandResults) GetCommonParentPath() string {
+	return utils.GetCommonParentDir(r.GetTargetsPaths()...)
+}
+
 func (r *SecurityCommandResults) GetScaScansXrayResults() (results []services.ScanResponse) {
 	for _, scan := range r.Targets {
 		results = append(results, scan.GetScaScansXrayResults()...)
