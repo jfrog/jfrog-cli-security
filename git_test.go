@@ -1,13 +1,13 @@
 package main
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
@@ -105,7 +105,7 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
-		xrayVersion, xscVersion, "",
+		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
