@@ -2,8 +2,6 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.23.7
 
-toolchain go1.24.2
-
 require (
 	github.com/beevik/etree v1.4.0
 	github.com/go-git/go-git/v5 v5.14.0
