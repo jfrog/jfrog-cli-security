@@ -317,7 +317,12 @@ func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, appl
 func convertCves(cves []services.Cve) []formats.CveRow {
 	var cveRows []formats.CveRow
 	for _, cveObj := range cves {
-		cveRows = append(cveRows, formats.CveRow{Id: cveObj.Id, CvssV2: cveObj.CvssV2Score, CvssV3: cveObj.CvssV3Score})
+		cveRows = append(cveRows, formats.CveRow{
+			Id: cveObj.Id,
+			CvssV2: cveObj.CvssV2Score,
+			CvssV3: cveObj.CvssV3Score,
+			Cwe:    cveObj.Cwe,
+		})
 	}
 	return cveRows
 }

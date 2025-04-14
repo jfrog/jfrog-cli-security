@@ -140,6 +140,7 @@ type CveRow struct {
 	Id            string         `json:"id"`
 	CvssV2        string         `json:"cvssV2"`
 	CvssV3        string         `json:"cvssV3"`
+	Cwe		      []string       `json:"cwe,omitempty"`
 	Applicability *Applicability `json:"applicability,omitempty"`
 }
 
