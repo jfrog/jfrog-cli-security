@@ -50,17 +50,17 @@ func TestGetCommonParentDir(t *testing.T) {
 	}{
 		{
 			name:     "common parent dir",
-			dirs:     []string{"dir1/dir2/dir3", "dir1/dir2/dir4"},
-			expected: "dir1/dir2",
+			dirs:     []string{filepath.Join("dir1", "dir2", "dir3"), filepath.Join("dir1", "dir2", "dir4")},
+			expected: filepath.Join("dir1", "dir2"),
 		},
 		{
 			name:     "multi sub common parent dir",
-			dirs:     []string{"dir1/dir2/dir3", "dir1/dir2/dir4", "dir1/dir5"},
+			dirs:     []string{filepath.Join("dir1", "dir2", "dir3"), filepath.Join("dir1", "dir2", "dir4"), filepath.Join("dir1", "dir5")},
 			expected: "dir1",
 		},
 		{
 			name:     "no common parent dir",
-			dirs:     []string{"dir1/dir2/dir3", "dir4/dir5"},
+			dirs:     []string{filepath.Join("dir1", "dir2", "dir3"), filepath.Join("dir1", "dir2", "dir4"), filepath.Join("dir4", "dir5")},
 			expected: ".",
 		},
 		{
