@@ -1,6 +1,9 @@
 package utils
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestGetRelativePath(t *testing.T) {
 	tests := []struct {
@@ -11,21 +14,21 @@ func TestGetRelativePath(t *testing.T) {
 	}{
 		{
 			name:     "relative path",
-			basePath: "dir1/dir2",
-			target:   "dir1/dir2/dir3",
+			basePath: filepath.Join("dir1", "dir2"),
+			target:   filepath.Join("dir1", "dir2", "dir3"),
 			expected: "dir3",
 		},
 		{
 			name:     "absolute path",
-			basePath: "/home/user/dir1/dir2",
-			target:   "/home/user/dir1/dir2/dir3",
+			basePath: filepath.Join("home", "user", "dir1", "dir2"),
+			target:   filepath.Join("home", "user", "dir1", "dir2", "dir3"),
 			expected: "dir3",
 		},
 		{
 			name:     "no common base path",
-			basePath: "dir1/dir2",
-			target:   "dir3/dir4",
-			expected: "dir3/dir4",
+			basePath: filepath.Join("dir1", "dir2"),
+			target:   filepath.Join("dir3", "dir4"),
+			expected: filepath.Join("dir3", "dir4"),
 		},
 	}
 
