@@ -138,11 +138,11 @@ type ComponentRow struct {
 
 type CveRow struct {
 	Id            string         `json:"id"`
-	CvssV2        string         `json:"cvssV2"`
-	CvssV2Vector  string         `json:"cvssV2Vector"`
-	CvssV3        string         `json:"cvssV3"`
-	CvssV3Vector  string         `json:"cvssV3Vector"`
-	Cwe		      []string       `json:"cwe,omitempty"`
+	CvssV2        string         `json:"cvssV2,omitempty"`
+	CvssV2Vector  string         `json:"cvssV2Vector,omitempty"`
+	CvssV3        string         `json:"cvssV3,omitempty"`
+	CvssV3Vector  string         `json:"cvssV3Vector,omitempty"`
+	Cwe           []string       `json:"cwe,omitempty"`
 	Applicability *Applicability `json:"applicability,omitempty"`
 }
 
