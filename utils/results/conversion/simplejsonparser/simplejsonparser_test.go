@@ -21,7 +21,7 @@ var (
 			IssueId:  "XRAY-1",
 			Summary:  "summary-1",
 			Severity: "High",
-			Cves:     []services.Cve{{Id: "CVE-1"}},
+			Cves:     []services.Cve{{Id: "CVE-1", CvssV3Score: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 			Components: map[string]services.Component{
 				"component-A": {
 					ImpactPaths: [][]services.ImpactPathNode{{
@@ -41,7 +41,7 @@ var (
 			IssueId:  "XRAY-2",
 			Summary:  "summary-2",
 			Severity: "Low",
-			Cves:     []services.Cve{{Id: "CVE-2"}},
+			Cves:     []services.Cve{{Id: "CVE-2", CvssV2Score: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P"}},
 			Components: map[string]services.Component{
 				"component-B": {
 					ImpactPaths: [][]services.ImpactPathNode{{
@@ -59,7 +59,7 @@ var (
 			Severity:      "High",
 			WatchName:     "watch-name",
 			ViolationType: "security",
-			Cves:          []services.Cve{{Id: "CVE-1"}},
+			Cves:          []services.Cve{{Id: "CVE-1", CvssV3Score: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 			Components: map[string]services.Component{
 				"component-A": {
 					ImpactPaths: [][]services.ImpactPathNode{{
@@ -81,7 +81,7 @@ var (
 			Severity:      "Low",
 			WatchName:     "watch-name",
 			ViolationType: "security",
-			Cves:          []services.Cve{{Id: "CVE-2"}},
+			Cves:          []services.Cve{{Id: "CVE-2", CvssV2Score: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P"}},
 			Components: map[string]services.Component{
 				"component-B": {
 					ImpactPaths: [][]services.ImpactPathNode{{
@@ -287,7 +287,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
-					Cves:    []formats.CveRow{{Id: "CVE-1"}},
+					Cves:    []formats.CveRow{{Id: "CVE-1", CvssV3: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-A",
@@ -302,7 +302,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
-					Cves:    []formats.CveRow{{Id: "CVE-1"}},
+					Cves:    []formats.CveRow{{Id: "CVE-1", CvssV3: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-B",
@@ -317,7 +317,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 				{
 					Summary: "summary-2",
 					IssueId: "XRAY-2",
-					Cves:    []formats.CveRow{{Id: "CVE-2"}},
+					Cves:    []formats.CveRow{{Id: "CVE-2", CvssV2: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
@@ -351,7 +351,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
+					Cves: []formats.CveRow{{
+						Id:            "CVE-1",
+						CvssV3:        "5.3",
+						CvssV3Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+						Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}},
+					},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
@@ -367,7 +372,12 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
+					Cves: []formats.CveRow{{
+						Id:            "CVE-1",
+						CvssV3:        "5.3",
+						CvssV3Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+						Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}},
+					},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-B",
@@ -384,7 +394,9 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 					IssueId:    "XRAY-2",
 					Applicable: jasutils.Applicable.String(),
 					Cves: []formats.CveRow{{
-						Id: "CVE-2",
+						Id:           "CVE-2",
+						CvssV2:       "5.0",
+						CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P",
 						Applicability: &formats.Applicability{
 							ScannerDescription: "rule-msg",
 							Status:             jasutils.Applicable.String(),
@@ -441,7 +453,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
-					Cves:    []formats.CveRow{{Id: "CVE-1"}},
+					Cves:    []formats.CveRow{{Id: "CVE-1", CvssV3: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-A",
@@ -459,7 +471,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					Summary: "summary-1",
 					IssueId: "XRAY-1",
-					Cves:    []formats.CveRow{{Id: "CVE-1"}},
+					Cves:    []formats.CveRow{{Id: "CVE-1", CvssV3: "5.3", CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 18},
 						ImpactedDependencyName: "component-B",
@@ -477,7 +489,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 				{
 					Summary: "summary-2",
 					IssueId: "XRAY-2",
-					Cves:    []formats.CveRow{{Id: "CVE-2"}},
+					Cves:    []formats.CveRow{{Id: "CVE-2", CvssV2: "5.0", CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P"}},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 						ImpactedDependencyName: "component-B",
@@ -529,7 +541,12 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
+					Cves: []formats.CveRow{{
+						Id:            "CVE-1",
+						CvssV3:        "5.3",
+						CvssV3Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+						Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}},
+					},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-A",
@@ -548,7 +565,12 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					Summary:    "summary-1",
 					IssueId:    "XRAY-1",
 					Applicable: jasutils.NotApplicable.String(),
-					Cves:       []formats.CveRow{{Id: "CVE-1", Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}}},
+					Cves: []formats.CveRow{{
+						Id:            "CVE-1",
+						CvssV3:        "5.3",
+						CvssV3Vector:  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+						Applicability: &formats.Applicability{ScannerDescription: "rule-msg", Status: jasutils.NotApplicable.String()}},
+					},
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 						SeverityDetails:        formats.SeverityDetails{Severity: "High", SeverityNumValue: 4},
 						ImpactedDependencyName: "component-B",
@@ -568,7 +590,9 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 					IssueId:    "XRAY-2",
 					Applicable: jasutils.Applicable.String(),
 					Cves: []formats.CveRow{{
-						Id: "CVE-2",
+						Id:           "CVE-2",
+						CvssV2:       "5.0",
+						CvssV2Vector: "CVSS:2.0/AV:N/AC:L/Au:N/C:N/I:N/A:P",
 						Applicability: &formats.Applicability{
 							ScannerDescription: "rule-msg",
 							Status:             jasutils.Applicable.String(),
