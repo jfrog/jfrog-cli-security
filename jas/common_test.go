@@ -540,3 +540,58 @@ func TestGetDiffScanTypeValue(t *testing.T) {
 		})
 	}
 }
+
+func TestGetResultsToCompare(t *testing.T) {
+	testCases := []struct {
+		name             string
+		target           string
+		ResultsToCompare *results.SecurityCommandResults
+		expectedTarget   *results.TargetResults
+	}{
+		{
+			name:             "No results to compare",
+			target:           filepath.Join("path", "to", "target"),
+			ResultsToCompare: results.NewCommandResults(utils.SourceCode),
+			expectedTarget:   nil,
+		},
+		{
+			name:   "Results to compare - target not found",
+			target: filepath.Join("path", "to", "target"),
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "another", "target")}},
+				},
+			},
+			expectedTarget: nil,
+		},
+		{
+			name:   "Results to compare - same path",
+			target: filepath.Join("path", "to", "target"),
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target")}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target2")}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target")}},
+		},
+		{
+			name:   "Results to compare - match relative path",
+			target: "target2",
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target")}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompare(testCase.target))
+		})
+	}
+}

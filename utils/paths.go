@@ -96,8 +96,10 @@ func GetCommonParentDir(paths ...string) string {
 		return ""
 	}
 	commonParent := paths[0]
-	for _, path := range paths[1:] {
-		commonParent = getCommonParentDir(commonParent, path)
+	if len(paths) > 1 {
+		for _, path := range paths[1:] {
+			commonParent = getCommonParentDir(commonParent, path)
+		}
 	}
 	return commonParent
 }
