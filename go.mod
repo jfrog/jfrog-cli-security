@@ -115,7 +115,7 @@ require (
 
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20250415110536-056853bb1c41
 
-// replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 

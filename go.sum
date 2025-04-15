@@ -60,6 +60,8 @@ github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
+github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13 h1:mta57UAFokIBgByACCaMzOnOmCdVIY+Cj0zBEUooiT0=
+github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13/go.mod h1:LjHhIAxph7sSy0r9cM41C9fmmywUasgl6DoFyZ52yH8=
 github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=
 github.com/fatih/color v1.16.0/go.mod h1:fL2Sau1YI5c0pdGEVCbKQbLXB6edEj1ZgiY4NijnWvE=
 github.com/forPelevin/gomoji v1.3.0 h1:WPIOLWB1bvRYlKZnSSEevLt3IfKlLs+tK+YA9fFYlkE=
@@ -130,8 +132,6 @@ github.com/jfrog/gofrog v1.7.6 h1:QmfAiRzVyaI7JYGsB7cxfAJePAZTzFz0gRWZSE27c6s=
 github.com/jfrog/gofrog v1.7.6/go.mod h1:ntr1txqNOZtHplmaNd7rS4f8jpA5Apx8em70oYEe7+4=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
-github.com/jfrog/jfrog-cli-artifactory v0.2.3 h1:Bp6Ga+09JJOsD/738Hp1UyUoLW8BuIgHS849yY2yJQU=
-github.com/jfrog/jfrog-cli-artifactory v0.2.3/go.mod h1:TuRrkv/a/JJCUycuA5O84MaiG8P9T64xFw63mxhX6Sc=
 github.com/jfrog/jfrog-client-go v1.52.0 h1:MCmHviUqj3X7iqyOokTkyvV5yBWFwZYDPVXYikl4nf0=
 github.com/jfrog/jfrog-client-go v1.52.0/go.mod h1:uRmT8Q1SJymIzId01v0W1o8mGqrRfrwUF53CgEMsH0U=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
