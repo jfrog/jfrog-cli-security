@@ -8,7 +8,7 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.10.10
-	github.com/jfrog/froggit-go v1.17.0
+	github.com/jfrog/froggit-go v1.16.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.2.3
