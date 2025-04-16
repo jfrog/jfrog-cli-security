@@ -8,11 +8,11 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.10.10
-	github.com/jfrog/froggit-go v1.16.2
+	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.2.3
-	github.com/jfrog/jfrog-cli-core/v2 v2.58.3
+	github.com/jfrog/jfrog-cli-artifactory v0.2.4
+	github.com/jfrog/jfrog-cli-core/v2 v2.58.4
 	github.com/jfrog/jfrog-client-go v1.52.0
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
@@ -113,9 +113,9 @@ require (
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20250415110536-056853bb1c41
+// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13
+// replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 

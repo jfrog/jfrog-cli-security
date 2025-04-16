@@ -6,8 +6,6 @@ github.com/BurntSushi/toml v1.4.0 h1:kuoIxZQy2WRRk1pttg9asf+WVv6tWQuBNVmK8+nqPr0
 github.com/BurntSushi/toml v1.4.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/CycloneDX/cyclonedx-go v0.9.2 h1:688QHn2X/5nRezKe2ueIVCt+NRqf7fl3AVQk+vaFcIo=
 github.com/CycloneDX/cyclonedx-go v0.9.2/go.mod h1:vcK6pKgO1WanCdd61qx4bFnSsDJQ6SbM2ZuMIgq86Jg=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20250415110536-056853bb1c41 h1:x8amIZD6WRbgAcNdasse2oUPV5xFRla4mtwGgYDw4fs=
-github.com/EyalDelarea/jfrog-cli-core/v2 v2.0.0-20250415110536-056853bb1c41/go.mod h1:JbLdMCWL0xVZZ0FY7jd+iTi/gKYqRmRpeLBhAFtldfQ=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
@@ -60,8 +58,6 @@ github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
-github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13 h1:mta57UAFokIBgByACCaMzOnOmCdVIY+Cj0zBEUooiT0=
-github.com/eyalDelarea/jfrog-cli-artifactory v0.0.0-20250415113448-586802e43b13/go.mod h1:LjHhIAxph7sSy0r9cM41C9fmmywUasgl6DoFyZ52yH8=
 github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=
 github.com/fatih/color v1.16.0/go.mod h1:fL2Sau1YI5c0pdGEVCbKQbLXB6edEj1ZgiY4NijnWvE=
 github.com/forPelevin/gomoji v1.3.0 h1:WPIOLWB1bvRYlKZnSSEevLt3IfKlLs+tK+YA9fFYlkE=
@@ -126,12 +122,16 @@ github.com/jfrog/archiver/v3 v3.6.1 h1:LOxnkw9pOn45DzCbZNFV6K0+6dCsQ0L8mR3ZcujO5
 github.com/jfrog/archiver/v3 v3.6.1/go.mod h1:VgR+3WZS4N+i9FaDwLZbq+jeU4B4zctXL+gL4EMzfLw=
 github.com/jfrog/build-info-go v1.10.10 h1:2nOFjV7SX1uisi2rQK7fb4Evm7YkSOdmssrm6Tf4ipc=
 github.com/jfrog/build-info-go v1.10.10/go.mod h1:JcISnovFXKx3wWf3p1fcMmlPdt6adxScXvoJN4WXqIE=
-github.com/jfrog/froggit-go v1.16.2 h1:F//S83iXH14qsCwYzv0zB2JtjS2pJVEsUoEmYA+37dQ=
-github.com/jfrog/froggit-go v1.16.2/go.mod h1:5VpdQfAcbuyFl9x/x8HGm7kVk719kEtW/8YJFvKcHPA=
+github.com/jfrog/froggit-go v1.17.0 h1:20Ie787WO27SwB2MOHDvsR6yN7fA5WfRnuAbmUqz1Zs=
+github.com/jfrog/froggit-go v1.17.0/go.mod h1:HvDkfFfJwIdsXFdqaB+utvD2cLDRmaC3kF8otYb6Chw=
 github.com/jfrog/gofrog v1.7.6 h1:QmfAiRzVyaI7JYGsB7cxfAJePAZTzFz0gRWZSE27c6s=
 github.com/jfrog/gofrog v1.7.6/go.mod h1:ntr1txqNOZtHplmaNd7rS4f8jpA5Apx8em70oYEe7+4=
 github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYLipdsOFMY=
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
+github.com/jfrog/jfrog-cli-artifactory v0.2.4 h1:n/BlqkH20jW8T1JPr/QHw+D+wsPZsDU0Qq/+eSGzgAg=
+github.com/jfrog/jfrog-cli-artifactory v0.2.4/go.mod h1:tXlrvTtG4l0dPdKFG7nlteuSv7vggF/OVwsq44sgVgA=
+github.com/jfrog/jfrog-cli-core/v2 v2.58.4 h1:ywpq2UMOPtp9WcELR54HSJJS0PSgin9plM4If9sDks0=
+github.com/jfrog/jfrog-cli-core/v2 v2.58.4/go.mod h1:JbLdMCWL0xVZZ0FY7jd+iTi/gKYqRmRpeLBhAFtldfQ=
 github.com/jfrog/jfrog-client-go v1.52.0 h1:MCmHviUqj3X7iqyOokTkyvV5yBWFwZYDPVXYikl4nf0=
 github.com/jfrog/jfrog-client-go v1.52.0/go.mod h1:uRmT8Q1SJymIzId01v0W1o8mGqrRfrwUF53CgEMsH0U=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
