@@ -33,6 +33,13 @@ const (
 	TestMoreInfoUrl = "https://test-more-info-url.jfrog.io/"
 
 	TestConfigProfileName = "default-profile"
+
+	VersionApi        = "version"
+	EntitlementsApi   = "entitlements"
+	GraphScanPostAPI  = "graphScan_post"
+	GraphScanGetAPI   = "graphScan_get"
+	ConfigProfileAPI  = "config_profile"
+	WatchResourcesAPI = "watch_resources"
 )
 
 var (
@@ -81,18 +88,19 @@ type MockServerParams struct {
 	ReturnMsi string
 	// Xsc/Watch/Resource Api
 	ReturnMockPlatformWatches xrayutils.ResourcesWatchesBody
+	ApiCallCounts             map[string]int
 }
 
 // Mock Only Xsc server API (backward compatible)
 func XscServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
 	if !xscutils.IsXscXrayInnerService(params.XrayVersion) {
-		serverMock, serverDetails, _ := CreateXscRestsMockServer(t, getXscServerApiHandler(t, params))
+		serverMock, serverDetails, _ := CreateXscRestsMockServer(t, getXscServerApiHandler(t, &params))
 		return serverMock, serverDetails
 	}
-	return XrayServer(t, params)
+	return XrayServer(t, &params)
 }
 
-func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.ResponseWriter, r *http.Request) {
+func getXscServerApiHandler(t *testing.T, params *MockServerParams) func(w http.ResponseWriter, r *http.Request) {
 	apiUrlPart := "api/v1/"
 	var isXrayAfterXscMigration bool
 	if isXrayAfterXscMigration = xscutils.IsXscXrayInnerService(params.XrayVersion); isXrayAfterXscMigration {
@@ -142,9 +150,10 @@ func getXscServerApiHandler(t *testing.T, params MockServerParams) func(w http.R
 }
 
 // Mock Xray server (with Xsc inner service if supported based on version - not backward compatible to XSC API)
-func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *config.ServerDetails) {
+func XrayServer(t *testing.T, params *MockServerParams) (*httptest.Server, *config.ServerDetails) {
 	serverMock, serverDetails := CreateXrayRestsMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI == fmt.Sprintf(versionApiUrl, "api/v1/", "xray") {
+			params.ApiCallCounts[VersionApi]++
 			_, err := w.Write([]byte(fmt.Sprintf(`{"xray_version": "%s", "xray_revision": "xxx"}`, params.XrayVersion)))
 			if !assert.NoError(t, err) {
 				return
@@ -152,6 +161,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		}
 		if r.RequestURI == "/xray/api/v1/entitlements/feature/contextual_analysis" {
 			if r.Method == http.MethodGet {
+				params.ApiCallCounts[EntitlementsApi]++
 				w.WriteHeader(http.StatusOK)
 				_, err := w.Write([]byte(`{"entitled": true, "feature_id": "contextual_analysis"}`))
 				if !assert.NoError(t, err) {
@@ -162,6 +172,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		// Scan graph with Xray or Xsc
 		if strings.Contains(r.RequestURI, "/scan/graph") {
 			if r.Method == http.MethodPost {
+				params.ApiCallCounts[GraphScanPostAPI]++
 				w.WriteHeader(http.StatusCreated)
 				_, err := w.Write([]byte(fmt.Sprintf(`{"scan_id" : "%s"}`, TestScaScanId)))
 				if !assert.NoError(t, err) {
@@ -169,6 +180,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 				}
 			}
 			if r.Method == http.MethodGet {
+				params.ApiCallCounts[GraphScanGetAPI]++
 				w.WriteHeader(http.StatusOK)
 				content, err := os.ReadFile("../../tests/testdata/other/graphScanResults/graphScanResult.txt")
 				if !assert.NoError(t, err) {
@@ -183,6 +195,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 
 		isXrayAfterXscMigration := xscutils.IsXscXrayInnerService(params.XrayVersion)
 		if strings.Contains(r.RequestURI, "/xsc/profile_repos") && isXrayAfterXscMigration {
+			params.ApiCallCounts[ConfigProfileAPI]++
 			assert.Equal(t, http.MethodPost, r.Method)
 			w.WriteHeader(http.StatusOK)
 			content, err := os.ReadFile("../../tests/testdata/other/configProfile/configProfileExample.json")
@@ -200,6 +213,7 @@ func XrayServer(t *testing.T, params MockServerParams) (*httptest.Server, *confi
 		}
 		// Get defined active watches only supported after xsc was inner service
 		if strings.Contains(r.RequestURI, "/api/v1/xsc/watches/resource") {
+			params.ApiCallCounts[WatchResourcesAPI]++
 			if r.Method == http.MethodGet {
 				w.WriteHeader(http.StatusOK)
 				content, err := utils.GetAsJsonBytes(params.ReturnMockPlatformWatches, false, false)

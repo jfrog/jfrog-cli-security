@@ -60,17 +60,17 @@ func TestGetConfigProfileByName(t *testing.T) {
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string
-		mockParams  validations.MockServerParams
+		mockParams  *validations.MockServerParams
 		expectError bool
 	}{
 		{
 			name:        "Xray version too low - error expected",
-			mockParams:  validations.MockServerParams{XrayVersion: "3.108.0"},
+			mockParams:  &validations.MockServerParams{XrayVersion: "3.108.0"},
 			expectError: true,
 		},
 		{
 			name:       "Valid request",
-			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion},
+			mockParams: &validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
 		},
 	}
 

@@ -46,7 +46,7 @@ func TestJasRunner(t *testing.T) {
 	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}, targetResults.GetTechnologies()...)))
 	assert.NoError(t, err)
 
-	targetResults.NewScaScanResults(0, results.Sbom{}, jas.FakeBasicXrayResults[0])
+	targetResults.NewScaScanResults(0, jas.FakeBasicXrayResults[0])
 	testParams := JasRunnerParams{
 		Runner:             securityParallelRunnerForTest,
 		Scanner:            jasScanner,

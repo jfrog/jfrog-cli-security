@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
-	"strings"
-
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -89,15 +87,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			log.Warn(fmt.Sprintf("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan in '%s'...", targetResult.Target))
 			continue
 		}
-		if partialScan, filterDescriptors := getTargetDescriptorsToScan(targetResult.ScaResults, auditParams.filesToScan); partialScan {
-			// Diff mode, scan only the files affected by the diff. (for now: scan all if one change occur or nothing if no related changes)
-			if len(filterDescriptors) == 0 {
-				log.Info(fmt.Sprintf("No changed descriptors found for %s. Skipping SCA scan...", targetResult.Target))
-				continue
-			} else {
-				log.Info(fmt.Sprintf("Partial SCA scan will be performed on the following descriptors: %v", filterDescriptors))
-			}
-		}
 		// Get the dependency tree for the technology in the working directory.
 		treeResult, bdtErr := buildDependencyTree(targetResult, auditParams)
 		if bdtErr != nil {
@@ -109,9 +98,25 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
+		if auditParams.diffMode {
+			var ddtErr error
+			if auditParams.resultsToCompare != nil {
+				treeResult, ddtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult)
+				if ddtErr != nil {
+					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree: %s", ddtErr.Error()), auditParams.AllowPartialResults())
+					continue
+				}
+			} else {
+				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s in source branch, skipping scan part",
+					targetResult.Target))
+				continue
+			}
+		}
+		if err := logDeps(treeResult.FlatTree); err != nil {
+			log.Warn("Failed to log dependencies tree: " + err.Error())
+		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		// defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
@@ -121,23 +126,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 	}
 	return
-}
-
-// Find if the given sca descriptors matches some of the files to scan
-func getTargetDescriptorsToScan(scaResults *results.ScaScanResults, filesToScan []string) (bool, []string) {
-	if len(filesToScan) == 0 {
-		return false, scaResults.Descriptors
-	}
-	filteredDescriptors := datastructures.MakeSet[string]()
-	for _, fileToScan := range filesToScan {
-		for _, descriptor := range scaResults.Descriptors {
-			if strings.HasSuffix(descriptor, fileToScan) {
-				filteredDescriptors.Add(descriptor)
-			}
-		}
-	}
-	return true, filteredDescriptors.ToSlice()
-
 }
 
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
@@ -160,7 +148,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), results.DepTreeToSbom(treeResult.FullDepTrees), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {
@@ -307,7 +295,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 		depTreeResult.FlatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
-	depTreeResult.FlatTree, err = createFlatTree(uniqueDeps)
+	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
 	return
 }
 
@@ -359,9 +347,6 @@ func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techu
 }
 
 func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
-	if err := logDeps(uniqueDeps); err != nil {
-		return nil, err
-	}
 	var uniqueNodes []*xrayCmdUtils.GraphNode
 	for uniqueDep, nodeAttr := range uniqueDeps {
 		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
@@ -374,23 +359,28 @@ func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdU
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
 }
 
-func createFlatTree(uniqueDeps []string) (*xrayCmdUtils.GraphNode, error) {
-	if err := logDeps(uniqueDeps); err != nil {
-		return nil, err
-	}
+func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
 	uniqueNodes := []*xrayCmdUtils.GraphNode{}
 	for _, uniqueDep := range uniqueDeps {
 		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
-func logDeps(uniqueDeps any) (err error) {
+func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
+	var uniqueNodes []string
+	for _, node := range flatTree.Nodes {
+		uniqueNodes = append(uniqueNodes, node.Id)
+	}
+	return uniqueNodes
+}
+
+func logDeps(flatTree *xrayCmdUtils.GraphNode) (err error) {
 	if log.GetLogger().GetLogLevel() != log.DEBUG {
 		// Avoid printing and marshaling if not on DEBUG mode.
 		return
 	}
-	jsonList, err := json.Marshal(uniqueDeps)
+	jsonList, err := json.Marshal(flatTreeToStringList(flatTree))
 	if errorutils.CheckError(err) != nil {
 		return err
 	}
@@ -415,6 +405,7 @@ func buildDependencyTree(scan *results.TargetResults, params *AuditParams) (*Dep
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
+	scan.SetSbom(results.DepTreeToSbom(treeResult.FullDepTrees))
 	return &treeResult, nil
 }
 
@@ -428,4 +419,31 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+}
+
+func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBranchResults *results.SecurityCommandResults, treeResult *DependencyTreeResult) (*DependencyTreeResult, error) {
+	targetSbom := targetBranchResult.Sbom
+	var sourceSbom results.Sbom
+	if sbr := sourceBranchResults.GetTargetResults(targetBranchResult.Target); sbr != nil {
+		sourceSbom = sbr.Sbom
+	} else {
+		return nil, fmt.Errorf("failed to get source branch results for target: %s", targetBranchResult.Target)
+	}
+	targetDepsMap := datastructures.MakeSet[string]()
+	for _, component := range targetSbom.Components {
+		targetDepsMap.Add(component.ToXrayComponentId())
+	}
+	addedDepsMap := datastructures.MakeSet[string]()
+	for _, component := range sourceSbom.Components {
+		componentId := component.ToXrayComponentId()
+		if exists := targetDepsMap.Exists(componentId); !exists {
+			addedDepsMap.Add(componentId)
+		}
+	}
+	diffDepTree := DependencyTreeResult{
+		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
+		FullDepTrees: treeResult.FullDepTrees,
+	}
+	targetBranchResult.SetSbom(results.DepTreeToSbom([]*xrayCmdUtils.GraphNode{diffDepTree.FlatTree})) // Not sure it's needed
+	return &diffDepTree, nil
 }

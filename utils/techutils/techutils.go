@@ -702,11 +702,11 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Component name: "invalid-comp-id"
 //     Component version: ""
 //     Package type: ""
-func SplitComponentId(componentId string) (string, string, string) {
+func SplitComponentId(componentId string) (string, string, string, string) {
 	compIdParts := strings.Split(componentId, "://")
 	// Invalid component ID
 	if len(compIdParts) != 2 {
-		return componentId, "", ""
+		return componentId, "", "", ""
 	}
 
 	packageType := compIdParts[0]
@@ -715,7 +715,7 @@ func SplitComponentId(componentId string) (string, string, string) {
 	// Generic identifier structure: generic://sha256:<Checksum>/name
 	if packageType == "generic" {
 		lastSlashIndex := strings.LastIndex(packageId, "/")
-		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
+		return packageId[lastSlashIndex+1:], "", packageTypes[packageType], ""
 	}
 
 	var compName, compVersion string
@@ -744,5 +744,5 @@ func SplitComponentId(componentId string) (string, string, string) {
 		compName = packageId
 	}
 
-	return compName, compVersion, packageTypes[packageType]
+	return compName, compVersion, packageTypes[packageType], packageType
 }
