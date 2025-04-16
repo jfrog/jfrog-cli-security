@@ -276,7 +276,7 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	resultsFileName := strings.ToLower(scanType) + "_results_" + curTimeHash + ".json"
 	resultsFileFullPath := filepath.Join(scanResultsOutputDir, resultsFileName)
 	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
-	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); err != nil {
+	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
