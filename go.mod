@@ -2,20 +2,18 @@ module github.com/jfrog/jfrog-cli-security
 
 go 1.23.7
 
-toolchain go1.24.2
-
 require (
 	github.com/beevik/etree v1.4.0
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.10.10
-	github.com/jfrog/froggit-go v1.16.2
+	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.2.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.58.2
-	github.com/jfrog/jfrog-client-go v1.51.1
+	github.com/jfrog/jfrog-cli-artifactory v0.2.4
+	github.com/jfrog/jfrog-cli-core/v2 v2.58.4
+	github.com/jfrog/jfrog-client-go v1.52.0
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.10.0
@@ -113,7 +111,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250406105605-ee90d11546f9
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
