@@ -111,7 +111,7 @@ func calculateUniqueDependencies(nodes map[string]conanRef) []string {
 func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	graphInfo := []string{"info"}
 	if params.PipRequirementsFile() != "" {
-		// We allow passing a name for the descriptor file to be used in the 'graph info' command. If non has provided we execute the command on the current dir.
+		// We allow passing a custom name for the descriptor file to be used in the 'graph info' command. If non has provided we execute the command on the current dir.
 		// Since this ability already exists for python we leverage this ability
 		graphInfo = append(graphInfo, filepath.Join(workingDir, params.PipRequirementsFile()))
 	} else {

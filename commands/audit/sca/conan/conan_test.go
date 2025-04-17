@@ -78,20 +78,6 @@ func TestBuildDependencyTree(t *testing.T) {
 			assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 		})
 	}
-
-	/*
-		dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
-		defer cleanUp()
-		params := &utils.AuditBasicParams{}
-		params.SetConanProfile(filepath.Join(dir, "profile"))
-		graph, uniqueDeps, err := BuildDependencyTree(params)
-		assert.NoError(t, err)
-		if !tests.CompareTree(expectedResult, graph[0]) {
-			t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)
-		}
-		assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
-
-	*/
 }
 
 func TestCalculateUniqueDeps(t *testing.T) {
