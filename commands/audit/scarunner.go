@@ -117,6 +117,8 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 	requestedDescriptors := map[techutils.Technology][]string{}
 	if params.PipRequirementsFile() != "" {
 		requestedDescriptors[techutils.Pip] = []string{params.PipRequirementsFile()}
+		// We leverage the ability to pass a custom descriptor name for Conan through PipRequirementsFile as well, therefore we set also Conan with the provided descriptor name.
+		requestedDescriptors[techutils.Conan] = []string{params.PipRequirementsFile()}
 	}
 	return requestedDescriptors
 }
