@@ -43,7 +43,6 @@ func TestParseConanDependencyTree(t *testing.T) {
 	}
 }
 
-// TODO eran add a testcase with a provided descriptor name
 func TestBuildDependencyTree(t *testing.T) {
 	testcases := []struct {
 		name           string
@@ -64,8 +63,7 @@ func TestBuildDependencyTree(t *testing.T) {
 			params := &utils.AuditBasicParams{}
 			if testcase.descriptorName != "" {
 				// changing the name of the descriptor to verify the work with a non-default descriptor name
-				changeNameCmd := exec.Command("mv", "conanfile.txt", testcase.descriptorName)
-				changeNameCmd.Dir = dir
+				changeNameCmd := exec.Command("mv", filepath.Join(dir, "conanfile.txt"), filepath.Join(dir, testcase.descriptorName))
 				_, err := changeNameCmd.CombinedOutput()
 				require.NoError(t, err)
 				require.FileExists(t, filepath.Join(dir, testcase.descriptorName))
