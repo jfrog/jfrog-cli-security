@@ -27,7 +27,7 @@ const (
 	gradleDepTreeJarFile    = "gradle-dep-tree.jar"
 	gradleDepTreeInitFile   = "gradledeptree.init"
 	gradleDepTreeOutputFile = "gradledeptree.out"
-	gradleNoCacheFlag       = "--no-configuration-cache"
+	gradleNoCacheFlag       = "-Dorg.gradle.configuration-cache=false"
 	gradleDepTreeInitScript = `initscript {
 	repositories { %s
 		mavenCentral()
