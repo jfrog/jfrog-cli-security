@@ -62,7 +62,7 @@ func TestCalcShouldReportEvents(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, _ := validations.XscServer(t, testcase.mockParams)
+			mockServer, _, _ := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			if testcase.setEnvVarReportFalse {

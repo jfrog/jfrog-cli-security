@@ -111,10 +111,6 @@ func (se SbomEntry) String() string {
 	return fmt.Sprintf("%s:%s (%s)", se.Component, se.Version, se.Type)
 }
 
-func (se SbomEntry) ToXrayComponentId() string {
-	return fmt.Sprintf("%s://%s:%s", se.XrayType, se.Component, se.Version)
-}
-
 type JasScansResults struct {
 	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
 	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`

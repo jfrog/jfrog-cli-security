@@ -99,11 +99,9 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		if auditParams.diffMode {
-			var ddtErr error
 			if auditParams.resultsToCompare != nil {
-				treeResult, ddtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult)
-				if ddtErr != nil {
-					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree: %s", ddtErr.Error()), auditParams.AllowPartialResults())
+				if treeResult, bdtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult); bdtErr != nil {
+					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 					continue
 				}
 			} else {
@@ -421,6 +419,7 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }
 
+// Collect dependencies exists in source branch and not in target branch
 func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBranchResults *results.SecurityCommandResults, treeResult *DependencyTreeResult) (*DependencyTreeResult, error) {
 	targetSbom := targetBranchResult.Sbom
 	var sourceSbom results.Sbom
@@ -431,12 +430,13 @@ func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBran
 	}
 	targetDepsMap := datastructures.MakeSet[string]()
 	for _, component := range targetSbom.Components {
-		targetDepsMap.Add(component.ToXrayComponentId())
+		targetDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
 	}
 	addedDepsMap := datastructures.MakeSet[string]()
 	for _, component := range sourceSbom.Components {
-		componentId := component.ToXrayComponentId()
+		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
 		if exists := targetDepsMap.Exists(componentId); !exists {
+			// Dependency in source but not in target
 			addedDepsMap.Add(componentId)
 		}
 	}
@@ -444,6 +444,6 @@ func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBran
 		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
 		FullDepTrees: treeResult.FullDepTrees,
 	}
-	targetBranchResult.SetSbom(results.DepTreeToSbom([]*xrayCmdUtils.GraphNode{diffDepTree.FlatTree})) // Not sure it's needed
+	targetBranchResult.SetSbom(results.DepTreeToSbom([]*xrayCmdUtils.GraphNode{diffDepTree.FlatTree}))
 	return &diffDepTree, nil
 }

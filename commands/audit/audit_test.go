@@ -9,7 +9,6 @@ import (
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"net/http"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -598,7 +597,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XrayServer(t, &validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
+			mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion, XscVersion: services.ConfigProfileMinXscVersion})
 			defer mockServer.Close()
 
 			tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -649,7 +648,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := validations.XrayServer(t, &validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -919,7 +918,7 @@ func TestCreateResultsContext(t *testing.T) {
 		}
 		for _, testCase := range testCases {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
-				mockServer, serverDetails := validations.XrayServer(t, &validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
+				mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
 				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
@@ -989,14 +988,20 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 						Sbom: results.Sbom{
 							Components: []results.SbomEntry{
 								{
-									Component: "pip",
-									Version:   "26.0",
+									Component: "werkzeug",
+									Version:   "1.0.1",
 									Type:      "Python",
 									XrayType:  "pypi",
 								},
 								{
 									Component: "pyyaml",
 									Version:   "5.2",
+									Type:      "Python",
+									XrayType:  "pypi",
+								},
+								{
+									Component: "wasabi",
+									Version:   "1.1.3",
 									Type:      "Python",
 									XrayType:  "pypi",
 								},
@@ -1008,8 +1013,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 			expectedSbom: results.Sbom{
 				Components: []results.SbomEntry{
 					{
-						Component: "pip",
-						Version:   "26.0",
+						Component: "wasabi",
+						Version:   "1.1.3",
 						Type:      "Python",
 						XrayType:  "pypi",
 						Direct:    true,
@@ -1025,11 +1030,10 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testParams := validations.MockServerParams{
-				XrayVersion:   utils.EntitlementsMinVersion,
-				XscVersion:    services.ConfigProfileMinXscVersion,
-				ApiCallCounts: map[string]int{},
+				XrayVersion: utils.EntitlementsMinVersion,
+				XscVersion:  services.ConfigProfileMinXscVersion,
 			}
-			mockServer, serverDetails := validations.XrayServer(t, &testParams)
+			mockServer, serverDetails, apiCallsCount := validations.XrayServer(t, testParams)
 			defer mockServer.Close()
 
 			auditBasicParams := (&utils.AuditBasicParams{}).
@@ -1047,11 +1051,17 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetDiffMode(true).
 				SetResultsToCompare(tc.sourceBranchResults)
 
-			auditParams.SetWorkingDirs([]string{tempDirPath}).SetIsRecursiveScan(true)
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
-			reflect.DeepEqual(tc.expectedSbom, auditResults.Targets[0].Sbom)
-			assert.Equal(t, tc.expectedApiCallsCount, testParams.ApiCallCounts)
+			assert.Equal(t, tc.expectedApiCallsCount, *apiCallsCount)
+			if tc.name == "Target branch scan" {
+				assert.Len(t, auditResults.Targets, 1)
+				assert.Len(t, auditResults.Targets[0].Sbom.Components, 1)
+				assert.Equal(t, tc.expectedSbom.Components[0], auditResults.Targets[0].Sbom.Components[0])
+			} else {
+				assert.Len(t, auditResults.Targets, 1)
+				assert.Len(t, auditResults.Targets[0].Sbom.Components, 3)
+			}
 		})
 	}
 }

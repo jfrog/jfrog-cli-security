@@ -60,23 +60,23 @@ func TestGetConfigProfileByName(t *testing.T) {
 func TestGetConfigProfileByUrl(t *testing.T) {
 	testCases := []struct {
 		name        string
-		mockParams  *validations.MockServerParams
+		mockParams  validations.MockServerParams
 		expectError bool
 	}{
 		{
 			name:        "Xray version too low - error expected",
-			mockParams:  &validations.MockServerParams{XrayVersion: "3.108.0"},
+			mockParams:  validations.MockServerParams{XrayVersion: "3.108.0"},
 			expectError: true,
 		},
 		{
 			name:       "Valid request",
-			mockParams: &validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
+			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
 		},
 	}
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XrayServer(t, testcase.mockParams)
+			mockServer, serverDetails, _ := validations.XrayServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			configProfile, err := GetConfigProfileByUrl(testcase.mockParams.XrayVersion, serverDetails, testRepoUrl)

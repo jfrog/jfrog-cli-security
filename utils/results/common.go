@@ -233,10 +233,10 @@ func SplitComponents(target string, impactedPackages map[string]services.Compone
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currCompType, _ := techutils.SplitComponentId(currCompId)
+		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
-		impactedPackagesTypes = append(impactedPackagesTypes, currCompType)
+		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
 		directComponents = append(directComponents, currDirectComponents)
@@ -258,14 +258,14 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 		}
 		componentId := impactPath[impactPathIndex].ComponentId
 		if _, exist := componentsMap[componentId]; !exist {
-			compName, compVersion, _, _ := techutils.SplitComponentId(componentId)
+			compName, compVersion, _ := techutils.SplitComponentIdRaw(componentId)
 			componentsMap[componentId] = formats.ComponentRow{Name: compName, Version: compVersion, Location: getComponentLocation(impactPath[impactPathIndex].FullPath, target)}
 		}
 
 		// Convert the impact path
 		var compImpactPathRows []formats.ComponentRow
 		for _, pathNode := range impactPath {
-			nodeCompName, nodeCompVersion, _, _ := techutils.SplitComponentId(pathNode.ComponentId)
+			nodeCompName, nodeCompVersion, _ := techutils.SplitComponentIdRaw(pathNode.ComponentId)
 			compImpactPathRows = append(compImpactPathRows, formats.ComponentRow{
 				Name:     nodeCompName,
 				Version:  nodeCompVersion,
@@ -597,7 +597,7 @@ func shouldDisqualifyEvidence(components map[string]services.Component, evidence
 		if !strings.HasPrefix(key, techutils.Npm.GetPackageTypeId()) {
 			return
 		}
-		dependencyName, _, _, _ := techutils.SplitComponentId(key)
+		dependencyName, _, _ := techutils.SplitComponentIdRaw(key)
 		// Check both Unix & Windows paths.
 		if strings.Contains(evidenceFilePath, nodeModules+"/"+dependencyName) || strings.Contains(evidenceFilePath, filepath.Join(nodeModules, dependencyName)) {
 			return true
@@ -737,8 +737,8 @@ func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct
 		return
 	}
 	// If the node is not parsed yet, parse it and its children
-	component, version, packageType, xrayPackageType := techutils.SplitComponentId(node.Id)
-	entry := SbomEntry{Component: component, Version: version, Type: packageType, XrayType: xrayPackageType, Direct: direct}
+	component, version, xrayPackageType := techutils.SplitComponentIdRaw(node.Id)
+	entry := SbomEntry{Component: component, Version: version, Type: techutils.ConvertXrayPackageType(xrayPackageType), XrayType: xrayPackageType, Direct: direct}
 	parsed[node.Id] = entry
 	for _, child := range node.Nodes {
 		parseNode(child, parsed, false)
@@ -755,10 +755,10 @@ func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomE
 		return
 	}
 	// If the node is not parsed yet, parse it and its children
-	component, version, packageType, xrayPackageType := techutils.SplitComponentId(node.Id)
+	component, version, xrayPackageType := techutils.SplitComponentIdRaw(node.Id)
 	if version != "" {
 		// For docker images, binary graph also contains layer information not relevant for the sbom
-		entry := SbomEntry{Component: component, Version: version, Type: packageType, XrayType: xrayPackageType, Direct: direct}
+		entry := SbomEntry{Component: component, Version: version, Type: techutils.ConvertXrayPackageType(xrayPackageType), XrayType: xrayPackageType, Direct: direct}
 		parsed[node.Id] = entry
 	}
 	for _, child := range node.Nodes {
