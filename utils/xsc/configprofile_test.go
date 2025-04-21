@@ -33,7 +33,7 @@ func TestGetConfigProfileByName(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, serverDetails := validations.XscServer(t, testcase.mockParams)
+			mockServer, serverDetails, _ := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			configProfile, err := GetConfigProfileByName(testcase.mockParams.XrayVersion, serverDetails, validations.TestConfigProfileName)
