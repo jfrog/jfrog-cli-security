@@ -38,6 +38,30 @@ func TestJasRunner_AnalyzerManagerNotExist(t *testing.T) {
 	assert.ErrorContains(t, err, "unable to locate the analyzer manager package. Advanced security scans cannot be performed without this package")
 }
 
+func TestJasRunner_AnalyzerManagerLocalPath(t *testing.T) {
+	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir))
+	}()
+	assert.NoError(t, os.Setenv(coreutils.HomeDir, tmpDir))
+	defer func() {
+		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
+	}()
+	localPath := "local/path/to/analyzer/manager"
+	assert.NoError(t, os.Setenv(jas.JfrogCliAnalyzerManagerLocalEnvVariable, localPath))
+	defer func() {
+		assert.NoError(t, os.Unsetenv(jas.JfrogCliAnalyzerManagerLocalEnvVariable))
+	}()
+	scanner, err := jas.CreateJasScanner(&jas.FakeServerDetails, false, "", jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}))
+	assert.NoError(t, err)
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+		return
+	}
+	assert.NoError(t, err)
+	assert.Equal(t, localPath, scanner.AnalyzerManager.AnalyzerManagerFullPath)
+}
+
 func TestJasRunner(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
