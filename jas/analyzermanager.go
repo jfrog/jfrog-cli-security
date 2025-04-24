@@ -43,6 +43,7 @@ const (
 	unsupportedOsExitCode                     = 55
 	ErrFailedScannerRun                       = "failed to run %s scan. Exit code received: %s"
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
+	jfrogCliAnalyzerManagerLocalEnvVariable   = "JFROG_CLI_ANALYZER_MANAGER_PATH"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
 	// #nosec G101 -- Not credentials.
@@ -117,6 +118,9 @@ func GetAnalyzerManagerDirAbsolutePath() (string, error) {
 }
 
 func GetAnalyzerManagerExecutable() (analyzerManagerPath string, err error) {
+	if localPath := os.Getenv(jfrogCliAnalyzerManagerLocalEnvVariable); localPath != "" && fileutils.IsPathExists(localPath, false) {
+		return localPath, nil
+	}
 	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
 	if err != nil {
 		return "", err
@@ -184,6 +188,10 @@ func GetAnalyzerManagerExitCode(err error) int {
 // Download the latest AnalyzerManager executable if not cached locally.
 // By default, the zip is downloaded directly from jfrog releases.
 func DownloadAnalyzerManagerIfNeeded(threadId int) error {
+	if localPath := os.Getenv(jfrogCliAnalyzerManagerLocalEnvVariable); localPath != "" && fileutils.IsPathExists(localPath, false) {
+		log.Debug(fmt.Sprintf("Using local analyzer manager path: %s", localPath))
+		return nil
+	}
 	downloadPath, err := GetAnalyzerManagerDownloadPath()
 	if err != nil {
 		return err
