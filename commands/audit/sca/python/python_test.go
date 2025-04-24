@@ -1,12 +1,18 @@
 package python
 
 import (
+	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	clisecurityutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -20,10 +26,8 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Server: nil,
-		Tool:   pythonutils.PythonTool(techutils.Pip),
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -49,10 +53,9 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	defer cleanUp()
 	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Tool:               pythonutils.PythonTool(techutils.Pip),
-		InstallCommandArgs: []string{"--break-system-packages"},
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	params.SetInstallCommandArgs([]string{"--force-reinstall"})
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -61,11 +64,9 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&AuditPython{
-		Server:        nil,
-		Tool:          pythonutils.PythonTool(techutils.Pip),
-		IsCurationCmd: true,
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	params.SetIsCurationCmd(true)
+	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -95,9 +96,8 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Tool: pythonutils.PythonTool(techutils.Pip),
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -105,7 +105,7 @@ func validatePipRequirementsProject(t *testing.T, err error, uniqueDeps []string
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
-	assert.Len(t, rootNode, 1)
+	require.Len(t, rootNode, 1)
 	if assert.GreaterOrEqual(t, len(rootNode[0].Nodes), 2) {
 		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.7.0")
 		if childNode != nil {
@@ -120,11 +120,9 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Server:              nil,
-		Tool:                pythonutils.PythonTool(techutils.Pip),
-		PipRequirementsFile: "requirements.txt",
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	params.SetPipRequirementsFile("requirements.txt")
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -150,10 +148,8 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "ptyprocess:0.7.0",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Server: nil,
-		Tool:   pythonutils.PythonTool(techutils.Pipenv),
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pipenv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,9 +184,8 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
 	// Run getModulesDependencyTrees
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&AuditPython{
-		Tool: pythonutils.PythonTool(techutils.Poetry),
-	})
+	params := clisecurityutils.AuditBasicParams{}
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Poetry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +199,104 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		if assert.NotNil(t, childNode) {
 			tests.GetAndAssertNode(t, childNode.Nodes, "packaging:24.2")
 		}
+	}
+}
+
+func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
+	// This feature is currently supported and tested for Pip and Poetry only
+	testcases := []struct {
+		name                             string
+		testDir                          string
+		technology                       techutils.Technology
+		installBeforeFetchingInitialDeps bool
+	}{
+		// pip
+		{
+			name:                             "pip: project not installed | install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
+			technology:                       techutils.Pip,
+			installBeforeFetchingInitialDeps: false,
+		},
+		{
+			name:                             "pip: project installed before dep tree construction| install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
+			technology:                       techutils.Pip,
+			installBeforeFetchingInitialDeps: true,
+		},
+		{
+			name:                             "poetry: project not installed | install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
+			technology:                       techutils.Poetry,
+			installBeforeFetchingInitialDeps: false,
+		},
+		{
+			name:                             "poetry: project installed before dep tree construction| install forbidden",
+			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
+			technology:                       techutils.Poetry,
+			installBeforeFetchingInitialDeps: true,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			testDir, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			defer cleanUp()
+
+			// Create virtual env according to package manager if needed
+			if !test.installBeforeFetchingInitialDeps {
+				// If we install before calling BuildDependencyTree a virtual environment is going to be created, and we don't have to do it manually
+				if test.technology == techutils.Pip {
+					restoreEnv, err := SetPipVirtualEnvPath()
+					defer func() {
+						assert.NoError(t, restoreEnv(), "restoring env after setting pip virtual env creation failed")
+					}()
+					require.NoError(t, err)
+				}
+			}
+
+			// Setting scan params
+			params := (&clisecurityutils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			if test.technology == techutils.Pip {
+				params.SetPipRequirementsFile("requirements.txt")
+			}
+
+			if test.installBeforeFetchingInitialDeps {
+				restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
+				defer func() {
+					assert.NoError(t, restoreEnv(), "restoring env after setting "+test.technology+" virtual env creation failed")
+				}()
+				require.NoError(t, err)
+			}
+
+			// Checking dependencies before BuildDependencyTree
+			localDependenciesPath, err := config.GetJfrogDependenciesPath()
+			assert.NoError(t, err)
+			// We use the dependencies graph and not the list of dependencies since the list includes only direct dependencies
+			dependenciesGraphBeforeBuildDepTree, _, err := pythonutils.GetPythonDependencies(pythonutils.PythonTool(test.technology), testDir, localDependenciesPath, log.GetLogger())
+			assert.NoError(t, err)
+
+			var dependenciesBeforeBuildDepTree []string
+			switch test.technology {
+			case techutils.Pip:
+				dependenciesBeforeBuildDepTree = maps.Keys(dependenciesGraphBeforeBuildDepTree)
+			case techutils.Poetry:
+				if len(dependenciesGraphBeforeBuildDepTree) != 0 {
+					mapKey := maps.Keys(dependenciesGraphBeforeBuildDepTree)[0]
+					dependenciesBeforeBuildDepTree = dependenciesGraphBeforeBuildDepTree[mapKey]
+				}
+			}
+
+			// Build dependency tree
+			_, uniqueDeps, _, err := BuildDependencyTree(params, test.technology)
+			require.NoError(t, err)
+			var trimmedUniqueDeps []string
+			for _, dep := range uniqueDeps {
+				trimmedUniqueDeps = append(trimmedUniqueDeps, strings.TrimPrefix(dep, "pypi://"))
+			}
+			slices.Sort(dependenciesBeforeBuildDepTree)
+			slices.Sort(trimmedUniqueDeps)
+			assert.Equal(t, dependenciesBeforeBuildDepTree, trimmedUniqueDeps)
+		})
 	}
 }
 

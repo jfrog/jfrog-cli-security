@@ -86,6 +86,7 @@ type scaParseParams struct {
 	FixedVersions           []string
 	DirectComponents        []formats.ComponentRow
 	Violation               *violationContext
+	ImpactPaths             [][]formats.ComponentRow
 }
 
 // holds the violation context for the results
@@ -106,7 +107,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
 		return sarifutils.NewReport()
 	}
-	return sc.current, nil
+	return sarifutils.CombineMultipleRunsWithSameTool(sc.current)
 }
 
 func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
@@ -356,6 +357,7 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 			ImpactedPackagesVersion: impactedPackagesVersion,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directComponents,
+			ImpactPaths:             impactPaths,
 		})
 		cveImpactedComponentRuleId := results.GetScaIssueId(impactedPackagesName, impactedPackagesVersion, results.GetIssueIdentifier(cves, vulnerability.IssueId, "_"))
 		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
@@ -392,6 +394,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 			ImpactedPackagesVersion: impactedPackagesVersion,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directComponents,
+			ImpactPaths:             impactPaths,
 			Violation: &violationContext{
 				Watch:    violation.WatchName,
 				Policies: results.ConvertPolicesToString(violation.Policies),
@@ -432,6 +435,7 @@ func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sar
 			ImpactedPackagesVersion: impactedPackagesVersion,
 			FixedVersions:           fixedVersions,
 			DirectComponents:        directComponents,
+			ImpactPaths:             impactPaths,
 			Violation: &violationContext{
 				Watch:    violation.WatchName,
 				Policies: results.ConvertPolicesToString(violation.Policies),
@@ -454,6 +458,7 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	level := severityutils.SeverityToSarifSeverityLevel(params.Severity)
 	// Add rule for the cve if not exists
 	rule = getScaIssueSarifRule(
+		params.ImpactPaths,
 		cveImpactedComponentRuleId,
 		params.GenerateTitleFunc(params.ImpactedPackagesName, params.ImpactedPackagesVersion, issueId, params.Watch),
 		params.CveScore,
@@ -491,11 +496,16 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 	return
 }
 
-func getScaIssueSarifRule(ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
+func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, maxCveScore, summary, markdownDescription string) *sarif.ReportingDescriptor {
 	cveRuleProperties := sarif.NewPropertyBag()
 	cveRuleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
+	if len(impactPaths) > 0 {
+		cveRuleProperties.Add(sarifutils.SarifImpactPathsRulePropertyKey, impactPaths)
+	}
 	return sarif.NewRule(ruleId).
+		WithName(results.IdToName(ruleId)).
 		WithDescription(ruleDescription).
+		WithFullDescription(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
 		WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
 		WithProperties(cveRuleProperties.Properties)
 }

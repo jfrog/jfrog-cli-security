@@ -317,7 +317,14 @@ func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, appl
 func convertCves(cves []services.Cve) []formats.CveRow {
 	var cveRows []formats.CveRow
 	for _, cveObj := range cves {
-		cveRows = append(cveRows, formats.CveRow{Id: cveObj.Id, CvssV2: cveObj.CvssV2Score, CvssV3: cveObj.CvssV3Score})
+		cveRows = append(cveRows, formats.CveRow{
+			Id:           cveObj.Id,
+			CvssV2:       cveObj.CvssV2Score,
+			CvssV2Vector: cveObj.CvssV2Vector,
+			CvssV3:       cveObj.CvssV3Score,
+			CvssV3Vector: cveObj.CvssV3Vector,
+			Cwe:          cveObj.Cwe,
+		})
 	}
 	return cveRows
 }
@@ -568,6 +575,11 @@ func GetDependencyId(depName, version string) string {
 
 func GetScaIssueId(depName, version, issueId string) string {
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
+}
+
+// replaces underscore with dash
+func IdToName(input string) string {
+	return strings.Join(strings.Split(input, "_"), "-")
 }
 
 // GetUniqueKey returns a unique string key of format "vulnerableDependency:vulnerableVersion:xrayID:fixVersionExist"

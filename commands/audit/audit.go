@@ -223,7 +223,7 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if failBuild && !auditResults.ResultContext.IncludeVulnerabilities && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	if failBuild && auditResults.HasViolationContext() && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
 		err = results.NewFailBuildError()
 	}
 	return
@@ -310,6 +310,8 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		),
 		auditParams.Exclusions()...,
 	)
+	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.AuditBasicParams.GetConfigProfile())
+
 	auditParallelRunner.ResultsMu.Unlock()
 	if err != nil {
 		generalError = fmt.Errorf("failed to create jas scanner: %s", err.Error())
@@ -350,7 +352,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				ServerDetails:               serverDetails,
 				Scanner:                     scanner,
 				Module:                      *module,
-				ConfigProfile:               auditParams.configProfile,
+				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:              auditParams.ScansToPerform(),
 				SecretsScanType:             secrets.SecretsScannerType,
 				MaliciousScanType:           maliciouscode.MaliciousScannerType,

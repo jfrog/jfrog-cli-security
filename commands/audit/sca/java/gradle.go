@@ -27,6 +27,7 @@ const (
 	gradleDepTreeJarFile    = "gradle-dep-tree.jar"
 	gradleDepTreeInitFile   = "gradledeptree.init"
 	gradleDepTreeOutputFile = "gradledeptree.out"
+	gradleNoCacheFlag       = "-Dorg.gradle.configuration-cache=false"
 	gradleDepTreeInitScript = `initscript {
 	repositories { %s
 		mavenCentral()
@@ -158,6 +159,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		"clean",
 		"generateDepTrees", "-I", filepath.Join(depTreeDir, gradleDepTreeInitFile),
 		"-q",
+		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
 		"-Dcom.jfrog.includeAllBuildFiles=true"}
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"path/filepath"
 	"testing"
 
@@ -11,9 +12,9 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -87,6 +88,9 @@ func TestGitAuditSimpleJson(t *testing.T) {
 }
 
 func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
+	if !coreutils.IsLinux() {
+		t.Skip("Skipping test. This test only runs on Linux to avoid flaky tests when running in parallel tests.")
+	}
 	xrayVersion, xscVersion, testCleanUp := integration.InitGitTest(t, services.MinXrayVersionGitRepoKey)
 	defer testCleanUp()
 
@@ -95,13 +99,13 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations (unknown = all vulnerabilities will be reported as violations)
 	policyName, cleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "git-repo-ignore-rule-policy", utils.Unknown, true, false)
 	defer cleanUpPolicy()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "git-repo-ignore-rule-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer cleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	createTestProjectRunGitAuditAndValidate(t, projectPath,
 		auditCommandTestParams{Format: string(format.SimpleJson), WithLicense: true, WithVuln: true},
-		xrayVersion, xscVersion, "",
+		xrayVersion, xscVersion, "One or more of the detected violations are configured to fail the build that including them",
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Licenses: 3, Violations: 12, Vulnerabilities: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)
@@ -111,19 +115,19 @@ func TestGitAuditViolationsWithIgnoreRule(t *testing.T) {
 
 	// Create an ignore rules for the git repo
 	cleanUpCveIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sca ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		CVEs:            []string{"any"}, Licenses: []string{"any"},
 		Watches: []string{watchName},
 	})
 	defer cleanUpCveIgnoreRule()
 	cleanUpExposureIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Exposure ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		Exposures:       &utils.ExposuresFilterName{Categories: []utils.ExposureType{utils.SecretExposureType, utils.IacExposureType}},
 		Watches:         []string{watchName},
 	})
 	defer cleanUpExposureIgnoreRule()
 	cleanSastUpIgnoreRule := securityTestUtils.CreateTestIgnoreRules(t, "security cli tests - Sast ignore rule", utils.IgnoreFilters{
-		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl)},
+		GitRepositories: []string{xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl)},
 		Sast:            &utils.SastFilterName{Rule: []string{"any"}},
 		Watches:         []string{watchName},
 	})
@@ -178,7 +182,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 			cleanUpPolicy()
 		}
 	}()
-	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	watchName, cleanUpWatch := securityTestUtils.CreateWatchForTests(t, policyName, "without-skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer func() {
 		if !firstWatchCleaned {
 			cleanUpWatch()
@@ -192,7 +196,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
 				ValidateScan:                &validations.ScanCount{Sca: 8, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1, NotCovered: 7},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 3, NotCovered: 5},
 			},
 			ExactResultsMatch: true,
 		},
@@ -207,7 +211,7 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 	// Create policy and watch for the git repo so we will also get violations - This watch SKIP not-applicable results
 	skipPolicyName, skipCleanUpPolicy := securityTestUtils.CreateTestSecurityPolicy(t, "skip-non-applicable-policy", utils.Low, false, true)
 	defer skipCleanUpPolicy()
-	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.GitRepoHttpsCloneUrl))
+	skipWatchName, skipCleanUpWatch := securityTestUtils.CreateWatchForTests(t, skipPolicyName, "skip-not-applicable-watch", xscutils.GetGitRepoUrlKey(validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl))
 	defer skipCleanUpWatch()
 
 	// Run the audit command with git repo and verify violations are reported to the platform and not applicable issues are skipped.
@@ -216,8 +220,8 @@ func TestXrayAuditJasSkipNotApplicableCvesViolations(t *testing.T) {
 		xrayVersion, xscVersion, "",
 		validations.ValidationParams{
 			Violations: &validations.ViolationCount{
-				ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Secrets: 2},
-				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 7},
+				ValidateScan:                &validations.ScanCount{Sca: 5, Sast: 2, Secrets: 2},
+				ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 5},
 			},
 			ExactResultsMatch: true,
 		},

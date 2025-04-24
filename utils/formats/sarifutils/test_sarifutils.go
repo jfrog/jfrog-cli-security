@@ -1,6 +1,8 @@
 package sarifutils
 
 import (
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
@@ -76,6 +78,15 @@ func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties,
 		rule.Properties[properties[index]] = values[index]
 	}
 	return run
+}
+
+func CreateDummyRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescription, summary, markdownDescription, maxCveScore string) *sarif.ReportingDescriptor {
+	var ruleProperties = sarif.NewPropertyBag()
+	ruleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
+	ruleProperties.Add(SarifImpactPathsRulePropertyKey, impactPaths)
+	description := sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)
+	return sarif.NewRule(ruleId).WithName(ruleId).WithProperties(ruleProperties.Properties).WithDescription(ruleDescription).WithHelp(description).WithFullDescription(description)
+
 }
 
 func CreateDummyResultInPath(fileName string) *sarif.Result {
