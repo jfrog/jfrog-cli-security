@@ -48,18 +48,18 @@ func TestJasRunner_AnalyzerManagerLocalPath(t *testing.T) {
 	defer func() {
 		assert.NoError(t, os.Unsetenv(coreutils.HomeDir))
 	}()
-	localPath := "local/path/to/analyzer/manager"
-	assert.NoError(t, os.Setenv(jas.JfrogCliAnalyzerManagerLocalEnvVariable, localPath))
+	// Create a temp file to simulate the local path
+	localPath, err := os.CreateTemp(tmpDir, "analyzer_manager")
+	assert.NoError(t, err)
+	assert.NoError(t, os.Setenv(jas.JfrogCliAnalyzerManagerLocalEnvVariable, localPath.Name()))
 	defer func() {
 		assert.NoError(t, os.Unsetenv(jas.JfrogCliAnalyzerManagerLocalEnvVariable))
 	}()
 	scanner, err := jas.CreateJasScanner(&jas.FakeServerDetails, false, "", jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}))
 	assert.NoError(t, err)
-	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
-		return
-	}
+	scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable()
 	assert.NoError(t, err)
-	assert.Equal(t, localPath, scanner.AnalyzerManager.AnalyzerManagerFullPath)
+	assert.Equal(t, localPath.Name(), scanner.AnalyzerManager.AnalyzerManagerFullPath)
 }
 
 func TestJasRunner(t *testing.T) {
