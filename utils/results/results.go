@@ -70,6 +70,7 @@ type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
 	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
+	Sbom       Sbom             `json:"sbom,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
@@ -89,8 +90,6 @@ type ScaScanResults struct {
 	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
 	// Target of the scan
 	Descriptors []string `json:"descriptors,omitempty"`
-	// Sbom
-	TargetSbom Sbom `json:"sbom,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 }
@@ -103,6 +102,7 @@ type SbomEntry struct {
 	Component string `json:"component"`
 	Version   string `json:"version"`
 	Type      string `json:"type"`
+	XrayType  string `json:"xray_type"`
 	// Direct dependency or transitive dependency
 	Direct bool `json:"direct"`
 }
@@ -233,6 +233,15 @@ func (r *SecurityCommandResults) GetTargets() (targets []ScanTarget) {
 		targets = append(targets, scan.ScanTarget)
 	}
 	return
+}
+
+func (r *SecurityCommandResults) GetTargetResults(target string) *TargetResults {
+	for _, scan := range r.Targets {
+		if scan.Target == target {
+			return scan
+		}
+	}
+	return nil
 }
 
 func (r *SecurityCommandResults) GetCommonParentPath() string {
@@ -439,11 +448,15 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) NewScaScanResults(errorCode int, sbom Sbom, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) SetSbom(sbom Sbom) *TargetResults {
+	sr.Sbom = sbom
+	return sr
+}
+
+func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.TargetSbom = sbom
 	for _, response := range responses {
 		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}
