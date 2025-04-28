@@ -44,7 +44,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 			name:      "With transitive dependencies",
 			treeDepth: "1",
 			expectedUniqueDeps: []string{
-				"npm://axios:1.8.4",
+				"npm://axios:1.9.0",
 				"npm://balaganjs:1.0.0",
 				"npm://yargs:13.3.0",
 				"npm://zen-website:1.0.0",
