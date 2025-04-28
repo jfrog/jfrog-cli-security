@@ -54,7 +54,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 				Nodes: []*xrayUtils.GraphNode{
 					{
 						Id:    "npm://balaganjs:1.0.0",
-						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.8.4"}, {Id: "npm://yargs:13.3.0"}},
+						Nodes: []*xrayUtils.GraphNode{{Id: "npm://axios:1.9.0"}, {Id: "npm://yargs:13.3.0"}},
 					},
 				},
 			},
