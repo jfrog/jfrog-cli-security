@@ -198,7 +198,8 @@ func ScanCmd(c *components.Context) error {
 		// If a non-existing flag was provided AFTER the provided source_pattern - it will be captured as another argument. Since 'scan' command
 		// Expects only a single argument, we use this check to verify all provided flags are valid.
 		// If a non exiting flag was provided BEFORE the source_pattern, the CLI will return an error before reaching this point.
-		return pluginsCommon.PrintHelpAndReturnError(utils.GetCliTooManyArgsErrorMessage(len(c.Arguments)), c)
+		errorMessage := fmt.Sprintf("Too many arguments provided (%d in total).\nSome flags may be incorrectly specified, causing them to be misinterpreted as arguments and ignored. Please verify that all flags are valid.", len(c.Arguments))
+		return pluginsCommon.PrintHelpAndReturnError(errorMessage, c)
 	}
 
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
