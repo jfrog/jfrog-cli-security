@@ -52,9 +52,9 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/go-github/v38 v38.1.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/grokify/mogo v0.64.12 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -71,6 +71,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-tty v0.0.3 // indirect
+	github.com/microsoft/azure-devops-go-api/azuredevops/v7 v7.1.0 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nwaples/rardecode v1.1.3 // indirect
@@ -118,4 +119,4 @@ replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-art
 
 replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go v1.8.9-0.20250430095855-31e84b93cb68
 
-replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go v0.0.0-20210901072045-2a91b7f66309
+replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go v1.17.0
