@@ -10,6 +10,66 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
+const (
+	WatchSarifPropertyKey           = "watch"
+	PoliciesSarifPropertyKey        = "policies"
+	JasIssueIdSarifPropertyKey      = "issueId"
+	CWEPropertyKey                  = "CWE"
+	SarifImpactPathsRulePropertyKey = "impactPaths"
+)
+
+// Specific JFrog Sarif Utils
+
+func GetResultWatches(result *sarif.Result) (watches string) {
+	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
+		if watchesValue, ok := watchesProperty.(string); ok {
+			return watchesValue
+		}
+	}
+	return
+}
+
+func GetResultPolicies(result *sarif.Result) (policies []string) {
+	if policiesProperty, ok := result.Properties[PoliciesSarifPropertyKey]; ok {
+		if policiesValue, ok := policiesProperty.(string); ok {
+			split := strings.Split(policiesValue, ",")
+			for _, policy := range split {
+				policies = append(policies, strings.TrimSpace(policy))
+			}
+			return
+		}
+	}
+	return
+}
+
+func GetResultIssueId(result *sarif.Result) (issueId string) {
+	if issueIdProperty, ok := result.Properties[JasIssueIdSarifPropertyKey]; ok {
+		if issueIdValue, ok := issueIdProperty.(string); ok {
+			return issueIdValue
+		}
+	}
+	return
+}
+
+func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
+	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
+		// No CWE property
+		return
+	}
+	if cweProperty, ok := rule.DefaultConfiguration.Parameters.Properties[CWEPropertyKey]; ok {
+		if cweValue, ok := cweProperty.(string); ok {
+			split := strings.Split(cweValue, ",")
+			for _, policy := range split {
+				cwe = append(cwe, strings.TrimSpace(policy))
+			}
+			return
+		}
+	}
+	return
+}
+
+// General Sarif Utils
+
 func NewReport() (*sarif.Report, error) {
 	report, err := sarif.New(sarif.Version210)
 	if err != nil {
@@ -24,7 +84,34 @@ func CombineReports(reports ...*sarif.Report) (combined *sarif.Report, err error
 	}
 	for _, report := range reports {
 		for _, run := range report.Runs {
-			combined.AddRun(run)
+			appendRunInfoToReport(combined, run)
+		}
+	}
+	return
+}
+
+func CombineMultipleRunsWithSameTool(report *sarif.Report) (combined *sarif.Report, err error) {
+	if combined, err = NewReport(); err != nil {
+		return
+	}
+	for _, run := range report.Runs {
+		appendRunInfoToReport(combined, run)
+	}
+	return
+}
+
+func appendRunInfoToReport(combined *sarif.Report, run *sarif.Run) {
+	if existingRun := getRunByToolName(GetRunToolName(run), combined); existingRun != nil {
+		AggregateMultipleRunsIntoSingle([]*sarif.Run{run}, existingRun)
+	} else {
+		combined.AddRun(run)
+	}
+}
+
+func getRunByToolName(toolName string, report *sarif.Report) (run *sarif.Run) {
+	for _, r := range report.Runs {
+		if GetRunToolName(r) == toolName {
+			return r
 		}
 	}
 	return
@@ -35,6 +122,17 @@ func GetToolVersion(run *sarif.Run) string {
 		return *run.Tool.Driver.Version
 	}
 	return ""
+}
+
+func CopyRun(run *sarif.Run) *sarif.Run {
+	copy := CopyRunMetadata(run)
+	if run.Tool.Driver != nil {
+		copy.Tool.Driver.Rules = CopyRules(run.Tool.Driver.Rules...)
+	}
+	for _, result := range run.Results {
+		copy.Results = append(copy.Results, CopyResult(result))
+	}
+	return copy
 }
 
 func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
@@ -60,6 +158,22 @@ func CopyRunMetadata(run *sarif.Run) (copied *sarif.Run) {
 	}
 	if informationURI := GetRunToolInformationURI(run); informationURI != "" {
 		copied.Tool.Driver.InformationURI = &informationURI
+	}
+	return
+}
+
+func CopyRules(rules ...*sarif.ReportingDescriptor) (copied []*sarif.ReportingDescriptor) {
+	for _, rule := range rules {
+		cloned := sarif.NewRule(rule.ID)
+		cloned.HelpURI = copyStrAttribute(rule.HelpURI)
+		cloned.Name = copyStrAttribute(rule.Name)
+		cloned.ShortDescription = copyMultiMsgAttribute(rule.ShortDescription)
+		cloned.FullDescription = copyMultiMsgAttribute(rule.FullDescription)
+		cloned.DefaultConfiguration = rule.DefaultConfiguration
+		cloned.Help = copyMultiMsgAttribute(rule.Help)
+		cloned.Properties = rule.Properties
+		cloned.MessageStrings = rule.MessageStrings
+		copied = append(copied, cloned)
 	}
 	return
 }
@@ -134,15 +248,56 @@ func CopyResult(result *sarif.Result) *sarif.Result {
 		RuleIndex:    result.RuleIndex,
 		Kind:         result.Kind,
 		Fingerprints: result.Fingerprints,
-		CodeFlows:    result.CodeFlows,
+		CodeFlows:    copyCodeFlows(result.CodeFlows...),
 		Level:        result.Level,
-		Message:      result.Message,
+		Message:      copyMsgAttribute(result.Message),
 		PropertyBag:  result.PropertyBag,
 	}
 	for _, location := range result.Locations {
 		copied.Locations = append(copied.Locations, CopyLocation(location))
 	}
 	return copied
+}
+
+func copyCodeFlows(flows ...*sarif.CodeFlow) []*sarif.CodeFlow {
+	var copied []*sarif.CodeFlow
+	for _, flow := range flows {
+		copied = append(copied, copyCodeFlow(flow))
+	}
+	return copied
+}
+
+func copyCodeFlow(flow *sarif.CodeFlow) *sarif.CodeFlow {
+	copied := &sarif.CodeFlow{}
+	for _, threadFlow := range flow.ThreadFlows {
+		copied.ThreadFlows = append(copied.ThreadFlows, copyThreadFlow(threadFlow))
+	}
+	return copied
+}
+
+func copyThreadFlow(threadFlow *sarif.ThreadFlow) *sarif.ThreadFlow {
+	copied := &sarif.ThreadFlow{}
+	for _, location := range threadFlow.Locations {
+		copied.Locations = append(copied.Locations, sarif.NewThreadFlowLocation().WithLocation(CopyLocation(location.Location)))
+	}
+	return copied
+}
+
+func copyMsgAttribute(attr sarif.Message) sarif.Message {
+	return sarif.Message{
+		Text:     copyStrAttribute(attr.Text),
+		Markdown: copyStrAttribute(attr.Markdown),
+	}
+}
+
+func copyMultiMsgAttribute(attr *sarif.MultiformatMessageString) *sarif.MultiformatMessageString {
+	if attr == nil {
+		return nil
+	}
+	return &sarif.MultiformatMessageString{
+		Text:     copyStrAttribute(attr.Text),
+		Markdown: copyStrAttribute(attr.Markdown),
+	}
 }
 
 func copyStrAttribute(attr *string) *string {
@@ -190,9 +345,9 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
 		copied.LogicalLocations = append(copied.LogicalLocations, &sarif.LogicalLocation{
-			Name:               logicalLocation.Name,
-			FullyQualifiedName: logicalLocation.FullyQualifiedName,
-			DecoratedName:      logicalLocation.DecoratedName,
+			Name:               copyStrAttribute(logicalLocation.Name),
+			FullyQualifiedName: copyStrAttribute(logicalLocation.FullyQualifiedName),
+			DecoratedName:      copyStrAttribute(logicalLocation.DecoratedName),
 			Kind:               logicalLocation.Kind,
 			PropertyBag:        logicalLocation.PropertyBag,
 		})
@@ -348,6 +503,13 @@ func GetRunsByToolName(report *sarif.Report, toolName string) (filteredRuns []*s
 
 func SetResultMsgMarkdown(markdown string, result *sarif.Result) {
 	result.Message.Markdown = &markdown
+}
+
+func GetResultMsgMarkdown(result *sarif.Result) string {
+	if result != nil && result.Message.Markdown != nil {
+		return *result.Message.Markdown
+	}
+	return ""
 }
 
 func GetResultMsgText(result *sarif.Result) string {
@@ -548,7 +710,7 @@ func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {
 }
 
 func GetRuleFullDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.FullDescription != nil && rule.FullDescription.Text != nil {
+	if rule != nil && rule.FullDescription != nil && rule.FullDescription.Text != nil {
 		return *rule.FullDescription.Text
 	}
 	return ""
@@ -577,7 +739,7 @@ func GetRuleHelpMarkdown(rule *sarif.ReportingDescriptor) string {
 }
 
 func GetRuleShortDescription(rule *sarif.ReportingDescriptor) string {
-	if rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
+	if rule != nil && rule.ShortDescription != nil && rule.ShortDescription.Text != nil {
 		return *rule.ShortDescription.Text
 	}
 	return ""
@@ -596,6 +758,30 @@ func SetRuleShortDescriptionText(value string, rule *sarif.ReportingDescriptor) 
 		return
 	}
 	rule.ShortDescription.Text = &value
+}
+
+func SetRuleHelp(msg, markdown string, rule *sarif.ReportingDescriptor) {
+	if rule.Help == nil {
+		rule.Help = &sarif.MultiformatMessageString{
+			Text:     &msg,
+			Markdown: &markdown,
+		}
+		return
+	}
+	rule.Help.Markdown = &markdown
+	rule.Help.Text = &msg
+}
+
+func SetRuleFullDescription(msg, markdown string, rule *sarif.ReportingDescriptor) {
+	if rule.FullDescription == nil {
+		rule.FullDescription = &sarif.MultiformatMessageString{
+			Text:     &msg,
+			Markdown: &markdown,
+		}
+		return
+	}
+	rule.FullDescription.Markdown = &markdown
+	rule.FullDescription.Text = &msg
 }
 
 func GetRuleShortDescriptionText(rule *sarif.ReportingDescriptor) string {

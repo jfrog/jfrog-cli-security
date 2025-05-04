@@ -1,18 +1,35 @@
 package xsc
 
 import (
-	"fmt"
-
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	xscservices "github.com/jfrog/jfrog-client-go/xray/services/xsc"
 	"github.com/jfrog/jfrog-client-go/xsc"
+	xscservicesutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 )
 
 const MinXscVersionForErrorReport = "1.7.7"
 
-func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServicesManager, error) {
+func CreateXscServiceBackwardCompatible(xrayVersion string, serviceDetails *config.ServerDetails) (xsc.XscService, error) {
+	if xscservicesutils.IsXscXrayInnerService(xrayVersion) {
+		return CreateXscService(serviceDetails)
+	}
+	return createDeprecatedXscServiceManager(serviceDetails)
+}
+
+func CreateXscService(serviceDetails *config.ServerDetails) (*xscservices.XscInnerService, error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serviceDetails)
+	if err != nil {
+		return nil, err
+	}
+	return xrayManager.Xsc(), nil
+}
+
+func createDeprecatedXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServicesManager, error) {
 	certsPath, err := coreutils.GetJfrogCertsDir()
 	if err != nil {
 		return nil, err
@@ -32,19 +49,25 @@ func CreateXscServiceManager(serviceDetails *config.ServerDetails) (*xsc.XscServ
 	return xsc.New(serviceConfig)
 }
 
-func GetXscMsiAndVersion(analyticsMetricsService *AnalyticsMetricsService) (multiScanId, xscVersion string) {
-	var err error
-	if analyticsMetricsService != nil {
-		multiScanId = analyticsMetricsService.GetMsi()
+func GetJfrogServicesVersion(serverDetails *config.ServerDetails) (xrayVersion, xscVersion string, err error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return
 	}
-	if multiScanId != "" {
-		xscManager := analyticsMetricsService.XscManager()
-		if xscManager != nil {
-			xscVersion, err = xscManager.GetVersion()
-			if err != nil {
-				log.Debug(fmt.Sprintf("Can't get XSC version for xray graph scan params. Cause: %s", err.Error()))
-			}
-		}
+	xrayVersion, err = xrayManager.GetVersion()
+	if err != nil {
+		return
 	}
+	log.Debug("Xray version: " + xrayVersion)
+	xscService, err := CreateXscServiceBackwardCompatible(xrayVersion, serverDetails)
+	if err != nil {
+		return
+	}
+	xscVersion, e := xscService.GetVersion()
+	if e != nil {
+		log.Debug("Using Xray: " + e.Error())
+		return
+	}
+	log.Debug("XSC version: " + xscVersion)
 	return
 }

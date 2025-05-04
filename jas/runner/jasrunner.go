@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -31,7 +31,7 @@ type JasRunnerParams struct {
 	ConfigProfile       *services.ConfigProfile
 	AllowPartialResults bool
 
-	ScansToPreform []utils.SubScanType
+	ScansToPerform []utils.SubScanType
 
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
@@ -80,14 +80,13 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 	if jasType == "" {
 		return fmt.Errorf("failed to determine Jas scan type for %s", subScan)
 	}
-	if len(params.ScansToPreform) > 0 && !slices.Contains(params.ScansToPreform, subScan) {
+	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, subScan) {
 		log.Debug(fmt.Sprintf("Skipping %s scan as requested by input...", subScan))
 		return
 	}
 	if params.ConfigProfile != nil {
 		// This code section is related to CentralizedConfig integration in CI Next.
 		log.Debug(fmt.Sprintf("Using config profile '%s' to determine whether to run %s scan...", params.ConfigProfile.ProfileName, jasType))
-		// Currently, if config profile exists, the only possible scanners to run are: Secrets, Sast
 		enabled := false
 		switch jasType {
 		case jasutils.Secrets:
@@ -95,11 +94,10 @@ func addJasScanTaskForModuleIfNeeded(params JasRunnerParams, subScan utils.SubSc
 		case jasutils.Sast:
 			enabled = params.ConfigProfile.Modules[0].ScanConfig.SastScannerConfig.EnableSastScan
 		case jasutils.IaC:
-			log.Debug("Skipping Iac scan as it is not currently supported with a config profile...")
-			return
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.IacScannerConfig.EnableIacScan
 		case jasutils.Applicability:
-			log.Debug("Skipping Contextual Analysis scan as it is not currently supported with a config profile...")
-			return
+			// In Applicability scanner we must check that Sca is also enabled, since we cannot run CA without Sca results
+			enabled = params.ConfigProfile.Modules[0].ScanConfig.ContextualAnalysisScannerConfig.EnableCaScan && params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan
 		}
 		if enabled {
 			generalError = addModuleJasScanTask(jasType, params.Runner, task, params.ScanResults, params.AllowPartialResults)
@@ -131,15 +129,15 @@ func runSecretsScan(securityParallelRunner *utils.SecurityParallelRunner, scanne
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := secrets.RunSecretsScan(scanner, secretsScanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SecretsScanResults = append(extendedScanResults.SecretsScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Secrets)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Secrets, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Secrets, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -149,15 +147,15 @@ func runIacScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *j
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := iac.RunIacScan(scanner, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := iac.RunIacScan(scanner, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.IacScanResults = append(extendedScanResults.IacScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.IaC)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.IaC, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.IaC, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -167,15 +165,15 @@ func runSastScan(securityParallelRunner *utils.SecurityParallelRunner, scanner *
 		defer func() {
 			securityParallelRunner.JasScannersWg.Done()
 		}()
-		results, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		vulnerabilitiesResults, violationsResults, err := sast.RunSastScan(scanner, module, signedDescriptions, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		extendedScanResults.SastScanResults = append(extendedScanResults.SastScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Sast)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		extendedScanResults.AddJasScanResults(jasutils.Sast, vulnerabilitiesResults, violationsResults, jas.GetAnalyzerManagerExitCode(err))
+		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Sast, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -187,26 +185,33 @@ func runContextualScan(securityParallelRunner *utils.SecurityParallelRunner, sca
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		securityParallelRunner.ScaScansWg.Wait()
-		results, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
-		if err != nil {
-			return fmt.Errorf("%s %s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
-		}
+		caScanResults, err := applicability.RunApplicabilityScan(scanResults.GetScaScansXrayResults(), *directDependencies, scanner, thirdPartyApplicabilityScan, scanType, module, threadId)
 		securityParallelRunner.ResultsMu.Lock()
 		defer securityParallelRunner.ResultsMu.Unlock()
-		scanResults.JasResults.ApplicabilityScanResults = append(scanResults.JasResults.ApplicabilityScanResults, results...)
-		err = dumpSarifRunToFileIfNeeded(results, scansOutputDir, jasutils.Applicability)
-		return
+		// We first add the scan results and only then check for errors, so we can store the exit code in order to report it in the end
+		scanResults.JasResults.AddApplicabilityScanResults(jas.GetAnalyzerManagerExitCode(err), caScanResults...)
+		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
+			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
+		}
+		return dumpSarifRunToFileIfNeeded(scansOutputDir, jasutils.Applicability, caScanResults)
 	}
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
-func dumpSarifRunToFileIfNeeded(results []*sarif.Run, scanResultsOutputDir string, scanType jasutils.JasScanType) (err error) {
-	if scanResultsOutputDir == "" || results == nil {
+func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.JasScanType, scanResults ...[]*sarif.Run) (err error) {
+	if scanResultsOutputDir == "" || len(scanResults) == 0 {
 		return
 	}
-	fileContent, err := json.Marshal(results)
-	if err != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+	var fileContent []byte
+	for _, resultsToDump := range scanResults {
+		if len(resultsToDump) == 0 {
+			continue
+		}
+		if fileContent, err = utils.GetAsJsonBytes(resultsToDump, true, true); err != nil {
+			err = errors.Join(err, fmt.Errorf("failed to write %s scan results to file", scanType))
+		} else {
+			err = errors.Join(err, utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String()))
+		}
 	}
-	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+	return
 }

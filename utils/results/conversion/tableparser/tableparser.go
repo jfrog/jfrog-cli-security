@@ -2,6 +2,7 @@ package tableparser
 
 import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -13,12 +14,13 @@ import (
 
 type CmdResultsTableConverter struct {
 	simpleJsonConvertor *simplejsonparser.CmdResultsSimpleJsonConverter
+	sbomInfo            map[string]results.SbomEntry
 	// If supported, pretty print the output in the tables
 	pretty bool
 }
 
 func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
-	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true)}
+	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]results.SbomEntry)}
 }
 
 func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
@@ -27,14 +29,19 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 		return formats.ResultsTables{}, err
 	}
 	return formats.ResultsTables{
-		SecurityVulnerabilitiesTable:   formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.Vulnerabilities),
-		SecurityViolationsTable:        formats.ConvertToVulnerabilityTableRow(simpleJsonFormat.SecurityViolations),
+		LicensesTable: formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
+		SbomTable:     convertToSbomTableRow(maps.Values(tc.sbomInfo)),
+
+		SecurityVulnerabilitiesTable:   formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.Vulnerabilities),
+		SecurityViolationsTable:        formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.SecurityViolations),
 		LicenseViolationsTable:         formats.ConvertToLicenseViolationTableRow(simpleJsonFormat.LicensesViolations),
-		LicensesTable:                  formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
 		OperationalRiskViolationsTable: formats.ConvertToOperationalRiskViolationTableRow(simpleJsonFormat.OperationalRiskViolations),
-		SecretsTable:                   formats.ConvertToSecretsTableRow(simpleJsonFormat.Secrets),
-		IacTable:                       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Iacs),
-		SastTable:                      formats.ConvertToIacOrSastTableRow(simpleJsonFormat.Sast),
+		SecretsVulnerabilitiesTable:    formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsVulnerabilities),
+		SecretsViolationsTable:         formats.ConvertToSecretsTableRow(simpleJsonFormat.SecretsViolations),
+		IacVulnerabilitiesTable:        formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsVulnerabilities),
+		IacViolationsTable:             formats.ConvertToIacOrSastTableRow(simpleJsonFormat.IacsViolations),
+		SastVulnerabilitiesTable:       formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastVulnerabilities),
+		SastViolationsTable:            formats.ConvertToIacOrSastTableRow(simpleJsonFormat.SastViolations),
 	}, nil
 }
 
@@ -46,26 +53,55 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseScaIssues(target, violations, scaResponse, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseVulnerabilities(target, scaResponse, applicabilityRuns...)
+func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+	return tc.simpleJsonConvertor.ParseLicenses(target, scaResponse)
 }
 
-func (tc *CmdResultsTableConverter) ParseLicenses(target results.ScanTarget, licenses []services.License) (err error) {
-	return tc.simpleJsonConvertor.ParseLicenses(target, licenses)
+func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, secrets ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSecrets(target, secrets...)
+func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs)
 }
 
-func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, iacs ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseIacs(target, iacs...)
+func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
 }
 
-func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, sast ...*sarif.Run) (err error) {
-	return tc.simpleJsonConvertor.ParseSast(target, sast...)
+func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom results.Sbom) (err error) {
+	for _, entry := range sbom.Components {
+		if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
+			if entry.Direct && !parsedEntry.Direct {
+				// If the entry is direct, we want to override the existing entry
+				tc.sbomInfo[entry.String()] = entry
+			}
+			continue
+		}
+		// If the entry does not exist, we want to add it
+		tc.sbomInfo[entry.String()] = entry
+	}
+	return
+}
+
+func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
+	results.SortSbom(rows)
+	for _, entry := range rows {
+		relation := "Direct"
+		if !entry.Direct {
+			relation = "Transitive"
+		}
+		tableRows = append(tableRows, formats.SbomTableRow{
+			Component:   entry.Component,
+			PackageType: entry.Type,
+			Direct:      entry.Direct,
+			Version:     entry.Version,
+			Relation:    relation,
+		})
+	}
+	return
 }

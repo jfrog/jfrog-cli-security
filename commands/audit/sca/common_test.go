@@ -2,6 +2,7 @@ package sca
 
 import (
 	"fmt"
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"reflect"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestGetExcludePattern(t *testing.T) {
 		{
 			name:     "Test no exclude pattern recursive",
 			params:   func() *utils.AuditBasicParams { return (&utils.AuditBasicParams{}).SetIsRecursiveScan(true) },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
 			name: "Test exclude pattern not recursive",
@@ -50,7 +51,33 @@ func TestGetExcludePattern(t *testing.T) {
 		{
 			name:     "Test no exclude pattern",
 			params:   func() *utils.AuditBasicParams { return &utils.AuditBasicParams{} },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)",
+			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+		},
+		{
+			name: "Test exclude patterns from config profile",
+			params: func() *utils.AuditBasicParams {
+				param := &utils.AuditBasicParams{}
+				configProfile := clientservices.ConfigProfile{
+					ProfileName: "profile with sca exclusions",
+					Modules: []clientservices.Module{
+						{
+							ModuleName:   "module with sca exclusions",
+							PathFromRoot: ".",
+							ScanConfig: clientservices.ScanConfig{
+								ScaScannerConfig: clientservices.ScaScannerConfig{
+									EnableScaScan:   true,
+									ExcludePatterns: []string{"exclude3"},
+								},
+							},
+						},
+					},
+					IsDefault:      false,
+					IsBasicProfile: false,
+				}
+				param.SetExclusions([]string{"exclude1", "exclude2"}).SetIsRecursiveScan(true).SetConfigProfile(&configProfile)
+				return param
+			},
+			expected: "(^exclude1$)|(^exclude2$)|(^exclude3$)",
 		},
 	}
 

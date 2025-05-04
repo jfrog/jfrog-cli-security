@@ -19,11 +19,11 @@ import (
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/container"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/container"
 	containerUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/container"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/build"
@@ -40,96 +40,58 @@ import (
 )
 
 // Binary scan tests
-
 func TestXrayBinaryScanJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.Json), false)
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScan(t, string(format.Json), "", "", false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
-	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-policy", "scan-binary-watch", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities:    1,
-		SecurityViolations: 1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.Json), false)
+	output := testXrayBinaryScan(t, string(format.Json), "", "", false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
 func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.SimpleJson), true)
+	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-progress-policy", "scan-binary-progress-watch", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities:    1,
-		SecurityViolations: 1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
 }
 
-// This test verifies the correctness of a use case in 'scan' command, where a user provides the command's arguments before the command's flags, and there is an incorrect flag.
-// Since the library that parses the command expects the flags to be provided before the arguments, it cannot recognize a wrongly provided flag when the order is reversed.
-// This test checks the fix for this issue.
-func TestXrayBinaryScanWithIncorrectFlagsAfterArgs(t *testing.T) {
-	testCases := []struct {
-		name            string
-		flagsBeforeArgs bool
-	}{
-		{
-			name:            "flags before args",
-			flagsBeforeArgs: true,
-		},
-		{
-			name:            "args before flags",
-			flagsBeforeArgs: false,
-		},
-	}
-
-	callback := commonTests.MockProgressInitialization()
-	defer callback()
-	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
-	defer deleteWatch()
-
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			var args []string
-			if test.flagsBeforeArgs {
-				args = []string{"scan", "--watch=" + watchName, binariesPath}
-			} else {
-				args = []string{"scan", binariesPath, "--watch=" + watchName}
-			}
-
-			err := securityTests.PlatformCli.Exec(args...)
-			assert.Error(t, err)
-		})
-	}
-}
-
-func testXrayBinaryScan(t *testing.T, format string, withViolation bool) string {
-	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+func testXrayBinaryScan(t *testing.T, format, policyName, watchName string, errorExpected bool) string {
 	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
-	if withViolation {
-		watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	if policyName != "" && watchName != "" {
+		watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
 		defer deleteWatch()
 		// Include violations and vulnerabilities
 		args = append(args, "--watches="+watchName, "--vuln")
 	}
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, args...)
+	output, err := securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
+	if errorExpected {
+		assert.Error(t, err)
+	} else {
+		assert.NoError(t, err)
+	}
+	return output
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
@@ -147,8 +109,7 @@ func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {
 	scanArgs = append(scanArgs, "--bypass-archive-limits")
 	output := securityTests.PlatformCli.RunCliCmdWithOutput(t, scanArgs...)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
@@ -174,7 +135,7 @@ func TestDockerScan(t *testing.T) {
 	testCli, cleanup := integration.InitNativeDockerTest(t)
 	defer cleanup()
 
-	watchName, deleteWatch := securityTestUtils.CreateTestWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
+	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "docker-policy", "docker-watch", xrayUtils.Low)
 	defer deleteWatch()
 
 	imagesToScan := []string{
@@ -209,9 +170,11 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
 			if validateSecrets {
-				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Inactive: minInactives})
+				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+					Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: minInactives}},
+				})
 			} else {
-				validations.VerifyJsonResults(t, output, validations.ValidationParams{Vulnerabilities: minVulnerabilities, Licenses: minLicenses})
+				validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: minVulnerabilities, Licenses: minLicenses}})
 			}
 		}
 		// Run docker scan on image with watch
@@ -221,7 +184,7 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 		cmdArgs = append(cmdArgs, "--watches="+watchName)
 		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
 		if assert.NotEmpty(t, output) {
-			validations.VerifyJsonResults(t, output, validations.ValidationParams{SecurityViolations: minViolations})
+			validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Violations: minViolations}})
 		}
 	}
 }
@@ -267,7 +230,7 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 	assert.True(t, applicableStatusExists)
 
 	// Verify that secretes detection succeeded.
-	assert.NotEqual(t, 0, len(results.Secrets))
+	assert.NotEqual(t, 0, len(results.SecretsVulnerabilities))
 
 }
 

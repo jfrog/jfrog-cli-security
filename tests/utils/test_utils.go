@@ -14,7 +14,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -24,7 +23,6 @@ import (
 
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
@@ -48,25 +46,23 @@ func UnmarshalXML(t *testing.T, output string) formats.Bom {
 	return xmlMap
 }
 
-func ValidateXrayVersion(t *testing.T, minVersion string) {
-	xrayVersion, err := getTestsXrayVersion()
+func GetAndValidateXrayVersion(t *testing.T, minVersion string) {
+	xrayVersion, err := GetTestsXrayVersion()
 	if err != nil {
 		assert.NoError(t, err)
 		return
 	}
-	err = clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion.GetVersion(), minVersion)
-	if err != nil {
+	ValidateXrayVersion(t, xrayVersion.GetVersion(), minVersion)
+}
+
+func ValidateXrayVersion(t *testing.T, xrayVersion, minVersion string) {
+	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xray, xrayVersion, minVersion); err != nil {
 		t.Skip(err)
 	}
 }
 
-func ValidateXscVersion(t *testing.T, minVersion string) {
-	xscVersion, err := getTestsXscVersion()
-	if err != nil {
-		t.Skip(err)
-	}
-	err = clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion.GetVersion(), minVersion)
-	if err != nil {
+func ValidateXscVersion(t *testing.T, xscVersion, minVersion string) {
+	if err := clientUtils.ValidateMinimumVersion(clientUtils.Xsc, xscVersion, minVersion); err != nil {
 		t.Skip(err)
 	}
 }
@@ -95,14 +91,9 @@ func removeDirs(dirs ...string) {
 	}
 }
 
-func getTestsXrayVersion() (version.Version, error) {
+func GetTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
-}
-
-func getTestsXscVersion() (version.Version, error) {
-	xscVersion, err := configTests.XscAuth.GetVersion()
-	return *version.NewVersion(xscVersion), err
 }
 
 func ChangeWD(t *testing.T, newPath string) string {
@@ -110,31 +101,6 @@ func ChangeWD(t *testing.T, newPath string) string {
 	assert.NoError(t, err, "Failed to get current dir")
 	clientTests.ChangeDirAndAssert(t, newPath)
 	return prevDir
-}
-
-func ReadCmdScanResults(t *testing.T, path string) *results.SecurityCommandResults {
-	content, err := os.ReadFile(path)
-	require.NoError(t, err)
-	var cmdResults *results.SecurityCommandResults
-	if !assert.NoError(t, json.Unmarshal(content, &cmdResults)) {
-		return &results.SecurityCommandResults{}
-	}
-	// replace paths separators
-	for _, targetResults := range cmdResults.Targets {
-		targetResults.Target = filepath.FromSlash(targetResults.Target)
-		if targetResults.ScaResults != nil {
-			for i, descriptor := range targetResults.ScaResults.Descriptors {
-				targetResults.ScaResults.Descriptors[i] = filepath.FromSlash(descriptor)
-			}
-		}
-		if targetResults.JasResults != nil {
-			convertSarifRunPathsForOS(targetResults.JasResults.ApplicabilityScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SecretsScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.IacScanResults...)
-			convertSarifRunPathsForOS(targetResults.JasResults.SastScanResults...)
-		}
-	}
-	return cmdResults
 }
 
 func convertSarifRunPathsForOS(runs ...*sarif.Run) {
@@ -167,9 +133,7 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.SimpleJsonResults
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.SimpleJsonResults{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, vulnerability := range results.Vulnerabilities {
 		convertScaSimpleJsonPathsForOS(&vulnerability.Components, &vulnerability.ImpactPaths, &vulnerability.ImpactedDependencyDetails, &vulnerability.Cves)
@@ -183,13 +147,22 @@ func ReadSimpleJsonResults(t *testing.T, path string) formats.SimpleJsonResults 
 	for _, orViolation := range results.OperationalRiskViolations {
 		convertScaSimpleJsonPathsForOS(&orViolation.Components, nil, &orViolation.ImpactedDependencyDetails, nil)
 	}
-	for _, secret := range results.Secrets {
+	for _, secret := range results.SecretsVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&secret)
 	}
-	for _, sast := range results.Sast {
+	for _, sast := range results.SastVulnerabilities {
 		convertJasSimpleJsonPathsForOS(&sast)
 	}
-	for _, iac := range results.Iacs {
+	for _, iac := range results.IacsVulnerabilities {
+		convertJasSimpleJsonPathsForOS(&iac)
+	}
+	for _, secret := range results.SecretsViolations {
+		convertJasSimpleJsonPathsForOS(&secret)
+	}
+	for _, sast := range results.SastViolations {
+		convertJasSimpleJsonPathsForOS(&sast)
+	}
+	for _, iac := range results.IacsViolations {
 		convertJasSimpleJsonPathsForOS(&iac)
 	}
 	return results
@@ -255,9 +228,7 @@ func ReadSarifResults(t *testing.T, path string) *sarif.Report {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results *sarif.Report
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return &sarif.Report{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	convertSarifRunPathsForOS(results.Runs...)
 	return results
@@ -267,9 +238,7 @@ func ReadSummaryResults(t *testing.T, path string) formats.ResultsSummary {
 	content, err := os.ReadFile(path)
 	require.NoError(t, err)
 	var results formats.ResultsSummary
-	if !assert.NoError(t, json.Unmarshal(content, &results)) {
-		return formats.ResultsSummary{}
-	}
+	require.NoError(t, json.Unmarshal(content, &results))
 	// replace paths separators
 	for _, targetResults := range results.Scans {
 		targetResults.Target = filepath.FromSlash(targetResults.Target)
@@ -288,16 +257,124 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
-func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUtils.Severity) (string, func()) {
+func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.IgnoreFilters) func() {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayUtils.IgnoreRuleParams{
+		// expired in one day
+		Notes:         description,
+		ExpiresAt:     time.Now().AddDate(0, 0, 1),
+		IgnoreFilters: filters,
+	})
+	assert.NoError(t, err)
+	return func() {
+		assert.NoError(t, xrayManager.DeleteIgnoreRule(ignoreRuleId))
+	}
+}
+
+func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.PolicyRule) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default security policy.
+	policyParams := xrayUtils.PolicyParams{
+		Name:  fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
+		Type:  xrayUtils.Security,
+		Rules: rules,
+	}
+	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
+		return "", func() {}
+	}
+	return policyParams.Name, func() {
+		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
+	}
+}
+
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
+	return CreateSecurityPolicy(t, policyName,
+		xrayUtils.PolicyRule{
+			Name:     "sca_rule",
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 1,
+		},
+		xrayUtils.PolicyRule{
+			Name:     "exposers_rule",
+			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 2,
+		},
+		xrayUtils.PolicyRule{
+			Name:     "sast_rule",
+			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity),
+			Actions:  getBuildFailAction(failBuild),
+			Priority: 3,
+		},
+	)
+}
+
+func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
+	if failBuild {
+		return &xrayUtils.PolicyAction{
+			FailBuild: clientUtils.Pointer(true),
+		}
+	}
+	return nil
+}
+
+func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams) (string, func()) {
+	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
+	require.NoError(t, err)
+	// Create new default watch.
+	watchParams := assignParams(xrayUtils.NewWatchParams())
+	watchParams.Name = fmt.Sprintf("%s-%s-%s", watchName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10))
+	watchParams.Active = true
+	// Assign the policy to the watch.
+	watchParams.Policies = []xrayUtils.AssignedPolicy{
+		{
+			Name: policyName,
+			Type: string(xrayUtils.Security),
+		},
+	}
+	assert.NoError(t, xrayManager.CreateWatch(watchParams))
+	return watchParams.Name, func() {
+		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	}
+}
+
+// If gitResources is empty, the watch will be created with all builds.
+func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
+		return watchParams
+	})
+}
+
+func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+		watchParams.ProjectKey = projectKey
+		if len(gitResources) > 0 {
+			watchParams.GitRepositories.Resources = gitResources
+		} else {
+			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+		}
+		return watchParams
+	})
+}
+
+func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
 	policyParams := xrayUtils.PolicyParams{
-		Name: fmt.Sprintf("%s-%s", policyName, strconv.FormatInt(time.Now().Unix(), 10)),
+		Name: fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
 		Type: xrayUtils.Security,
 		Rules: []xrayUtils.PolicyRule{{
 			Name:     "sec_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity),
+			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, false),
 			Priority: 1,
 			Actions: &xrayUtils.PolicyAction{
 				FailBuild: clientUtils.Pointer(true),
@@ -308,19 +385,9 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 		return "", func() {}
 	}
 	// Create new default watch.
-	watchParams := xrayUtils.NewWatchParams()
-	watchParams.Name = fmt.Sprintf("%s-%s", watchName, strconv.FormatInt(time.Now().Unix(), 10))
-	watchParams.Active = true
-	watchParams.Builds.Type = xrayUtils.WatchBuildAll
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
-		{
-			Name: policyParams.Name,
-			Type: "security",
-		},
-	}
-	assert.NoError(t, xrayManager.CreateWatch(watchParams))
-	return watchParams.Name, func() {
-		assert.NoError(t, xrayManager.DeleteWatch(watchParams.Name))
+	watchName, cleanUpWatch := CreateWatchForTests(t, policyParams.Name, watchName)
+	return watchName, func() {
+		cleanUpWatch()
 		assert.NoError(t, xrayManager.DeletePolicy(policyParams.Name))
 	}
 }
@@ -328,19 +395,39 @@ func CreateTestWatch(t *testing.T, policyName string, watchName, severity xrayUt
 func CreateTestProjectInTempDir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, err := fileutils.CreateTempDir()
 	assert.NoError(t, err, "Couldn't create temp dir")
-	actualPath := filepath.Join(filepath.Dir(tempDirPath), filepath.Base(projectPath))
-	coreTests.RenamePath(tempDirPath, actualPath, t)
+	// Make sure the name of the final dir is the name of the project Path
+	actualPath := filepath.Join(tempDirPath, filepath.Base(projectPath))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(actualPath))
+	// Copy the project to the temp dir.
 	assert.NoError(t, biutils.CopyDir(projectPath, actualPath, true, nil))
 	return actualPath, func() {
-		assert.NoError(t, fileutils.RemoveTempDir(actualPath), "Couldn't remove temp dir")
+		assert.NoError(t, fileutils.RemoveTempDir(tempDirPath), "Couldn't remove temp dir")
 	}
 }
 
 func CreateTestProjectEnvAndChdir(t *testing.T, projectPath string) (string, func()) {
 	tempDirPath, createTempDirCallback := CreateTestProjectInTempDir(t, projectPath)
-	prevWd := ChangeWD(t, tempDirPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
 	return tempDirPath, func() {
-		clientTests.ChangeDirAndAssert(t, prevWd)
+		cleanCwd()
+		createTempDirCallback()
+	}
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZip(t *testing.T, projectPath string) (string, func()) {
+	tempDirWithZip, cleanUp := CreateTestProjectInTempDir(t, projectPath)
+	zipName := fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+	assert.NoError(t, clientUtils.ExtractArchive(tempDirWithZip, zipName, zipName, "", false))
+	return tempDirWithZip, cleanUp
+}
+
+// 'projectPath' directory should contains a single zip file in the format: fmt.Sprintf("%s.zip", filepath.Base(projectPath))
+func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string, func()) {
+	tempDirPath, createTempDirCallback := CreateTestProjectFromZip(t, projectPath)
+	cleanCwd := ChangeWDWithCallback(t, tempDirPath)
+	return tempDirPath, func() {
+		cleanCwd()
 		createTempDirCallback()
 	}
 }

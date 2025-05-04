@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -18,19 +16,22 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
 var TestDataDir = filepath.Join("..", "..", "tests", "testdata")
@@ -507,7 +508,10 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	curationCmd := NewCurationAuditCommand()
 	curationCmd.SetIsCurationCmd(true)
 	curationCmd.parallelRequests = 3
+	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
+	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return
@@ -555,6 +559,7 @@ type testCase struct {
 	expectedError            string
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
+	allowInsecureTls         bool
 }
 
 func (tc testCase) getPathToTests() string {
@@ -795,9 +800,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			tech:          techutils.Dotnet,
 			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
-				"curated-nuget": filepath.Join("resources", "feed.json"),
-				"index.json":    filepath.Join("resources", "index.json"),
-				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
+				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
+				"index.json":               filepath.Join("resources", "index.json"),
+				"13.0.3":                   filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
 			},
 			requestToFail: map[string]bool{
 				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
@@ -825,6 +830,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 					totalNumberOfPackages: 1,
 				},
 			},
+			allowInsecureTls: true,
 		},
 	}
 	return tests
@@ -848,7 +854,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 		}
 		if r.Method == http.MethodGet {
 			if resourceToServe != nil {
-				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
+				if pathToRes := getResourceToServe(resourceToServe, r.RequestURI); pathToRes != "" && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
@@ -873,6 +879,15 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 	})
 	config.XrayUrl = config.Url + "xray/"
 	return serverMock, config
+}
+
+func getResourceToServe(resourcesToServe map[string]string, pathToRes string) string {
+	for key, value := range resourcesToServe {
+		if strings.HasSuffix(strings.TrimSuffix(pathToRes, "/"), key) {
+			return value
+		}
+	}
+	return ""
 }
 
 func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
@@ -1110,6 +1125,184 @@ func Test_convertResultsToSummary(t *testing.T) {
 				})
 			}
 			assert.Equal(t, tt.expected, summary)
+		})
+	}
+}
+
+func Test_getSelectedPackages(t *testing.T) {
+	blockedPackages := []*PackageStatus{
+		{PackageName: "pkg1", PackageVersion: "1.0.0"},
+		{PackageName: "pkg2", PackageVersion: "2.0.0"},
+		{PackageName: "pkg3", PackageVersion: "3.0.0"},
+		{PackageName: "pkg4", PackageVersion: "4.0.0"},
+	}
+
+	tests := []struct {
+		name           string
+		requestedRows  string
+		expectedResult []*PackageStatus
+		expectedOk     bool
+	}{
+		{
+			name:           "Select all packages",
+			requestedRows:  "all",
+			expectedResult: blockedPackages,
+			expectedOk:     true,
+		},
+		{
+			name:           "Select single package",
+			requestedRows:  "2",
+			expectedResult: []*PackageStatus{blockedPackages[1]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select multiple packages",
+			requestedRows:  "1,3",
+			expectedResult: []*PackageStatus{blockedPackages[0], blockedPackages[2]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select range of packages",
+			requestedRows:  "2-4",
+			expectedResult: []*PackageStatus{blockedPackages[1], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select mixed indices and ranges",
+			requestedRows:  "1,3-4",
+			expectedResult: []*PackageStatus{blockedPackages[0], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select overlapping ranges",
+			requestedRows:  "2-3,2,3,3-4",
+			expectedResult: []*PackageStatus{blockedPackages[1], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Empty input",
+			requestedRows:  "",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+		{
+			name:           "Invalid format",
+			requestedRows:  "invalid",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+		{
+			name:           "Out of range index",
+			requestedRows:  "5",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := getSelectedPackages(tt.requestedRows, blockedPackages)
+			assert.Equal(t, tt.expectedResult, result)
+			assert.Equal(t, tt.expectedOk, ok)
+		})
+	}
+}
+
+func TestSendWaiverRequests(t *testing.T) {
+	tests := []struct {
+		name           string
+		pkgs           []*PackageStatus
+		msg            string
+		mockResponse   string
+		expectedStatus []WaiverResponse
+		expectError    bool
+		testCase
+	}{
+		{
+			name: "Single package approved",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:          "Requesting waiver for testing",
+			mockResponse: `{"errors":[{"status":200,"message":"waiver-id|approved"}]}`,
+			expectedStatus: []WaiverResponse{
+				{
+					PkgName:     "rsc.io/sampler",
+					Status:      "approved",
+					WaiverID:    "waiver-id",
+					Explanation: WaiverRequestApproved,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Single package forbidden",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:          "Requesting waiver for testing",
+			mockResponse: `{"errors":[{"status":403,"message":"waiver-id|forbidden"}]}`,
+			expectedStatus: []WaiverResponse{
+				{
+					PkgName:     "rsc.io/sampler",
+					Status:      "forbidden",
+					WaiverID:    "waiver-id",
+					Explanation: WaiverRequestForbidden,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Error while sending requests",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:            "Requesting waiver for testing",
+			mockResponse:   `{"errors":[{"status":500,"message":"error"}]}`,
+			expectedStatus: nil,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock server to simulate Artifactory responses
+			testHandler := func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, err := w.Write([]byte(tt.mockResponse))
+				assert.NoError(t, err)
+			}
+			mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+			defer mockServer.Close()
+
+			// Create CurationAuditCommand instance
+			ca := &CurationAuditCommand{}
+
+			// Call the function
+			for _, pkg := range tt.pkgs {
+				pkg.BlockedPackageUrl = strings.ReplaceAll(pkg.BlockedPackageUrl, "http://localhost:8046/", serverDetails.GetArtifactoryUrl())
+			}
+			requestStatuses, err := ca.sendWaiverRequests(tt.pkgs, tt.msg, serverDetails)
+
+			// Assertions
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, requestStatuses)
+			}
 		})
 	}
 }

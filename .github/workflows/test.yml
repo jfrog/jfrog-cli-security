@@ -18,10 +18,11 @@ concurrency:
 # Environment variables shared across all jobs.
 env:
   GOPROXY: direct
-  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }}"
+  GO_COMMON_TEST_ARGS: "-v github.com/jfrog/jfrog-cli-security --race --timeout 30m --jfrog.url=${{ secrets.PLATFORM_URL }} --jfrog.adminToken=${{ secrets.PLATFORM_ADMIN_TOKEN }} --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }}"
   GRADLE_OPTS: -Dorg.gradle.daemon=false
   CI: true
   JFROG_CLI_LOG_LEVEL: DEBUG
+  JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY: ${{ vars.JFROG_TEST_PROJECT_KEY }}
 
 jobs:
   Pretest:
@@ -65,7 +66,7 @@ jobs:
 
       # Test and generate code coverage
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} -cover -coverprofile=cover-unit-tests --test.unit
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --ci.runId=${{ runner.os }}-sec-test -covermode atomic -coverprofile=cover-unit-tests --test.unit
 
       - name: Archive Code Coverage Results
         uses: actions/upload-artifact@v4
@@ -97,7 +98,11 @@ jobs:
             testFlags: '--test.audit.Go'
           - name: 'C/C++/C# Suite (Conan, NuGet, Dotnet)'
             testFlags: '--test.audit.C'
-        
+          - name: 'Cocoapods Suite'
+            testFlags: '--test.audit.Cocoapods'
+          - name: 'Swift Suite'
+            testFlags: '--test.audit.Swift'
+
     steps:
       # Prepare the environment
       - name: Checkout code
@@ -110,7 +115,7 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }}
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} ${{ matrix.suite.testFlags }} --ci.runId=${{ runner.os }}-sec-test
 
   Artifactory_Integration_Tests:
     name: "[${{ matrix.os }}] Artifactory Integration Tests"
@@ -178,6 +183,10 @@ jobs:
       # Test
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
+        if: ${{ matrix.os != 'ubuntu' }}
+      - name: Run security tests (with Docker Scan)
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
+        if: ${{ matrix.os == 'ubuntu' }}
 
   Other_Scan_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Scan Commands Integration Tests"
@@ -202,7 +211,7 @@ jobs:
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
         if: ${{ matrix.os != 'ubuntu' }}
       - name: Run security tests (with Docker Scan)
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --test.containerRegistry=${{ secrets.CONTAINER_REGISTRY }} --ci.runId=${{ runner.os }}-sec-test
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
         if: ${{ matrix.os == 'ubuntu' }}
 
   Other_Commands_Integration_Tests:
@@ -225,8 +234,31 @@ jobs:
 
       # Test
       - name: Run tests
-        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --test.git
+        run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
  
+
+  Git_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Git Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu, windows, macos ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.git --ci.runId=${{ runner.os }}-sec-test
+
   Code_Coverage:
     name: Generate Code Coverage Report
     if: github.event_name == 'pull_request_target'
@@ -238,7 +270,7 @@ jobs:
       pull-requests: write # write permission needed to comment on PR
     steps:
       - name: Generate Unit Tests Code Coverage Report
-        uses: fgrosse/go-coverage-report@v1.2.0
+        uses: fgrosse/go-coverage-report@v1.1.0
         with:
           coverage-artifact-name: unit-tests-code-coverage
           coverage-file-name: cover-unit-tests

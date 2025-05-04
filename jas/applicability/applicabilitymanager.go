@@ -28,7 +28,6 @@ const (
 type ApplicabilityScanType string
 
 type ApplicabilityScanManager struct {
-	applicabilityScanResults []*sarif.Run
 	directDependenciesCves   []string
 	indirectDependenciesCves []string
 	xrayResults              []services.ScanResponse
@@ -44,10 +43,6 @@ type ApplicabilityScanManager struct {
 // Checking if the scanned project is eligible for applicability scan.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-// Return values:
-// map[string]string: A map containing the applicability result of each XRAY CVE.
-// bool: true if the user is entitled to the applicability scan, false otherwise.
-// error: An error object (if any).
 func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
 	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
 	var scannerTempDir string
@@ -60,13 +55,13 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 		return
 	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
-	if err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err)
+	// Applicability scan does not produce violations.
+	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
 		return
 	}
-	results = applicabilityScanManager.applicabilityScanResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetRulesPropertyCount("applicability", "applicable", results...), "applicable cves")
+	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
+	if applicableCveCount > 0 {
+		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", applicableCveCount, "applicable cves")
 	}
 	return
 }
@@ -74,7 +69,6 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
-		applicabilityScanResults: []*sarif.Run{},
 		directDependenciesCves:   directDependenciesCves,
 		indirectDependenciesCves: indirectDependenciesCves,
 		xrayResults:              xrayScanResults,
@@ -128,19 +122,14 @@ func isDirectComponents(components []string, directDependencies []string) bool {
 	return false
 }
 
-func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = asm.createConfigFile(module, asm.scanner.Exclusions...); err != nil {
+func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = asm.createConfigFile(module, append(asm.scanner.Exclusions, asm.scanner.ScannersExclusions.ContextualAnalysisExcludePatterns...)...); err != nil {
 		return
 	}
 	if err = asm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(asm.resultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity)
-	if err != nil {
-		return
-	}
-	asm.applicabilityScanResults = append(asm.applicabilityScanResults, workingDirResults...)
-	return
+	return jas.ReadJasScanRunsFromFile(asm.resultsFileName, module.SourceRoot, applicabilityDocsUrlSuffix, asm.scanner.MinSeverity)
 }
 
 func (asm *ApplicabilityScanManager) cvesExists() bool {

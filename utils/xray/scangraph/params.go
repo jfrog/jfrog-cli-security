@@ -2,26 +2,16 @@ package scangraph
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 type ScanGraphParams struct {
 	serverDetails       *config.ServerDetails
+	technology          techutils.Technology
 	xrayGraphScanParams *services.XrayGraphScanParams
 	fixableOnly         bool
-	xrayVersion         string
 	severityLevel       int
-}
-
-type CommonGraphScanParams struct {
-	RepoPath               string
-	ProjectKey             string
-	Watches                []string
-	ScanType               services.ScanType
-	IncludeVulnerabilities bool
-	IncludeLicenses        bool
-	XscVersion             string
-	MultiScanId            string
 }
 
 func NewScanGraphParams() *ScanGraphParams {
@@ -38,11 +28,6 @@ func (sgp *ScanGraphParams) SetXrayGraphScanParams(params *services.XrayGraphSca
 	return sgp
 }
 
-func (sgp *ScanGraphParams) SetXrayVersion(xrayVersion string) *ScanGraphParams {
-	sgp.xrayVersion = xrayVersion
-	return sgp
-}
-
 func (sgp *ScanGraphParams) SetSeverityLevel(severity string) *ScanGraphParams {
 	sgp.severityLevel = getLevelOfSeverity(severity)
 	return sgp
@@ -50,10 +35,6 @@ func (sgp *ScanGraphParams) SetSeverityLevel(severity string) *ScanGraphParams {
 
 func (sgp *ScanGraphParams) XrayGraphScanParams() *services.XrayGraphScanParams {
 	return sgp.xrayGraphScanParams
-}
-
-func (sgp *ScanGraphParams) XrayVersion() string {
-	return sgp.xrayVersion
 }
 
 func (sgp *ScanGraphParams) ServerDetails() *config.ServerDetails {
@@ -67,4 +48,13 @@ func (sgp *ScanGraphParams) FixableOnly() bool {
 func (sgp *ScanGraphParams) SetFixableOnly(fixable bool) *ScanGraphParams {
 	sgp.fixableOnly = fixable
 	return sgp
+}
+
+func (sgp *ScanGraphParams) SetTechnology(technology techutils.Technology) *ScanGraphParams {
+	sgp.technology = technology
+	return sgp
+}
+
+func (sgp *ScanGraphParams) Technology() techutils.Technology {
+	return sgp.technology
 }

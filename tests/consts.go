@@ -13,10 +13,11 @@ const (
 	GoCacheEnvVar   = "GOMODCACHE"
 	PipCacheEnvVar  = "PIP_CACHE_DIR"
 
-	TestJfrogUrlEnvVar      = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
-	TestJfrogTokenEnvVar    = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
-	TestJfrogUserEnvVar     = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
-	TestJfrogPasswordEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
+	TestJfrogUrlEnvVar                = "JFROG_SECURITY_CLI_TESTS_JFROG_URL"
+	TestJfrogTokenEnvVar              = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
+	TestJfrogUserEnvVar               = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
+	TestJfrogPasswordEnvVar           = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
+	TestJfrogPlatformProjectKeyEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY"
 
 	MavenCacheRedirectionVal = "-Dmaven.repo.local="
 )
@@ -162,8 +163,8 @@ func AddTimestampToGlobalVars() {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
-	if *ciRunId != "" {
-		uniqueSuffix = "-" + *ciRunId + uniqueSuffix
+	if *CiRunId != "" {
+		uniqueSuffix = "-" + *CiRunId + uniqueSuffix
 	}
 	// Artifactory accepts only lowercase repository names
 	uniqueSuffix = strings.ToLower(uniqueSuffix)

@@ -21,7 +21,7 @@ import (
 	"github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
 
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/dotnet"
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/dotnet"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
@@ -93,7 +93,7 @@ func restoreInTempDirAndGetBuildInfo(params utils.AuditParams, wd string, exclus
 	}
 
 	log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern)
+	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern, params.InsecureTls())
 	if err != nil {
 		return
 	}
@@ -116,7 +116,7 @@ func isInstallRequired(params utils.AuditParams, sol solution.Solution, skipAuto
 	return installRequired, nil
 }
 
-func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionPattern string) (sol solution.Solution, err error) {
+func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
 	toolName := params.InstallCommandName()
 	if toolName == "" {
 		// Determine if the project is a NuGet or .NET project
@@ -148,7 +148,7 @@ func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionP
 		log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
 
 		var configFile *os.File
-		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, false)
+		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, false, allowInsecureConnections)
 		if err != nil {
 			err = fmt.Errorf("failed while attempting to generate a configuration file for setting up Artifactory as a resolution server")
 			return

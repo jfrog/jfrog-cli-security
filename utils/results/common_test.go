@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 func TestViolationFailBuild(t *testing.T) {
@@ -399,6 +400,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			cves:           []services.Cve{{Id: "testCve2"}},
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{
+				Reason: "result-msg",
 				Location: formats.Location{
 					File:      "fileName2",
 					StartLine: 1,
@@ -456,7 +458,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
-					Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
 				}},
 			},
 		},
@@ -558,7 +560,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
 			},
 		},
 	}
@@ -697,6 +699,371 @@ func TestGetFinalApplicabilityStatus(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expectedOutput, getFinalApplicabilityStatus(tc.input))
+		})
+	}
+}
+
+func TestShouldSkipNotApplicable(t *testing.T) {
+	testCases := []struct {
+		name                string
+		violation           services.Violation
+		applicabilityStatus jasutils.ApplicabilityStatus
+		shouldSkip          bool
+		errorExpected       bool
+	}{
+		{
+			name:                "Applicable CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.Applicable,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Undetermined CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.ApplicabilityUndetermined,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Not covered CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotCovered,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Missing Context CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.MissingContext,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Not scanned CVE - should NOT skip",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotScanned,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name: "Non applicable CVE with skip-non-applicable in ALL policies - SHOULD skip",
+			violation: services.Violation{
+				Policies: []services.Policy{
+					{
+						Policy:            "policy-1",
+						SkipNotApplicable: true,
+					},
+					{
+						Policy:            "policy-2",
+						SkipNotApplicable: true,
+					},
+				},
+			},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          true,
+			errorExpected:       false,
+		},
+		{
+			name: "Non applicable CVE with skip-non-applicable in SOME policies - should NOT skip",
+			violation: services.Violation{
+				Policies: []services.Policy{
+					{
+						Policy:            "policy-1",
+						SkipNotApplicable: true,
+					},
+					{
+						Policy:            "policy-2",
+						SkipNotApplicable: false,
+					},
+				},
+			},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          false,
+			errorExpected:       false,
+		},
+		{
+			name:                "Violation without policy - error expected",
+			violation:           services.Violation{},
+			applicabilityStatus: jasutils.NotApplicable,
+			shouldSkip:          false,
+			errorExpected:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			shouldSkip, err := shouldSkipNotApplicable(tc.violation, tc.applicabilityStatus)
+			if tc.errorExpected {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tc.shouldSkip {
+				assert.True(t, shouldSkip)
+			} else {
+				assert.False(t, shouldSkip)
+			}
+		})
+	}
+}
+
+func TestDepTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		depTrees     []*xrayCmdUtils.GraphNode
+		expectedSbom Sbom
+	}{
+		{
+			name:         "no deps",
+			depTrees:     []*xrayCmdUtils.GraphNode{},
+			expectedSbom: Sbom{},
+		},
+		{
+			name: "one tree with one node",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id:    "root",
+					Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://A:1.0.1"}},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id:    "npm://D:2.0.0",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id: "npm://B:1.0.0",
+						},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			depTrees: []*xrayCmdUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "go://B:1.0.0"}},
+						},
+						{
+							Id: "npm://C:1.0.1",
+						},
+						{
+							Id: "npm://D:1.0.0",
+						},
+					},
+				},
+				{
+					Id: "root",
+					Nodes: []*xrayCmdUtils.GraphNode{
+						{
+							Id:    "npm://A:2.0.1",
+							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}, {Id: "npm://D:1.2.3"}},
+						},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "D", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+					},
+					{
+						Component: "D", Version: "1.2.3", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := DepTreeToSbom(test.depTrees)
+			SortSbom(sbom.Components)
+			assert.Equal(t, test.expectedSbom, sbom)
+		})
+	}
+}
+
+func TestCompTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		compTrees    *xrayCmdUtils.BinaryGraphNode
+		expectedSbom Sbom
+	}{
+		{
+			name:         "no deps",
+			compTrees:    &xrayCmdUtils.BinaryGraphNode{},
+			expectedSbom: Sbom{Components: []SbomEntry{}},
+		},
+		{
+			name: "one tree with one node",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id:    "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://A:1.0.1"}},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree rpm",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id:    "npm://root:1.0.0",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "rpm://OS-1:A:1111:1.0.1"}},
+				Path:  "file.rpm",
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "root", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "1111:1.0.1", Type: "RPM", Direct: false,
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id:    "npm://D:2.0.0",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id: "npm://B:1.0.0",
+					},
+					{
+						Id: "npm://No-Version",
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			compTrees: &xrayCmdUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayCmdUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "go://B:1.0.0"}},
+					},
+					{
+						Id: "npm://C:1.0.1",
+					},
+					{
+						Id:    "npm://A:2.0.1",
+						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+				},
+			},
+			expectedSbom: Sbom{
+				Components: []SbomEntry{
+					{
+						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+					},
+					{
+						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := CompTreeToSbom(test.compTrees)
+			SortSbom(sbom.Components)
+			assert.Equal(t, test.expectedSbom, sbom)
 		})
 	}
 }

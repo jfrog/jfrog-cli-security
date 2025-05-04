@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -21,24 +22,28 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
+const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
+
 type Technology string
 
 const (
-	Maven  Technology = "maven"
-	Gradle Technology = "gradle"
-	Npm    Technology = "npm"
-	Pnpm   Technology = "pnpm"
-	Yarn   Technology = "yarn"
-	Go     Technology = "go"
-	Pip    Technology = "pip"
-	Pipenv Technology = "pipenv"
-	Poetry Technology = "poetry"
-	Nuget  Technology = "nuget"
-	Dotnet Technology = "dotnet"
-	Docker Technology = "docker"
-	Oci    Technology = "oci"
-	Conan  Technology = "conan"
-	NoTech Technology = ""
+	Maven     Technology = "maven"
+	Gradle    Technology = "gradle"
+	Npm       Technology = "npm"
+	Pnpm      Technology = "pnpm"
+	Yarn      Technology = "yarn"
+	Go        Technology = "go"
+	Pip       Technology = "pip"
+	Pipenv    Technology = "pipenv"
+	Poetry    Technology = "poetry"
+	Nuget     Technology = "nuget"
+	Dotnet    Technology = "dotnet"
+	Docker    Technology = "docker"
+	Oci       Technology = "oci"
+	Conan     Technology = "conan"
+	Cocoapods Technology = "cocoapods"
+	Swift     Technology = "swift"
+	NoTech    Technology = ""
 )
 const Pypi = "pypi"
 
@@ -53,21 +58,26 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
+	// CocoapodsLang package can have multiple languages
+	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
 var TechToProjectType = map[Technology]project.ProjectType{
-	Maven:  project.Maven,
-	Gradle: project.Gradle,
-	Npm:    project.Npm,
-	Yarn:   project.Yarn,
-	Go:     project.Go,
-	Pip:    project.Pip,
-	Pipenv: project.Pipenv,
-	Poetry: project.Poetry,
-	Nuget:  project.Nuget,
-	Dotnet: project.Dotnet,
+	Maven:     project.Maven,
+	Gradle:    project.Gradle,
+	Npm:       project.Npm,
+	Yarn:      project.Yarn,
+	Go:        project.Go,
+	Pip:       project.Pip,
+	Pipenv:    project.Pipenv,
+	Poetry:    project.Poetry,
+	Nuget:     project.Nuget,
+	Dotnet:    project.Dotnet,
+	Cocoapods: project.Cocoapods,
+	Swift:     project.Swift,
 }
 
 var packageTypes = map[string]string{
@@ -191,9 +201,21 @@ var technologiesData = map[Technology]TechData{
 	Docker: {},
 	Oci:    {},
 	Conan: {
-		indicators:         []string{"conanfile.txt", "conanfile.py "},
-		packageDescriptors: []string{"conanfile.txt", "conanfile.py "},
+		indicators:         []string{"conanfile.txt", "conanfile.py"},
+		packageDescriptors: []string{"conanfile.txt", "conanfile.py"},
 		formal:             "Conan",
+	},
+	Cocoapods: {
+		indicators:         []string{"Podfile", "Podfile.lock"},
+		packageDescriptors: []string{"Podfile", "Podfile.lock"},
+		formal:             "Cocoapods",
+		packageTypeId:      "cocoapods://",
+	},
+	Swift: {
+		indicators:         []string{"Package.swift", "Package.resolved"},
+		packageDescriptors: []string{"Package.swift", "Package.resolved"},
+		formal:             "Swift",
+		packageTypeId:      "swift://",
 	},
 }
 
@@ -224,17 +246,19 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 
 func TechnologyToLanguage(technology Technology) CodeLanguage {
 	languageMap := map[Technology]CodeLanguage{
-		Npm:    JavaScript,
-		Pip:    Python,
-		Poetry: Python,
-		Pipenv: Python,
-		Go:     GoLang,
-		Maven:  Java,
-		Gradle: Java,
-		Nuget:  CSharp,
-		Dotnet: CSharp,
-		Yarn:   JavaScript,
-		Pnpm:   JavaScript,
+		Npm:       JavaScript,
+		Pip:       Python,
+		Poetry:    Python,
+		Pipenv:    Python,
+		Go:        GoLang,
+		Maven:     Java,
+		Gradle:    Java,
+		Nuget:     CSharp,
+		Dotnet:    CSharp,
+		Yarn:      JavaScript,
+		Pnpm:      JavaScript,
+		Cocoapods: CocoapodsLang,
+		Swift:     SwiftLang,
 	}
 	return languageMap[technology]
 }
@@ -410,29 +434,6 @@ func getDirNoTechList(technologiesDetected map[Technology]map[string][]string, d
 		// If all children exists in childNoTechList, add only the parent directory to NoTech
 		noTechList = []string{dir}
 	}
-
-	// for _, techDirs := range technologiesDetected {
-	// 	if _, exist := techDirs[dir]; exist {
-	// 		// The directory is already mapped to a technology, no need to add the dir or its sub directories to NoTech
-	// 		break
-	// 	}
-	// 	for _, child := range children {
-	// 		childNoTechList := getDirNoTechList(technologiesDetected, child, dirsList)
-	// 	}
-
-	// 	if len(children) == 0 {
-	// 		// No children directories, add the directory to NoTech
-	// 		childNoTechList = append(childNoTechList, dir)
-	// 		break
-	// 	}
-	// 	for _, child := range children {
-	// 		childNoTechList = append(childNoTechList, getDirNoTechList(technologiesDetected, child, dirsList)...)
-	// 	}
-	// 	// If all children exists in childNoTechList, add only the parent directory to NoTech
-	// 	if len(children) == len(childNoTechList) {
-	// 		childNoTechList = []string{dir}
-	// 	}
-	// }
 	return
 }
 
@@ -444,58 +445,6 @@ func getDirChildren(dir string, dirsList []string) (children []string) {
 	}
 	return
 }
-
-// func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, path, excludePathPattern string) (finalMap map[Technology]map[string][]string, err error) {
-// 	finalMap = technologiesDetected
-// 	noTechMap := map[string][]string{}
-// 	// TODO: not only direct, need to see if multiple levels of directories are missing technology indicators
-// 	// if all directories in are found no need for anything else,
-// 	// if one missing need to add it to NoTech
-// 	// if not one detected add only parent directory no need for each directory
-// 	directories, err := getDirectDirectories(path, excludePathPattern)
-// 	if err != nil {
-// 		return
-// 	}
-// 	for _, dir := range directories {
-// 		// Check if the directory is already mapped to a technology
-// 		isMapped := false
-// 		for _, techDirs := range finalMap {
-// 			if _, exist := techDirs[dir]; exist {
-// 				isMapped = true
-// 				break
-// 			}
-// 		}
-// 		if !isMapped {
-// 			// Add the directory to NoTech (no indicators/descriptors were found)
-// 			noTechMap[dir] = []string{}
-// 		}
-// 	}
-// 	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
-// 		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
-// 		finalMap[NoTech] = noTechMap
-// 	}
-// 	return
-// }
-
-// func getDirectDirectories(path, excludePathPattern string) (directories []string, err error) {
-// 	// Get all files and directories in the path, not recursive
-// 	filesOrDirsInPath, err := fspatterns.ListFiles(path, false, true, true, true, excludePathPattern)
-// 	if err != nil {
-// 		return
-// 	}
-// 	// Filter to directories only
-// 	for _, potentialDir := range filesOrDirsInPath {
-// 		isDir, e := fileutils.IsDirExists(potentialDir, true)
-// 		if e != nil {
-// 			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", potentialDir, e))
-// 			continue
-// 		}
-// 		if isDir {
-// 			directories = append(directories, potentialDir)
-// 		}
-// 	}
-// 	return
-// }
 
 // Map files to relevant working directories according to the technologies' indicators/descriptors and requested descriptors.
 // files: The file paths to map.
@@ -636,9 +585,24 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	// Don't allow working directory if sub directory already exists as key for the same technology
-	techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || shouldCleanSubModulesInUnsupportedTechs() {
+		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
+		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	}
 	return
+}
+
+func shouldCleanSubModulesInUnsupportedTechs() bool {
+	// Turn on clean sub modules for tech that we do not support multi-module projects if requested
+	shouldCleanEnvValRaw := os.Getenv(JfrogCleanTechSubModulesEnv)
+	if shouldCleanEnvValRaw == "" {
+		return false
+	}
+	shouldClean, e := strconv.ParseBool(shouldCleanEnvValRaw)
+	if e != nil {
+		log.Warn(fmt.Sprintf("Failed to parse %s: %s", JfrogCleanTechSubModulesEnv, e.Error()))
+	}
+	return shouldClean
 }
 
 func isTechExcludedInWorkingDir(tech Technology, wd string, excludedTechAtWorkingDir map[string][]Technology) bool {

@@ -3,17 +3,18 @@ package scan
 import (
 	"bytes"
 	"fmt"
-	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
+
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -27,8 +28,7 @@ const (
 
 type DockerScanCommand struct {
 	ScanCommand
-	imageTag       string
-	targetRepoPath string
+	imageTag string
 }
 
 func NewDockerScanCommand() *DockerScanCommand {
@@ -40,18 +40,9 @@ func (dsc *DockerScanCommand) SetImageTag(imageTag string) *DockerScanCommand {
 	return dsc
 }
 
-func (dsc *DockerScanCommand) SetTargetRepoPath(repoPath string) *DockerScanCommand {
-	dsc.targetRepoPath = repoPath
-	return dsc
-}
-
 func (dsc *DockerScanCommand) Run() (err error) {
 	// Validate Xray minimum version
-	_, xrayVersion, err := xray.CreateXrayServiceManagerAndGetVersion(dsc.ScanCommand.serverDetails)
-	if err != nil {
-		return err
-	}
-	err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, DockerScanMinXrayVersion)
+	err = clientutils.ValidateMinimumVersion(clientutils.Xray, dsc.xrayVersion, DockerScanMinXrayVersion)
 	if err != nil {
 		return err
 	}
@@ -82,10 +73,16 @@ func (dsc *DockerScanCommand) Run() (err error) {
 	}
 
 	// Perform scan on image.tar
-	dsc.analyticsMetricsService.AddGeneralEvent(dsc.analyticsMetricsService.CreateGeneralEvent(xscservices.CliProduct, xscservices.CliEventType))
+	dsc.multiScanId, dsc.startTime = xsc.SendNewScanEvent(
+		dsc.xrayVersion,
+		dsc.xscVersion,
+		dsc.serverDetails,
+		xsc.CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, dsc.serverDetails),
+	)
+
 	dsc.SetSpec(spec.NewBuilder().
 		Pattern(imageTarPath).
-		Target(dsc.targetRepoPath).
+		Target(dsc.resultsContext.RepoPath).
 		BuildSpec()).SetThreads(1)
 	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag).SetRunJasScans(true)
 	err = dsc.setCredentialEnvsForIndexerApp()
@@ -102,18 +99,18 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		if scanResults == nil {
 			return
 		}
-		dsc.analyticsMetricsService.UpdateGeneralEvent(dsc.analyticsMetricsService.CreateXscAnalyticsGeneralEventFinalizeFromAuditResults(scanResults))
+		xsc.SendScanEndedWithResults(dsc.serverDetails, scanResults)
 		return dsc.recordResults(scanResults)
 	})
 }
 
 func (dsc *DockerScanCommand) recordResults(scanResults *results.SecurityCommandResults) (err error) {
-	hasViolationContext := dsc.ScanCommand.hasViolationContext()
-	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext); err != nil {
+	hasViolationContext := dsc.ScanCommand.resultsContext.HasViolationContext()
+	if err = output.RecordSarifOutput(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext); err != nil {
 		return
 	}
 	var summary output.ScanCommandResultSummary
-	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.includeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
+	if summary, err = output.NewDockerScanSummary(scanResults, dsc.ScanCommand.serverDetails, dsc.ScanCommand.resultsContext.IncludeVulnerabilities, hasViolationContext, dsc.imageTag); err != nil {
 		return
 	}
 	return output.RecordSecurityCommandSummary(summary)

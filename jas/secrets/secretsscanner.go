@@ -8,6 +8,7 @@ import (
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -25,61 +26,47 @@ const (
 type SecretsScanType string
 
 type SecretScanManager struct {
-	secretsScannerResults []*sarif.Run
-	scanner               *jas.JasScanner
-	scanType              SecretsScanType
-	configFileName        string
-	resultsFileName       string
+	scanner         *jas.JasScanner
+	scanType        SecretsScanType
+	configFileName  string
+	resultsFileName string
 }
 
 // The getSecretsScanResults function runs the secrets scan flow, which includes the following steps:
 // Creating an SecretScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-// Return values:
-// []utils.IacOrSecretResult: a list of the secrets that were found.
-// error: An error object (if any).
-func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
 		return
 	}
 	secretScanManager := newSecretsScanManager(scanner, scanType, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running secrets scan...")
-	if err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err)
+	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		return
 	}
-	results = secretScanManager.secretsScannerResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(results...), "secrets vulnerabilities")
-	}
+	log.Info(utils.GetScanFindingsLog(utils.SecretsScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId))
 	return
 }
 
 func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string) (manager *SecretScanManager) {
 	return &SecretScanManager{
-		secretsScannerResults: []*sarif.Run{},
-		scanner:               scanner,
-		scanType:              scanType,
-		configFileName:        filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:       filepath.Join(scannerTempDir, "results.sarif"),
+		scanner:         scanner,
+		scanType:        scanType,
+		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
 	}
 }
 
-func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = ssm.createConfigFile(module, ssm.scanner.Exclusions...); err != nil {
+func (ssm *SecretScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = ssm.createConfigFile(module, append(ssm.scanner.Exclusions, ssm.scanner.ScannersExclusions.SecretsExcludePatterns...)...); err != nil {
 		return
 	}
 	if err = ssm.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirRuns, err := jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
-	if err != nil {
-		return
-	}
-	ssm.secretsScannerResults = append(ssm.secretsScannerResults, processSecretScanRuns(workingDirRuns)...)
-	return
+	return jas.ReadJasScanRunsFromFile(ssm.resultsFileName, module.SourceRoot, secretsDocsUrlSuffix, ssm.scanner.MinSeverity)
 }
 
 type secretsScanConfig struct {

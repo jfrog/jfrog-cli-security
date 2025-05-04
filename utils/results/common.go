@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -18,6 +21,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -56,8 +60,8 @@ type ParseScaViolationFunc func(violation services.Violation, cves []formats.Cve
 type ParseLicensesFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
-// PrepareJasIssues allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
+// Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
+func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -88,8 +92,8 @@ func PrepareJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFu
 	return nil
 }
 
-// PrepareScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
+// ApplyHandlerToScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
+func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -116,8 +120,8 @@ func PrepareScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vul
 	return nil
 }
 
-// PrepareScaViolations allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func PrepareScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+// Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
+func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -145,6 +149,13 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 				// No handler was provided for security violations
 				continue
 			}
+
+			var skipNotApplicable bool
+			if skipNotApplicable, err = shouldSkipNotApplicable(violation, applicabilityStatus); skipNotApplicable {
+				log.Debug("A non-applicable violation was found and will be removed from final results as requested by its policies")
+				continue
+			}
+
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
 				if e := securityHandler(
 					violation, cves, applicabilityStatus, severity,
@@ -161,6 +172,10 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 				continue
 			}
 			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
+				if impactedPackagesNames[compIndex] == "root" {
+					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
+					continue
+				}
 				if e := licenseHandler(
 					violation, cves, applicabilityStatus, severity,
 					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
@@ -191,8 +206,8 @@ func PrepareScaViolations(target ScanTarget, violations []services.Violation, en
 	return
 }
 
-// PrepareLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
-func PrepareLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
+// ApplyHandlerToLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
+func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -302,7 +317,14 @@ func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, appl
 func convertCves(cves []services.Cve) []formats.CveRow {
 	var cveRows []formats.CveRow
 	for _, cveObj := range cves {
-		cveRows = append(cveRows, formats.CveRow{Id: cveObj.Id, CvssV2: cveObj.CvssV2Score, CvssV3: cveObj.CvssV3Score})
+		cveRows = append(cveRows, formats.CveRow{
+			Id:           cveObj.Id,
+			CvssV2:       cveObj.CvssV2Score,
+			CvssV2Vector: cveObj.CvssV2Vector,
+			CvssV3:       cveObj.CvssV3Score,
+			CvssV3Vector: cveObj.CvssV3Vector,
+			Cwe:          cveObj.Cwe,
+		})
 	}
 	return cveRows
 }
@@ -545,11 +567,19 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 }
 
 func GetDependencyId(depName, version string) string {
+	if version == "" {
+		return depName
+	}
 	return fmt.Sprintf("%s:%s", depName, version)
 }
 
 func GetScaIssueId(depName, version, issueId string) string {
 	return fmt.Sprintf("%s_%s_%s", issueId, depName, version)
+}
+
+// replaces underscore with dash
+func IdToName(input string) string {
+	return strings.Join(strings.Split(input, "_"), "-")
 }
 
 // GetUniqueKey returns a unique string key of format "vulnerableDependency:vulnerableVersion:xrayID:fixVersionExist"
@@ -622,4 +652,142 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	}
 
 	return jasutils.NotApplicable
+}
+
+func ConvertPolicesToString(policies []services.Policy) []string {
+	var policiesStr []string
+	for _, policy := range policies {
+		policiesStr = append(policiesStr, policy.Policy)
+	}
+	return policiesStr
+}
+
+func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
+	for _, result := range results {
+		runs = append(runs, result.Scan...)
+	}
+	return
+}
+
+// Resolve the actual technology from multiple sources:
+func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
+	if responseTechnology != "" {
+		// technology returned in the vulnerability/violation obj is the most specific technology
+		return techutils.Technology(responseTechnology)
+	}
+	// if no technology is provided, use the target technology
+	return targetTech
+}
+
+// Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
+func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
+	if applicabilityStatus != jasutils.NotApplicable {
+		return false, nil
+	}
+
+	if len(violation.Policies) == 0 {
+		return false, errors.New("a violation with no policies was provided")
+	}
+
+	for _, policy := range violation.Policies {
+		if !policy.SkipNotApplicable {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
+	if graph == nil {
+		return
+	}
+	// Recursively parse the tree
+	parsed := map[string]SbomEntry{}
+	if strings.HasSuffix(graph.Path, ".rpm") {
+		// For rmp package manager, root is also included in the graph
+		parseBinaryNode(graph, parsed, true)
+	} else {
+		for _, node := range graph.Nodes {
+			parseBinaryNode(node, parsed, true)
+		}
+	}
+
+	sbom.Components = maps.Values(parsed)
+	return
+}
+
+func DepTreeToSbom(fullDepTrees []*xrayCmdUtils.GraphNode) (sbom Sbom) {
+	if len(fullDepTrees) == 0 {
+		// No dependencies
+		return
+	}
+	parsed := map[string]SbomEntry{}
+	// Recursively parse the tree
+	for _, projectTree := range fullDepTrees {
+		// First node is the root (project node), skip it
+		for _, directNode := range projectTree.Nodes {
+			// First node is direct, the rest are transitive
+			parseNode(directNode, parsed, true)
+		}
+	}
+	sbom.Components = maps.Values(parsed)
+	return
+}
+
+func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct bool) {
+	if parsedEntry, exists := parsed[node.Id]; exists {
+		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+		if direct {
+			parsedEntry.Direct = true
+			parsed[node.Id] = parsedEntry
+		}
+		return
+	}
+	// If the node is not parsed yet, parse it and its children
+	component, version, packageType := techutils.SplitComponentId(node.Id)
+	entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
+	parsed[node.Id] = entry
+	for _, child := range node.Nodes {
+		parseNode(child, parsed, false)
+	}
+}
+
+func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomEntry, direct bool) {
+	if parsedEntry, exists := parsed[node.Id]; exists {
+		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
+		if direct {
+			parsedEntry.Direct = true
+			parsed[node.Id] = parsedEntry
+		}
+		return
+	}
+	// If the node is not parsed yet, parse it and its children
+	component, version, packageType := techutils.SplitComponentId(node.Id)
+	if version != "" {
+		// For docker images, binary graph also contains layer information not relevant for the sbom
+		entry := SbomEntry{Component: component, Version: version, Type: packageType, Direct: direct}
+		parsed[node.Id] = entry
+	}
+	for _, child := range node.Nodes {
+		parseBinaryNode(child, parsed, false)
+	}
+}
+
+func SortSbom(components []SbomEntry) {
+	sort.Slice(components, func(i, j int) bool {
+		if components[i].Direct == components[j].Direct {
+			if components[i].Component == components[j].Component {
+				if components[i].Version == components[j].Version {
+					// Last order by type
+					return components[i].Type < components[j].Type
+				}
+				// Third order by version
+				return components[i].Version < components[j].Version
+			}
+			// Second order by component
+			return components[i].Component < components[j].Component
+		}
+		// First order by direct components
+		return components[i].Direct
+	})
 }

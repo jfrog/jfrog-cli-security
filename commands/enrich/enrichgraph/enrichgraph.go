@@ -9,8 +9,8 @@ const (
 	EnrichMinimumVersionXray = "3.101.3"
 )
 
-func RunImportGraphAndGetResults(params *EnrichGraphParams, xrayManager *xray.XrayServicesManager) (*services.ScanResponse, error) {
-	scanId, err := xrayManager.ImportGraph(*params.xrayGraphImportParams)
+func RunImportGraphAndGetResults(params *EnrichGraphParams, xrayManager *xray.XrayServicesManager, rootPath string) (*services.ScanResponse, error) {
+	scanId, err := xrayManager.ImportGraph(*params.xrayGraphImportParams, rootPath)
 	if err != nil {
 		return nil, err
 	}

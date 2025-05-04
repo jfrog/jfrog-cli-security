@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	orderedJson "github.com/virtuald/go-ordered-json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -24,16 +27,21 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL   = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	JasInfoURL             = "https://jfrog.com/xray/"
-	EntitlementsMinVersion = "3.66.5"
+	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	JasInfoURL                    = "https://jfrog.com/xray/"
+	EntitlementsMinVersion        = "3.66.5"
+	GitRepoKeyAnalyticsMinVersion = "3.114.0"
+
+	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
+	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
+	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
 )
 
 var (
 	// Exclude pattern for files.
-	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
+	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
 	// Exclude pattern for directories.
-	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
+	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
 )
 
 const (
@@ -56,6 +64,10 @@ func (v ViolationIssueType) String() string {
 
 type SubScanType string
 
+func (s SubScanType) String() string {
+	return string(s)
+}
+
 const (
 	SourceCode  CommandType = "source_code"
 	Binary      CommandType = "binary"
@@ -66,10 +78,6 @@ const (
 )
 
 type CommandType string
-
-func (s SubScanType) String() string {
-	return string(s)
-}
 
 func (s CommandType) IsTargetBinary() bool {
 	return s == Binary || s == DockerImage
@@ -85,6 +93,36 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
+}
+
+func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
+	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
+		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
+		IsScanRequested(cmdType, IacScan, requestedScans...) ||
+		IsScanRequested(cmdType, SastScan, requestedScans...)
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
+	threadPrefix := ""
+	if threadId >= 0 {
+		threadPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	if vulnerabilitiesCount == 0 && violationsCount == 0 {
+		return fmt.Sprintf("%sNo %s findings", threadPrefix, scanType.String())
+	}
+	msg := fmt.Sprintf("%sFound", threadPrefix)
+	hasVulnerabilities := vulnerabilitiesCount > 0
+	if hasVulnerabilities {
+		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+	}
+	if violationsCount > 0 {
+		if hasVulnerabilities {
+			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
+		} else {
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+		}
+	}
+	return msg
 }
 
 func IsCI() bool {
@@ -112,7 +150,7 @@ func UniqueUnion[T comparable](arr []T, elements ...T) []T {
 
 func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {
 	if escapeValues {
-		if results, err = json.Marshal(output); errorutils.CheckError(err) != nil {
+		if results, err = orderedJson.Marshal(output); errorutils.CheckError(err) != nil {
 			return
 		}
 	} else {
@@ -146,6 +184,10 @@ func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, err
 	return string(results), nil
 }
 
+func NewStringPtr(v string) *string {
+	return &v
+}
+
 func NewBoolPtr(v bool) *bool {
 	return &v
 }
@@ -159,6 +201,10 @@ func NewInt64Ptr(v int64) *int64 {
 }
 
 func NewFloat64Ptr(v float64) *float64 {
+	return &v
+}
+
+func NewStrPtr(v string) *string {
 	return &v
 }
 
@@ -236,9 +282,10 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	return
 }
 
-// This is a general error message for the CLI commands.
-// Because of how command parsing is handled, improperly specified flags may be misinterpreted as arguments.
-// Therefore, these flags will not go through the command's flags verifications, and will not be caught as incorrect flags.
-func GetCliTooManyArgsErrorMessage(numberOfArguments int) string {
-	return fmt.Sprintf("Too many arguments provided (%d in total).\nSome flags may be incorrectly specified, causing them to be misinterpreted as arguments and ignored. Please verify that all flags are valid.", numberOfArguments)
+// Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report
+func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
+	if gitRepoHttpsCloneUrl == "" {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }

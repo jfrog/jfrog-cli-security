@@ -5,6 +5,7 @@ import (
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -20,59 +21,44 @@ const (
 )
 
 type IacScanManager struct {
-	iacScannerResults []*sarif.Run
-	scanner           *jas.JasScanner
-	configFileName    string
-	resultsFileName   string
+	scanner         *jas.JasScanner
+	configFileName  string
+	resultsFileName string
 }
 
 // The getIacScanResults function runs the iac scan flow, which includes the following steps:
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-// Return values:
-// []utils.SourceCodeScanResult: a list of the iac violations that were found.
-// bool: true if the user is entitled to iac scan, false otherwise.
-// error: An error object (if any).
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
 		return
 	}
 	iacScanManager := newIacScanManager(scanner, scannerTempDir)
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
-	if err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
-		err = jas.ParseAnalyzerManagerError(jasutils.IaC, err)
+	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		return
 	}
-	results = iacScanManager.iacScannerResults
-	if len(results) > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", sarifutils.GetResultsLocationCount(iacScanManager.iacScannerResults...), "IaC vulnerabilities")
-	}
+	log.Info(utils.GetScanFindingsLog(utils.IacScan, sarifutils.GetResultsLocationCount(vulnerabilitiesResults...), sarifutils.GetResultsLocationCount(violationsResults...), threadId))
 	return
 }
 
 func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *IacScanManager) {
 	return &IacScanManager{
-		iacScannerResults: []*sarif.Run{},
-		scanner:           scanner,
-		configFileName:    filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:   filepath.Join(scannerTempDir, "results.sarif")}
+		scanner:         scanner,
+		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
+		resultsFileName: filepath.Join(scannerTempDir, "results.sarif")}
 }
 
-func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (err error) {
-	if err = iac.createConfigFile(module, iac.scanner.Exclusions...); err != nil {
+func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
+	if err = iac.createConfigFile(module, append(iac.scanner.Exclusions, iac.scanner.ScannersExclusions.IacExcludePatterns...)...); err != nil {
 		return
 	}
 	if err = iac.runAnalyzerManager(); err != nil {
 		return
 	}
-	workingDirResults, err := jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
-	if err != nil {
-		return
-	}
-	iac.iacScannerResults = append(iac.iacScannerResults, workingDirResults...)
-	return
+	return jas.ReadJasScanRunsFromFile(iac.resultsFileName, module.SourceRoot, iacDocsUrlSuffix, iac.scanner.MinSeverity)
 }
 
 type iacScanConfig struct {

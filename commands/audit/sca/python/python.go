@@ -9,16 +9,16 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/gofrog/datastructures"
-	utils "github.com/jfrog/jfrog-cli-core/v2/artifactory/commands/python"
+	artifactoryutils "github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/python"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	xrayutils2 "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	clientutils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"os"
 	"os/exec"
@@ -34,42 +34,33 @@ const (
 	CurationPipMinimumVersion = "23.0.0"
 )
 
-type AuditPython struct {
-	Server              *config.ServerDetails
-	Tool                pythonutils.PythonTool
-	RemotePypiRepo      string
-	PipRequirementsFile string
-	InstallCommandArgs  []string
-	IsCurationCmd       bool
-}
-
-func BuildDependencyTree(auditPython *AuditPython) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
-	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(auditPython)
+func BuildDependencyTree(params utils.AuditParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
 	if errGetTree != nil {
 		err = errGetTree
 		return
 	}
 	downloadUrls = pipUrls
-	directDependencies := []*xrayUtils.GraphNode{}
+	directDependencies := []*clientutils.GraphNode{}
 	uniqueDepsSet := datastructures.MakeSet[string]()
 	for _, rootDep := range directDependenciesList {
-		directDependency := &xrayUtils.GraphNode{
+		directDependency := &clientutils.GraphNode{
 			Id:    PythonPackageTypeIdentifier + rootDep,
-			Nodes: []*xrayUtils.GraphNode{},
+			Nodes: []*clientutils.GraphNode{},
 		}
 		populatePythonDependencyTree(directDependency, dependenciesGraph, uniqueDepsSet)
 		directDependencies = append(directDependencies, directDependency)
 	}
-	root := &xrayUtils.GraphNode{
+	root := &clientutils.GraphNode{
 		Id:    "root",
 		Nodes: directDependencies,
 	}
-	dependencyTree = []*xrayUtils.GraphNode{root}
+	dependencyTree = []*clientutils.GraphNode{root}
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return
 }
 
-func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getDependencies(params utils.AuditParams, technology techutils.Technology) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -100,24 +91,31 @@ func getDependencies(auditPython *AuditPython) (dependenciesGraph map[string][]s
 		return
 	}
 
-	restoreEnv, err := runPythonInstall(auditPython)
-	defer func() {
-		err = errors.Join(err, restoreEnv())
-	}()
-	if err != nil {
-		return
+	pythonTool := pythonutils.PythonTool(technology)
+	if technology == techutils.Pipenv || !params.SkipAutoInstall() {
+		var restoreEnv func() error
+		restoreEnv, err = runPythonInstall(params, pythonTool)
+		defer func() {
+			err = errors.Join(err, restoreEnv())
+		}()
+		if err != nil {
+			return
+		}
+	} else {
+		log.Debug(fmt.Sprintf("JF_SKIP_AUTO_INSTALL was set to 'true' with one of the following technologies: %s, %s. Skipping installation...\n"+
+			"NOTE: in this case all dependencies must be manually pre-installed by the user", techutils.Pip, techutils.Poetry))
 	}
 
 	localDependenciesPath, err := config.GetJfrogDependenciesPath()
 	if err != nil {
 		return
 	}
-	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(auditPython.Tool, tempDirPath, localDependenciesPath)
+	dependenciesGraph, directDependencies, err = pythonutils.GetPythonDependencies(pythonTool, tempDirPath, localDependenciesPath, log.GetLogger())
 	if err != nil {
 		sca.LogExecutableVersion("python")
-		sca.LogExecutableVersion(string(auditPython.Tool))
+		sca.LogExecutableVersion(string(pythonTool))
 	}
-	if !auditPython.IsCurationCmd {
+	if !params.IsCurationCmd() {
 		return
 	}
 	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
@@ -181,29 +179,34 @@ type pypiMetaData struct {
 	Version string `json:"version"`
 }
 
-func runPythonInstall(auditPython *AuditPython) (restoreEnv func() error, err error) {
-	switch auditPython.Tool {
+func runPythonInstall(params utils.AuditParams, tool pythonutils.PythonTool) (restoreEnv func() error, err error) {
+	switch tool {
 	case pythonutils.Pip:
-		return installPipDeps(auditPython)
+		return installPipDeps(params)
 	case pythonutils.Pipenv:
-		return installPipenvDeps(auditPython)
+		return installPipenvDeps(params)
 	case pythonutils.Poetry:
-		return installPoetryDeps(auditPython)
+		return installPoetryDeps(params)
 	}
 	return
 }
 
-func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPoetryDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
 	restoreEnv = func() error {
 		return nil
 	}
-	if auditPython.RemotePypiRepo != "" {
-		rtUrl, username, password, err := utils.GetPypiRepoUrlWithCredentials(auditPython.Server, auditPython.RemotePypiRepo, false)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return restoreEnv, err
+		}
+		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(serverDetails, params.DepsRepo(), false)
 		if err != nil {
 			return restoreEnv, err
 		}
 		if password != "" {
-			err = utils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, auditPython.RemotePypiRepo)
+			err = artifactoryutils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DepsRepo())
 			if err != nil {
 				return restoreEnv, err
 			}
@@ -214,7 +217,7 @@ func installPoetryDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 	return restoreEnv, err
 }
 
-func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPipenvDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
 	// Set virtualenv path to venv dir
 	err = os.Setenv("WORKON_HOME", ".jfrog")
 	if err != nil {
@@ -223,23 +226,33 @@ func installPipenvDeps(auditPython *AuditPython) (restoreEnv func() error, err e
 	restoreEnv = func() error {
 		return os.Unsetenv("WORKON_HOME")
 	}
-	if auditPython.RemotePypiRepo != "" {
-		return restoreEnv, runPipenvInstallFromRemoteRegistry(auditPython.Server, auditPython.RemotePypiRepo)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return
+		}
+		return restoreEnv, runPipenvInstallFromRemoteRegistry(serverDetails, params.DepsRepo())
 	}
 	// Run 'pipenv install -d'
 	_, err = executeCommand("pipenv", "install", "-d")
 	return restoreEnv, err
 }
 
-func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err error) {
+func installPipDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
 	restoreEnv, err = SetPipVirtualEnvPath()
 	if err != nil {
 		return
 	}
 
 	remoteUrl := ""
-	if auditPython.RemotePypiRepo != "" {
-		remoteUrl, err = utils.GetPypiRepoUrl(auditPython.Server, auditPython.RemotePypiRepo, auditPython.IsCurationCmd)
+	if params.DepsRepo() != "" {
+		var serverDetails *config.ServerDetails
+		serverDetails, err = params.ServerDetails()
+		if err != nil {
+			return
+		}
+		remoteUrl, err = artifactoryutils.GetPypiRepoUrl(serverDetails, params.DepsRepo(), params.IsCurationCmd())
 		if err != nil {
 			return
 		}
@@ -247,22 +260,22 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 
 	var curationCachePip string
 	var reportFileName string
-	if auditPython.IsCurationCmd {
+	if params.IsCurationCmd() {
 		// upgrade pip version to 23.0.0, as it is required for the curation command.
 		if err = upgradePipVersion(CurationPipMinimumVersion); err != nil {
 			log.Warn(fmt.Sprintf("Failed to upgrade pip version, err: %v", err))
 		}
-		if curationCachePip, err = xrayutils2.GetCurationPipCacheFolder(); err != nil {
+		if curationCachePip, err = utils.GetCurationPipCacheFolder(); err != nil {
 			return
 		}
 		reportFileName = pythonReportFile
 	}
 
-	pipInstallArgs := getPipInstallArgs(auditPython.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
+	pipInstallArgs := getPipInstallArgs(params.PipRequirementsFile(), remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
 	var reqErr error
 	_, err = executeCommand("python", pipInstallArgs...)
-	if err != nil && auditPython.PipRequirementsFile == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, auditPython.InstallCommandArgs...)
+	if err != nil && params.PipRequirementsFile() == "" {
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
 		_, reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
@@ -272,7 +285,7 @@ func installPipDeps(auditPython *AuditPython) (restoreEnv func() error, err erro
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := sca.GetMsgToUserForCurationBlock(auditPython.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := sca.GetMsgToUserForCurationBlock(params.IsCurationCmd(), techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}
@@ -318,7 +331,7 @@ func getPipInstallArgs(requirementsFile, remoteUrl, cacheFolder, reportFileName 
 		args = append(args, "-r", requirementsFile)
 	}
 	if remoteUrl != "" {
-		args = append(args, utils.GetPypiRemoteRegistryFlag(pythonutils.Pip), remoteUrl)
+		args = append(args, artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pip), remoteUrl)
 	}
 	if cacheFolder != "" {
 		args = append(args, "--cache-dir", cacheFolder)
@@ -359,7 +372,7 @@ func parseCustomArgs(remoteUrl, cacheFolder, reportFileName string, customArgs .
 				continue
 			}
 		}
-		if remoteUrl != "" && strings.Contains(customArgs[i], utils.GetPypiRemoteRegistryFlag(pythonutils.Pip)) {
+		if remoteUrl != "" && strings.Contains(customArgs[i], artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pip)) {
 			log.Warn("The remote registry flag is not supported in the custom arguments list. skipping...")
 			i++
 			continue
@@ -370,11 +383,11 @@ func parseCustomArgs(remoteUrl, cacheFolder, reportFileName string, customArgs .
 }
 
 func runPipenvInstallFromRemoteRegistry(server *config.ServerDetails, depsRepoName string) (err error) {
-	rtUrl, err := utils.GetPypiRepoUrl(server, depsRepoName, false)
+	rtUrl, err := artifactoryutils.GetPypiRepoUrl(server, depsRepoName, false)
 	if err != nil {
 		return err
 	}
-	args := []string{"install", "-d", utils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtUrl}
+	args := []string{"install", "-d", artifactoryutils.GetPypiRemoteRegistryFlag(pythonutils.Pipenv), rtUrl}
 	_, err = executeCommand("pipenv", args...)
 	return err
 }
@@ -424,7 +437,7 @@ func SetPipVirtualEnvPath() (restoreEnv func() error, err error) {
 	return
 }
 
-func populatePythonDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGraph map[string][]string, uniqueDepsSet *datastructures.Set[string]) {
+func populatePythonDependencyTree(currNode *clientutils.GraphNode, dependenciesGraph map[string][]string, uniqueDepsSet *datastructures.Set[string]) {
 	if currNode.NodeHasLoop() {
 		return
 	}
@@ -432,9 +445,9 @@ func populatePythonDependencyTree(currNode *xrayUtils.GraphNode, dependenciesGra
 	currDepChildren := dependenciesGraph[strings.TrimPrefix(currNode.Id, PythonPackageTypeIdentifier)]
 	// Recursively create & append all node's dependencies.
 	for _, dependency := range currDepChildren {
-		childNode := &xrayUtils.GraphNode{
+		childNode := &clientutils.GraphNode{
 			Id:     PythonPackageTypeIdentifier + dependency,
-			Nodes:  []*xrayUtils.GraphNode{},
+			Nodes:  []*clientutils.GraphNode{},
 			Parent: currNode,
 		}
 		currNode.Nodes = append(currNode.Nodes, childNode)

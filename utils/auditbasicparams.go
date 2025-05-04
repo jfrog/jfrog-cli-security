@@ -4,6 +4,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams interface {
@@ -27,6 +28,8 @@ type AuditParams interface {
 	InstallCommandName() string
 	InstallCommandArgs() []string
 	SetNpmScope(depType string) *AuditBasicParams
+	SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams
+	MaxTreeDepth() string
 	OutputFormat() format.OutputFormat
 	DepsRepo() string
 	SetDepsRepo(depsRepo string) *AuditBasicParams
@@ -42,6 +45,8 @@ type AuditParams interface {
 	IsRecursiveScan() bool
 	SkipAutoInstall() bool
 	AllowPartialResults() bool
+	GetXrayVersion() string
+	GetConfigProfile() *xscservices.ConfigProfile
 }
 
 type AuditBasicParams struct {
@@ -55,11 +60,12 @@ type AuditBasicParams struct {
 	ignoreConfigFile                 bool
 	isMavenDepTreeInstalled          bool
 	isCurationCmd                    bool
+	maxTreeDepth                     string
 	pipRequirementsFile              string
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
-	scansToPreform                   []SubScanType
+	scansToPerform                   []SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -67,6 +73,9 @@ type AuditBasicParams struct {
 	isRecursiveScan                  bool
 	skipAutoInstall                  bool
 	allowPartialResults              bool
+	xrayVersion                      string
+	xscVersion                       string
+	configProfile                    *xscservices.ConfigProfile
 }
 
 func (abp *AuditBasicParams) DirectDependencies() *[]string {
@@ -116,6 +125,15 @@ func (abp *AuditBasicParams) UseJas() bool {
 	return abp.useJas
 }
 
+func (abp *AuditBasicParams) MaxTreeDepth() string {
+	return abp.maxTreeDepth
+}
+
+func (abp *AuditBasicParams) SetMaxTreeDepth(maxTreeDepth string) *AuditBasicParams {
+	abp.maxTreeDepth = maxTreeDepth
+	return abp
+}
+
 func (abp *AuditBasicParams) PipRequirementsFile() string {
 	return abp.pipRequirementsFile
 }
@@ -162,12 +180,12 @@ func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicP
 }
 
 func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
-	abp.scansToPreform = scansToPerform
+	abp.scansToPerform = scansToPerform
 	return abp
 }
 
 func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
-	return abp.scansToPreform
+	return abp.scansToPerform
 }
 
 func (abp *AuditBasicParams) Progress() ioUtils.ProgressMgr {
@@ -274,4 +292,31 @@ func (abp *AuditBasicParams) SkipAutoInstall() bool {
 
 func (abp *AuditBasicParams) AllowPartialResults() bool {
 	return abp.allowPartialResults
+}
+
+func (abp *AuditBasicParams) SetXrayVersion(xrayVersion string) *AuditBasicParams {
+	abp.xrayVersion = xrayVersion
+	return abp
+}
+
+func (abp *AuditBasicParams) GetXrayVersion() string {
+	return abp.xrayVersion
+}
+
+func (abp *AuditBasicParams) SetXscVersion(xscVersion string) *AuditBasicParams {
+	abp.xscVersion = xscVersion
+	return abp
+}
+
+func (abp *AuditBasicParams) GetXscVersion() string {
+	return abp.xscVersion
+}
+
+func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile) *AuditBasicParams {
+	abp.configProfile = profile
+	return abp
+}
+
+func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
+	return abp.configProfile
 }

@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 
 	"github.com/jfrog/jfrog-cli-security/tests"
@@ -21,74 +22,69 @@ import (
 )
 
 func TestReportError(t *testing.T) {
-	cleanUp := integration.InitXscTest(t, func() { securityTestUtils.ValidateXscVersion(t, xsc.MinXscVersionForErrorReport) })
+	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
+	securityTestUtils.ValidateXscVersion(t, xscVersion, xsc.MinXscVersionForErrorReport)
 	defer cleanUp()
 	errorToReport := errors.New("THIS IS NOT A REAL ERROR! This Error is posted as part of TestReportError test")
-	assert.NoError(t, xsc.ReportError(tests.XscDetails, errorToReport, "cli"))
+	assert.NoError(t, xsc.ReportError(xrayVersion, xscVersion, tests.XscDetails, errorToReport, "cli"))
 }
 
 // In the npm tests we use a watch flag, so we would get only violations
 func TestXscAuditNpmJsonWithWatch(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.Json), false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1},
 	})
 }
 
 func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	output := testAuditNpm(t, string(format.SimpleJson), true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		SecurityViolations: 1,
-		Vulnerabilities:    1,
-		Licenses:           1,
+		Total: &validations.TotalCount{Licenses: 1, Violations: 1, Vulnerabilities: 1},
 	})
 }
 
 func TestXscAuditMavenJson(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testXscAuditMaven(t, string(format.Json))
+	output := testAuditMaven(t, string(format.Json))
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
 func TestXscAuditMavenSimpleJson(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testXscAuditMaven(t, string(format.SimpleJson))
+	output := testAuditMaven(t, string(format.SimpleJson))
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-		Vulnerabilities: 1,
-		Licenses:        1,
+		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
 }
 
 func TestXscAnalyticsForAudit(t *testing.T) {
-	cleanUp := integration.InitXscTest(t)
+	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	// Scan npm project and verify that analytics general event were sent to XSC.
 	output := testAuditNpm(t, string(format.SimpleJson), false)
-	validateAnalyticsBasicEvent(t, output)
+	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
 }
 
-func validateAnalyticsBasicEvent(t *testing.T, output string) {
+func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output string) {
 	// Get MSI.
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(output), &results)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify analytics metrics.
-	am := xsc.NewAnalyticsMetricsService(tests.XscDetails)
-	assert.NotNil(t, am)
+	event, err := xsc.GetScanEvent(xrayVersion, xscVersion, results.MultiScanId, tests.XscDetails)
+	require.NoError(t, err)
+	assert.NotNil(t, event)
 	assert.NotEmpty(t, results.MultiScanId)
-	event, err := am.GetGeneralEvent(results.MultiScanId)
-	assert.NoError(t, err)
 
 	// Event creation and addition information.
 	assert.Equal(t, xscservices.CliProduct, event.Product)
@@ -101,7 +97,7 @@ func validateAnalyticsBasicEvent(t *testing.T, output string) {
 }
 
 func TestAdvancedSecurityDockerScanWithXsc(t *testing.T) {
-	cleanUpXsc := integration.InitXscTest(t)
+	_, _, cleanUpXsc := integration.InitXscTest(t)
 	defer cleanUpXsc()
 	testCli, cleanupDocker := integration.InitNativeDockerTest(t)
 	defer cleanupDocker()
