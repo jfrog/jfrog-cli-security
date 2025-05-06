@@ -119,4 +119,4 @@ require (
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
-// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go dev
+// replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
