@@ -292,7 +292,7 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
 	if len(uniqDepsWithTypes) > 0 {
-		depTreeResult.FlatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
+		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
 	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
@@ -346,7 +346,7 @@ func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techu
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayCmdUtils.GraphNode {
 	var uniqueNodes []*xrayCmdUtils.GraphNode
 	for uniqueDep, nodeAttr := range uniqueDeps {
 		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
@@ -356,7 +356,7 @@ func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdU
 		}
 		uniqueNodes = append(uniqueNodes, node)
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
 func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
