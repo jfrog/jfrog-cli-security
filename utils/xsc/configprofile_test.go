@@ -70,7 +70,7 @@ func TestGetConfigProfileByUrl(t *testing.T) {
 		},
 		{
 			name:       "Valid request",
-			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileByUrlMinXrayVersion},
+			mockParams: validations.MockServerParams{XrayVersion: services.ConfigProfileNewSchemaMinXrayVersion},
 		},
 	}
 
