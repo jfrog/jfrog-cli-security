@@ -24,16 +24,21 @@ const (
 type SastScanManager struct {
 	scanner            *jas.JasScanner
 	signedDescriptions bool
-	configFileName     string
-	resultsFileName    string
+
+	resultsToCompareFileName string
+	configFileName           string
+	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int, sourceResultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String()); err != nil {
 		return
 	}
-	sastScanManager := newSastScanManager(scanner, scannerTempDir, signedDescriptions)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, sourceResultsToCompare...)
+	if err != nil {
+		return
+	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running SAST scan...")
 	if vulnerabilitiesResults, violationsResults, err = sastScanManager.scanner.Run(sastScanManager, module); err != nil {
 		return
@@ -42,12 +47,23 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool) (manager *SastScanManager) {
-	return &SastScanManager{
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, sourceResultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif")}
+		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
+	}
+	if len(sourceResultsToCompare) == 0 {
+		// No source scan to compare
+		return
+	}
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "source.sarif")
+	// Save the source scan to compare as a report
+	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, sourceResultsToCompare...); err != nil {
+		return
+	}
+	return
 }
 
 func (ssm *SastScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
@@ -71,12 +87,14 @@ type sastScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots           []string       `yaml:"roots,omitempty"`
-	Type            string         `yaml:"type,omitempty"`
-	Language        string         `yaml:"language,omitempty"`
-	ExcludePatterns []string       `yaml:"exclude_patterns,omitempty"`
-	ExcludedRules   []string       `yaml:"excluded-rules,omitempty"`
-	SastParameters  sastParameters `yaml:"sast_parameters,omitempty"`
+	Roots                  []string       `yaml:"roots,omitempty"`
+	Type                   string         `yaml:"type,omitempty"`
+	Output                 string         `yaml:"output,omitempty"`
+	PathToResultsToCompare string         `yaml:"source-result-file,omitempty"`
+	Language               string         `yaml:"language,omitempty"`
+	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
+	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
+	SastParameters         sastParameters `yaml:"sast_parameters,omitempty"`
 }
 
 type sastParameters struct {
@@ -95,10 +113,12 @@ func (ssm *SastScanManager) createConfigFile(module jfrogappsconfig.Module, sign
 	configFileContent := sastScanConfig{
 		Scans: []scanConfiguration{
 			{
-				Type:          sastScannerType,
-				Roots:         roots,
-				Language:      sastScanner.Language,
-				ExcludedRules: sastScanner.ExcludedRules,
+				Type:                   sastScannerType,
+				Roots:                  roots,
+				Output:                 ssm.resultsFileName,
+				PathToResultsToCompare: ssm.resultsToCompareFileName,
+				Language:               sastScanner.Language,
+				ExcludedRules:          sastScanner.ExcludedRules,
 				SastParameters: sastParameters{
 					SignedDescriptions: signedDescriptions,
 				},

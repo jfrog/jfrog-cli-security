@@ -831,7 +831,7 @@ func TestDepTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 				},
 			},
@@ -859,16 +859,16 @@ func TestDepTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+						Component: "D", Version: "2.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: false,
 					},
 				},
 			},
@@ -904,25 +904,25 @@ func TestDepTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "D", Version: "1.0.0", Type: "npm", Direct: true,
+						Component: "D", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
 					},
 					{
-						Component: "D", Version: "1.2.3", Type: "npm", Direct: false,
+						Component: "D", Version: "1.2.3", Type: "npm", XrayType: "npm", Direct: false,
 					},
 				},
 			},
@@ -958,7 +958,7 @@ func TestCompTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 				},
 			},
@@ -973,10 +973,10 @@ func TestCompTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "root", Version: "1.0.0", Type: "npm", Direct: true,
+						Component: "root", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "A", Version: "1111:1.0.1", Type: "RPM", Direct: false,
+						Component: "A", Version: "1111:1.0.1", Type: "RPM", XrayType: "rpm", Direct: false,
 					},
 				},
 			},
@@ -1005,16 +1005,16 @@ func TestCompTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "npm", Direct: true,
+						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "D", Version: "2.0.0", Type: "npm", Direct: true,
+						Component: "D", Version: "2.0.0", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "C", Version: "1.0.1", Type: "npm", Direct: false,
+						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: false,
 					},
 				},
 			},
@@ -1040,19 +1040,19 @@ func TestCompTreeToSbom(t *testing.T) {
 			expectedSbom: Sbom{
 				Components: []SbomEntry{
 					{
-						Component: "A", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "A", Version: "2.0.1", Type: "npm", Direct: true,
+						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "C", Version: "1.0.1", Type: "npm", Direct: true,
+						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "Go", Direct: false,
+						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
 					},
 					{
-						Component: "B", Version: "1.0.0", Type: "npm", Direct: false,
+						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
 					},
 				},
 			},

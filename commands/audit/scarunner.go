@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
-
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
+	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -99,9 +98,23 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 			continue
 		}
+		if auditParams.diffMode {
+			if auditParams.resultsToCompare != nil {
+				if treeResult, bdtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult); bdtErr != nil {
+					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
+					continue
+				}
+			} else {
+				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s in source branch, skipping scan part",
+					targetResult.Target))
+				continue
+			}
+		}
+		if err := logDeps(treeResult.FlatTree); err != nil {
+			log.Warn("Failed to log dependencies tree: " + err.Error())
+		}
 		// Create sca scan task
 		auditParallelRunner.ScaScansWg.Add(1)
-		// defer auditParallelRunner.ScaScansWg.Done()
 		_, taskErr := auditParallelRunner.Runner.AddTaskWithError(executeScaScanTask(auditParallelRunner, serverDetails, auditParams, targetResult, treeResult), func(err error) {
 			_ = targetResult.AddTargetError(fmt.Errorf("failed to execute SCA scan: %s", err.Error()), auditParams.AllowPartialResults())
 		})
@@ -135,7 +148,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), results.DepTreeToSbom(treeResult.FullDepTrees), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {
@@ -279,10 +292,10 @@ func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetail
 	}
 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
 	if len(uniqDepsWithTypes) > 0 {
-		depTreeResult.FlatTree, err = createFlatTreeWithTypes(uniqDepsWithTypes)
+		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
-	depTreeResult.FlatTree, err = createFlatTree(uniqueDeps)
+	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
 	return
 }
 
@@ -333,10 +346,7 @@ func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techu
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdUtils.GraphNode, error) {
-	if err := logDeps(uniqueDeps); err != nil {
-		return nil, err
-	}
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayCmdUtils.GraphNode {
 	var uniqueNodes []*xrayCmdUtils.GraphNode
 	for uniqueDep, nodeAttr := range uniqueDeps {
 		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
@@ -346,26 +356,31 @@ func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) (*xrayCmdU
 		}
 		uniqueNodes = append(uniqueNodes, node)
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
-func createFlatTree(uniqueDeps []string) (*xrayCmdUtils.GraphNode, error) {
-	if err := logDeps(uniqueDeps); err != nil {
-		return nil, err
-	}
+func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
 	uniqueNodes := []*xrayCmdUtils.GraphNode{}
 	for _, uniqueDep := range uniqueDeps {
 		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}, nil
+	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
-func logDeps(uniqueDeps any) (err error) {
+func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
+	var uniqueNodes []string
+	for _, node := range flatTree.Nodes {
+		uniqueNodes = append(uniqueNodes, node.Id)
+	}
+	return uniqueNodes
+}
+
+func logDeps(flatTree *xrayCmdUtils.GraphNode) (err error) {
 	if log.GetLogger().GetLogLevel() != log.DEBUG {
 		// Avoid printing and marshaling if not on DEBUG mode.
 		return
 	}
-	jsonList, err := json.Marshal(uniqueDeps)
+	jsonList, err := json.Marshal(flatTreeToStringList(flatTree))
 	if errorutils.CheckError(err) != nil {
 		return err
 	}
@@ -390,6 +405,7 @@ func buildDependencyTree(scan *results.TargetResults, params *AuditParams) (*Dep
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
+	scan.SetSbom(results.DepTreeToSbom(treeResult.FullDepTrees))
 	return &treeResult, nil
 }
 
@@ -403,4 +419,33 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+}
+
+// Collect dependencies exists in source branch and not in target branch
+func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBranchResults *results.SecurityCommandResults, treeResult *DependencyTreeResult) (*DependencyTreeResult, error) {
+	targetSbom := targetBranchResult.Sbom
+	var sourceSbom results.Sbom
+	if sbr := sourceBranchResults.GetTargetResults(targetBranchResult.Target); sbr != nil {
+		sourceSbom = sbr.Sbom
+	} else {
+		return nil, fmt.Errorf("failed to get source branch results for target: %s", targetBranchResult.Target)
+	}
+	targetDepsMap := datastructures.MakeSet[string]()
+	for _, component := range targetSbom.Components {
+		targetDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
+	}
+	addedDepsMap := datastructures.MakeSet[string]()
+	for _, component := range sourceSbom.Components {
+		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
+		if exists := targetDepsMap.Exists(componentId); !exists {
+			// Dependency in source but not in target
+			addedDepsMap.Add(componentId)
+		}
+	}
+	diffDepTree := DependencyTreeResult{
+		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
+		FullDepTrees: treeResult.FullDepTrees,
+	}
+	targetBranchResult.SetSbom(results.DepTreeToSbom([]*xrayCmdUtils.GraphNode{diffDepTree.FlatTree}))
+	return &diffDepTree, nil
 }
