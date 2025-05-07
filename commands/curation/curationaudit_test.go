@@ -832,6 +832,30 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 			allowInsecureTls: true,
 		},
+		expectedResp: map[string]*CurationReport{
+			"com.example:jfrog-cli-security:1.0.0": {
+				packagesStatus: []*PackageStatus{
+					{
+						Action:            "blocked",
+						ParentVersion:     "",
+						ParentName:        "",
+						BlockedPackageUrl: "gradle-remote/log4j/log4j/1.2.14/log4j-1.2.14.jar",
+						PackageName:       "log4j:log4j",
+						PackageVersion:    "1.2.14",
+						BlockingReason:    "Policy violations",
+						PkgType:           "gradle",
+						DepRelation:       "direct",
+						Policy: []Policy{
+							{
+								Policy:    "pol1",
+								Condition: "cond1",
+							},
+						},
+					},
+				},
+				totalNumberOfPackages: 8,
+			},
+		}
 	}
 	return tests
 }
