@@ -1010,29 +1010,38 @@ func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.Graph
 	return downloadUrls, strings.Join(allParts[:2], ":"), "", allParts[2]
 }
 func getGradleNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.GraphNode) (downloadUrls []string, name, scope, version string) {
-	id = strings.TrimPrefix(id, "gav://")
+    id = strings.TrimPrefix(id, "gav://")
+    parts := strings.Split(id, ":")
+    if len(parts) < 3 {
+        return
+    }
 
-	parts := strings.Split(id, ":")
-	if len(parts) < 3 {
-		return
-	}
-	
-	groupID, artifactID, version := parts[0], parts[1], parts[2]
-	nameVersion := artifactID + "-" + version
-	versionDir := version
-	
-	if node != nil && node.Classifier != nil && *node.Classifier != "" {
-		classifierSuffix := "-" + *node.Classifier
-		versionDir = strings.TrimSuffix(version, classifierSuffix)
-	}
-	
-	groupPath := strings.ReplaceAll(groupID, ".", "/")
-	packagePath := fmt.Sprintf("%s/%s/%s/%s", groupPath, artifactID, versionDir, nameVersion)
-	
-	jarURL := fmt.Sprintf("%s/%s/%s.jar", strings.TrimSuffix(artiUrl, "/"), repo, packagePath)
-	downloadUrls = append(downloadUrls, jarURL)
+    groupID, artifactID, version := parts[0], parts[1], parts[2]
+    nameVersion := artifactID + "-" + version
+    versionDir := version
 
-	return downloadUrls, strings.Join(parts[:2], ":"), "", parts[2]
+    if node != nil && node.Classifier != nil && *node.Classifier != "" {
+        classifierSuffix := "-" + *node.Classifier
+        versionDir = strings.TrimSuffix(version, classifierSuffix)
+    }
+
+    groupPath := strings.ReplaceAll(groupID, ".", "/")
+    packagePath := fmt.Sprintf("%s/%s/%s/%s", groupPath, artifactID, versionDir, nameVersion)
+    if node != nil && node.Types != nil {
+        for _, fileType := range *node.Types {
+            if fileType == "jar" {
+                jarURL := fmt.Sprintf("%s/%s/%s.jar", strings.TrimSuffix(artiUrl, "/"), repo, packagePath)
+                downloadUrls = append(downloadUrls, jarURL)
+                break 
+            }
+        }
+    } else {
+        //  .jar type file by default
+        jarURL := fmt.Sprintf("%s/%s/%s.jar", strings.TrimSuffix(artiUrl, "/"), repo, packagePath)
+        downloadUrls = append(downloadUrls, jarURL)
+    }
+
+    return downloadUrls, strings.Join(parts[:2], ":"), "", parts[2]
 }
 
 // The graph holds, for each node, the component ID (xray representation)
