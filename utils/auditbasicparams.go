@@ -37,6 +37,7 @@ type AuditParams interface {
 	SetIgnoreConfigFile(ignoreConfigFile bool) *AuditBasicParams
 	IsMavenDepTreeInstalled() bool
 	SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams
+	SetIsGradleDepTreeInstalled (isGradleDepTreeInstalled bool) *AuditBasicParams
 	IsCurationCmd() bool
 	SetIsCurationCmd(bool) *AuditBasicParams
 	SetExclusions(exclusions []string) *AuditBasicParams
@@ -59,6 +60,7 @@ type AuditBasicParams struct {
 	insecureTls                      bool
 	ignoreConfigFile                 bool
 	isMavenDepTreeInstalled          bool
+	isGradleDepTreeInstalled         bool
 	isCurationCmd                    bool
 	maxTreeDepth                     string
 	pipRequirementsFile              string
@@ -256,6 +258,13 @@ func (abp *AuditBasicParams) IsMavenDepTreeInstalled() bool {
 
 func (abp *AuditBasicParams) SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams {
 	abp.isMavenDepTreeInstalled = isMavenDepTreeInstalled
+	return abp
+}
+func (abp *AuditBasicParams) IsGradleDepTreeInstalled() bool {
+	return abp.isGradleDepTreeInstalled
+}
+func (abp *AuditBasicParams) SetIsGradleDepTreeInstalled(isGradleDepTreeInstalled bool) *AuditBasicParams {
+	abp.isGradleDepTreeInstalled = isGradleDepTreeInstalled
 	return abp
 }
 

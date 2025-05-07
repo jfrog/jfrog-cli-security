@@ -75,6 +75,7 @@ const (
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
+	MinArtiGradleSupport="7.82.0"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -92,6 +93,9 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 	},
 	techutils.Nuget: func(ca *CurationAuditCommand) (bool, error) {
 		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
+	},
+	techutils.Gradle: func(ca *CurationAuditCommand) (bool, error) {
+		return ca.checkSupportByVersionOrEnv(techutils.Gradle, MinArtiGradleSupport)
 	},
 }
 
@@ -400,6 +404,8 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 			SetNpmOverwritePackageLock(true)
 	case techutils.Maven:
 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
+	case techutils.Gradle:
+		ca.AuditParams.SetIsGradleDepTreeInstalled(true)
 	}
 
 	return ca.AuditParams
@@ -908,7 +914,8 @@ func getUrlNameAndVersionByTech(tech techutils.Technology, node *xrayUtils.Graph
 		return getNpmNameScopeAndVersion(node.Id, artiUrl, repo, techutils.Npm.String())
 	case techutils.Maven:
 		return getMavenNameScopeAndVersion(node.Id, artiUrl, repo, node)
-
+	case techutils.Gradle:
+		return getGradleNameScopeAndVersion(node.Id, artiUrl, repo, node)
 	case techutils.Pip:
 		downloadUrls, name, version = getPythonNameVersion(node.Id, downloadUrlsMap)
 		return
@@ -1001,6 +1008,31 @@ func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.Graph
 		}
 	}
 	return downloadUrls, strings.Join(allParts[:2], ":"), "", allParts[2]
+}
+func getGradleNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.GraphNode) (downloadUrls []string, name, scope, version string) {
+	id = strings.TrimPrefix(id, "gav://")
+
+	parts := strings.Split(id, ":")
+	if len(parts) < 3 {
+		return
+	}
+	
+	groupID, artifactID, version := parts[0], parts[1], parts[2]
+	nameVersion := artifactID + "-" + version
+	versionDir := version
+	
+	if node != nil && node.Classifier != nil && *node.Classifier != "" {
+		classifierSuffix := "-" + *node.Classifier
+		versionDir = strings.TrimSuffix(version, classifierSuffix)
+	}
+	
+	groupPath := strings.ReplaceAll(groupID, ".", "/")
+	packagePath := fmt.Sprintf("%s/%s/%s/%s", groupPath, artifactID, versionDir, nameVersion)
+	
+	jarURL := fmt.Sprintf("%s/%s/%s.jar", strings.TrimSuffix(artiUrl, "/"), repo, packagePath)
+	downloadUrls = append(downloadUrls, jarURL)
+
+	return downloadUrls, strings.Join(parts[:2], ":"), "", parts[2]
 }
 
 // The graph holds, for each node, the component ID (xray representation)
