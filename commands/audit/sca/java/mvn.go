@@ -174,7 +174,13 @@ func (mdt *MavenDepTreeManager) RunMvnCmd(goals []string) (cmdOutput []byte, err
 	}
 
 	//#nosec G204
-	cmdOutput, err = exec.Command("mvn", goals...).CombinedOutput()
+	// Fix bug #418 if DepTreeParams.UseWrapper is true, we need to run the maven wrapper script instead of 'mvn'
+	cmd := "mvn"
+        if mdt.useWrapper {
+          cmd = "./mvnw"
+        }
+        //#nosec G204
+        cmdOutput, err = exec.Command(cmd, goals...).CombinedOutput()
 	if err != nil {
 		stringOutput := string(cmdOutput)
 		if len(cmdOutput) > 0 {
