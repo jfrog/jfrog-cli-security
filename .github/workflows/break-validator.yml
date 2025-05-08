@@ -1,0 +1,44 @@
+name: Validate breaking depended libraries
+on:
+  pull_request:
+    types: [labeled, unlabeled, opened, edited]  # Run when labels change or PR events occur
+  workflow_dispatch:
+
+# Ensures that only the latest commit is running for each PR at a time.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  # required for the action to create comments on the PR
+  pull-requests: write
+
+jobs:
+  validate-depended-libraries:
+    name: "Validate if ${{ matrix.library.name }} is broken"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        library:
+          - name: 'JFrog CLI'
+            branch: 'dev'
+            url: 'https://github.com/jfrog/jfrog-cli.git'
+          - name: 'Frogbot'
+            url: 'https://github.com/jfrog/frogbot.git'
+            branch: 'dev'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: attiasas/breaking-change-validator@main
+        env:
+          # Optional, needed for some action operations (generating PR comments)
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          repository: ${{ matrix.library.url }}
+          branch: ${{ matrix.library.branch }}
+          output_strategy: 'terminal, summary, comment'
+          test_command: ${{ github.event_name != 'pull_request' && matrix.library.test_command || (contains(github.event.pull_request.labels.*.name, 'test dependencies') && matrix.library.test_command) || '' }}
+          remediation_label: ${{ github.event_name == 'pull_request' && 'breaking change' || '' }}
