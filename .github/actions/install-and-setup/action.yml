@@ -85,7 +85,7 @@ runs:
       if: ${{ runner.os == 'macOS'}}
 
     - name: Install Swift on Windows
-      uses: compnerd/gha-setup-swift@main
+      uses: compnerd/gha-setup-swift@v0.3.0
       with:
         branch: swift-6.1-release
         tag: 6.1-RELEASE

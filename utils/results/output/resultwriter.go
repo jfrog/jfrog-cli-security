@@ -136,7 +136,7 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 		IncludeLicenses:        rw.commandResults.IncludesLicenses(),
 		IncludeSbom:            rw.commandResults.IncludeSbom(),
 		IncludeVulnerabilities: rw.commandResults.IncludesVulnerabilities(),
-		HasViolationContext:    rw.commandResults.HasViolationContext(),
+		HasViolationContext:    rw.showViolations || rw.commandResults.HasViolationContext(),
 		RequestedScans:         rw.subScansPerformed,
 		Pretty:                 pretty,
 	})
