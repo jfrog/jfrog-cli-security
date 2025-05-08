@@ -649,7 +649,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 // This test tests audit flow when providing --output-dir flag
 func TestAuditWithScansOutputDir(t *testing.T) {
-	mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	mockServer, serverDetails := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.NewJasBinaryMinVersion})
 	defer mockServer.Close()
 
 	outputDirPath, removeOutputDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
@@ -663,7 +663,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	auditBasicParams := (&utils.AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
-		SetXrayVersion(utils.EntitlementsMinVersion).
+		SetXrayVersion(utils.NewJasBinaryMinVersion).
 		SetUseJas(true)
 
 	auditParams := NewAuditParams().
@@ -679,13 +679,15 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 5)
+	assert.Len(t, filesList, 6)
 
 	searchForStrWithSubString(t, filesList, "sca_results")
 	searchForStrWithSubString(t, filesList, "iac_results")
 	searchForStrWithSubString(t, filesList, "sast_results")
 	searchForStrWithSubString(t, filesList, "secrets_results")
 	searchForStrWithSubString(t, filesList, "applicability_results")
+	searchForStrWithSubString(t, filesList, "maliciouscode_results")
+
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {

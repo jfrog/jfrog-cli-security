@@ -59,6 +59,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseSbom(target results.ScanTarget, sbom results.Sbom) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
+	ParseMalicious(target results.ScanTarget, violations bool, maliciousFindings []results.ScanResult[[]*sarif.Run]) error
 	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
 	ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) error
 	// When done parsing the stream results, get the converted content
@@ -195,6 +196,16 @@ func parseJasResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			scanResults = targetResults.JasResults.JasViolations.IacScanResults
 		}
 		return parser.ParseIacs(targetResults.ScanTarget, violations, scanResults)
+	}); err != nil {
+		return
+	}
+	// Parsing JAS Malicious code results
+	if err = parseJasScanResults(params, targetResults, cmdType, utils.MaliciousCodeScan, func(violations bool) error {
+		scanResults := targetResults.JasResults.JasVulnerabilities.MaliciousScanResults
+		if violations {
+			scanResults = targetResults.JasResults.JasViolations.MaliciousScanResults
+		}
+		return parser.ParseMalicious(targetResults.ScanTarget, violations, scanResults)
 	}); err != nil {
 		return
 	}
