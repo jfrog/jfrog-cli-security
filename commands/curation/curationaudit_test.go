@@ -632,6 +632,60 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			name:          "gradle tree - one blocked package",
+			tech:          techutils.Gradle,
+			pathToProject: filepath.Join("projects", "package-managers", "gradle", "curation-project"),
+			funcToGetGoals: func(t *testing.T) []string {
+				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
+				defer restoreWD()
+
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				require.NoError(t, err)
+
+				return []string{
+					"gradle", "build",
+					"--build-file", "build.gradle",
+					"--gradle-user-home=" + curationCache,
+					"--no-daemon",
+				}
+			},
+			serveResources: map[string]string{
+				"build.gradle": filepath.Join("tests", "testdata", "projects", "package-managers", "gradle", "curation-project", "build.gradle"),
+			},
+			requestToFail: map[string]bool{
+				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": false,
+			},
+			expectedResp: map[string]*CurationReport{
+				"com.example:curation-project:1.0.0": {
+					// Ensure packagesStatus is properly initialized, even if empty initially
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "net.sourceforge.jexcelapi:jxl",
+							ParentVersion:     "2.6.10", // Ensure this is correct
+							BlockedPackageUrl: "/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar",
+							PackageName:       "log4j:log4j",
+							PackageVersion:    "1.2.14",
+							BlockingReason:    "Policy violations",
+							DepRelation:       "indirect",
+							PkgType:           "gradle",
+							WaiverAllowed:     false,
+							Policy: []Policy{
+								{
+									Policy:         "pol1",
+									Condition:      "cond1",
+									Explanation:    "",
+									Recommendation: "",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 7,
+				},
+			},
+			allowInsecureTls: true,
+		},
+		{
 			name:          "python tree - one blocked package",
 			tech:          techutils.Pip,
 			pathToProject: filepath.Join("projects", "package-managers", "python", "pip", "pip-curation"),
@@ -832,30 +886,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 			allowInsecureTls: true,
 		},
-		expectedResp: map[string]*CurationReport{
-			"com.example:jfrog-cli-security:1.0.0": {
-				packagesStatus: []*PackageStatus{
-					{
-						Action:            "blocked",
-						ParentVersion:     "",
-						ParentName:        "",
-						BlockedPackageUrl: "gradle-remote/log4j/log4j/1.2.14/log4j-1.2.14.jar",
-						PackageName:       "log4j:log4j",
-						PackageVersion:    "1.2.14",
-						BlockingReason:    "Policy violations",
-						PkgType:           "gradle",
-						DepRelation:       "direct",
-						Policy: []Policy{
-							{
-								Policy:    "pol1",
-								Condition: "cond1",
-							},
-						},
-					},
-				},
-				totalNumberOfPackages: 8,
-			},
-		}
 	}
 	return tests
 }

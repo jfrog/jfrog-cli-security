@@ -37,7 +37,7 @@ type AuditParams interface {
 	SetIgnoreConfigFile(ignoreConfigFile bool) *AuditBasicParams
 	IsMavenDepTreeInstalled() bool
 	SetIsMavenDepTreeInstalled(isMavenDepTreeInstalled bool) *AuditBasicParams
-	SetIsGradleDepTreeInstalled (isGradleDepTreeInstalled bool) *AuditBasicParams
+	SetIsGradleDepTreeInstalled(isGradleDepTreeInstalled bool) *AuditBasicParams
 	IsCurationCmd() bool
 	SetIsCurationCmd(bool) *AuditBasicParams
 	SetExclusions(exclusions []string) *AuditBasicParams
