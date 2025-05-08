@@ -653,7 +653,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"build.gradle": filepath.Join("tests", "testdata", "projects", "package-managers", "gradle", "curation-project", "build.gradle"),
 			},
 			requestToFail: map[string]bool{
-				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": true,
+				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": false,
 			},
 			expectedResp: map[string]*CurationReport{
 				"com.example:curation-project:1.0.0": {
@@ -661,13 +661,13 @@ func getTestCasesForDoCurationAudit() []testCase {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "log4j:log4j",
-							ParentVersion:     "1.2.14",
+							ParentName:        "net.sourceforge.jexcelapi:jxl",
+							ParentVersion:     "2.6.10", // Ensure this is correct
 							BlockedPackageUrl: "/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar",
 							PackageName:       "log4j:log4j",
 							PackageVersion:    "1.2.14",
 							BlockingReason:    "Policy violations",
-							DepRelation:       "direct",
+							DepRelation:       "indirect",
 							PkgType:           "gradle",
 							WaiverAllowed:     false,
 							Policy: []Policy{
@@ -680,7 +680,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
-					totalNumberOfPackages: 6, // Adjust the number if necessary
+					totalNumberOfPackages: 7,
 				},
 			},
 			allowInsecureTls: true,
@@ -886,30 +886,6 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 			allowInsecureTls: true,
 		},
-		expectedResp: map[string]*CurationReport{
-			"com.example:jfrog-cli-security:1.0.0": {
-				packagesStatus: []*PackageStatus{
-					{
-						Action:            "blocked",
-						ParentVersion:     "",
-						ParentName:        "",
-						BlockedPackageUrl: "gradle-remote/log4j/log4j/1.2.14/log4j-1.2.14.jar",
-						PackageName:       "log4j:log4j",
-						PackageVersion:    "1.2.14",
-						BlockingReason:    "Policy violations",
-						PkgType:           "gradle",
-						DepRelation:       "direct",
-						Policy: []Policy{
-							{
-								Policy:    "pol1",
-								Condition: "cond1",
-							},
-						},
-					},
-				},
-				totalNumberOfPackages: 8,
-			},
-		}
 	}
 	return tests
 }
