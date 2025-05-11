@@ -32,12 +32,12 @@ type IacScanManager struct {
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, sourceResultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
 		return
 	}
-	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, sourceResultsToCompare...)
+	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, resultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -49,19 +49,20 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 	return
 }
 
-func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, sourceResultsToCompare ...*sarif.Run) (manager *IacScanManager, err error) {
+func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *IacScanManager, err error) {
 	manager = &IacScanManager{
 		scanner:         scanner,
 		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
 	}
-	if len(sourceResultsToCompare) == 0 {
-		// No source scan to compare
+	if len(resultsToCompare) == 0 {
+		// No scan results to compare
 		return
 	}
-	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "source.sarif")
-	// Save the source scan to compare as a report
-	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, sourceResultsToCompare...); err != nil {
+	log.Debug("Diff mode - IaC results to compare provided")
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
+	// Save the sca results to compare as a report
+	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...); err != nil {
 		return
 	}
 	return
@@ -84,7 +85,7 @@ type iacScanConfig struct {
 type iacScanConfiguration struct {
 	Roots                  []string `yaml:"roots"`
 	Output                 string   `yaml:"output"`
-	PathToResultsToCompare string   `yaml:"source-result-file"`
+	PathToResultsToCompare string   `yaml:"target-result-file,omitempty"`
 	Type                   string   `yaml:"type"`
 	SkippedDirs            []string `yaml:"skipped-folders"`
 }

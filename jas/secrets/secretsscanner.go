@@ -38,12 +38,12 @@ type SecretScanManager struct {
 // Creating an SecretScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int, sourceResultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String()); err != nil {
 		return
 	}
-	secretScanManager, err := newSecretsScanManager(scanner, scanType, scannerTempDir, sourceResultsToCompare...)
+	secretScanManager, err := newSecretsScanManager(scanner, scanType, scannerTempDir, resultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -55,22 +55,21 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	return
 }
 
-func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string, sourceResultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
+func newSecretsScanManager(scanner *jas.JasScanner, scanType SecretsScanType, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *SecretScanManager, err error) {
 	manager = &SecretScanManager{
 		scanner:         scanner,
 		scanType:        scanType,
 		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
 	}
-	if len(sourceResultsToCompare) == 0 {
-		// No source scan to compare
+	if len(resultsToCompare) == 0 {
+		// No scan results to compare
 		return
 	}
-	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "source.sarif")
-	// Save the source scan to compare as a report
-	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, sourceResultsToCompare...); err != nil {
-		return
-	}
+	log.Debug("Diff mode - Secrets results to compare provided")
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
+	// Save the sca results to compare as a report
+	err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...)
 	return
 }
 
@@ -91,7 +90,7 @@ type secretsScanConfig struct {
 type secretsScanConfiguration struct {
 	Roots                  []string `yaml:"roots"`
 	Output                 string   `yaml:"output"`
-	PathToResultsToCompare string   `yaml:"source-result-file"`
+	PathToResultsToCompare string   `yaml:"source-result-file,omitempty"`
 	Type                   string   `yaml:"type"`
 	SkippedDirs            []string `yaml:"skipped-folders"`
 }

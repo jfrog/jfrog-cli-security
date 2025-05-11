@@ -101,12 +101,11 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		if auditParams.diffMode {
 			if auditParams.resultsToCompare != nil {
 				if treeResult, bdtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult); bdtErr != nil {
-					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree: %s", bdtErr.Error()), auditParams.AllowPartialResults())
+					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree in source branch: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 					continue
 				}
 			} else {
-				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s in source branch, skipping scan part",
-					targetResult.Target))
+				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s in target branch, skipping scan part", targetResult.Target))
 				continue
 			}
 		}

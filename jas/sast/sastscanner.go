@@ -30,12 +30,12 @@ type SastScanManager struct {
 	resultsFileName          string
 }
 
-func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int, sourceResultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedDescriptions bool, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Sast.String()); err != nil {
 		return
 	}
-	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, sourceResultsToCompare...)
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, signedDescriptions, resultsToCompare...)
 	if err != nil {
 		return
 	}
@@ -47,22 +47,21 @@ func RunSastScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, signedD
 	return
 }
 
-func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, sourceResultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
+func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDescriptions bool, resultsToCompare ...*sarif.Run) (manager *SastScanManager, err error) {
 	manager = &SastScanManager{
 		scanner:            scanner,
 		signedDescriptions: signedDescriptions,
 		configFileName:     filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:    filepath.Join(scannerTempDir, "results.sarif"),
 	}
-	if len(sourceResultsToCompare) == 0 {
-		// No source scan to compare
+	if len(resultsToCompare) == 0 {
+		// No scan results to compare
 		return
 	}
-	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "source.sarif")
-	// Save the source scan to compare as a report
-	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, sourceResultsToCompare...); err != nil {
-		return
-	}
+	log.Debug("Diff mode - SAST results to compare provided")
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
+	// Save the sca results to compare as a report
+	err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...)
 	return
 }
 
@@ -90,7 +89,7 @@ type scanConfiguration struct {
 	Roots                  []string       `yaml:"roots,omitempty"`
 	Type                   string         `yaml:"type,omitempty"`
 	Output                 string         `yaml:"output,omitempty"`
-	PathToResultsToCompare string         `yaml:"source-result-file,omitempty"`
+	PathToResultsToCompare string         `yaml:"target-result-file,omitempty"`
 	Language               string         `yaml:"language,omitempty"`
 	ExcludePatterns        []string       `yaml:"exclude_patterns,omitempty"`
 	ExcludedRules          []string       `yaml:"excluded-rules,omitempty"`
