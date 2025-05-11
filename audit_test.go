@@ -356,14 +356,6 @@ func testAuditMaven(t *testing.T, format string) string {
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--mvn", "--licenses", "--format="+format)
 }
 
-func testAuditGradle(t *testing.T, format string) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gradle", "gradle"))
-	defer cleanUp()
-	// Add dummy descriptor file to check that we run only specific audit
-	addDummyPackageDescriptor(t, false)
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--gradle", "--licenses", "--format="+format)
-}
-
 func TestXrayAuditGoJson(t *testing.T) {
 	integration.InitAuditGoTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayAuditGo(t, false, string(format.Json), "simple-project")
