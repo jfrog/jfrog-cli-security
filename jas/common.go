@@ -140,23 +140,7 @@ func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, di
 }
 
 func (js *JasScanner) GetResultsToCompare(target string) (resultsToCompare *results.TargetResults) {
-	if js.ResultsToCompare == nil {
-		return
-	}
-	// Results to compare could be a results from the same path or a relative path
-	sourceBasePath := js.ResultsToCompare.GetCommonParentPath()
-	var best *results.TargetResults
-	for _, potential := range js.ResultsToCompare.Targets {
-		if target == potential.Target {
-			return potential
-		}
-		if target == utils.GetRelativePath(potential.Target, sourceBasePath) {
-			if best == nil {
-				best = potential
-			}
-		}
-	}
-	return best
+	return results.SearchTargetResultsByPath(target, js.ResultsToCompare)
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {

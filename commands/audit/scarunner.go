@@ -99,13 +99,12 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		if auditParams.diffMode {
-			if auditParams.resultsToCompare != nil {
-				if treeResult, bdtErr = getDiffDependencyTree(targetResult, auditParams.resultsToCompare, treeResult); bdtErr != nil {
-					_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree in source branch: %s", bdtErr.Error()), auditParams.AllowPartialResults())
-					continue
-				}
-			} else {
-				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s in target branch, skipping scan part", targetResult.Target))
+			if auditParams.resultsToCompare == nil {
+				// First scan, no diff to compare
+				log.Debug(fmt.Sprintf("Diff scan - calculated dependencies tree for target %s, skipping scan part", targetResult.Target))
+				continue
+			} else if treeResult, bdtErr = getDiffDependencyTree(targetResult, results.SearchTargetResultsByPath(utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()), auditParams.resultsToCompare), treeResult.FullDepTrees...); bdtErr != nil {
+				_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree in source branch: %s", bdtErr.Error()), auditParams.AllowPartialResults())
 				continue
 			}
 		}
@@ -420,31 +419,27 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }
 
-// Collect dependencies exists in source branch and not in target branch
-func getDiffDependencyTree(targetBranchResult *results.TargetResults, sourceBranchResults *results.SecurityCommandResults, treeResult *DependencyTreeResult) (*DependencyTreeResult, error) {
-	targetSbom := targetBranchResult.Sbom
-	var sourceSbom results.Sbom
-	if sbr := sourceBranchResults.GetTargetResults(targetBranchResult.Target); sbr != nil {
-		sourceSbom = sbr.Sbom
-	} else {
-		return nil, fmt.Errorf("failed to get source branch results for target: %s", targetBranchResult.Target)
+// Collect dependencies exists in target and not in resultsToCompare
+func getDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayCmdUtils.GraphNode) (*DependencyTreeResult, error) {
+	if resultsToCompare == nil {
+		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
 	}
+	// Compare the dependency trees
 	targetDepsMap := datastructures.MakeSet[string]()
-	for _, component := range targetSbom.Components {
+	for _, component := range resultsToCompare.Sbom.Components {
 		targetDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
 	}
 	addedDepsMap := datastructures.MakeSet[string]()
-	for _, component := range sourceSbom.Components {
+	for _, component := range scanResults.Sbom.Components {
 		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
 		if exists := targetDepsMap.Exists(componentId); !exists {
-			// Dependency in source but not in target
+			// Dependency in scan results but not in results to compare
 			addedDepsMap.Add(componentId)
 		}
 	}
 	diffDepTree := DependencyTreeResult{
 		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
-		FullDepTrees: treeResult.FullDepTrees,
+		FullDepTrees: fullDepTrees,
 	}
-	targetBranchResult.SetSbom(results.DepTreeToSbom([]*xrayCmdUtils.GraphNode{diffDepTree.FlatTree}))
 	return &diffDepTree, nil
 }

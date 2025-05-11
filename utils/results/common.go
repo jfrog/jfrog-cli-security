@@ -791,3 +791,22 @@ func SortSbom(components []SbomEntry) {
 		return components[i].Direct
 	})
 }
+
+func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+	if resultsToCompare == nil {
+		return
+	}
+	// Results to compare could be a results from the same path or a relative path
+	sourceBasePath := resultsToCompare.GetCommonParentPath()
+	var best *TargetResults
+	for _, potential := range resultsToCompare.Targets {
+		if target == potential.Target {
+			// If the target is exactly the same, return it
+			return potential
+		}
+		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); target == relative && (best == nil || len(best.Target) > len(potential.Target)) {
+			best = potential
+		}
+	}
+	return best
+}
