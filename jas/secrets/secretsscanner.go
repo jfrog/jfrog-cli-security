@@ -90,7 +90,7 @@ type secretsScanConfig struct {
 type secretsScanConfiguration struct {
 	Roots                  []string `yaml:"roots"`
 	Output                 string   `yaml:"output"`
-	PathToResultsToCompare string   `yaml:"source-result-file,omitempty"`
+	PathToResultsToCompare string   `yaml:"target-result-file,omitempty"`
 	Type                   string   `yaml:"type"`
 	SkippedDirs            []string `yaml:"skipped-folders"`
 }
