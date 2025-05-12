@@ -424,6 +424,7 @@ func getDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare 
 	if resultsToCompare == nil {
 		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
 	}
+	log.Debug(fmt.Sprintf("Comparing %s SBOM with %s to get diff", scanResults.Target, resultsToCompare.Target))
 	// Compare the dependency trees
 	targetDepsMap := datastructures.MakeSet[string]()
 	for _, component := range resultsToCompare.Sbom.Components {
