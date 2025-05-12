@@ -108,6 +108,11 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 				continue
 			}
 		}
+		if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+			// No dependencies were found. We don't want to run the scan in this case.
+			log.Debug(fmt.Sprintf("No dependencies were found in target %s. Skipping SCA", targetResult.Target))
+			continue
+		}
 		if err := logDeps(treeResult.FlatTree); err != nil {
 			log.Warn("Failed to log dependencies tree: " + err.Error())
 		}
