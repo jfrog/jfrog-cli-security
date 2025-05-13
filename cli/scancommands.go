@@ -200,18 +200,33 @@ func ExecAndPipe(executable_path string, envVars map[string]string, scanCommands
 
 	// Copy standard input to the subprocess's standard input
 	go func() {
-		io.Copy(stdin, os.Stdin)
-		stdin.Close()
+		if _, err := io.Copy(stdin, os.Stdin); err != nil {
+			log.Error("Error copying stdin to subprocess: %v", err)
+		}
+
+		if err := stdin.Close(); err != nil {
+			log.Error("Error closing stdin: %v", err)
+		}
 	}()
 
 	go func() {
-		io.Copy(os.Stderr, stderr)
-		stdin.Close()
+		if _, err := io.Copy(os.Stderr, stderr); err != nil {
+			log.Error("Error copying stderr to os.Stderr: %v", err)
+		}
+
+		if err := stderr.Close(); err != nil {
+			log.Error("Error closing stderr: %v", err)
+		}
 	}()
 
 	go func() {
-		io.Copy(os.Stdout, stdout)
-		stdin.Close()
+		if _, err := io.Copy(os.Stdout, stdout); err != nil {
+			log.Error("Error copying stderr to os.Stdout: %v", err)
+		}
+
+		if err := stdout.Close(); err != nil {
+			log.Error("Error closing stdout: %v", err)
+		}
 	}()
 
 	// Wait for the subprocess to finish
@@ -232,7 +247,9 @@ func SourceMcpCmd(c *components.Context) error {
 		return err
 	}
 
-	jas.DownloadAnalyzerManagerIfNeeded(0)
+	if err := jas.DownloadAnalyzerManagerIfNeeded(0); err == nil {
+		return err
+	}
 
 	am_path, err := jas.GetAnalyzerManagerExecutable()
 	if err != nil {
