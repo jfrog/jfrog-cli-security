@@ -247,7 +247,7 @@ func SourceMcpCmd(c *components.Context) error {
 		return err
 	}
 
-	if err := jas.DownloadAnalyzerManagerIfNeeded(0); err == nil {
+	if err := jas.DownloadAnalyzerManagerIfNeeded(0); err != nil {
 		return err
 	}
 
