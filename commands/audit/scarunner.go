@@ -429,14 +429,14 @@ func getDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare 
 	}
 	log.Debug(fmt.Sprintf("Comparing %s SBOM with %s to get diff", scanResults.Target, resultsToCompare.Target))
 	// Compare the dependency trees
-	targetDepsMap := datastructures.MakeSet[string]()
+	filterDepsMap := datastructures.MakeSet[string]()
 	for _, component := range resultsToCompare.Sbom.Components {
-		targetDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
+		filterDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
 	}
 	addedDepsMap := datastructures.MakeSet[string]()
 	for _, component := range scanResults.Sbom.Components {
 		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
-		if exists := targetDepsMap.Exists(componentId); !exists {
+		if exists := filterDepsMap.Exists(componentId); !exists {
 			// Dependency in scan results but not in results to compare
 			addedDepsMap.Add(componentId)
 		}
