@@ -255,7 +255,7 @@ func SourceMcpCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	return ExecAndPipe(am_path, am_env, append([]string{"mcp-server"}, c.Arguments...)...)
+	return ExecAndPipe(am_path, am_env, append([]string{"mcp-sast"}, c.Arguments...)...)
 }
 
 func EnrichCmd(c *components.Context) error {
