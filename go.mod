@@ -7,7 +7,7 @@ require (
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.10.11
+	github.com/jfrog/build-info-go v1.10.12
 	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
@@ -117,7 +117,6 @@ require (
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
-// attiasas:fix_get_dep_win_pip
-replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250515082125-5e48098a5b97
+// replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go dev
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
