@@ -3,6 +3,11 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -14,22 +19,20 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/urfave/cli"
-	"os"
-	"strings"
-
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
@@ -162,7 +165,97 @@ func getAuditAndScansCommands() []components.Command {
 			},
 			Hidden: true,
 		},
+		{
+			Name:        "source-mcp",
+			Description: auditSpecificDocs.GetPipenvDescription(),
+			Action:      SourceMcpCmd,
+		},
 	}
+}
+
+func ExecAndPipe(executable_path string, envVars map[string]string, scanCommands ...string) (err error) {
+	cmd := exec.Command(executable_path, scanCommands...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Error("Error creating stdin pipe: %v", err)
+		return err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Error("Error creating stdout pipe: %v", err)
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Error("Error creating stderr pipe: %v", err)
+		return err
+	}
+
+	// Start the subprocess
+	if err := cmd.Start(); err != nil {
+		log.Error("Error starting subprocess: %v", err)
+		return err
+	}
+
+	// Copy standard input to the subprocess's standard input
+	go func() {
+		if _, err := io.Copy(stdin, os.Stdin); err != nil {
+			log.Error("Error copying stdin to subprocess: %v", err)
+		}
+
+		if err := stdin.Close(); err != nil {
+			log.Error("Error closing stdin: %v", err)
+		}
+	}()
+
+	go func() {
+		if _, err := io.Copy(os.Stderr, stderr); err != nil {
+			log.Error("Error copying stderr to os.Stderr: %v", err)
+		}
+
+		if err := stderr.Close(); err != nil {
+			log.Error("Error closing stderr: %v", err)
+		}
+	}()
+
+	go func() {
+		if _, err := io.Copy(os.Stdout, stdout); err != nil {
+			log.Error("Error copying stderr to os.Stdout: %v", err)
+		}
+
+		if err := stdout.Close(); err != nil {
+			log.Error("Error closing stdout: %v", err)
+		}
+	}()
+
+	// Wait for the subprocess to finish
+	if err := cmd.Wait(); err != nil {
+		log.Error("Error waiting for subprocess: %v", err)
+	}
+	return nil
+}
+
+func SourceMcpCmd(c *components.Context) error {
+
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	am_env, err := jas.GetAnalyzerManagerEnvVariables(serverDetails)
+	if err != nil {
+		return err
+	}
+
+	if err := jas.DownloadAnalyzerManagerIfNeeded(0); err != nil {
+		return err
+	}
+
+	am_path, err := jas.GetAnalyzerManagerExecutable()
+	if err != nil {
+		return err
+	}
+	return ExecAndPipe(am_path, am_env, append([]string{"mcp-sast"}, c.Arguments...)...)
 }
 
 func EnrichCmd(c *components.Context) error {
