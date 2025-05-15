@@ -118,6 +118,6 @@ require (
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
 // attiasas:fix_get_dep_win_pip
-replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250515064018-0075c8c7e79c
+replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250515072044-f25c8f5edbc9
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
