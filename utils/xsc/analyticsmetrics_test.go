@@ -62,7 +62,7 @@ func TestCalcShouldReportEvents(t *testing.T) {
 
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
-			mockServer, _ := validations.XscServer(t, testcase.mockParams)
+			mockServer, _, _ := validations.XscServer(t, testcase.mockParams)
 			defer mockServer.Close()
 
 			if testcase.setEnvVarReportFalse {
@@ -136,7 +136,7 @@ func TestSendStartScanEvent(t *testing.T) {
 			usageCallback := tests.SetEnvWithCallbackAndAssert(t, coreutils.ReportUsage, fmt.Sprintf("%t", testCase.reportUsage))
 			defer usageCallback()
 
-			mockServer, serverDetails := validations.XscServer(t, testCase.mockParams)
+			mockServer, serverDetails, _ := validations.XscServer(t, testCase.mockParams)
 			defer mockServer.Close()
 
 			msi, startTime := SendNewScanEvent(testCase.mockParams.XrayVersion, testCase.mockParams.XscVersion, serverDetails, CreateAnalyticsEvent(xscservices.CliProduct, xscservices.CliEventType, serverDetails))
@@ -217,7 +217,7 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 	cmdResults.StartTime = time.Now()
 	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
-	scanResults.NewScaScanResults(0, results.Sbom{}, services.ScanResponse{Vulnerabilities: vulnerabilities})
+	scanResults.NewScaScanResults(0, services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
 		scanResults.JasResults.ApplicabilityScanResults = validations.NewMockJasRuns(sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123")))

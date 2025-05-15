@@ -682,7 +682,7 @@ func GetAllTechnologiesList() (technologies []Technology) {
 	return
 }
 
-// SplitComponentId splits a Xray component ID to the component name, version and package type.
+// SplitComponentIdRaw splits a Xray component ID to the component name, version and package type.
 // In case componentId doesn't contain a version, the returned version will be an empty string.
 // In case componentId's format is invalid, it will be returned as the component name
 // and empty strings will be returned instead of the version and the package type.
@@ -691,18 +691,18 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Returned values:
 //     Component name: "antparent:ant"
 //     Component version: "1.6.5"
-//     Package type: "Maven"
+//     Package type: "gav"
 //  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
 //     Returned values:
 //     Component name: "foo.jar"
 //     Component version: ""
-//     Package type: "Generic"
+//     Package type: "generic"
 //  3. componentId: "invalid-comp-id"
 //     Returned values:
 //     Component name: "invalid-comp-id"
 //     Component version: ""
 //     Package type: ""
-func SplitComponentId(componentId string) (string, string, string) {
+func SplitComponentIdRaw(componentId string) (string, string, string) {
 	compIdParts := strings.Split(componentId, "://")
 	// Invalid component ID
 	if len(compIdParts) != 2 {
@@ -744,5 +744,13 @@ func SplitComponentId(componentId string) (string, string, string) {
 		compName = packageId
 	}
 
-	return compName, compVersion, packageTypes[packageType]
+	return compName, compVersion, packageType
+}
+
+func ConvertXrayPackageType(xrayPackageType string) string {
+	return packageTypes[xrayPackageType]
+}
+
+func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	return fmt.Sprintf("%s://%s:%s", packageType, componentName, componentVersion)
 }

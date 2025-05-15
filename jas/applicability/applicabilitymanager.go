@@ -51,7 +51,7 @@ func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencie
 	}
 	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
-		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping....")
+		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
