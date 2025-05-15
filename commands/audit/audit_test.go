@@ -1015,15 +1015,6 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
 			assert.Equal(t, tc.expectedApiCallsCount, *apiCallsCount)
-			// if tc.resultsToCompare == nil {
-			// 	assert.Len(t, auditResults.Targets, 1)
-			// 	assert.Len(t, auditResults.Targets[0].Sbom.Components, 3)
-			// } else {
-			// 	assert.Len(t, auditResults.Targets, 1)
-			// 	// We expect only the pip and the new component to be added
-			// 	assert.Len(t, auditResults.Targets[0].Sbom.Components, 2)
-			// 	assert.Contains(t, auditResults.Targets[0].Sbom.Components, tc.expectedSbom.Components[0])
-			// }
 		})
 	}
 }

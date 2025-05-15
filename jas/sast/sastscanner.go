@@ -60,8 +60,8 @@ func newSastScanManager(scanner *jas.JasScanner, scannerTempDir string, signedDe
 	}
 	log.Debug("Diff mode - SAST results to compare provided")
 	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
-	// Save the sca results to compare as a report
-	err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...)
+	// Save the sast results to compare as a report
+	err = jas.SaveScanResultsToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...)
 	return
 }
 

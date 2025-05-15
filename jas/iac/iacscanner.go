@@ -61,8 +61,8 @@ func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsTo
 	}
 	log.Debug("Diff mode - IaC results to compare provided")
 	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
-	// Save the sca results to compare as a report
-	if err = jas.SaveScanToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...); err != nil {
+	// Save the iac results to compare as a report
+	if err = jas.SaveScanResultsToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...); err != nil {
 		return
 	}
 	return

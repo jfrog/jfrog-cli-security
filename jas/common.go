@@ -3,8 +3,6 @@ package jas
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/gofrog/datastructures"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +10,9 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/jfrog/gofrog/datastructures"
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -309,7 +310,7 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	}
 }
 
-func SaveScanToCompareAsReport(fileName string, runs ...*sarif.Run) error {
+func SaveScanResultsToCompareAsReport(fileName string, runs ...*sarif.Run) error {
 	report, err := sarifutils.NewReport()
 	if err != nil {
 		return err
