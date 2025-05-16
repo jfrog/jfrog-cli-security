@@ -221,7 +221,6 @@ func isGradleWrapperExist() (bool, error) {
 // Returns true if successful, false otherwise.
 func createTempBuildGradleFile() bool {
 	cwd, err := os.Getwd()
-	fmt.Println(cwd)
 	if err != nil {
 		return false
 	}
@@ -289,7 +288,6 @@ func modifyArtifactoryURL(filePath string) error {
 // Returns error on failure.
 func renameTempToBuildGradle() error {
 	cwd, err := os.Getwd()
-	fmt.Println(cwd)
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
@@ -297,10 +295,8 @@ func renameTempToBuildGradle() error {
 	buildGradlePath := filepath.Join(cwd, "build.gradle")
 
 	if _, err := os.Stat(tmpFilePath); os.IsNotExist(err) {
-		fmt.Println("temp file doesn't exists")
 		return fmt.Errorf("temporary file does not exist: %s", tmpFilePath)
 	} else if err != nil {
-		fmt.Println("temp file doesn't exists")
 		return fmt.Errorf("failed to stat temporary file: %w", err)
 	}
 	err = os.Rename(tmpFilePath, buildGradlePath)
@@ -308,12 +304,10 @@ func renameTempToBuildGradle() error {
 		if _, err := os.Stat(buildGradlePath); err == nil {
 			err = os.Remove(buildGradlePath)
 			if err != nil {
-				fmt.Println("temp file doesn't existss")
 				return fmt.Errorf("failed to remove existing build.gradle: %w", err)
 			}
 			err = os.Rename(tmpFilePath, buildGradlePath)
 			if err != nil {
-				fmt.Println("temp file doesn't existsss")
 				return fmt.Errorf("failed to rename temporary file to build.gradle: %w", err)
 			}
 		} else {
