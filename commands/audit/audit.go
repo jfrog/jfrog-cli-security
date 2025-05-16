@@ -3,6 +3,7 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"github.com/jfrog/jfrog-cli-security/jas/maliciouscode"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -203,7 +204,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'Malicious Code Scan', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -354,6 +355,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:              auditParams.ScansToPerform(),
 				SecretsScanType:             secrets.SecretsScannerType,
+				MaliciousScanType:           maliciouscode.MaliciousScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
