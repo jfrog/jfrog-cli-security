@@ -1,6 +1,7 @@
 package java
 
 import (
+	"bufio"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -57,10 +58,22 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
+	isCurationCmd bool
+}
+
+func NewGradleDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *gradleDepTreeManager {
+	depTreeManager := NewDepTreeManager(&DepTreeParams{
+		Server:   params.Server,
+		DepsRepo: params.DepsRepo,
+	})
+	return &gradleDepTreeManager{
+		DepTreeManager: depTreeManager,
+		isCurationCmd:  params.IsCurationCmd,
+	}
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
-	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
+	manager := NewGradleDepTreeManager(params, Tree)
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
 		return
@@ -122,7 +135,6 @@ func getRemoteRepos(depsRepo string, server *config.ServerDetails) (string, stri
 	if err != nil {
 		return "", "", err
 	}
-
 	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server)
 	if err != nil {
 		return "", "", err
@@ -136,7 +148,6 @@ func constructReleasesRemoteRepo() (string, error) {
 	if err != nil || serverId == "" || repoName == "" {
 		return "", err
 	}
-
 	releasesServer, err := config.GetSpecificConfig(serverId, false, true)
 	if err != nil {
 		return "", err
@@ -153,7 +164,9 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		err = errorutils.CheckError(err)
 		return
 	}
-
+	if gdt.isCurationCmd {
+		gdt.isCurationCmd = createTempBuildGradleFile()
+	}
 	outputFilePath := filepath.Join(depTreeDir, gradleDepTreeOutputFile)
 	tasks := []string{
 		"clean",
@@ -161,7 +174,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		"-q",
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
-		"-Dcom.jfrog.includeAllBuildFiles=true"}
+		"-Dcom.jfrog.includeAllBuildFiles=true", "--info"}
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
 	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
@@ -169,7 +182,9 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	defer func() {
 		err = errors.Join(err, errorutils.CheckError(os.Remove(outputFilePath)))
 	}()
-
+	if gdt.isCurationCmd {
+		renameTempToBuildGradle()
+	}
 	outputFileContent, err = os.ReadFile(outputFilePath)
 	err = errorutils.CheckError(err)
 	return
@@ -200,4 +215,110 @@ func isGradleWrapperExist() (bool, error) {
 		wrapperName += ".bat"
 	}
 	return fileutils.IsFileExists(wrapperName, false)
+}
+
+// this function attempts to create a temporary modified version of build.gradle.
+// Returns true if successful, false otherwise.
+func createTempBuildGradleFile() bool {
+	cwd, err := os.Getwd()
+	fmt.Println(cwd)
+	if err != nil {
+		return false
+	}
+	buildGradlePath := filepath.Join(cwd, "build.gradle")
+	if _, err := os.Stat(buildGradlePath); os.IsNotExist(err) {
+		return false
+	} else if err != nil {
+		return false
+	}
+	if err := modifyArtifactoryURL(buildGradlePath); err != nil {
+		return false
+	}
+	return true
+}
+
+// this functions renames the given build.gradle to a temp file, modifies URLs inside,
+// and writes changes back to build.gradle.
+// Returns error if any step fails.
+func modifyArtifactoryURL(filePath string) error {
+	tmpFilePath := filePath + ".tmp"
+	err := os.Rename(filePath, tmpFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to rename file: %w", err)
+	}
+	file, err := os.Open(tmpFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open tmp file: %w", err)
+	}
+	defer file.Close()
+	newFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create original file: %w", err)
+	}
+	defer newFile.Close()
+
+	scanner := bufio.NewScanner(file)
+	writer := bufio.NewWriter(newFile)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmedLine := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmedLine, "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
+			line = strings.Replace(line, "/artifactory/", "/artifactory/api/curation/audit/", 1)
+		}
+
+		_, err := writer.WriteString(line + "\n")
+		if err != nil {
+			return fmt.Errorf("failed to write to original file: %w", err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading tmp file: %w", err)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
+
+	return nil
+}
+
+// renameTempToBuildGradle safely renames the temporary build.gradle.tmp file back to build.gradle,
+// Returns error on failure.
+func renameTempToBuildGradle() error {
+	cwd, err := os.Getwd()
+	fmt.Println(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+	tmpFilePath := filepath.Join(cwd, "build.gradle.tmp")
+	buildGradlePath := filepath.Join(cwd, "build.gradle")
+
+	if _, err := os.Stat(tmpFilePath); os.IsNotExist(err) {
+		fmt.Println("temp file doesn't exists")
+		return fmt.Errorf("temporary file does not exist: %s", tmpFilePath)
+	} else if err != nil {
+		fmt.Println("temp file doesn't exists")
+		return fmt.Errorf("failed to stat temporary file: %w", err)
+	}
+	err = os.Rename(tmpFilePath, buildGradlePath)
+	if err != nil {
+		if _, err := os.Stat(buildGradlePath); err == nil {
+			err = os.Remove(buildGradlePath)
+			if err != nil {
+				fmt.Println("temp file doesn't existss")
+				return fmt.Errorf("failed to remove existing build.gradle: %w", err)
+			}
+			err = os.Rename(tmpFilePath, buildGradlePath)
+			if err != nil {
+				fmt.Println("temp file doesn't existsss")
+				return fmt.Errorf("failed to rename temporary file to build.gradle: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to rename temporary file to build.gradle: %w", err)
+		}
+	}
+	return nil
 }
