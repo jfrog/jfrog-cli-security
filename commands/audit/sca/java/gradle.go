@@ -159,15 +159,13 @@ func constructReleasesRemoteRepo() (string, error) {
 }
 
 func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFileContent []byte, err error) {
-	TempFileCreated := false
-
 	gradleExecPath, err := build.GetGradleExecPath(gdt.useWrapper)
 	if err != nil {
 		err = errorutils.CheckError(err)
 		return
 	}
 	if gdt.isCurationCmd {
-		TempFileCreated = createTempBuildGradleFile()
+		gdt.isCurationCmd = createTempBuildGradleFile()
 	}
 	outputFilePath := filepath.Join(depTreeDir, gradleDepTreeOutputFile)
 	tasks := []string{
@@ -176,7 +174,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		"-q",
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
-		"-Dcom.jfrog.includeAllBuildFiles=true"}
+		"-Dcom.jfrog.includeAllBuildFiles=true", "--info"}
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
 	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
@@ -184,10 +182,8 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	defer func() {
 		err = errors.Join(err, errorutils.CheckError(os.Remove(outputFilePath)))
 	}()
-	if TempFileCreated {
-		if err := renameTempToBuildGradle(); err != nil {
-			fmt.Printf("Failed to rename temporary build.gradle: %v\n", err)
-		}
+	if gdt.isCurationCmd {
+		renameTempToBuildGradle()
 	}
 	outputFileContent, err = os.ReadFile(outputFilePath)
 	err = errorutils.CheckError(err)
@@ -225,6 +221,7 @@ func isGradleWrapperExist() (bool, error) {
 // Returns true if successful, false otherwise.
 func createTempBuildGradleFile() bool {
 	cwd, err := os.Getwd()
+	fmt.Println(cwd)
 	if err != nil {
 		return false
 	}
@@ -267,7 +264,7 @@ func modifyArtifactoryURL(filePath string) error {
 		line := scanner.Text()
 		trimmedLine := strings.TrimSpace(line)
 
-		if strings.HasPrefix(strings.ToLower(trimmedLine), "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
+		if strings.HasPrefix(trimmedLine, "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
 			line = strings.Replace(line, "/artifactory/", "/artifactory/api/curation/audit/", 1)
 		}
 
@@ -292,6 +289,7 @@ func modifyArtifactoryURL(filePath string) error {
 // Returns error on failure.
 func renameTempToBuildGradle() error {
 	cwd, err := os.Getwd()
+	fmt.Println(cwd)
 	if err != nil {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
@@ -299,8 +297,10 @@ func renameTempToBuildGradle() error {
 	buildGradlePath := filepath.Join(cwd, "build.gradle")
 
 	if _, err := os.Stat(tmpFilePath); os.IsNotExist(err) {
+		fmt.Println("temp file doesn't exists")
 		return fmt.Errorf("temporary file does not exist: %s", tmpFilePath)
 	} else if err != nil {
+		fmt.Println("temp file doesn't exists")
 		return fmt.Errorf("failed to stat temporary file: %w", err)
 	}
 	err = os.Rename(tmpFilePath, buildGradlePath)
@@ -308,10 +308,12 @@ func renameTempToBuildGradle() error {
 		if _, err := os.Stat(buildGradlePath); err == nil {
 			err = os.Remove(buildGradlePath)
 			if err != nil {
+				fmt.Println("temp file doesn't existss")
 				return fmt.Errorf("failed to remove existing build.gradle: %w", err)
 			}
 			err = os.Rename(tmpFilePath, buildGradlePath)
 			if err != nil {
+				fmt.Println("temp file doesn't existsss")
 				return fmt.Errorf("failed to rename temporary file to build.gradle: %w", err)
 			}
 		} else {
