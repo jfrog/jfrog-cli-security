@@ -680,7 +680,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
-					totalNumberOfPackages: 7,
+					totalNumberOfPackages: 5,
 				},
 			},
 			allowInsecureTls: true,

@@ -228,3 +228,111 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 		}()
 	}
 }
+
+func TestCreateDepTreeScriptWithRepositoriesForCli(t *testing.T) {
+	manager := &gradleDepTreeManager{DepTreeManager: DepTreeManager{}, isCurationCmd: true}
+	manager.depsRepo = "deps-repo"
+	manager.server = &config.ServerDetails{
+		Url:            "https://myartifactory.com/",
+		ArtifactoryUrl: "https://myartifactory.com/artifactory",
+		// jfrog-ignore
+		AccessToken: dummyToken,
+	}
+	tmpDir, err := manager.createDepTreeScriptAndGetDir()
+	assert.NoError(t, err)
+	defer func() {
+		assert.NoError(t, os.Remove(filepath.Join(tmpDir, gradleDepTreeInitFile)))
+	}()
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, gradleDepTreeInitFile))
+	assert.NoError(t, err)
+	gradleDepTreeJarPath := ioutils.DoubleWinPathSeparator(filepath.Join(tmpDir, gradleDepTreeJarFile))
+	// jfrog-ignore
+	assert.Equal(t, fmt.Sprintf(expectedInitScriptWithRepos, gradleDepTreeJarPath, dummyToken), string(content))
+}
+func TestExecGradleDepTree_WithCurationCmd_ModifiesBuildGradle(t *testing.T) {
+
+	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle-example-config"))
+	defer cleanUp()
+	const buildGradleContent = `
+// Apply the Java plugin to add support for Java
+plugins {
+    id 'java'
+}
+
+// Set the group and version of the project
+group = 'com.example'
+version = '1.0.0'
+
+// Specify the repositories for dependencies
+repositories {
+    // Use Maven Central repository
+    //mavenCentral()
+    maven {
+        allowInsecureProtocol = true
+        url "http://localhost:8046/artifactory/gradle-remote/"
+        credentials {
+            username = 'admin'
+            password = 'password'
+        }
+    }
+}
+
+// Declare the dependencies for the project
+dependencies {
+    // Use JUnit 4 for testing
+    testImplementation 'junit:junit:4.13.2'
+
+    // Example of including a library (e.g., Apache Commons Lang)
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    implementation group: 'ch.qos.logback', name: 'logback-access', version: '1.4.13'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.5.4'
+    implementation group: 'net.sourceforge.jexcelapi', name: 'jxl', version: '2.6.10'
+    //implementation 'com.h2database:h2:1.4.200'
+}
+
+// Define a custom task (optional)
+task hello {
+    doLast {
+        println 'Hello, Gradle!'
+    }
+}
+
+// Specify the Java version compatibility
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+`
+	path := filepath.Join(tempDirPath, "build.gradle")
+	os.WriteFile(path, []byte(buildGradleContent), 0644)
+	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
+	manager := &gradleDepTreeManager{DepTreeManager: DepTreeManager{}, isCurationCmd: true}
+	manager.depsRepo = "deps-repo"
+	manager.server = &config.ServerDetails{
+		Url:            "https://myartifactory.com/",
+		ArtifactoryUrl: "https://myartifactory.com/artifactory",
+		AccessToken:    dummyToken,
+	}
+	if manager.isCurationCmd {
+		manager.isCurationCmd = createTempBuildGradleFile()
+	}
+	// Path to the build.gradle file in the current directory
+	buildGradlePath := filepath.Join(tempDirPath, "build.gradle")
+	content, err := os.ReadFile(buildGradlePath)
+	assert.NoError(t, err, "Failed to read the modified build.gradle file")
+	// Verify the build.gradle content contains the updated curation audit URL
+	assert.Contains(t, string(content), "/artifactory/api/curation/audit/", "build.gradle should contain the updated curation audit URL")
+	if manager.isCurationCmd {
+		err := renameTempToBuildGradle()
+		assert.NoError(t, err, "Failed to rename temporary build.gradle")
+	}
+	content, err = os.ReadFile(buildGradlePath)
+	assert.NoError(t, err, "Failed to read the modified build.gradle file")
+	// Verify the build.gradle content no longer contains the original curation URL
+	assert.NotContains(t, string(content), "/artifactory/api/curation/audit/", "build.gradle should not contain the updated curation audit URL")
+	// Verify the temporary build.gradle.tmp file was cleaned up
+	tempDirPath = filepath.Join(tempDirPath, "build.gradle.tmp")
+	_, err = os.Stat(tempDirPath)
+	assert.True(t, os.IsNotExist(err), "Expected build.gradle.tmp to be removed after execution")
+}
