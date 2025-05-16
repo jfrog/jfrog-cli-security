@@ -174,7 +174,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		"-q",
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
-		"-Dcom.jfrog.includeAllBuildFiles=true", "--info"}
+		"-Dcom.jfrog.includeAllBuildFiles=true"}
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
 	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
