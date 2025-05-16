@@ -306,7 +306,7 @@ java {
 `
 	path := filepath.Join(tempDirPath, "build.gradle")
 	err := os.WriteFile(path, []byte(buildGradleContent), 0644)
-	assert.NoError(t, err, "Failed to write build.gradle")
+	assert.NoError(t, err, "Failed to modfiy build.gradle")
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 	manager := &gradleDepTreeManager{DepTreeManager: DepTreeManager{}, isCurationCmd: true}
 	manager.depsRepo = "deps-repo"
