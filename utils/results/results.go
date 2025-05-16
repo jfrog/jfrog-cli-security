@@ -30,6 +30,8 @@ type SecurityCommandResults struct {
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
+	HasScannableComponents bool `json:"has_scannable_components,omitempty"`
+
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
 	// GeneralError that occurred during the command execution
