@@ -183,7 +183,9 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		err = errors.Join(err, errorutils.CheckError(os.Remove(outputFilePath)))
 	}()
 	if gdt.isCurationCmd {
-		renameTempToBuildGradle()
+		if err := renameTempToBuildGradle(); err != nil {
+			fmt.Printf("Failed to rename temporary build.gradle: %v\n", err)
+		}
 	}
 	outputFileContent, err = os.ReadFile(outputFilePath)
 	err = errorutils.CheckError(err)
