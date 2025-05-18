@@ -152,7 +152,6 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 		for i := range jfrogAppsConfig.Modules {
 			// converting to absolute path before starting the scan flow
 			jfrogAppsConfig.Modules[i].SourceRoot, err = filepath.Abs(jfrogAppsConfig.Modules[i].SourceRoot)
-			jfrogAppsConfig.Modules[i].SourceRoot = filepath.Clean(jfrogAppsConfig.Modules[i].SourceRoot)
 			if err != nil {
 				return nil, errorutils.CheckError(err)
 			}
@@ -234,7 +233,7 @@ func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix st
 		if len(sarifRun.Invocations) == 0 {
 			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
 		}
-		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
+		sarifRun.Invocations[0].WorkingDirectory.WithUri(utils.ToURI(wd))
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)

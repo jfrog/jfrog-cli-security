@@ -1,11 +1,14 @@
 package utils
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
@@ -118,4 +121,27 @@ func getCommonParentDir(path1, path2 string) string {
 			path2 = filepath.Dir(path2)
 		}
 	}
+}
+
+func ToURI(path string) string {
+	// Convert Windows path to URI format
+	// Use filepath.ToSlash to make sure the path uses forward slashes
+	path = filepath.ToSlash(path)
+
+	// If it's a Windows path, prepend "file:///" and replace the drive letter
+	if len(path) > 2 && path[1] == ':' {
+		// Convert "C:\\path\\to\\file" to "file:///C:/path/to/file"
+		path = "file:///" + path[:2] + path[2:]
+	} else {
+		// For Linux/Unix or other paths, just add "file://"
+		path = "file:///" + path
+	}
+	// Parse the URL to ensure it's valid (this step is optional for simple paths)
+	u, err := url.Parse(path)
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to parse path %s: %v", path, err))
+		return path
+	}
+	// Return the string representation of the URL
+	return u.String()
 }
