@@ -1,25 +1,25 @@
 package jas
 
 import (
-	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
 
 func TestReadJasScanRunsFromFile(t *testing.T) {
-	dummyReport, err := sarifutils.NewReport()
-	assert.NoError(t, err)
+	dummyReport := sarif.NewReport()
 	dummyReport.AddRun(sarifutils.CreateRunWithDummyResults(
 		sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
 		sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
@@ -97,7 +97,7 @@ func TestExcludeSuppressResults(t *testing.T) {
 		},
 		{
 			sarifResults: []*sarif.Result{
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
 				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 			expectedOutput: []*sarif.Result{
@@ -106,8 +106,8 @@ func TestExcludeSuppressResults(t *testing.T) {
 		},
 		{
 			sarifResults: []*sarif.Result{
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
 			},
 			expectedOutput: []*sarif.Result{},
 		},

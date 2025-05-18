@@ -14,7 +14,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"

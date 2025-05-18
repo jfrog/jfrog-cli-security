@@ -2,6 +2,12 @@ package cocoapods
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -9,12 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
-	"os"
-	"path"
-	"path/filepath"
-	"regexp"
-	"strings"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 // VersionForMainModule - We don't have information in cocoapods on the current package, or main module, we only have information on its
