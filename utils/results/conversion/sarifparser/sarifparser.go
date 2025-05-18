@@ -100,20 +100,17 @@ func NewCmdResultsSarifConverter(baseUrl string, includeVulnerabilities, hasViol
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	if sc.current == nil {
-		return sarifutils.NewReport()
+		return sarif.NewReport(), nil
 	}
 	// Flush the current run
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
-		return sarifutils.NewReport()
+		return sarif.NewReport(), nil
 	}
-	return sarifutils.CombineMultipleRunsWithSameTool(sc.current)
+	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
 
 func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
-	sc.current, err = sarifutils.NewReport()
-	if err != nil {
-		return
-	}
+	sc.current = sarif.NewReport()
 	// Reset the current stream general information
 	sc.currentCmdType = cmdType
 	sc.xrayVersion = xrayVersion
@@ -169,7 +166,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 	}
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().
 		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)).
-		WithExecutionSuccess(errorCount == 0),
+		WithExecutionSuccessful(errorCount == 0),
 	)
 	return run
 }
@@ -276,7 +273,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 			destination = run
 			continue
 		} else if destination.Tool.Driver.Name != run.Tool.Driver.Name {
-			log.Warn(fmt.Sprintf("Skipping JAS run (%s) as it doesn't match the current run (%s)", run.Tool.Driver.Name, destination.Tool.Driver.Name))
+			log.Warn(fmt.Sprintf("Skipping JAS run (%s) as it doesn't match the current run (%s)", sarifutils.GetRunToolName(run), sarifutils.GetRunToolName(destination)))
 			continue
 		}
 		// Combine the rules and results of the run to the destination
@@ -472,7 +469,7 @@ func parseScaToSarifFormat(params scaParseParams) (sarifResults []*sarif.Result,
 			}
 		}
 		resultsProperties.Add(fixedVersionSarifPropertyKey, getFixedVersionString(params.FixedVersions))
-		issueResult.AttachPropertyBag(resultsProperties)
+		issueResult.WithProperties(resultsProperties)
 		// Add location
 		issueLocation := getComponentSarifLocation(params.CmdType, directDependency)
 		if issueLocation != nil {
@@ -492,9 +489,9 @@ func getScaIssueSarifRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDesc
 	return sarif.NewRule(ruleId).
 		WithName(results.IdToName(ruleId)).
 		WithDescription(ruleDescription).
-		WithFullDescription(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
-		WithHelp(sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)).
-		WithProperties(cveRuleProperties.Properties)
+		WithFullDescription(sarif.NewMultiformatMessageString().WithText(summary).WithMarkdown(markdownDescription)).
+		WithHelp(sarif.NewMultiformatMessageString().WithText(summary).WithMarkdown(markdownDescription)).
+		WithProperties(cveRuleProperties)
 }
 
 func getComponentSarifLocation(cmtType utils.CommandType, component formats.ComponentRow) *sarif.Location {
@@ -513,13 +510,13 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 		if layer != "" {
 			logicalLocation := sarifutils.NewLogicalLocation(layer, "layer")
 			if algorithm != "" {
-				logicalLocation.Properties = map[string]interface{}{"algorithm": algorithm}
+				logicalLocation.Properties = sarif.NewPropertyBag().Add("algorithm", algorithm)
 			}
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
 	return sarif.NewLocation().
-		WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://" + filePath))).WithLogicalLocations(logicalLocations)
+		WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://" + filePath))).WithLogicalLocations(logicalLocations)
 }
 
 func getScaIssueMarkdownDescription(directDependencies []formats.ComponentRow, cveScore string, applicableStatus jasutils.ApplicabilityStatus, fixedVersions []string) (string, error) {
@@ -636,7 +633,7 @@ func patchDockerSecretLocations(result *sarif.Result) {
 		}
 		// Set Logical location kind "layer" with the layer hash
 		logicalLocation := sarifutils.NewLogicalLocation(layerHash, "layer")
-		logicalLocation.Properties = sarif.Properties(map[string]interface{}{"algorithm": algorithm})
+		logicalLocation.Properties = sarif.NewPropertyBag().Add("algorithm", algorithm)
 		location.LogicalLocations = append(location.LogicalLocations, logicalLocation)
 		sarifutils.SetLocationFileName(location, relativePath)
 	}
@@ -645,7 +642,7 @@ func patchDockerSecretLocations(result *sarif.Result) {
 func patchRules(platformBaseUrl string, commandType utils.CommandType, subScanType utils.SubScanType, isViolations bool, rules ...*sarif.ReportingDescriptor) (patched []*sarif.ReportingDescriptor) {
 	patched = []*sarif.ReportingDescriptor{}
 	for _, rule := range rules {
-		if rule.Name != nil && rule.ID == *rule.Name {
+		if rule.Name != nil && sarifutils.GetRuleId(rule) == *rule.Name {
 			// SARIF1001 - if both 'id' and 'name' are present, they must be different. If they are identical, the tool must omit the 'name' property.
 			rule.Name = nil
 		}
@@ -856,7 +853,7 @@ func getBinaryLocationMarkdownString(commandType utils.CommandType, subScanType 
 		return ""
 	}
 	if commandType == utils.DockerImage {
-		if layer, algorithm := getDockerLayer(location); layer != "" {
+		if layer, algorithm := sarifutils.GetDockerLayer(location); layer != "" {
 			if algorithm != "" {
 				content += fmt.Sprintf("\nLayer (%s): %s", algorithm, layer)
 			} else {
@@ -875,18 +872,6 @@ func getBinaryLocationMarkdownString(commandType utils.CommandType, subScanType 
 	}
 	if tokenValidation := results.GetResultPropertyTokenValidation(result); tokenValidation != "" {
 		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
-	}
-	return
-}
-
-func getDockerLayer(location *sarif.Location) (layer, algorithm string) {
-	// If location has logical location with kind "layer" return it
-	if logicalLocation := sarifutils.GetLogicalLocation("layer", location); logicalLocation != nil && logicalLocation.Name != nil {
-		layer = *logicalLocation.Name
-		if algorithmValue, ok := logicalLocation.Properties["algorithm"].(string); ok {
-			algorithm = algorithmValue
-		}
-		return
 	}
 	return
 }

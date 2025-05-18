@@ -65,6 +65,18 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 	return
 }
 
+func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
+	// If location has logical location with kind "layer" return it
+	if logicalLocation := GetLogicalLocation("layer", location); logicalLocation != nil && logicalLocation.Name != nil && logicalLocation.Properties != nil {
+		layer = *logicalLocation.Name
+		if algorithmValue, ok := logicalLocation.Properties.Properties["algorithm"].(string); ok {
+			algorithm = algorithmValue
+		}
+		return
+	}
+	return
+}
+
 func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
 	if rule == nil || rule.DefaultConfiguration == nil || rule.DefaultConfiguration.Parameters == nil || rule.DefaultConfiguration.Parameters.Properties == nil {
 		// No CWE property

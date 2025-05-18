@@ -546,7 +546,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 	if rule != nil && rule.Properties != nil && rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
 		status, ok := rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
 		if !ok {
-			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", rule.ID))
+			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", sarifutils.GetRuleId(rule)))
 		}
 		switch status {
 		case "not_covered":

@@ -33,7 +33,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				Version: "1.0.0",
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://Package-Descriptor")),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://Package-Descriptor")),
 			),
 		},
 		{
@@ -44,7 +44,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 				Location: &formats.Location{File: filepath.Join("dir", "file.txt")},
 			},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri(fmt.Sprintf("file://%s", filepath.Join("dir", "file.txt")))),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI(fmt.Sprintf("file://%s", filepath.Join("dir", "file.txt")))),
 			),
 		},
 		{
@@ -52,7 +52,7 @@ func TestGetComponentSarifLocation(t *testing.T) {
 			cmdType:   utils.DockerImage,
 			component: formats.ComponentRow{Name: "sha256__3a8bca98bcad879bca98b9acd.tar"},
 			expectedOutput: sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().
-				WithArtifactLocation(sarif.NewArtifactLocation().WithUri("file://Package-Descriptor")),
+				WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://Package-Descriptor")),
 			).WithLogicalLocations([]*sarif.LogicalLocation{sarifutils.CreateLogicalLocationWithProperty("3a8bca98bcad879bca98b9acd", "layer", "algorithm", "sha256")}),
 		},
 	}

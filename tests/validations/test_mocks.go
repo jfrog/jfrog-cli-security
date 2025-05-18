@@ -233,18 +233,21 @@ func NewMockScaResults(responses ...services.ScanResponse) (converted []results.
 }
 
 func CreateDummyApplicabilityRule(cve string, applicableStatus jasutils.ApplicabilityStatus) *sarif.ReportingDescriptor {
+	id := fmt.Sprintf("applic_%s", cve)
+	properties := sarif.NewPropertyBag()
+	properties.Properties = map[string]interface{}{"applicability": applicableStatus.String()}
 	return &sarif.ReportingDescriptor{
-		ID:               fmt.Sprintf("applic_%s", cve),
+		ID:               &id,
 		Name:             &cve,
-		ShortDescription: sarif.NewMultiformatMessageString(fmt.Sprintf("Scanner for %s", cve)),
-		FullDescription:  sarif.NewMultiformatMessageString(fmt.Sprintf("The Scanner checks for %s", cve)),
-		Properties:       map[string]interface{}{"applicability": applicableStatus.String()},
+		ShortDescription: sarif.NewMultiformatMessageString().WithText(fmt.Sprintf("Scanner for %s", cve)),
+		FullDescription:  sarif.NewMultiformatMessageString().WithText(fmt.Sprintf("The Scanner checks for %s", cve)),
+		Properties:       properties,
 	}
 }
 
 func CreateDummyApplicableResults(cve string, location formats.Location) *sarif.Result {
 	return &sarif.Result{
-		Message: *sarif.NewTextMessage("ca msg"),
+		Message: sarif.NewTextMessage("ca msg"),
 		RuleID:  utils.NewStrPtr(fmt.Sprintf("applic_%s", cve)),
 		Locations: []*sarif.Location{
 			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
@@ -254,10 +257,10 @@ func CreateDummyApplicableResults(cve string, location formats.Location) *sarif.
 
 func CreateDummyJasRule(id string, cwe ...string) *sarif.ReportingDescriptor {
 	descriptor := &sarif.ReportingDescriptor{
-		ID:               id,
+		ID:               &id,
 		Name:             &id,
-		ShortDescription: sarif.NewMultiformatMessageString(fmt.Sprintf("Scanner for %s", id)).WithMarkdown(fmt.Sprintf("Scanner for %s", id)),
-		FullDescription:  sarif.NewMultiformatMessageString(fmt.Sprintf("The Scanner checks for %s", id)).WithMarkdown(fmt.Sprintf("The Scanner checks for %s", id)),
+		ShortDescription: sarif.NewMultiformatMessageString().WithText(fmt.Sprintf("Scanner for %s", id)).WithMarkdown(fmt.Sprintf("Scanner for %s", id)),
+		FullDescription:  sarif.NewMultiformatMessageString().WithText(fmt.Sprintf("The Scanner checks for %s", id)).WithMarkdown(fmt.Sprintf("The Scanner checks for %s", id)),
 	}
 	if len(cwe) > 0 {
 		descriptor.DefaultConfiguration = &sarif.ReportingConfiguration{
@@ -270,36 +273,37 @@ func CreateDummyJasRule(id string, cwe ...string) *sarif.ReportingDescriptor {
 }
 
 func CreateDummySecretResult(id string, status jasutils.TokenValidationStatus, metadata string, location formats.Location) *sarif.Result {
+	properties := sarif.NewPropertyBag()
+	properties.Add("tokenValidation", status.String())
+	properties.Add("metadata", metadata)
 	return &sarif.Result{
-		Message: *sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
+		Message: sarif.NewTextMessage(fmt.Sprintf("Secret %s were found", id)),
 		RuleID:  utils.NewStrPtr(id),
-		Level:   utils.NewStrPtr(severityutils.LevelInfo.String()),
+		Level:   severityutils.LevelInfo.String(),
 		Locations: []*sarif.Location{
 			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
 		},
-		PropertyBag: sarif.PropertyBag{
-			Properties: map[string]interface{}{"tokenValidation": status.String(), "metadata": metadata},
-		},
+		Properties: properties,
 	}
 }
 
 func CreateDummySecretViolationResult(id string, status jasutils.TokenValidationStatus, metadata, watch, issueId string, policies []string, location formats.Location) *sarif.Result {
 	result := CreateDummySecretResult(id, status, metadata, location)
-	result.PropertyBag.Properties[sarifutils.WatchSarifPropertyKey] = watch
-	result.PropertyBag.Properties[sarifutils.JasIssueIdSarifPropertyKey] = issueId
-	result.PropertyBag.Properties[sarifutils.PoliciesSarifPropertyKey] = policies
+	result.Properties.Add(sarifutils.WatchSarifPropertyKey, watch)
+	result.Properties.Add(sarifutils.JasIssueIdSarifPropertyKey, issueId)
+	result.Properties.Add(sarifutils.PoliciesSarifPropertyKey, policies)
 	return result
 }
 
 func CreateDummyJasResult(id string, level severityutils.SarifSeverityLevel, location formats.Location, codeFlows ...[]formats.Location) *sarif.Result {
 	result := &sarif.Result{
-		Message: *sarif.NewTextMessage(fmt.Sprintf("Vulnerability %s were found", id)),
+		Message: sarif.NewTextMessage(fmt.Sprintf("Vulnerability %s were found", id)),
 		RuleID:  utils.NewStrPtr(id),
-		Level:   utils.NewStrPtr(level.String()),
+		Level:   level.String(),
 		Locations: []*sarif.Location{
 			sarifutils.CreateLocation(location.File, location.StartLine, location.StartColumn, location.EndLine, location.EndColumn, location.Snippet),
 		},
-		PropertyBag: sarif.PropertyBag{Properties: map[string]interface{}{}},
+		Properties: sarif.NewPropertyBag(),
 	}
 	for _, codeFlow := range codeFlows {
 		flows := []*sarif.Location{}
@@ -313,8 +317,8 @@ func CreateDummyJasResult(id string, level severityutils.SarifSeverityLevel, loc
 
 func CreateDummySastViolationResult(id string, level severityutils.SarifSeverityLevel, watch, issueId string, policies []string, location formats.Location, codeFlows ...[]formats.Location) *sarif.Result {
 	result := CreateDummyJasResult(id, level, location, codeFlows...)
-	result.PropertyBag.Properties[sarifutils.WatchSarifPropertyKey] = watch
-	result.PropertyBag.Properties[sarifutils.JasIssueIdSarifPropertyKey] = issueId
-	result.PropertyBag.Properties[sarifutils.PoliciesSarifPropertyKey] = policies
+	result.Properties.Add(sarifutils.WatchSarifPropertyKey, watch)
+	result.Properties.Add(sarifutils.JasIssueIdSarifPropertyKey, issueId)
+	result.Properties.Add(sarifutils.PoliciesSarifPropertyKey, policies)
 	return result
 }

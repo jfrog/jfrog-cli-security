@@ -244,11 +244,7 @@ func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
 	if err != nil {
 		return
 	}
-	combined, err := sarifutils.CombineReports(reports...)
-	if err != nil {
-		return
-	}
-	return utils.GetAsJsonBytes(combined, false, false)
+	return utils.GetAsJsonBytes(sarifutils.CombineReports(reports...), false, false)
 }
 
 func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
