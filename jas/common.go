@@ -152,6 +152,7 @@ func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConf
 		for i := range jfrogAppsConfig.Modules {
 			// converting to absolute path before starting the scan flow
 			jfrogAppsConfig.Modules[i].SourceRoot, err = filepath.Abs(jfrogAppsConfig.Modules[i].SourceRoot)
+			jfrogAppsConfig.Modules[i].SourceRoot = filepath.Clean(jfrogAppsConfig.Modules[i].SourceRoot)
 			if err != nil {
 				return nil, errorutils.CheckError(err)
 			}
