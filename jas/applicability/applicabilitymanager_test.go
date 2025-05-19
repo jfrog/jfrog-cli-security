@@ -317,7 +317,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 				if tc.name == "new applicability statuses" {
 					assert.Len(t, vulnerabilitiesResults[0].Tool.Driver.Rules, len(tc.expectedApplicabilityStatuses))
 					for i, value := range tc.expectedApplicabilityStatuses {
-						assert.Equal(t, value, vulnerabilitiesResults[0].Tool.Driver.Rules[i].Properties["applicability"])
+						assert.Equal(t, value, vulnerabilitiesResults[0].Tool.Driver.Rules[i].Properties.Properties["applicability"])
 					}
 				}
 			}
