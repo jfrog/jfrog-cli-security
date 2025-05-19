@@ -159,13 +159,15 @@ func constructReleasesRemoteRepo() (string, error) {
 }
 
 func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFileContent []byte, err error) {
+	TempFileCreated := false
+
 	gradleExecPath, err := build.GetGradleExecPath(gdt.useWrapper)
 	if err != nil {
 		err = errorutils.CheckError(err)
 		return
 	}
 	if gdt.isCurationCmd {
-		gdt.isCurationCmd = createTempBuildGradleFile()
+		TempFileCreated = createTempBuildGradleFile()
 	}
 	outputFilePath := filepath.Join(depTreeDir, gradleDepTreeOutputFile)
 	tasks := []string{
@@ -182,7 +184,7 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	defer func() {
 		err = errors.Join(err, errorutils.CheckError(os.Remove(outputFilePath)))
 	}()
-	if gdt.isCurationCmd {
+	if TempFileCreated {
 		if err := renameTempToBuildGradle(); err != nil {
 			fmt.Printf("Failed to rename temporary build.gradle: %v\n", err)
 		}
@@ -265,7 +267,7 @@ func modifyArtifactoryURL(filePath string) error {
 		line := scanner.Text()
 		trimmedLine := strings.TrimSpace(line)
 
-		if strings.HasPrefix(trimmedLine, "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
+		if strings.HasPrefix(strings.ToLower(trimmedLine), "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
 			line = strings.Replace(line, "/artifactory/", "/artifactory/api/curation/audit/", 1)
 		}
 
