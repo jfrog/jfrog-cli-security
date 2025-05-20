@@ -653,7 +653,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"build.gradle": filepath.Join("tests", "testdata", "projects", "package-managers", "gradle", "curation-project", "build.gradle"),
 			},
 			requestToFail: map[string]bool{
-				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": false,
+				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": true,
 			},
 			expectedResp: map[string]*CurationReport{
 				"com.example:curation-project:1.0.0": {
@@ -661,13 +661,13 @@ func getTestCasesForDoCurationAudit() []testCase {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "net.sourceforge.jexcelapi:jxl",
-							ParentVersion:     "2.6.10", // Ensure this is correct
+							ParentName:        "log4j:log4j",
+							ParentVersion:     "1.2.14",
 							BlockedPackageUrl: "/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar",
 							PackageName:       "log4j:log4j",
 							PackageVersion:    "1.2.14",
 							BlockingReason:    "Policy violations",
-							DepRelation:       "indirect",
+							DepRelation:       "direct",
 							PkgType:           "gradle",
 							WaiverAllowed:     false,
 							Policy: []Policy{
@@ -680,7 +680,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
-					totalNumberOfPackages: 5,
+					totalNumberOfPackages: 5, // Adjust the number if necessary
 				},
 			},
 			allowInsecureTls: true,
