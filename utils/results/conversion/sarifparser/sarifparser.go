@@ -104,7 +104,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	}
 	// Flush the current run
 	if err := sc.ParseNewTargetResults(results.ScanTarget{}, nil); err != nil {
-		return sarif.NewReport(), nil
+		return sarif.NewReport(), err
 	}
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
@@ -515,8 +515,11 @@ func getComponentSarifLocation(cmtType utils.CommandType, component formats.Comp
 			logicalLocations = append(logicalLocations, logicalLocation)
 		}
 	}
-	return sarif.NewLocation().
-		WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://" + filePath))).WithLogicalLocations(logicalLocations)
+	location := sarif.NewLocation().WithPhysicalLocation(sarif.NewPhysicalLocation().WithArtifactLocation(sarif.NewArtifactLocation().WithURI("file://" + filePath)))
+	if len(logicalLocations) > 0 {
+		location.WithLogicalLocations(logicalLocations)
+	}
+	return location
 }
 
 func getScaIssueMarkdownDescription(directDependencies []formats.ComponentRow, cveScore string, applicableStatus jasutils.ApplicabilityStatus, fixedVersions []string) (string, error) {

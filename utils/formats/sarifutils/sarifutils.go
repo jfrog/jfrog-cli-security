@@ -520,7 +520,7 @@ func GetResultMsgMarkdown(result *sarif.Result) string {
 }
 
 func GetResultMsgText(result *sarif.Result) string {
-	if result.Message.Text != nil {
+	if result != nil && result.Message != nil && result.Message.Text != nil {
 		return *result.Message.Text
 	}
 	return ""

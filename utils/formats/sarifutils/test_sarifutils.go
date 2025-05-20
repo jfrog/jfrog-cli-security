@@ -139,10 +139,6 @@ func CreateDummyResultWithFingerprint(markdown, msg, algorithm, value string, lo
 	return result
 }
 
-func newUintPtr(v uint) *uint {
-	return &v
-}
-
 func CreateDummyResultWithPathAndLogicalLocation(fileName, logicalName, kind, property, value string) *sarif.Result {
 	result := CreateDummyResult("result-markdown", "result-msg", "rule", "level")
 	result.Locations = append(result.Locations, CreateDummyLocationWithPathAndLogicalLocation(fileName, logicalName, kind, property, value))
@@ -160,20 +156,29 @@ func CreateDummyLocationInPath(fileName string) *sarif.Location {
 }
 
 func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
-	return &sarif.Location{
-		PhysicalLocation: &sarif.PhysicalLocation{
+	return sarif.NewLocation().WithPhysicalLocation( &sarif.PhysicalLocation{
 			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
 			Region: &sarif.Region{
 				StartLine:   &startLine,
 				StartColumn: &startCol,
 				EndLine:     &endLine,
 				EndColumn:   &endCol,
-				Snippet:     &sarif.ArtifactContent{Text: &snippet}}},
-	}
+				Snippet:     &sarif.ArtifactContent{Text: &snippet}}})
+	// return &sarif.Location{
+	// 	PhysicalLocation: &sarif.PhysicalLocation{
+	// 		ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
+	// 		Region: &sarif.Region{
+	// 			StartLine:   &startLine,
+	// 			StartColumn: &startCol,
+	// 			EndLine:     &endLine,
+	// 			EndColumn:   &endCol,
+	// 			Snippet:     &sarif.ArtifactContent{Text: &snippet}}},
+	// }
 }
 
 func CreateLogicalLocationWithProperty(name, kind, property, value string) *sarif.LogicalLocation {
-	location := sarif.NewLogicalLocation().WithName(name).WithKind(kind)
+	location := &sarif.LogicalLocation{}
+	location.WithName(name).WithKind(kind)
 	location.Properties = sarif.NewPropertyBag()
 	location.Properties.Add(property, value)
 	return location
