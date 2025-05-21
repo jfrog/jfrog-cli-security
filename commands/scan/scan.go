@@ -456,7 +456,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					SetXrayGraphScanParams(params).
 					SetFixableOnly(scanCmd.fixableOnly).
 					SetSeverityLevel(scanCmd.minSeverityFilter.String())
-				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+				xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to create Xray service manager: %s", scanLogPrefix, err.Error()), false)
 				}

@@ -7,14 +7,23 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray"
 )
 
-func CreateXrayServiceManager(serverDetails *config.ServerDetails) (*xray.XrayServicesManager, error) {
+type XrayManagerOption func(f *xray.XrayServicesManager)
+
+// Global reference to the project key, used for API endpoints that require it for authentication
+func WithScopedProjectKey(projectKey string) XrayManagerOption {
+	return func(f *xray.XrayServicesManager) {
+		f.SetProjectKey(projectKey)
+	}
+}
+
+func CreateXrayServiceManager(serverDetails *config.ServerDetails, options ...XrayManagerOption) (manager *xray.XrayServicesManager, err error) {
 	certsPath, err := coreutils.GetJfrogCertsDir()
 	if err != nil {
-		return nil, err
+		return
 	}
 	xrayDetails, err := serverDetails.CreateXrayAuthConfig()
 	if err != nil {
-		return nil, err
+		return
 	}
 	serviceConfig, err := clientconfig.NewConfigBuilder().
 		SetServiceDetails(xrayDetails).
@@ -22,13 +31,20 @@ func CreateXrayServiceManager(serverDetails *config.ServerDetails) (*xray.XraySe
 		SetInsecureTls(serverDetails.InsecureTls).
 		Build()
 	if err != nil {
+		return
+	}
+	manager, err = xray.New(serviceConfig)
+	if err != nil {
 		return nil, err
 	}
-	return xray.New(serviceConfig)
+	for _, option := range options {
+		option(manager)
+	}
+	return 
 }
 
-func CreateXrayServiceManagerAndGetVersion(serviceDetails *config.ServerDetails) (*xray.XrayServicesManager, string, error) {
-	xrayManager, err := CreateXrayServiceManager(serviceDetails)
+func CreateXrayServiceManagerAndGetVersion(serviceDetails *config.ServerDetails, options ...XrayManagerOption) (*xray.XrayServicesManager, string, error) {
+	xrayManager, err := CreateXrayServiceManager(serviceDetails, options...)
 	if err != nil {
 		return nil, "", err
 	}
