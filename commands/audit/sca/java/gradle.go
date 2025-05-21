@@ -244,47 +244,101 @@ func createTempBuildGradleFile() bool {
 // and writes changes back to build.gradle.
 // Returns error if any step fails.
 func modifyArtifactoryURL(filePath string) error {
-	tmpFilePath := filePath + ".tmp"
-	err := os.Rename(filePath, tmpFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to rename file: %w", err)
-	}
-	file, err := os.Open(tmpFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to open tmp file: %w", err)
-	}
-	defer file.Close()
-	newFile, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create original file: %w", err)
-	}
-	defer newFile.Close()
+	// 1. Create the persistent backup of the original file
+	persistentBackupPath := filePath + ".tmp"
 
-	scanner := bufio.NewScanner(file)
-	writer := bufio.NewWriter(newFile)
+	_ = os.Remove(persistentBackupPath)
 
+	originalContent, err := os.ReadFile(filePath)
+
+	if err != nil {
+		return fmt.Errorf("failed to read original file '%s' for backup: %w", filePath, err)
+	}
+	err = os.WriteFile(persistentBackupPath, originalContent, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write persistent backup to '%s': %w", persistentBackupPath, err)
+	}
+	internalTmpFilePath := filePath + ".current_op_tmp"
+	_ = os.Remove(internalTmpFilePath)
+	err = os.Rename(filePath, internalTmpFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to rename file '%s' to internal temp '%s': %w", filePath, internalTmpFilePath, err)
+	}
+	operationSuccessful := false
+	defer func() {
+		if !operationSuccessful {
+			if _, statErr := os.Stat(internalTmpFilePath); statErr == nil {
+				_ = os.Remove(filePath)
+				_ = os.Rename(internalTmpFilePath, filePath)
+			}
+		} else {
+			_ = os.Remove(internalTmpFilePath)
+		}
+	}()
+
+	srcFile, err := os.Open(internalTmpFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open internal temp file '%s' for reading: %w", internalTmpFilePath, err)
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create target file '%s' for writing: %w", filePath, err)
+	}
+	defer destFile.Close()
+
+	scanner := bufio.NewScanner(srcFile)
+	writer := bufio.NewWriter(destFile)
+
+	inPublishingBlock := false
+	publishingBraceCount := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineToWrite := line
 		trimmedLine := strings.TrimSpace(line)
+		isLineEffectivelyInPublishingBlock := inPublishingBlock
 
-		if strings.HasPrefix(strings.ToLower(trimmedLine), "url") && strings.Contains(trimmedLine, "/artifactory/") && !strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
-			line = strings.Replace(line, "/artifactory/", "/artifactory/api/curation/audit/", 1)
+		if !inPublishingBlock {
+			if strings.Contains(strings.ToLower(trimmedLine), "publishing") && strings.Contains(trimmedLine, "{") {
+				inPublishingBlock = true
+				isLineEffectivelyInPublishingBlock = true
+				publishingBraceCount += strings.Count(trimmedLine, "{")
+				publishingBraceCount -= strings.Count(trimmedLine, "}")
+				if publishingBraceCount <= 0 {
+					inPublishingBlock = false
+					publishingBraceCount = 0
+				}
+			}
+		} else {
+			publishingBraceCount += strings.Count(trimmedLine, "{")
+			publishingBraceCount -= strings.Count(trimmedLine, "}")
+			if publishingBraceCount <= 0 {
+				inPublishingBlock = false
+				publishingBraceCount = 0
+			}
 		}
-
-		_, err := writer.WriteString(line + "\n")
-		if err != nil {
-			return fmt.Errorf("failed to write to original file: %w", err)
+		if !isLineEffectivelyInPublishingBlock {
+			if strings.HasPrefix(strings.ToLower(trimmedLine), "url") &&
+				strings.Contains(trimmedLine, "/artifactory/") &&
+				!strings.Contains(trimmedLine, "/artifactory/api/curation/audit/") {
+				lineToWrite = strings.Replace(line, "/artifactory/", "/artifactory/api/curation/audit/", 1)
+			}
+		}
+		_, errWrite := writer.WriteString(lineToWrite + "\n")
+		if errWrite != nil {
+			return fmt.Errorf("failed to write to target file '%s': %w", filePath, errWrite)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading tmp file: %w", err)
+		return fmt.Errorf("error reading from internal temp file '%s': %w", internalTmpFilePath, err)
 	}
 
 	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush writer: %w", err)
+		return fmt.Errorf("failed to flush writer for target file '%s': %w", filePath, err)
 	}
-
+	operationSuccessful = true
 	return nil
 }
 
