@@ -75,6 +75,7 @@ const (
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
+	MinArtiGradlesupport      = "7.63.5"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -94,7 +95,7 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
 	},
 	techutils.Gradle: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Gradle, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Gradle, MinArtiGradlesupport)
 	},
 }
 
