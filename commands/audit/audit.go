@@ -296,19 +296,23 @@ func RunJasScans(auditParallelRunner *utils.SecurityParallelRunner, auditParams 
 		return
 	}
 	auditParallelRunner.ResultsMu.Lock()
-	jasScanner, err = jas.CreateJasScanner(
-		serverDetails,
-		scanResults.SecretValidation,
-		auditParams.minSeverityFilter,
-		jas.GetAnalyzerManagerXscEnvVars(
-			auditParams.GetMultiScanId(),
-			utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
-			auditParams.resultsContext.ProjectKey,
-			auditParams.resultsContext.Watches,
-			scanResults.GetTechnologies()...,
+	scannerOptions := []jas.JasScannerOption{
+		jas.WithEnvVars(
+			scanResults.SecretValidation,
+			jas.GetDiffScanTypeValue(auditParams.diffMode, auditParams.resultsToCompare),
+			jas.GetAnalyzerManagerXscEnvVars(
+				auditParams.GetMultiScanId(),
+				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
+				auditParams.resultsContext.ProjectKey,
+				auditParams.resultsContext.Watches,
+				scanResults.GetTechnologies()...,
+			),
 		),
-		auditParams.Exclusions()...,
-	)
+		jas.WithMinSeverity(auditParams.minSeverityFilter),
+		jas.WithExclusions(auditParams.Exclusions()...),
+		jas.WithResultsToCompare(auditParams.resultsToCompare),
+	}
+	jasScanner, err = jas.NewJasScanner(serverDetails, scannerOptions...)
 	jas.UpdateJasScannerWithExcludePatternsFromProfile(jasScanner, auditParams.AuditBasicParams.GetConfigProfile())
 
 	auditParallelRunner.ResultsMu.Unlock()
@@ -353,6 +357,7 @@ func createJasScansTasks(auditParallelRunner *utils.SecurityParallelRunner, scan
 				Module:                      *module,
 				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:              auditParams.ScansToPerform(),
+				SourceResultsToCompare:      scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,

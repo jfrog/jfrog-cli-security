@@ -464,7 +464,7 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s sca scanning '%s' failed with error: %s", scanLogPrefix, graph.Id, err.Error()), false)
 				} else {
-					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), results.CompTreeToSbom(graph), *graphScanResults)
+					targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 					targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 				}
 				if !cmdResults.EntitledForJas {
@@ -475,17 +475,18 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 					return targetResults.AddTargetError(fmt.Errorf("%s jas scanning failed with error: %s", scanLogPrefix, err.Error()), false)
 				}
 				// Run Jas scans
-				scanner, err := jas.CreateJasScanner(scanCmd.serverDetails,
-					cmdResults.SecretValidation,
-					scanCmd.minSeverityFilter,
-					jas.GetAnalyzerManagerXscEnvVars(
-						cmdResults.MultiScanId,
-						// Passing but empty since not supported for binary scans
-						scanCmd.resultsContext.GitRepoHttpsCloneUrl,
-						scanCmd.resultsContext.ProjectKey,
-						scanCmd.resultsContext.Watches,
-						targetResults.GetTechnologies()...,
+				scanner, err := jas.NewJasScanner(scanCmd.serverDetails,
+					jas.WithEnvVars(cmdResults.SecretValidation, jas.NotDiffScanEnvValue,
+						jas.GetAnalyzerManagerXscEnvVars(
+							cmdResults.MultiScanId,
+							// Passing but empty since not supported for binary scans
+							scanCmd.resultsContext.GitRepoHttpsCloneUrl,
+							scanCmd.resultsContext.ProjectKey,
+							scanCmd.resultsContext.Watches,
+							targetResults.GetTechnologies()...,
+						),
 					),
+					jas.WithMinSeverity(scanCmd.minSeverityFilter),
 				)
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("failed to create jas scanner: %s", err.Error()), false)
