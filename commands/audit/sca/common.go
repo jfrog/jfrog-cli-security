@@ -44,7 +44,7 @@ func GetExcludePattern(params utils.AuditParams) string {
 func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {
 	var scanResults *services.ScanResponse
 	technology := scanGraphParams.Technology()
-	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails())
+	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanGraphParams.XrayGraphScanParams().ProjectKey))
 	if err != nil {
 		return nil, err
 	}
