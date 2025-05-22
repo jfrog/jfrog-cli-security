@@ -40,7 +40,7 @@ func CreateXrayServiceManager(serverDetails *config.ServerDetails, options ...Xr
 	for _, option := range options {
 		option(manager)
 	}
-	return 
+	return
 }
 
 func CreateXrayServiceManagerAndGetVersion(serviceDetails *config.ServerDetails, options ...XrayManagerOption) (*xray.XrayServicesManager, string, error) {
