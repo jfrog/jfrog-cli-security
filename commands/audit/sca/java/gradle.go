@@ -57,10 +57,22 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
+	isCurationCmd bool
+}
+
+func NewGradleDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *gradleDepTreeManager {
+	depTreeManager := NewDepTreeManager(&DepTreeParams{
+		Server:   params.Server,
+		DepsRepo: params.DepsRepo,
+	})
+	return &gradleDepTreeManager{
+		DepTreeManager: depTreeManager,
+		isCurationCmd:  params.IsCurationCmd,
+	}
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
-	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
+	manager := NewGradleDepTreeManager(params, Tree)
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
 		return
@@ -122,7 +134,6 @@ func getRemoteRepos(depsRepo string, server *config.ServerDetails) (string, stri
 	if err != nil {
 		return "", "", err
 	}
-
 	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server)
 	if err != nil {
 		return "", "", err
@@ -136,7 +147,6 @@ func constructReleasesRemoteRepo() (string, error) {
 	if err != nil || serverId == "" || repoName == "" {
 		return "", err
 	}
-
 	releasesServer, err := config.GetSpecificConfig(serverId, false, true)
 	if err != nil {
 		return "", err
@@ -148,12 +158,12 @@ func constructReleasesRemoteRepo() (string, error) {
 }
 
 func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFileContent []byte, err error) {
+
 	gradleExecPath, err := build.GetGradleExecPath(gdt.useWrapper)
 	if err != nil {
 		err = errorutils.CheckError(err)
 		return
 	}
-
 	outputFilePath := filepath.Join(depTreeDir, gradleDepTreeOutputFile)
 	tasks := []string{
 		"clean",
@@ -169,7 +179,6 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 	defer func() {
 		err = errors.Join(err, errorutils.CheckError(os.Remove(outputFilePath)))
 	}()
-
 	outputFileContent, err = os.ReadFile(outputFilePath)
 	err = errorutils.CheckError(err)
 	return
