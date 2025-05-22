@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/io"
@@ -109,16 +108,7 @@ func calculateUniqueDependencies(nodes map[string]conanRef) []string {
 }
 
 func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	graphInfo := []string{"info"}
-	if params.PipRequirementsFile() != "" {
-		// We allow passing a custom name for the descriptor file to be used in the 'graph info' command. If non has provided we execute the command on the current dir.
-		// Since this ability already exists for python we leverage this ability
-		graphInfo = append(graphInfo, filepath.Join(workingDir, params.PipRequirementsFile()))
-	} else {
-		graphInfo = append(graphInfo, ".")
-	}
-	graphInfo = append(graphInfo, "--format=json")
-	graphInfo = append(graphInfo, params.Args()...)
+	graphInfo := append([]string{"info", ".", "--format=json"}, params.Args()...)
 	conanGraphInfoContent, err := getConanCmd(executablePath, workingDir, "graph", graphInfo...).RunWithOutput()
 	if err != nil {
 		return

@@ -951,7 +951,7 @@ func toNugetDownloadUrl(artifactoryUrl, repo, compName, compVersion string) stri
 // input - repo: libs-release
 // output - downloadUrl: <arti-url>/libs-release/org/apache/tomcat/embed/tomcat-embed-jasper/8.0.33/tomcat-embed-jasper-8.0.33.jar
 func getNugetNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, version string) {
-	name, version, _ = techutils.SplitComponentId(id)
+	name, version, _ = techutils.SplitComponentIdRaw(id)
 
 	downloadUrls = append(downloadUrls, toNugetDownloadUrl(artiUrl, repo, name, version))
 	for _, versionVariant := range dependencies.CreateAlternativeVersionForms(version) {
