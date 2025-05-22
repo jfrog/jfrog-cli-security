@@ -113,9 +113,9 @@ require (
 
 replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250522165200-837cf45d086b
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250522133129-f15fd0818081
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250522185315-738a9866af5d
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250522170414-a043a12a9877
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250522190754-4f57f1e65ad2
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
