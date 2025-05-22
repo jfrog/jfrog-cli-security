@@ -23,6 +23,7 @@ const (
 
 	ApplicabilityScannerType        ApplicabilityScanType = "analyze-applicability"
 	ApplicabilityDockerScanScanType ApplicabilityScanType = "analyze-applicability-docker-scan"
+	ApplicabilityGenericScanScanType ApplicabilityScanType = "analyze-applicability-generic-scan"
 )
 
 type ApplicabilityScanType string

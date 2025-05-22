@@ -84,7 +84,7 @@ func (dsc *DockerScanCommand) Run() (err error) {
 		Pattern(imageTarPath).
 		Target(dsc.resultsContext.RepoPath).
 		BuildSpec()).SetThreads(1)
-	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag).SetRunJasScans(true)
+	dsc.ScanCommand.SetTargetNameOverride(dsc.imageTag)
 	err = dsc.setCredentialEnvsForIndexerApp()
 	if err != nil {
 		return errorutils.CheckError(err)
