@@ -2,7 +2,10 @@ package sast
 
 import (
 	"fmt"
+	"io"
+	"os/exec"
 	"path/filepath"
+	"time"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -165,4 +168,91 @@ func getResultLocationStr(result *sarif.Result) string {
 
 func getResultId(result *sarif.Result) string {
 	return sarifutils.GetResultRuleId(result) + sarifutils.GetResultLevel(result) + sarifutils.GetResultMsgText(result) + getResultLocationStr(result)
+}
+
+func RunAmMcpWithPipes(env map[string]string, input_pipe io.Reader, output_pipe io.Writer, error_pipe io.Writer, timeout int, args ...string) error {
+
+	am_path, err := jas.GetAnalyzerManagerExecutable()
+	if err != nil {
+		return err
+	}
+
+	allArgs := append([]string{"mcp-sast"}, args...)
+	command := exec.Command(am_path, allArgs...)
+	command.Env = utils.ToCommandEnvVars(env)
+	defer func() {
+		if command != nil && !command.ProcessState.Exited() {
+			if _error := command.Process.Kill(); _error != nil {
+				log.Error(fmt.Sprintf("failed to kill process: %s", _error.Error()))
+			}
+		}
+	}()
+
+	stdin, _error := command.StdinPipe()
+	if _error != nil {
+		log.Error(fmt.Sprintf("Error creating MCPService stdin pipe: %v", _error))
+		return _error
+	}
+
+	stdout, _error := command.StdoutPipe()
+	if _error != nil {
+		log.Error(fmt.Sprintf("Error creating MCPService stdout pipe: %v", _error))
+		return _error
+	}
+
+	stderr, _error := command.StderrPipe()
+	if _error != nil {
+		log.Error(fmt.Sprintf("Error creating MCPService stderr pipe: %v", _error))
+		return _error
+	}
+
+	if _error := command.Start(); _error != nil {
+		log.Error(fmt.Sprintf("Error starting MCPService subprocess: %v", _error))
+		return _error
+	}
+
+	go func() {
+		defer stdin.Close()
+		_, err := io.Copy(stdin, input_pipe)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error writing to MCPService stdin pipe: %v", err))
+		}
+
+	}()
+
+	go func() {
+		defer stderr.Close()
+		_, err := io.Copy(error_pipe, stderr)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error reading from MCPService stderr pipe: %v", err))
+		}
+	}()
+
+	go func() {
+		defer stdout.Close()
+		_, err := io.Copy(output_pipe, stdout)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error reading from MCPService stdout pipe: %v", err))
+		}
+	}()
+
+	// for testability only:
+	// set a timeout to shut down the child process
+	// after some time
+	if timeout > 0 {
+		go func() {
+			time.Sleep(time.Duration(timeout) * time.Second)
+			stdin.Close()
+			err := command.Process.Kill()
+			if err != nil {
+				log.Error(fmt.Sprintf("Error killing MCPService subprocess: %v", err))
+			}
+		}()
+	}
+
+	if _error := command.Wait(); _error != nil {
+		log.Error(fmt.Sprintf("Error waiting for MCPService subprocess: %v", _error))
+		return _error
+	}
+	return nil
 }
