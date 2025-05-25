@@ -59,19 +59,37 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 func TestXrayBinaryScanJsonDocker(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "xmas.tar", false)
-	verifyAdvancedSecurityScanResults(t, output, true, true)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 6},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 4, Secrets: 2},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 1, NotCovered: 1},
+		},
+	})
 }
 
 func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "backupfriend-client.tar.gz", false)
-	verifyAdvancedSecurityScanResults(t, output, true, true)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, Undetermined: 1},
+		},
+	})
 }
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "student-services-security-0.0.1.jar", false)
-	verifyAdvancedSecurityScanResults(t, output, true, false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 41},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 40, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 17, NotCovered: 3, NotApplicable: 20},
+		},
+	})
 }
 
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
