@@ -213,11 +213,13 @@ func CreateThreadFlow(locations ...*sarif.Location) *sarif.ThreadFlow {
 }
 
 func CreateDummyRuleWithProperties(id string, properties sarif.Properties) *sarif.ReportingDescriptor {
-	sarif.NewPropertyBag()
-	return &sarif.ReportingDescriptor{
-		ID:               &id,
-		Properties:       &sarif.PropertyBag{Properties: properties},
-		ShortDescription: sarif.NewMultiformatMessageString().WithText(""),
-		FullDescription:  sarif.NewMultiformatMessageString().WithText("rule-msg").WithMarkdown("rule-markdown"),
+	propertyBag := sarif.NewPropertyBag()
+	for key, value := range properties {
+		propertyBag.Add(key, value)
 	}
+	return sarif.NewReportingDescriptor().
+		WithID(id).
+		WithProperties(propertyBag).
+		WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).
+		WithFullDescription(sarif.NewMultiformatMessageString().WithText("rule-msg").WithMarkdown("rule-markdown"))
 }
