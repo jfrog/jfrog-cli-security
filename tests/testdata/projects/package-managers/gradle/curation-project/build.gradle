@@ -13,7 +13,7 @@ repositories {
     //mavenCentral()
     maven {
         allowInsecureProtocol = true
-        url "https://z0groupscope.jfrogdev.org/artifactory/gradle-remote/"
+        url "http://localhost:8046/artifactory/gradle-virtual/"
         credentials {
             username = 'admin'
             password = 'password'

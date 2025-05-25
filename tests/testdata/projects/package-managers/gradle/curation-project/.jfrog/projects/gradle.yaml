@@ -1,5 +1,5 @@
 version: 1
 type: gradle
 resolver:
-  repo: gradle-remote
+  repo: gradle-virtual
   serverId: test
