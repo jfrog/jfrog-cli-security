@@ -1,22 +1,147 @@
 package jas
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"golang.org/x/exp/slices"
 
+	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/stretchr/testify/assert"
+
+	jfrogAppsConfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	clientTestUtils "github.com/jfrog/jfrog-client-go/utils/tests"
+
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
+
+
+var createJFrogAppsConfigCases = []struct {
+	workingDirs []string
+}{
+	{workingDirs: []string{}},
+	{workingDirs: []string{"working-dir"}},
+	{workingDirs: []string{"working-dir-1", "working-dir-2"}},
+}
+
+func TestCreateJFrogAppsConfig(t *testing.T) {
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	for _, testCase := range createJFrogAppsConfigCases {
+		t.Run(fmt.Sprintf("%v", testCase.workingDirs), func(t *testing.T) {
+			jfrogAppsConfig, err := CreateJFrogAppsConfig(testCase.workingDirs)
+			assert.NoError(t, err)
+			assert.NotNil(t, jfrogAppsConfig)
+			if len(testCase.workingDirs) == 0 {
+				assert.Len(t, jfrogAppsConfig.Modules, 1)
+				assert.Equal(t, wd, jfrogAppsConfig.Modules[0].SourceRoot)
+				return
+			}
+			assert.Len(t, jfrogAppsConfig.Modules, len(testCase.workingDirs))
+			for i, workingDir := range testCase.workingDirs {
+				assert.Equal(t, filepath.Join(wd, workingDir), jfrogAppsConfig.Modules[i].SourceRoot)
+			}
+		})
+	}
+}
+
+func TestCreateJFrogAppsConfigWithConfig(t *testing.T) {
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+	chdirCallback := clientTestUtils.ChangeDirWithCallback(t, wd, "testdata")
+	defer chdirCallback()
+
+	jfrogAppsConfig, err := CreateJFrogAppsConfig([]string{})
+	assert.NoError(t, err)
+	assert.NotNil(t, jfrogAppsConfig)
+	assert.Equal(t, "1.0", jfrogAppsConfig.Version)
+	assert.Len(t, jfrogAppsConfig.Modules, 1)
+}
+
+func TestShouldSkipScanner(t *testing.T) {
+	module := jfrogAppsConfig.Module{}
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+
+	module = jfrogAppsConfig.Module{ExcludeScanners: []string{"sast"}}
+	assert.False(t, ShouldSkipScanner(module, jasutils.IaC))
+	assert.True(t, ShouldSkipScanner(module, jasutils.Sast))
+}
+
+var getSourceRootsCases = []struct {
+	scanner *jfrogAppsConfig.Scanner
+}{
+	{scanner: nil},
+	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"working-dir"}}},
+	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"working-dir-1", "working-dir-2"}}},
+}
+
+func TestGetSourceRoots(t *testing.T) {
+	testGetSourceRoots(t, "source-root")
+}
+
+func TestGetSourceRootsEmptySourceRoot(t *testing.T) {
+	testGetSourceRoots(t, "")
+}
+
+func testGetSourceRoots(t *testing.T, sourceRoot string) {
+	sourceRoot, err := filepath.Abs(sourceRoot)
+	assert.NoError(t, err)
+	module := jfrogAppsConfig.Module{SourceRoot: sourceRoot}
+	for _, testCase := range getSourceRootsCases {
+		t.Run("", func(t *testing.T) {
+			scanner := testCase.scanner
+			actualSourceRoots, err := GetSourceRoots(module, scanner)
+			assert.NoError(t, err)
+			if scanner == nil {
+				assert.ElementsMatch(t, []string{module.SourceRoot}, actualSourceRoots)
+				return
+			}
+			expectedWorkingDirs := []string{}
+			for _, workingDir := range scanner.WorkingDirs {
+				expectedWorkingDirs = append(expectedWorkingDirs, filepath.Join(module.SourceRoot, workingDir))
+			}
+			assert.ElementsMatch(t, actualSourceRoots, expectedWorkingDirs)
+		})
+	}
+}
+
+var getExcludePatternsCases = []struct {
+	scanner *jfrogAppsConfig.Scanner
+}{
+	{scanner: nil},
+	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"exclude-dir"}}},
+	{&jfrogAppsConfig.Scanner{WorkingDirs: []string{"exclude-dir-1", "exclude-dir-2"}}},
+}
+
+func TestGetExcludePatterns(t *testing.T) {
+	module := jfrogAppsConfig.Module{ExcludePatterns: []string{"exclude-root"}}
+	for _, testCase := range getExcludePatternsCases {
+		t.Run("", func(t *testing.T) {
+			scanner := testCase.scanner
+			actualExcludePatterns := GetExcludePatterns(module, scanner)
+			if scanner == nil {
+				assert.ElementsMatch(t, module.ExcludePatterns, actualExcludePatterns)
+				return
+			}
+			expectedExcludePatterns := module.ExcludePatterns
+			expectedExcludePatterns = append(expectedExcludePatterns, scanner.ExcludePatterns...)
+			assert.ElementsMatch(t, actualExcludePatterns, expectedExcludePatterns)
+		})
+	}
+}
 
 func TestReadJasScanRunsFromFile(t *testing.T) {
 	dummyReport := sarif.NewReport()
@@ -188,6 +313,7 @@ func TestGetJasEnvVars(t *testing.T) {
 		name            string
 		serverDetails   *config.ServerDetails
 		validateSecrets bool
+		diffMode        JasDiffScanEnvValue
 		extraEnvVars    map[string]string
 		expectedOutput  map[string]string
 	}{
@@ -260,10 +386,28 @@ func TestGetJasEnvVars(t *testing.T) {
 				jfTokenEnvVariable:           "token",
 			},
 		},
+		{
+			name: "Valid server details with diff mode",
+			serverDetails: &config.ServerDetails{
+				Url:         "url",
+				User:        "user",
+				Password:    "password",
+				AccessToken: "token",
+			},
+			diffMode: FirstScanDiffScanEnvValue,
+			expectedOutput: map[string]string{
+				jfPlatformUrlEnvVariable:      "url",
+				jfUserEnvVariable:             "user",
+				jfPasswordEnvVariable:         "password",
+				jfTokenEnvVariable:            "token",
+				JfSecretValidationEnvVariable: "false",
+				DiffScanEnvVariable:           string(FirstScanDiffScanEnvValue),
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.extraEnvVars)
+			envVars, err := getJasEnvVars(test.serverDetails, test.validateSecrets, test.diffMode, test.extraEnvVars)
 			assert.NoError(t, err)
 			for expectedKey, expectedValue := range test.expectedOutput {
 				assert.Equal(t, expectedValue, envVars[expectedKey])
@@ -367,4 +511,91 @@ func TestCreateScannerTempDirectory_baseDirIsEmpty(t *testing.T) {
 	scanner := &JasScanner{TempDir: ""}
 	_, err := CreateScannerTempDirectory(scanner, jasutils.Applicability.String())
 	assert.Error(t, err)
+}
+
+func TestGetDiffScanTypeValue(t *testing.T) {
+	testResults := results.NewCommandResults(utils.SourceCode)
+	tests := []struct {
+		name             string
+		diffScan         bool
+		resultsToCompare *results.SecurityCommandResults
+		expectedOutput   JasDiffScanEnvValue
+	}{
+		{
+			name:           "Not Diff scan",
+			expectedOutput: NotDiffScanEnvValue,
+		},
+		{
+			name:           "Diff scan - First scan",
+			diffScan:       true,
+			expectedOutput: FirstScanDiffScanEnvValue,
+		},
+		{
+			name:             "Diff scan - Second scan",
+			diffScan:         true,
+			resultsToCompare: testResults,
+			expectedOutput:   SecondScanDiffScanEnvValue,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetDiffScanTypeValue(test.diffScan, test.resultsToCompare))
+		})
+	}
+}
+
+func TestGetResultsToCompare(t *testing.T) {
+	testCases := []struct {
+		name             string
+		target           string
+		ResultsToCompare *results.SecurityCommandResults
+		expectedTarget   *results.TargetResults
+	}{
+		{
+			name:             "No results to compare",
+			target:           filepath.Join("path", "to", "target"),
+			ResultsToCompare: results.NewCommandResults(utils.SourceCode),
+			expectedTarget:   nil,
+		},
+		{
+			name:   "Results to compare - target not found",
+			target: filepath.Join("path", "to", "target"),
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "another", "target")}},
+				},
+			},
+			expectedTarget: nil,
+		},
+		{
+			name:   "Results to compare - same path",
+			target: filepath.Join("path", "to", "target"),
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target")}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target2")}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("path", "to", "target")}},
+		},
+		{
+			name:   "Results to compare - match relative path",
+			target: "target2",
+			ResultsToCompare: &results.SecurityCommandResults{
+				Targets: []*results.TargetResults{
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target")}},
+					{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
+				},
+			},
+			expectedTarget: &results.TargetResults{ScanTarget: results.ScanTarget{Target: filepath.Join("other", "root", "to", "target2")}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompare(testCase.target))
+		})
+	}
 }

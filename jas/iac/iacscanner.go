@@ -21,21 +21,26 @@ const (
 )
 
 type IacScanManager struct {
-	scanner         *jas.JasScanner
-	configFileName  string
-	resultsFileName string
+	scanner *jas.JasScanner
+
+	resultsToCompareFileName string
+	configFileName           string
+	resultsFileName          string
 }
 
 // The getIacScanResults function runs the iac scan flow, which includes the following steps:
 // Creating an IacScanManager object.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
+func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
 		return
 	}
-	iacScanManager := newIacScanManager(scanner, scannerTempDir)
+	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, resultsToCompare...)
+	if err != nil {
+		return
+	}
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running IaC scan...")
 	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		return
@@ -44,11 +49,23 @@ func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId
 	return
 }
 
-func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string) (manager *IacScanManager) {
-	return &IacScanManager{
+func newIacScanManager(scanner *jas.JasScanner, scannerTempDir string, resultsToCompare ...*sarif.Run) (manager *IacScanManager, err error) {
+	manager = &IacScanManager{
 		scanner:         scanner,
 		configFileName:  filepath.Join(scannerTempDir, "config.yaml"),
-		resultsFileName: filepath.Join(scannerTempDir, "results.sarif")}
+		resultsFileName: filepath.Join(scannerTempDir, "results.sarif"),
+	}
+	if len(resultsToCompare) == 0 {
+		// No scan results to compare
+		return
+	}
+	log.Debug("Diff mode - IaC results to compare provided")
+	manager.resultsToCompareFileName = filepath.Join(scannerTempDir, "target.sarif")
+	// Save the iac results to compare as a report
+	if err = jas.SaveScanResultsToCompareAsReport(manager.resultsToCompareFileName, resultsToCompare...); err != nil {
+		return
+	}
+	return
 }
 
 func (iac *IacScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {
@@ -66,10 +83,11 @@ type iacScanConfig struct {
 }
 
 type iacScanConfiguration struct {
-	Roots       []string `yaml:"roots"`
-	Output      string   `yaml:"output"`
-	Type        string   `yaml:"type"`
-	SkippedDirs []string `yaml:"skipped-folders"`
+	Roots                  []string `yaml:"roots"`
+	Output                 string   `yaml:"output"`
+	PathToResultsToCompare string   `yaml:"target-result-file,omitempty"`
+	Type                   string   `yaml:"type"`
+	SkippedDirs            []string `yaml:"skipped-folders"`
 }
 
 func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclusions ...string) error {
@@ -80,10 +98,11 @@ func (iac *IacScanManager) createConfigFile(module jfrogappsconfig.Module, exclu
 	configFileContent := iacScanConfig{
 		Scans: []iacScanConfiguration{
 			{
-				Roots:       roots,
-				Output:      iac.resultsFileName,
-				Type:        iacScannerType,
-				SkippedDirs: jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
+				Roots:                  roots,
+				Output:                 iac.resultsFileName,
+				PathToResultsToCompare: iac.resultsToCompareFileName,
+				Type:                   iacScannerType,
+				SkippedDirs:            jas.GetExcludePatterns(module, module.Scanners.Iac, exclusions...),
 			},
 		},
 	}
