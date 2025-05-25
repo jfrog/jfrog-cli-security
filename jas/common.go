@@ -3,8 +3,6 @@ package jas
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/gofrog/datastructures"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,12 +11,16 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jfrog/gofrog/datastructures"
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
+
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -44,6 +46,8 @@ type JasScanner struct {
 	ServerDetails         *config.ServerDetails
 	ScannerDirCleanupFunc func() error
 	EnvVars               map[string]string
+	DiffMode              bool
+	ResultsToCompare      *results.SecurityCommandResults
 	Exclusions            []string
 	// This field contains scanner specific exclude patterns from Config Profile
 	ScannersExclusions SpecificScannersExcludePatterns
@@ -57,7 +61,10 @@ type SpecificScannersExcludePatterns struct {
 	IacExcludePatterns                []string
 }
 
-func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool, minSeverity severityutils.Severity, envVars map[string]string, exclusions ...string) (scanner *JasScanner, err error) {
+type JasScannerOption func(f *JasScanner) error
+
+func NewJasScanner(serverDetails *config.ServerDetails, options ...JasScannerOption) (scanner *JasScanner, err error) {
+	// Validate
 	if serverDetails == nil {
 		err = errors.New(NoServerDetailsError)
 		return
@@ -73,31 +80,68 @@ func CreateJasScanner(serverDetails *config.ServerDetails, validateSecrets bool,
 			return
 		}
 	}
-	scanner = &JasScanner{}
-	if scanner.EnvVars, err = getJasEnvVars(serverDetails, validateSecrets, envVars); err != nil {
-		return scanner, err
-	}
+	// Create temp dir for scanner
 	var tempDir string
 	if tempDir, err = fileutils.CreateTempDir(); err != nil {
 		return
 	}
-	scanner.TempDir = tempDir
-	scanner.ScannerDirCleanupFunc = func() error {
-		return fileutils.RemoveTempDir(tempDir)
+	// Create scanner
+	scanner = &JasScanner{
+		ServerDetails: serverDetails,
+		TempDir:       tempDir,
+		ScannerDirCleanupFunc: func() error {
+			return fileutils.RemoveTempDir(tempDir)
+		},
 	}
-	scanner.ServerDetails = serverDetails
-	scanner.Exclusions = exclusions
-	scanner.MinSeverity = minSeverity
+	// Apply options
+	for _, option := range options {
+		err = errors.Join(err, option(scanner))
+	}
 	return
 }
 
-func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, vars map[string]string) (map[string]string, error) {
+func WithEnvVars(validateSecrets bool, diffMode JasDiffScanEnvValue, envVars map[string]string) JasScannerOption {
+	return func(scanner *JasScanner) (err error) {
+		scanner.EnvVars, err = getJasEnvVars(scanner.ServerDetails, validateSecrets, diffMode, envVars)
+		return
+	}
+}
+
+func WithResultsToCompare(resultsToCompare *results.SecurityCommandResults) JasScannerOption {
+	return func(scanner *JasScanner) (err error) {
+		scanner.ResultsToCompare = resultsToCompare
+		return
+	}
+}
+
+func WithExclusions(exclusions ...string) JasScannerOption {
+	return func(scanner *JasScanner) (err error) {
+		scanner.Exclusions = exclusions
+		return
+	}
+}
+
+func WithMinSeverity(minSeverity severityutils.Severity) JasScannerOption {
+	return func(scanner *JasScanner) (err error) {
+		scanner.MinSeverity = minSeverity
+		return
+	}
+}
+
+func getJasEnvVars(serverDetails *config.ServerDetails, validateSecrets bool, diffMode JasDiffScanEnvValue, vars map[string]string) (map[string]string, error) {
 	amBasicVars, err := GetAnalyzerManagerEnvVariables(serverDetails)
 	if err != nil {
 		return nil, err
 	}
 	amBasicVars[JfSecretValidationEnvVariable] = strconv.FormatBool(validateSecrets)
+	if diffMode != NotDiffScanEnvValue {
+		amBasicVars[DiffScanEnvVariable] = string(diffMode)
+	}
 	return utils.MergeMaps(utils.ToEnvVarsMap(os.Environ()), amBasicVars, vars), nil
+}
+
+func (js *JasScanner) GetResultsToCompare(target string) (resultsToCompare *results.TargetResults) {
+	return results.SearchTargetResultsByPath(target, js.ResultsToCompare)
 }
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
@@ -189,7 +233,7 @@ func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix st
 		if len(sarifRun.Invocations) == 0 {
 			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
 		}
-		sarifRun.Invocations[0].WorkingDirectory.WithUri(wd)
+		sarifRun.Invocations[0].WorkingDirectory.WithUri(utils.ToURI(wd))
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
@@ -266,14 +310,26 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 	}
 }
 
+func SaveScanResultsToCompareAsReport(fileName string, runs ...*sarif.Run) error {
+	report, err := sarifutils.NewReport()
+	if err != nil {
+		return err
+	}
+	report.Runs = runs
+	sarifData, err := utils.GetAsJsonBytes(report, false, false)
+	if err != nil {
+		return err
+	}
+	return errorutils.CheckError(os.WriteFile(fileName, sarifData, 0644))
+}
+
 func CreateScannersConfigFile(fileName string, fileContent interface{}, scanType jasutils.JasScanType) error {
 	yamlData, err := yaml.Marshal(&fileContent)
 	if errorutils.CheckError(err) != nil {
 		return err
 	}
 	log.Debug(scanType.String() + " scanner input YAML:\n" + string(yamlData))
-	err = os.WriteFile(fileName, yamlData, 0644)
-	return errorutils.CheckError(err)
+	return errorutils.CheckError(os.WriteFile(fileName, yamlData, 0644))
 }
 
 var FakeServerDetails = config.ServerDetails{
@@ -300,7 +356,7 @@ var FakeBasicXrayResults = []services.ScanResponse{
 
 func InitJasTest(t *testing.T) (*JasScanner, func()) {
 	assert.NoError(t, DownloadAnalyzerManagerIfNeeded(0))
-	scanner, err := CreateJasScanner(&FakeServerDetails, false, "", GetAnalyzerManagerXscEnvVars("", "", "", []string{}))
+	scanner, err := NewJasScanner(&FakeServerDetails)
 	assert.NoError(t, err)
 	return scanner, func() {
 		assert.NoError(t, scanner.ScannerDirCleanupFunc())
