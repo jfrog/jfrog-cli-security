@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"golang.org/x/exp/slices"
-
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slices"
 
 	jfrogAppsConfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -21,12 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"github.com/stretchr/testify/assert"
-
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 )
-
 
 var createJFrogAppsConfigCases = []struct {
 	workingDirs []string

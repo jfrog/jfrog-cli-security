@@ -303,7 +303,7 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 			}
 			score := severityutils.GetSeverityScore(severity, jasutils.Applicable)
 			if rule.Properties == nil {
-				rule.WithProperties(sarif.NewPropertyBag().Properties)
+				rule.WithProperties(sarif.NewPropertyBag())
 			}
 			// Add the score to the rule properties
 			rule.Properties.Add(severityutils.SarifSeverityRuleProperty, fmt.Sprintf("%.1f", score))
@@ -312,23 +312,7 @@ func addScoreToRunRules(sarifRun *sarif.Run) {
 }
 
 func SaveScanResultsToCompareAsReport(fileName string, runs ...*sarif.Run) error {
-	report, err := sarifutils.NewReport()
-	if err != nil {
-		return err
-	}
-	report.Runs = runs
-	sarifData, err := utils.GetAsJsonBytes(report, false, false)
-	if err != nil {
-		return err
-	}
-	return errorutils.CheckError(os.WriteFile(fileName, sarifData, 0644))
-}
-
-func SaveScanResultsToCompareAsReport(fileName string, runs ...*sarif.Run) error {
-	report, err := sarifutils.NewReport()
-	if err != nil {
-		return err
-	}
+	report := sarif.NewReport()
 	report.Runs = runs
 	sarifData, err := utils.GetAsJsonBytes(report, false, false)
 	if err != nil {

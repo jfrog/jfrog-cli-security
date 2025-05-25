@@ -156,14 +156,14 @@ func CreateDummyLocationInPath(fileName string) *sarif.Location {
 }
 
 func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
-	return sarif.NewLocation().WithPhysicalLocation( &sarif.PhysicalLocation{
-			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
-			Region: &sarif.Region{
-				StartLine:   &startLine,
-				StartColumn: &startCol,
-				EndLine:     &endLine,
-				EndColumn:   &endCol,
-				Snippet:     &sarif.ArtifactContent{Text: &snippet}}})
+	return sarif.NewLocation().WithPhysicalLocation(&sarif.PhysicalLocation{
+		ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
+		Region: &sarif.Region{
+			StartLine:   &startLine,
+			StartColumn: &startCol,
+			EndLine:     &endLine,
+			EndColumn:   &endCol,
+			Snippet:     &sarif.ArtifactContent{Text: &snippet}}})
 	// return &sarif.Location{
 	// 	PhysicalLocation: &sarif.PhysicalLocation{
 	// 		ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
