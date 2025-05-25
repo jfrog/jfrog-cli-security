@@ -747,6 +747,11 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 	return compName, compVersion, packageType
 }
 
+func SplitComponentId(componentId string) (string, string, string) {
+	compName, compVersion, packageType := SplitComponentIdRaw(componentId)
+	return compName, compVersion, ConvertXrayPackageType(packageType)
+}
+
 func ConvertXrayPackageType(xrayPackageType string) string {
 	return packageTypes[xrayPackageType]
 }

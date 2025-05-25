@@ -21,8 +21,9 @@ const (
 	applicabilityScanCommand   = "ca"
 	applicabilityDocsUrlSuffix = "contextual-analysis"
 
-	ApplicabilityScannerType        ApplicabilityScanType = "analyze-applicability"
-	ApplicabilityDockerScanScanType ApplicabilityScanType = "analyze-applicability-docker-scan"
+	ApplicabilityScannerType         ApplicabilityScanType = "analyze-applicability"
+	ApplicabilityDockerScanScanType  ApplicabilityScanType = "analyze-applicability-docker-scan"
+	ApplicabilityGenericScanScanType ApplicabilityScanType = "analyze-applicability-generic-scan"
 )
 
 type ApplicabilityScanType string

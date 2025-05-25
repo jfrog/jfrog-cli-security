@@ -69,9 +69,10 @@ func (rc *ResultContext) HasViolationContext() bool {
 type TargetResults struct {
 	ScanTarget
 	// All scan results for the target
-	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
-	Sbom       Sbom             `json:"sbom,omitempty"`
-	JasResults *JasScansResults `json:"jas_scans,omitempty"`
+	ScaResults         *ScaScanResults             `json:"sca_scans,omitempty"`
+	Sbom               Sbom                        `json:"sbom,omitempty"`
+	JasResults         *JasScansResults            `json:"jas_scans,omitempty"`
+	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
