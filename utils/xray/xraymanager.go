@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray"
 )
 
+// Options for creating an Xray service manager.
 type XrayManagerOption func(f *xray.XrayServicesManager)
 
 // Global reference to the project key, used for API endpoints that require it for authentication
