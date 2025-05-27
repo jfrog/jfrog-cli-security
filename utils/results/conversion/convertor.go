@@ -148,7 +148,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		}
 	}
 	if params.IncludeSbom {
-		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.TargetSbom); err != nil {
+		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.Sbom); err != nil {
 			return
 		}
 	}

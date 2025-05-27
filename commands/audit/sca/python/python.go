@@ -399,7 +399,7 @@ func SetPipVirtualEnvPath() (restoreEnv func() error, err error) {
 	}
 	venvdirName := "venvdir"
 	var cmdArgs []string
-	pythonPath, windowsPyArg := pythonutils.GetPython3Executable()
+	pythonPath, windowsPyArg := pythonutils.GetPython3Executable(true)
 	if windowsPyArg != "" {
 		// Add '-3' arg for windows 'py -3' command
 		cmdArgs = append(cmdArgs, windowsPyArg)

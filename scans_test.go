@@ -56,6 +56,42 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	})
 }
 
+func TestXrayBinaryScanJsonDocker(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "xmas.tar", false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 6},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 4, Secrets: 2},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 1, NotCovered: 1},
+		},
+	})
+}
+
+func TestXrayBinaryScanJsonGeneric(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "backupfriend-client.tar.gz", false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, Undetermined: 1},
+		},
+	})
+}
+
+func TestXrayBinaryScanJsonJar(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "student-services-security-0.0.1.jar", false)
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 41},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 40, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 17, NotCovered: 3, NotApplicable: 20},
+		},
+	})
+}
+
 func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
@@ -85,6 +121,21 @@ func testXrayBinaryScan(t *testing.T, format, policyName, watchName string, erro
 		// Include violations and vulnerabilities
 		args = append(args, "--watches="+watchName, "--vuln")
 	}
+	output, err := securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
+	if errorExpected {
+		assert.Error(t, err)
+	} else {
+		assert.NoError(t, err)
+	}
+	return output
+}
+
+func testXrayBinaryScanJAS(t *testing.T, format, artifact string, errorExpected bool) string {
+	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan"))
+	defer cleanUp()
+
+	binariesPathTemp := filepath.Join(tempDirPath, artifact)
+	args := []string{"scan", binariesPathTemp, "--format=" + format}
 	output, err := securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
 	if errorExpected {
 		assert.Error(t, err)
@@ -210,12 +261,12 @@ func runAdvancedSecurityDockerScan(t *testing.T, testCli *coreTests.JfrogCli, im
 		// Run docker scan on image
 		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
 		if assert.NotEmpty(t, output) {
-			verifyAdvancedSecurityScanResults(t, output)
+			verifyAdvancedSecurityScanResults(t, output, true, true)
 		}
 	}
 }
 
-func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
+func verifyAdvancedSecurityScanResults(t *testing.T, content string, isApplicable bool, isSecret bool) {
 	var results formats.SimpleJsonResults
 	err := json.Unmarshal([]byte(content), &results)
 	assert.NoError(t, err)
@@ -227,11 +278,18 @@ func verifyAdvancedSecurityScanResults(t *testing.T, content string) {
 			break
 		}
 	}
-	assert.True(t, applicableStatusExists)
 
-	// Verify that secretes detection succeeded.
-	assert.NotEqual(t, 0, len(results.SecretsVulnerabilities))
+	if isApplicable {
+		assert.True(t, applicableStatusExists)
+	}
 
+	if isSecret {
+		// Verify that secretes detection succeeded.
+		assert.NotEqual(t, 0, len(results.SecretsVulnerabilities))
+	} else {
+		// Verify that secretes detection succeeded.
+		assert.Equal(t, 0, len(results.SecretsVulnerabilities))
+	}
 }
 
 // Curation tests

@@ -2,9 +2,7 @@ package conan
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -44,40 +42,16 @@ func TestParseConanDependencyTree(t *testing.T) {
 }
 
 func TestBuildDependencyTree(t *testing.T) {
-	testcases := []struct {
-		name           string
-		descriptorName string
-	}{
-		{
-			name: "default descriptor file",
-		},
-		{
-			name:           "custom descriptor file",
-			descriptorName: "conanfile-system.txt",
-		},
+	dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
+	defer cleanUp()
+	params := &utils.AuditBasicParams{}
+	params.SetConanProfile(filepath.Join(dir, "profile"))
+	graph, uniqueDeps, err := BuildDependencyTree(params)
+	assert.NoError(t, err)
+	if !tests.CompareTree(expectedResult, graph[0]) {
+		t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)
 	}
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
-			defer cleanUp()
-			params := &utils.AuditBasicParams{}
-			if testcase.descriptorName != "" {
-				// changing the name of the descriptor to verify the work with a non-default descriptor name
-				changeNameCmd := exec.Command("mv", filepath.Join(dir, "conanfile.txt"), filepath.Join(dir, testcase.descriptorName))
-				_, err := changeNameCmd.CombinedOutput()
-				require.NoError(t, err)
-				require.FileExists(t, filepath.Join(dir, testcase.descriptorName))
-				params.SetPipRequirementsFile(testcase.descriptorName)
-			}
-			params.SetConanProfile(filepath.Join(dir, "profile"))
-			graph, uniqueDeps, err := BuildDependencyTree(params)
-			assert.NoError(t, err)
-			if !tests.CompareTree(expectedResult, graph[0]) {
-				t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)
-			}
-			assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
-		})
-	}
+	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 }
 
 func TestCalculateUniqueDeps(t *testing.T) {
