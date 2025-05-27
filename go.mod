@@ -11,9 +11,9 @@ require (
 	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.3.0
-	github.com/jfrog/jfrog-cli-core/v2 v2.58.6
-	github.com/jfrog/jfrog-client-go v1.53.0
+	github.com/jfrog/jfrog-cli-artifactory v0.3.1
+	github.com/jfrog/jfrog-cli-core/v2 v2.58.7
+	github.com/jfrog/jfrog-client-go v1.53.1
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
 	github.com/stretchr/testify v1.10.0
@@ -111,7 +111,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250525112429-c8dfcae5aba4
+// replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
