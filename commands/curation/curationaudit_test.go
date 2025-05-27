@@ -636,6 +636,9 @@ func getTestCasesForDoCurationAudit() []testCase {
 			tech:          techutils.Gradle,
 			pathToProject: filepath.Join("projects", "package-managers", "gradle", "curation-project"),
 			funcToGetGoals: func(t *testing.T) []string {
+				// To ensure only the blocked package is resolved during testing, we pre-populate the cache with dependencies beforehand.
+				// Since the cache location depends on the project directory, we need to mimic that setup during the pretest build.
+				// This way, the test phase will use the same cache directory, already filled with required dependencies.
 				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
 				defer restoreWD()
 

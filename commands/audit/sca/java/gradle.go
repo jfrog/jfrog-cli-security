@@ -57,22 +57,10 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
-	isCurationCmd bool
-}
-
-func NewGradleDepTreeManager(params *DepTreeParams, cmdName MavenDepTreeCmd) *gradleDepTreeManager {
-	depTreeManager := NewDepTreeManager(&DepTreeParams{
-		Server:   params.Server,
-		DepsRepo: params.DepsRepo,
-	})
-	return &gradleDepTreeManager{
-		DepTreeManager: depTreeManager,
-		isCurationCmd:  params.IsCurationCmd,
-	}
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
-	manager := NewGradleDepTreeManager(params, Tree)
+	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
 		return

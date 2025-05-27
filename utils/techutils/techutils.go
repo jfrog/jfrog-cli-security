@@ -93,7 +93,6 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
-	"gradle":   "Gradle",
 }
 
 type TechData struct {

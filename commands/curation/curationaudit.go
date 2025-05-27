@@ -1009,6 +1009,9 @@ func getMavenNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.Graph
 	}
 	return downloadUrls, strings.Join(allParts[:2], ":"), "", allParts[2]
 }
+
+// Given an input containing a classifier, e.g., id: gav://org.apache.tomcat.embed:tomcat-embed-jasper:8.0.33-jdk15,
+// we parse it to extract the package name and version, then use that information to build the corresponding Artifactory download URL.
 func getGradleNameScopeAndVersion(id, artiUrl, repo string, node *xrayUtils.GraphNode) (downloadUrls []string, name, scope, version string) {
 	id = strings.TrimPrefix(id, "gav://")
 	parts := strings.Split(id, ":")
