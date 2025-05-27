@@ -79,7 +79,7 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
-	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
+	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails, xrayutils.WithScopedProjectKey(bsc.buildConfiguration.GetProject()))
 	if err != nil {
 		return err
 	}
