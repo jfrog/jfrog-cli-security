@@ -1003,6 +1003,41 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func Test_getGradleNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		node             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Realistic package from example - log4j",
+			id:               "gav://log4j:log4j:1.2.14",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "gradle-virtual",
+			node:             "",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar"},
+			wantName:         "log4j:log4j",
+			wantScope:        "",
+			wantVersion:      "1.2.14",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getGradleNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo, nil)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
