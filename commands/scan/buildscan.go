@@ -79,7 +79,7 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
-	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
+	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails, xrayutils.WithScopedProjectKey(bsc.buildConfiguration.GetProject()))
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		SetResultsContext(results.ResultContext{ProjectKey: params.Project, IncludeVulnerabilities: bsc.includeVulnerabilities})
 
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
-	scanResults.NewScaScanResults(0, results.Sbom{}, services.ScanResponse{
+	scanResults.NewScaScanResults(0, services.ScanResponse{
 		Violations:      buildScanResults.Violations,
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
