@@ -87,6 +87,9 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 	if timeout > 0 {
 		go func() {
 			time.Sleep(time.Duration(timeout) * time.Second)
+			// closing the pipe required prior to killing the process
+			// according to MCP documentation
+			// https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle
 			err := stdin.Close()
 			if err != nil {
 				log.Error(fmt.Sprintf("Error closing MCPService stdin pipe: %v", err))
