@@ -632,6 +632,63 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			name:          "gradle tree - one blocked package",
+			tech:          techutils.Gradle,
+			pathToProject: filepath.Join("projects", "package-managers", "gradle", "curation-project"),
+			funcToGetGoals: func(t *testing.T) []string {
+				// To ensure only the blocked package is resolved during testing, we pre-populate the cache with dependencies beforehand.
+				// Since the cache location depends on the project directory, we need to mimic that setup during the pretest build.
+				// This way, the test phase will use the same cache directory, already filled with required dependencies.
+				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
+				defer restoreWD()
+
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				require.NoError(t, err)
+
+				return []string{
+					"gradle", "build",
+					"--build-file", "build.gradle",
+					"--gradle-user-home=" + curationCache,
+					"--no-daemon",
+				}
+			},
+			serveResources: map[string]string{
+				"build.gradle": filepath.Join("tests", "testdata", "projects", "package-managers", "gradle", "curation-project", "build.gradle"),
+			},
+			requestToFail: map[string]bool{
+				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": true,
+			},
+			expectedResp: map[string]*CurationReport{
+				"com.example:curation-project:1.0.0": {
+					// Ensure packagesStatus is properly initialized, even if empty initially
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "log4j:log4j",
+							ParentVersion:     "1.2.14",
+							BlockedPackageUrl: "/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar",
+							PackageName:       "log4j:log4j",
+							PackageVersion:    "1.2.14",
+							BlockingReason:    "Policy violations",
+							DepRelation:       "direct",
+							PkgType:           "gradle",
+							WaiverAllowed:     false,
+							Policy: []Policy{
+								{
+									Policy:         "pol1",
+									Condition:      "cond1",
+									Explanation:    "",
+									Recommendation: "",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 5, // Adjust the number if necessary
+				},
+			},
+			allowInsecureTls: true,
+		},
+		{
 			name:          "python tree - one blocked package",
 			tech:          techutils.Pip,
 			pathToProject: filepath.Join("projects", "package-managers", "python", "pip", "pip-curation"),
@@ -942,6 +999,41 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
 			assert.Equal(t, tt.compName, gotName)
 			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
+}
+
+func Test_getGradleNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		node             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Realistic package from example - log4j",
+			id:               "gav://log4j:log4j:1.2.14",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "gradle-virtual",
+			node:             "",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar"},
+			wantName:         "log4j:log4j",
+			wantScope:        "",
+			wantVersion:      "1.2.14",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getGradleNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo, nil)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
 		})
 	}
 }
