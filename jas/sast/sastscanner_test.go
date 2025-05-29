@@ -1,7 +1,6 @@
 package sast
 
 import (
-	"bytes"
 	"path/filepath"
 	"testing"
 
@@ -185,25 +184,5 @@ func TestGroupResultsByLocation(t *testing.T) {
 	for _, test := range tests {
 		groupResultsByLocation([]*sarif.Run{test.run})
 		assert.ElementsMatch(t, test.expectedOutput.Results, test.run.Results)
-	}
-}
-
-func TestRunSastMcp(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
-	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
-	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
-	input_buffer := *bytes.NewBufferString(query)
-	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
-	err := RunAmMcpWithPipes(am_env, &input_buffer, &output_buffer, &error_buffer, 5, scanned_path)
-	assert.NoError(t, err)
-	if !assert.Contains(t, error_buffer.String(), "Generated IR") {
-		t.Error(error_buffer.String())
-	}
-
-	if !assert.Contains(t, output_buffer.String(), "\"serverInfo\":{\"name\":\"jfrog_sast\"") {
-		t.Error(output_buffer.String())
 	}
 }

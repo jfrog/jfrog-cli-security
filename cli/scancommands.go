@@ -20,14 +20,15 @@ import (
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
 	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/jas/sast"
 
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -37,6 +38,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
+
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -104,6 +106,13 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      CurationCmd,
 		},
 
+		{
+			Name:        "source-mcp",
+			Description: mcpDocs.GetDescription(),
+			Action:      SourceMcpCmd,
+			Hidden:      true,
+		},
+
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "audit-mvn",
@@ -165,11 +174,6 @@ func getAuditAndScansCommands() []components.Command {
 			},
 			Hidden: true,
 		},
-		{
-			Name:        "source-mcp",
-			Description: auditSpecificDocs.GetPipenvDescription(),
-			Action:      SourceMcpCmd,
-		},
 	}
 }
 
@@ -184,7 +188,15 @@ func SourceMcpCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	return sast.RunAmMcpWithPipes(am_env, os.Stdin, os.Stdout, os.Stderr, 0, c.Arguments...)
+
+	mcp_cmd := source_mcp.McpCommand{
+		Env:        am_env,
+		Arguments:  c.Arguments,
+		InputPipe:  os.Stdin,
+		OutputPipe: os.Stdout,
+		ErrorPipe:  os.Stderr,
+	}
+	return mcp_cmd.Run()
 }
 
 func EnrichCmd(c *components.Context) error {
