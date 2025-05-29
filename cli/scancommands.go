@@ -3,6 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -14,26 +17,28 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/urfave/cli"
-	"os"
-	"strings"
-
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
+	"github.com/jfrog/jfrog-cli-security/jas"
+
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
+
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -101,6 +106,13 @@ func getAuditAndScansCommands() []components.Command {
 			Action:      CurationCmd,
 		},
 
+		{
+			Name:        "source-mcp",
+			Description: mcpDocs.GetDescription(),
+			Action:      SourceMcpCmd,
+			Hidden:      true,
+		},
+
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "audit-mvn",
@@ -163,6 +175,28 @@ func getAuditAndScansCommands() []components.Command {
 			Hidden: true,
 		},
 	}
+}
+
+func SourceMcpCmd(c *components.Context) error {
+
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+
+	am_env, err := jas.GetAnalyzerManagerEnvVariables(serverDetails)
+	if err != nil {
+		return err
+	}
+
+	mcp_cmd := source_mcp.McpCommand{
+		Env:        am_env,
+		Arguments:  c.Arguments,
+		InputPipe:  os.Stdin,
+		OutputPipe: os.Stdout,
+		ErrorPipe:  os.Stderr,
+	}
+	return mcp_cmd.Run()
 }
 
 func EnrichCmd(c *components.Context) error {
