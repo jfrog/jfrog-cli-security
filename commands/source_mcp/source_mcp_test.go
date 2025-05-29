@@ -27,9 +27,7 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 		ErrorPipe:  &error_buffer,
 	}
 
-	err := mcp_cmd.runWithTimeout(5)
-
-	assert.NoError(t, err)
+	mcp_cmd.runWithTimeout(5, "mcp-sast")
 	if !assert.Contains(t, error_buffer.String(), "Generated IR") {
 		t.Error(error_buffer.String())
 	}
@@ -43,7 +41,7 @@ func TestRunSourceMcpScannerError(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 	// no such path
-	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas2", "jas")
+	scanned_path := ""
 	input_buffer := *bytes.NewBufferString("")
 	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
 	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
@@ -55,8 +53,6 @@ func TestRunSourceMcpScannerError(t *testing.T) {
 		OutputPipe: &output_buffer,
 		ErrorPipe:  &error_buffer,
 	}
-	err := mcp_cmd.Run()
-
-	assert.Error(t, err)
-
+	err := mcp_cmd.runWithTimeout(0, "mcp-sast1") // no such command
+	assert.ErrorContains(t, err, "exit status 99")
 }

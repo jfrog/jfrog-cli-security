@@ -19,22 +19,33 @@ type McpCommand struct {
 	ErrorPipe  io.Writer
 }
 
-func establishPipe(dst io.Writer, src io.Reader) {
+func establishPipeToFile(dst io.WriteCloser, src io.Reader) {
+	defer dst.Close()
 	_, err := io.Copy(dst, src)
 	if err != nil {
 		log.Error("Error establishing pipe")
 	}
 }
 
-func RunAmMcpWithPipes(env map[string]string, input_pipe io.Reader, output_pipe io.Writer, error_pipe io.Writer, timeout int, args ...string) error {
+func establishPipeFromFile(dst io.Writer, src io.ReadCloser) {
+	defer src.Close()
+	_, err := io.Copy(dst, src)
+	if err != nil {
+		log.Error("Error establishing pipe")
+	}
+}
+
+func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, output_pipe io.Writer, error_pipe io.Writer, timeout int, args ...string) error {
 	am_path, err := jas.GetAnalyzerManagerExecutable()
 	if err != nil {
 		return err
 	}
 
-	allArgs := append([]string{"mcp-sast"}, args...)
+	allArgs := append([]string{cmd}, args...)
+	log.Info(fmt.Sprintf("Launching: %s; command %s; arguments %v", am_path, cmd, args))
 	command := exec.Command(am_path, allArgs...)
 	command.Env = utils.ToCommandEnvVars(env)
+
 	defer func() {
 		if command != nil && !command.ProcessState.Exited() {
 			if _error := command.Process.Kill(); _error != nil {
@@ -64,14 +75,14 @@ func RunAmMcpWithPipes(env map[string]string, input_pipe io.Reader, output_pipe 
 	}
 	defer stderr.Close()
 
+	go establishPipeToFile(stdin, input_pipe)
+	go establishPipeFromFile(error_pipe, stderr)
+	go establishPipeFromFile(output_pipe, stdout)
+
 	if _error := command.Start(); _error != nil {
 		log.Error(fmt.Sprintf("Error starting MCPService subprocess: %v", _error))
 		return _error
 	}
-
-	establishPipe(stdin, input_pipe)
-	establishPipe(error_pipe, stderr)
-	establishPipe(output_pipe, stdout)
 
 	if timeout > 0 {
 		go func() {
@@ -95,15 +106,15 @@ func RunAmMcpWithPipes(env map[string]string, input_pipe io.Reader, output_pipe 
 	return nil
 }
 
-func (mcpCmd *McpCommand) runWithTimeout(timeout int) (err error) {
+func (mcpCmd *McpCommand) runWithTimeout(timeout int, cmd string) (err error) {
 	err_ := jas.DownloadAnalyzerManagerIfNeeded(0)
 	if err_ != nil {
-		log.Error(fmt.Sprintf("Failed to download Analyzer Manager: %s", err.Error()))
+		log.Error(fmt.Sprintf("Failed to download Analyzer Manager: %v", err))
 	}
 
-	return RunAmMcpWithPipes(mcpCmd.Env, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
+	return RunAmMcpWithPipes(mcpCmd.Env, cmd, mcpCmd.InputPipe, mcpCmd.OutputPipe, mcpCmd.ErrorPipe, timeout, mcpCmd.Arguments...)
 }
 
 func (mcpCmd *McpCommand) Run() (err error) {
-	return mcpCmd.runWithTimeout(0)
+	return mcpCmd.runWithTimeout(0, "mcp-sast")
 }
