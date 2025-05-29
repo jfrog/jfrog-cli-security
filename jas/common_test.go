@@ -275,7 +275,6 @@ func TestAddScoreToRunRules(t *testing.T) {
 	for _, test := range tests {
 		addScoreToRunRules(test.sarifRun)
 		assert.ElementsMatch(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
-		// assert.Equal(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
 	}
 }
 

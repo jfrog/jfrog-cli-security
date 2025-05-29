@@ -322,14 +322,6 @@ func copyStrAttribute(attr *string) *string {
 	return &copy
 }
 
-func copyIntAttribute(attr *int) *int {
-	if attr == nil {
-		return nil
-	}
-	copy := *attr
-	return &copy
-}
-
 func CopyLocation(location *sarif.Location) *sarif.Location {
 	if location == nil {
 		return nil
@@ -339,9 +331,6 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
 			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)))
-			// copied.PhysicalLocation.ArtifactLocation = &sarif.ArtifactLocation{
-			// 	URI: copyStrAttribute(location.PhysicalLocation.ArtifactLocation.URI),
-			// }
 		}
 		if location.PhysicalLocation.Region != nil {
 			copied.PhysicalLocation.Region = sarif.NewRegion().WithStartLine(GetLocationStartLine(location)).WithStartColumn(GetLocationStartColumn(location)).WithEndLine(GetLocationEndLine(location)).WithEndColumn(GetLocationEndColumn(location))

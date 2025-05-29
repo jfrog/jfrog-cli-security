@@ -260,7 +260,6 @@ func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*
 			// Rule already exists, skip adding it again
 			continue
 		}
-		// This method will add the rule only if it doesn't existx
 		sc.currentTargetConvertedRuns.scaCurrentRun.Tool.Driver.AddRule(rule)
 	}
 	for _, result := range results {
