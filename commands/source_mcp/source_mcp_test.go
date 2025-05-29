@@ -27,7 +27,8 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 		ErrorPipe:  &error_buffer,
 	}
 
-	mcp_cmd.runWithTimeout(5, "mcp-sast")
+	err := mcp_cmd.runWithTimeout(5, "mcp-sast")
+	assert.Error(t, err) // returns error because it was terminated upon timeout
 	if !assert.Contains(t, error_buffer.String(), "Generated IR") {
 		t.Error(error_buffer.String())
 	}
