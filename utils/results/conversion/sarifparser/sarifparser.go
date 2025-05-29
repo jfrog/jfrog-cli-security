@@ -256,7 +256,11 @@ func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violati
 
 func (sc *CmdResultsSarifConverter) addScaResultsToCurrentRun(rules map[string]*sarif.ReportingDescriptor, results ...*sarif.Result) {
 	for _, rule := range rules {
-		// This method will add the rule only if it doesn't exist
+		if exist := sarifutils.GetRuleById(sc.currentTargetConvertedRuns.scaCurrentRun, sarifutils.GetRuleId(rule)); exist != nil {
+			// Rule already exists, skip adding it again
+			continue
+		}
+		// This method will add the rule only if it doesn't existx
 		sc.currentTargetConvertedRuns.scaCurrentRun.Tool.Driver.AddRule(rule)
 	}
 	for _, result := range results {
@@ -272,13 +276,16 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 			// First run, set as the destination
 			destination = run
 			continue
-		} else if destination.Tool.Driver.Name != run.Tool.Driver.Name {
+		} else if sarifutils.GetRunToolName(destination) != sarifutils.GetRunToolName(run) {
 			log.Warn(fmt.Sprintf("Skipping JAS run (%s) as it doesn't match the current run (%s)", sarifutils.GetRunToolName(run), sarifutils.GetRunToolName(destination)))
 			continue
 		}
 		// Combine the rules and results of the run to the destination
-		for _, rule := range run.Tool.Driver.Rules {
-			// This method will add the rule only if it doesn't exist
+		for _, rule := range sarifutils.GetRunRules(run) {
+			if exist := sarifutils.GetRuleById(destination, sarifutils.GetRuleId(rule)); exist != nil {
+				// Rule already exists, skip adding it again
+				continue
+			}
 			destination.Tool.Driver.AddRule(rule)
 		}
 		for _, result := range run.Results {

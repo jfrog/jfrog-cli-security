@@ -365,7 +365,8 @@ func TestGetLocationRegion(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, getLocationRegion(test.location))
+		actual := getLocationRegion(test.location)
+		assert.Equal(t, test.expectedOutput, actual)
 	}
 }
 

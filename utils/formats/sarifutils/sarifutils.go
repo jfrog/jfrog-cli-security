@@ -224,9 +224,7 @@ func GetRunToolInformationURI(run *sarif.Run) string {
 
 func NewPhysicalLocation(physicalPath string) *sarif.PhysicalLocation {
 	return &sarif.PhysicalLocation{
-		ArtifactLocation: &sarif.ArtifactLocation{
-			URI: &physicalPath,
-		},
+		ArtifactLocation: sarif.NewArtifactLocation().WithURI(physicalPath),
 	}
 }
 
@@ -338,19 +336,15 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	}
 	copied := sarif.NewLocation()
 	if location.PhysicalLocation != nil {
-		copied.PhysicalLocation = &sarif.PhysicalLocation{}
+		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
-			copied.PhysicalLocation.ArtifactLocation = &sarif.ArtifactLocation{
-				URI: copyStrAttribute(location.PhysicalLocation.ArtifactLocation.URI),
-			}
+			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)))
+			// copied.PhysicalLocation.ArtifactLocation = &sarif.ArtifactLocation{
+			// 	URI: copyStrAttribute(location.PhysicalLocation.ArtifactLocation.URI),
+			// }
 		}
 		if location.PhysicalLocation.Region != nil {
-			copied.PhysicalLocation.Region = &sarif.Region{
-				StartLine:   copyIntAttribute(location.PhysicalLocation.Region.StartLine),
-				StartColumn: copyIntAttribute(location.PhysicalLocation.Region.StartColumn),
-				EndLine:     copyIntAttribute(location.PhysicalLocation.Region.EndLine),
-				EndColumn:   copyIntAttribute(location.PhysicalLocation.Region.EndColumn),
-			}
+			copied.PhysicalLocation.Region = sarif.NewRegion().WithStartLine(GetLocationStartLine(location)).WithStartColumn(GetLocationStartColumn(location)).WithEndLine(GetLocationEndLine(location)).WithEndColumn(GetLocationEndColumn(location))
 			if location.PhysicalLocation.Region.Snippet != nil {
 				copied.PhysicalLocation.Region.Snippet = &sarif.ArtifactContent{
 					Text: copyStrAttribute(location.PhysicalLocation.Region.Snippet.Text),
@@ -380,6 +374,11 @@ func AggregateMultipleRunsIntoSingle(runs []*sarif.Run, destination *sarif.Run) 
 			continue
 		}
 		for _, rule := range GetRunRules(run) {
+			if exists := GetRuleById(destination, GetRuleId(rule)); exists != nil {
+				// If the rule already exists in the destination run, we can skip adding it again.
+				continue
+			}
+			// Add the rule to the destination run.
 			if destination.Tool.Driver != nil {
 				destination.Tool.Driver.AddRule(rule)
 			}
@@ -806,7 +805,7 @@ func GetRuleProperty(key string, rule *sarif.ReportingDescriptor) string {
 }
 
 func GetRunRules(run *sarif.Run) []*sarif.ReportingDescriptor {
-	if run != nil && run.Tool.Driver != nil {
+	if run != nil && run.Tool != nil && run.Tool.Driver != nil {
 		return run.Tool.Driver.Rules
 	}
 	return []*sarif.ReportingDescriptor{}

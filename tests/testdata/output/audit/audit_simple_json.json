@@ -240,6 +240,15 @@
                 "endColumn": 4,
                 "snippet": "snippet",
                 "reason": "ca msg"
+              },
+              {
+                "file": "file-B",
+                "startLine": 1,
+                "startColumn": 2,
+                "endLine": 3,
+                "endColumn": 4,
+                "snippet": "snippet2",
+                "reason": "ca msg"
               }
             ]
           }
@@ -367,6 +376,15 @@
                 "endLine": 3,
                 "endColumn": 4,
                 "snippet": "snippet",
+                "reason": "ca msg"
+              },
+              {
+                "file": "file-B",
+                "startLine": 1,
+                "startColumn": 2,
+                "endLine": 3,
+                "endColumn": 4,
+                "snippet": "snippet2",
                 "reason": "ca msg"
               }
             ]
