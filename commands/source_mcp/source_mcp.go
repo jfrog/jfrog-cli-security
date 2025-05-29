@@ -22,7 +22,7 @@ type McpCommand struct {
 func establishPipe(dst io.Writer, src io.Reader) {
 	_, err := io.Copy(dst, src)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error establishing pipe"))
+		log.Error("Error establishing pipe")
 	}
 }
 
@@ -76,8 +76,12 @@ func RunAmMcpWithPipes(env map[string]string, input_pipe io.Reader, output_pipe 
 	if timeout > 0 {
 		go func() {
 			time.Sleep(time.Duration(timeout) * time.Second)
-			stdin.Close()
-			err := command.Process.Kill()
+			err := stdin.Close()
+			if err != nil {
+				log.Error(fmt.Sprintf("Error closing MCPService stdin pipe: %v", err))
+			}
+
+			err = command.Process.Kill()
 			if err != nil {
 				log.Error(fmt.Sprintf("Error killing MCPService subprocess: %v", err))
 			}
