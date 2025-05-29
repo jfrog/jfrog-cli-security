@@ -2,13 +2,14 @@ package swift
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"

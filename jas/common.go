@@ -29,7 +29,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
@@ -233,7 +233,7 @@ func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix st
 		if len(sarifRun.Invocations) == 0 {
 			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
 		}
-		sarifRun.Invocations[0].WorkingDirectory.WithUri(utils.ToURI(wd))
+		sarifRun.Invocations[0].WorkingDirectory.WithURI(utils.ToURI(wd))
 		// Process runs values
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
@@ -279,9 +279,9 @@ func excludeMinSeverityResults(sarifResults []*sarif.Result, minSeverity severit
 	}
 	results := []*sarif.Result{}
 	for _, sarifResult := range sarifResults {
-		resultSeverity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+		resultSeverity, err := severityutils.ParseSeverity(sarifResult.Level, true)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+			log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifResult.Level, err.Error()))
 			resultSeverity = severityutils.Unknown
 		}
 		// Exclude results with severity lower than the minimum severity
@@ -294,27 +294,25 @@ func excludeMinSeverityResults(sarifResults []*sarif.Result, minSeverity severit
 
 func addScoreToRunRules(sarifRun *sarif.Run) {
 	for _, sarifResult := range sarifRun.Results {
-		if rule, err := sarifRun.GetRuleById(sarifutils.GetResultRuleId(sarifResult)); err == nil {
+		if rule := sarifutils.GetRuleById(sarifRun, sarifutils.GetResultRuleId(sarifResult)); rule != nil {
 			// Add to the rule security-severity score based on results severity
-			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(sarifResult), true)
+			severity, err := severityutils.ParseSeverity(sarifResult.Level, true)
 			if err != nil {
-				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifutils.GetResultLevel(sarifResult), err.Error()))
+				log.Warn(fmt.Sprintf("Failed to parse Sarif level %s: %s", sarifResult.Level, err.Error()))
 				severity = severityutils.Unknown
 			}
 			score := severityutils.GetSeverityScore(severity, jasutils.Applicable)
 			if rule.Properties == nil {
-				rule.WithProperties(sarif.NewPropertyBag().Properties)
+				rule.WithProperties(sarif.NewPropertyBag())
 			}
-			rule.Properties[severityutils.SarifSeverityRuleProperty] = fmt.Sprintf("%.1f", score)
+			// Add the score to the rule properties
+			rule.Properties.Add(severityutils.SarifSeverityRuleProperty, fmt.Sprintf("%.1f", score))
 		}
 	}
 }
 
 func SaveScanResultsToCompareAsReport(fileName string, runs ...*sarif.Run) error {
-	report, err := sarifutils.NewReport()
-	if err != nil {
-		return err
-	}
+	report := sarif.NewReport()
 	report.Runs = runs
 	sarifData, err := utils.GetAsJsonBytes(report, false, false)
 	if err != nil {
