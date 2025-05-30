@@ -30,6 +30,7 @@ const (
 	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
 	JasInfoURL                    = "https://jfrog.com/xray/"
 	EntitlementsMinVersion        = "3.66.5"
+	NewJasBinaryMinVersion        = "3.85.7"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
@@ -50,6 +51,7 @@ const (
 	IacScan                      SubScanType        = "iac"
 	SastScan                     SubScanType        = "sast"
 	SecretsScan                  SubScanType        = "secrets"
+	MaliciousCodeScan            SubScanType        = "malicious-code"
 	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
 	ViolationTypeSecurity        ViolationIssueType = "security"
 	ViolationTypeLicense         ViolationIssueType = "license"
@@ -84,7 +86,7 @@ func (s CommandType) IsTargetBinary() bool {
 }
 
 func GetAllSupportedScans() []SubScanType {
-	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan}
+	return []SubScanType{ScaScan, ContextualAnalysisScan, IacScan, SastScan, SecretsScan, SecretTokenValidationScan, MaliciousCodeScan}
 }
 
 // IsScanRequested returns true if the scan is requested, otherwise false. If requestedScans is empty, all scans are considered requested.
@@ -99,7 +101,8 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
 		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
 		IsScanRequested(cmdType, IacScan, requestedScans...) ||
-		IsScanRequested(cmdType, SastScan, requestedScans...)
+		IsScanRequested(cmdType, SastScan, requestedScans...) ||
+		IsScanRequested(cmdType, MaliciousCodeScan, requestedScans...)
 }
 
 func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
