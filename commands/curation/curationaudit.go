@@ -35,6 +35,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -396,24 +397,40 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) utils.AuditParams {
-	switch tech {
-	case techutils.Npm:
-		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
-			SetNpmIgnoreNodeModules(true).
-			SetNpmOverwritePackageLock(true)
-	case techutils.Maven:
-		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
-	case techutils.Gradle:
-		ca.AuditParams.SetIsGradleDepTreeInstalled(false)
-	}
+// func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) utils.AuditParams {
+// 	switch tech {
+// 	case techutils.Npm:
+// 		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
+// 			SetNpmIgnoreNodeModules(true).
+// 			SetNpmOverwritePackageLock(true)
+// 	case techutils.Maven:
+// 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
+// 	case techutils.Gradle:
+// 		ca.AuditParams.SetIsGradleDepTreeInstalled(false)
+// 	}
 
-	return ca.AuditParams
+// 	return ca.AuditParams
+// }
+
+func(ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
+	serverDetails, err := ca.AuditParams.ServerDetails()
+	if err != nil {
+		return technologies.BuildInfoBomGeneratorParams{}, err
+	}
+	return technologies.BuildInfoBomGeneratorParams{
+		Progress: ca.AuditParams.Progress(),
+		// Artifactory Repository params
+		ServerDetails: serverDetails,
+		DependenciesRepository: ca.PackageManagerConfig.TargetRepo(),
+	}, nil
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	params := ca.getAuditParamsByTech(tech)
-	serverDetails, err := buildinfo.SetResolutionRepoInAuditParamsIfExists(params, tech)
+	params, err := ca.getBuildInfoParamsByTech(tech)
+	if err != nil {
+		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
+	}
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
 		return err
 	}

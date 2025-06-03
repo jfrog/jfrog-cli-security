@@ -12,7 +12,6 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -37,7 +36,7 @@ type pnpmLsProject struct {
 	DevDependencies map[string]pnpmLsDependency `json:"devDependencies,omitempty"`
 }
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	// Prepare
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
@@ -129,7 +128,7 @@ func installProjectIfNeeded(pnpmExecPath, workingDir string) (dirForDependencies
 }
 
 // Run 'pnpm ls ...' command (project must be installed) and parse the returned result to create a dependencies trees for the projects.
-func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func calculateDependencies(executablePath, workingDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	lsArgs := append([]string{"--depth", params.MaxTreeDepth(), "--json", "--long"}, params.Args()...)
 	log.Debug("Running Pnpm ls command with args:", lsArgs)
 	npmLsCmdContent, err := getPnpmCmd(executablePath, workingDir, "ls", lsArgs...).RunWithOutput()

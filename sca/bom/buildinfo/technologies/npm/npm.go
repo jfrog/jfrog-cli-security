@@ -3,11 +3,12 @@ package npm
 import (
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/npm"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -20,7 +21,7 @@ const (
 	IgnoreScriptsFlag = "--ignore-scripts"
 )
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return
@@ -64,7 +65,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 }
 
 // Generates a .npmrc file to configure an Artifactory server as the resolver server.
-func configNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutionServerFunc func() error, err error) {
+func configNpmResolutionServerIfNeeded(params technologies.BuildInfoBomGeneratorParams) (clearResolutionServerFunc func() error, err error) {
 	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
 	if params.DepsRepo() == "" {
 		return
@@ -79,7 +80,7 @@ func configNpmResolutionServerIfNeeded(params utils.AuditParams) (clearResolutio
 	return
 }
 
-func createTreeDepsParam(params utils.AuditParams) biutils.NpmTreeDepListParam {
+func createTreeDepsParam(params technologies.BuildInfoBomGeneratorParams) biutils.NpmTreeDepListParam {
 	if params == nil {
 		return biutils.NpmTreeDepListParam{
 			Args: addIgnoreScriptsFlag([]string{}),

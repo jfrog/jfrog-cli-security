@@ -42,7 +42,7 @@ const (
 
 // Generates a temporary duplicate of the project to execute the 'install' command without impacting the original directory and establishing the JFrog configuration file for Artifactory resolution
 // Additionally, re-loads the project's Solution so the dependencies sources will be identified
-func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return
@@ -74,7 +74,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	return
 }
 
-func restoreInTempDirAndGetBuildInfo(params utils.AuditParams, wd string, exclusionPattern string) (buildInfo *entities.BuildInfo, err error) {
+func restoreInTempDirAndGetBuildInfo(params technologies.BuildInfoBomGeneratorParams, wd string, exclusionPattern string) (buildInfo *entities.BuildInfo, err error) {
 	var tmpWd string
 	tmpWd, err = fileutils.CreateTempDir()
 	if err != nil {
@@ -101,7 +101,7 @@ func restoreInTempDirAndGetBuildInfo(params utils.AuditParams, wd string, exclus
 }
 
 // Verifies whether the execution of an 'install' command is necessary, either because the project isn't installed or because the user has specified an 'install' command
-func isInstallRequired(params utils.AuditParams, sol solution.Solution, skipAutoInstall bool, curWd string) (bool, error) {
+func isInstallRequired(params technologies.BuildInfoBomGeneratorParams, sol solution.Solution, skipAutoInstall bool, curWd string) (bool, error) {
 	// If the user has specified an 'install' command, we proceed with executing the 'restore' command even if the project is already installed
 	// Additionally, if dependency sources were not identified during the construction of the Solution struct, the project will necessitate an 'install'
 	solDependencySourcesExists := len(sol.GetDependenciesSources()) > 0
@@ -116,7 +116,7 @@ func isInstallRequired(params utils.AuditParams, sol solution.Solution, skipAuto
 	return installRequired, nil
 }
 
-func runDotnetRestoreAndLoadSolution(params utils.AuditParams, tmpWd, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
+func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorParams, tmpWd, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
 	toolName := params.InstallCommandName()
 	if toolName == "" {
 		// Determine if the project is a NuGet or .NET project
@@ -259,7 +259,7 @@ func getEnvVariablesForCurationAudit() ([]string, error) {
 	return os.Environ(), nil
 }
 
-func runDotnetRestore(wd string, params utils.AuditParams, toolType bidotnet.ToolchainType, commandExtraArgs []string) (err error) {
+func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams, toolType bidotnet.ToolchainType, commandExtraArgs []string) (err error) {
 	var completeCommandArgs []string
 	if len(params.InstallCommandArgs()) > 0 {
 		// If the user has specified an 'install' command, we execute the command that has been provided.

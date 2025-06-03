@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -28,6 +30,13 @@ const (
 
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
+
+type BuildInfoBomGeneratorParams struct {
+	Progress      ioUtils.ProgressMgr
+	// Artifactory Repository params
+	ServerDetails *config.ServerDetails
+	DependenciesRepository string
+}
 
 func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
 	if configProfile != nil {

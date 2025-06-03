@@ -16,7 +16,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 	conanV2               = "2.0.0"
 )
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	// Prepare
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
@@ -107,7 +107,7 @@ func calculateUniqueDependencies(nodes map[string]conanRef) []string {
 	return uniqueDepsSet.ToSlice()
 }
 
-func calculateDependencies(executablePath, workingDir string, params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func calculateDependencies(executablePath, workingDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	graphInfo := append([]string{"info", ".", "--format=json"}, params.Args()...)
 	conanGraphInfoContent, err := getConanCmd(executablePath, workingDir, "graph", graphInfo...).RunWithOutput()
 	if err != nil {

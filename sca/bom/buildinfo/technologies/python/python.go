@@ -35,7 +35,7 @@ const (
 	CurationPipMinimumVersion = "23.0.0"
 )
 
-func BuildDependencyTree(params utils.AuditParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
 	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
 	if errGetTree != nil {
 		err = errGetTree
@@ -61,7 +61,7 @@ func BuildDependencyTree(params utils.AuditParams, technology techutils.Technolo
 	return
 }
 
-func getDependencies(params utils.AuditParams, technology techutils.Technology) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -180,7 +180,7 @@ type pypiMetaData struct {
 	Version string `json:"version"`
 }
 
-func runPythonInstall(params utils.AuditParams, tool pythonutils.PythonTool) (restoreEnv func() error, err error) {
+func runPythonInstall(params technologies.BuildInfoBomGeneratorParams, tool pythonutils.PythonTool) (restoreEnv func() error, err error) {
 	switch tool {
 	case pythonutils.Pip:
 		return installPipDeps(params)
@@ -192,7 +192,7 @@ func runPythonInstall(params utils.AuditParams, tool pythonutils.PythonTool) (re
 	return
 }
 
-func installPoetryDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
+func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
 	restoreEnv = func() error {
 		return nil
 	}
@@ -218,7 +218,7 @@ func installPoetryDeps(params utils.AuditParams) (restoreEnv func() error, err e
 	return restoreEnv, err
 }
 
-func installPipenvDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
+func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
 	// Set virtualenv path to venv dir
 	err = os.Setenv("WORKON_HOME", ".jfrog")
 	if err != nil {
@@ -240,7 +240,7 @@ func installPipenvDeps(params utils.AuditParams) (restoreEnv func() error, err e
 	return restoreEnv, err
 }
 
-func installPipDeps(params utils.AuditParams) (restoreEnv func() error, err error) {
+func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
 	restoreEnv, err = SetPipVirtualEnvPath()
 	if err != nil {
 		return

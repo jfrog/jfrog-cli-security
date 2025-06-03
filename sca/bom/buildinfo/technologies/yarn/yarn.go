@@ -3,8 +3,9 @@ package yarn
 import (
 	"errors"
 	"fmt"
-	biutils "github.com/jfrog/build-info-go/utils"
 	"path/filepath"
+
+	biutils "github.com/jfrog/build-info-go/utils"
 
 	"golang.org/x/exp/maps"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -43,7 +44,7 @@ const (
 	nodeModulesRepoName = "node_modules"
 )
 
-func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return
@@ -91,7 +92,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTrees []*xrayUtils
 
 // Sets up Artifactory server configurations for dependency resolution, if such were provided by the user.
 // Executes the user's 'install' command or a default 'install' command if none was specified.
-func configureYarnResolutionServerAndRunInstall(params utils.AuditParams, curWd, yarnExecPath string) (err error) {
+func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
 	depsRepo := params.DepsRepo()
 	if depsRepo == "" {
 		// Run install without configuring an Artifactory server

@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
 	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
@@ -41,11 +42,11 @@ type DependencyTreeResult struct {
 }
 
 // This method will change the working directory to the scan's working directory.
-func BuildDependencyTree(scan *results.TargetResults, params *utils.AuditBasicParams) (*DependencyTreeResult, error) {
+func BuildDependencyTree(scan *results.TargetResults, params technologies.BuildInfoBomGeneratorParams) (*DependencyTreeResult, error) {
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoInAuditParamsIfExists(params, scan.Technology)
+	serverDetails, err := SetResolutionRepoInParamsIfExists(&params, scan.Technology)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func BuildDependencyTree(scan *results.TargetResults, params *utils.AuditBasicPa
 	return &treeResult, nil
 }
 
-func GetTechDependencyTree(params utils.AuditParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
+func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
 	if err != nil {
@@ -69,8 +70,8 @@ func GetTechDependencyTree(params utils.AuditParams, artifactoryServerDetails *c
 	// In case it's not curation command these 'curationLogMsg' be empty
 	logMessage += curationLogMsg
 	log.Info(logMessage + "...")
-	if params.Progress() != nil {
-		params.Progress().SetHeadlineMsg(logMessage)
+	if params.Progress != nil {
+		params.Progress.SetHeadlineMsg(logMessage)
 	}
 
 	var uniqueDeps []string
@@ -131,7 +132,7 @@ func GetTechDependencyTree(params utils.AuditParams, artifactoryServerDetails *c
 	return
 }
 
-func getCurationCacheFolderAndLogMsg(params utils.AuditParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
+func getCurationCacheFolderAndLogMsg(params technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
 	if !params.IsCurationCmd() {
 		return
 	}
@@ -163,10 +164,8 @@ func getCurationCacheByTech(tech techutils.Technology) (string, error) {
 	return "", nil
 }
 
-func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
-	if serverDetails, err = params.ServerDetails(); err != nil {
-		return
-	}
+func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
+	serverDetails = params.ServerDetails
 	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
 		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
@@ -176,11 +175,11 @@ func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techu
 		return
 	}
 	if artifactoryDetails == nil {
-		return params.ServerDetails()
+		return params.ServerDetails, nil
 	}
 	// If the configuration file is found, the server details and the target repository are extracted from it.
 	params.SetDepsRepo(artifactoryDetails.TargetRepository)
-	params.SetServerDetails(artifactoryDetails.ServerDetails)
+	params.ServerDetails = artifactoryDetails.ServerDetails
 	serverDetails = artifactoryDetails.ServerDetails
 	return
 }

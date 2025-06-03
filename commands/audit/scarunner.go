@@ -78,7 +78,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		// Get the dependency tree for the technology in the working directory.
-		treeResult, bdtErr := buildinfo.BuildDependencyTree(targetResult, auditParams.AuditBasicParams)
+		treeResult, bdtErr := buildinfo.BuildDependencyTree(targetResult, toBuildInfoBomGeneratorParams(auditParams, serverDetails))
 		if bdtErr != nil {
 			var projectNotInstalledErr *biutils.ErrProjectNotInstalled
 			if errors.As(bdtErr, &projectNotInstalledErr) {
@@ -117,6 +117,15 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 	}
 	return
+}
+
+func toBuildInfoBomGeneratorParams(auditParams *AuditParams, serverDetails *config.ServerDetails) technologies.BuildInfoBomGeneratorParams {
+	return technologies.BuildInfoBomGeneratorParams{
+		Progress: 	   auditParams.Progress(),
+		// Artifactory Repository params
+		ServerDetails: serverDetails,
+		DependenciesRepository: auditParams.DepsRepo(),
+	}
 }
 
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
