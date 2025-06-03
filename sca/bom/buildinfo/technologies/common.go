@@ -1,4 +1,4 @@
-package sca
+package technologies
 
 import (
 	"fmt"
