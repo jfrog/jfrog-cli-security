@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 const (
@@ -29,16 +30,15 @@ const (
 var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree for the %s project. Please contact your " +
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
-func GetExcludePattern(params utils.AuditParams) string {
-	exclusions := params.Exclusions()
-	if configProfile := params.GetConfigProfile(); configProfile != nil {
+func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {
+	if configProfile != nil {
 		exclusions = append(exclusions, configProfile.Modules[0].ScanConfig.ScaScannerConfig.ExcludePatterns...)
 	}
 
 	if len(exclusions) == 0 {
 		exclusions = append(exclusions, utils.DefaultScaExcludePatterns...)
 	}
-	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, params.IsRecursiveScan())
+	return fspatterns.PrepareExcludePathPattern(exclusions, clientutils.WildCardPattern, isRecursive)
 }
 
 func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams) (results []services.ScanResponse, err error) {

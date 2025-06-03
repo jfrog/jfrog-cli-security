@@ -47,7 +47,7 @@ func BuildDependencyTree(params utils.AuditParams) (dependencyTree []*xrayUtils.
 	if err != nil {
 		return
 	}
-	exclusionPattern := technologies.GetExcludePattern(params)
+	exclusionPattern := technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...)
 	sol, err := solution.Load(wd, "", exclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
