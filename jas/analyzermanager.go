@@ -25,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.19.1"
+	defaultAnalyzerManagerVersion             = "1.20.2"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -37,7 +37,7 @@ const (
 	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
 	watchesEnvVariable                        = "AM_WATCHES"
-	projectEnvVariable                        = "AM_PROJECT_VIOLATIONS"
+	projectEnvVariable                        = "AM_PROJECT_KEY"
 	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13

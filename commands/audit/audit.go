@@ -393,7 +393,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
 
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
