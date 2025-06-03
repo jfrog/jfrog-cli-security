@@ -26,7 +26,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 // We can only perform SCA scan if we identified at least one technology for a target.
@@ -151,7 +151,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 }
 
 func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetails *config.ServerDetails,
-	flatTree xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) (techResults []services.ScanResponse, err error) {
+	flatTree xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) (techResults []services.ScanResponse, err error) {
 	// Create the scan graph parameters.
 	xrayScanGraphParams := params.createXrayGraphScanParams()
 	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
@@ -173,14 +173,102 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		return
 	}
 	log.Info(fmt.Sprintf("Finished '%s' dependency tree scan. %s", tech.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations), -1)))
-	techResults = technologies.BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
+	techResults = BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
 	return
 }
 
-func addThirdPartyDependenciesToParams(params *AuditParams, tech techutils.Technology, flatTree *xrayCmdUtils.GraphNode, fullDependencyTrees []*xrayCmdUtils.GraphNode) {
+// BuildImpactPathsForScanResponse builds the full impact paths for each vulnerability found in the scanResult argument, using the dependencyTrees argument.
+// Returns the updated services.ScanResponse slice.
+func BuildImpactPathsForScanResponse(scanResult []services.ScanResponse, dependencyTree []*xrayUtils.GraphNode) []services.ScanResponse {
+	for _, result := range scanResult {
+		if len(result.Vulnerabilities) > 0 {
+			buildVulnerabilitiesImpactPaths(result.Vulnerabilities, dependencyTree)
+		}
+		if len(result.Violations) > 0 {
+			buildViolationsImpactPaths(result.Violations, dependencyTree)
+		}
+		if len(result.Licenses) > 0 {
+			buildLicensesImpactPaths(result.Licenses, dependencyTree)
+		}
+	}
+	return scanResult
+}
+
+// Initialize a map of issues empty impact paths
+func fillIssuesMapWithEmptyImpactPaths(issuesImpactPathsMap map[string][][]services.ImpactPathNode, components map[string]services.Component) {
+	for dependencyName := range components {
+		issuesImpactPathsMap[dependencyName] = [][]services.ImpactPathNode{}
+	}
+}
+
+// Set the impact paths for each issue in the map
+func buildImpactPaths(issuesImpactPathsMap map[string][][]services.ImpactPathNode, dependencyTrees []*xrayUtils.GraphNode) {
+	for _, dependency := range dependencyTrees {
+		setPathsForIssues(dependency, issuesImpactPathsMap, []services.ImpactPathNode{})
+	}
+}
+
+func buildVulnerabilitiesImpactPaths(vulnerabilities []services.Vulnerability, dependencyTrees []*xrayUtils.GraphNode) {
+	issuesMap := make(map[string][][]services.ImpactPathNode)
+	for _, vulnerability := range vulnerabilities {
+		fillIssuesMapWithEmptyImpactPaths(issuesMap, vulnerability.Components)
+	}
+	buildImpactPaths(issuesMap, dependencyTrees)
+	for i := range vulnerabilities {
+		updateComponentsWithImpactPaths(vulnerabilities[i].Components, issuesMap)
+	}
+}
+
+func buildViolationsImpactPaths(violations []services.Violation, dependencyTrees []*xrayUtils.GraphNode) {
+	issuesMap := make(map[string][][]services.ImpactPathNode)
+	for _, violation := range violations {
+		fillIssuesMapWithEmptyImpactPaths(issuesMap, violation.Components)
+	}
+	buildImpactPaths(issuesMap, dependencyTrees)
+	for i := range violations {
+		updateComponentsWithImpactPaths(violations[i].Components, issuesMap)
+	}
+}
+
+func buildLicensesImpactPaths(licenses []services.License, dependencyTrees []*xrayUtils.GraphNode) {
+	issuesMap := make(map[string][][]services.ImpactPathNode)
+	for _, license := range licenses {
+		fillIssuesMapWithEmptyImpactPaths(issuesMap, license.Components)
+	}
+	buildImpactPaths(issuesMap, dependencyTrees)
+	for i := range licenses {
+		updateComponentsWithImpactPaths(licenses[i].Components, issuesMap)
+	}
+}
+
+func updateComponentsWithImpactPaths(components map[string]services.Component, issuesMap map[string][][]services.ImpactPathNode) {
+	for dependencyName := range components {
+		updatedComponent := services.Component{
+			FixedVersions: components[dependencyName].FixedVersions,
+			ImpactPaths:   issuesMap[dependencyName],
+			Cpes:          components[dependencyName].Cpes,
+		}
+		components[dependencyName] = updatedComponent
+	}
+}
+
+func setPathsForIssues(dependency *xrayUtils.GraphNode, issuesImpactPathsMap map[string][][]services.ImpactPathNode, pathFromRoot []services.ImpactPathNode) {
+	pathFromRoot = append(pathFromRoot, services.ImpactPathNode{ComponentId: dependency.Id})
+	if _, exists := issuesImpactPathsMap[dependency.Id]; exists {
+		// Create a copy of pathFromRoot to avoid modifying the original slice
+		pathCopy := make([]services.ImpactPathNode, len(pathFromRoot))
+		copy(pathCopy, pathFromRoot)
+		issuesImpactPathsMap[dependency.Id] = append(issuesImpactPathsMap[dependency.Id], pathCopy)
+	}
+	for _, depChild := range dependency.Nodes {
+		setPathsForIssues(depChild, issuesImpactPathsMap, pathFromRoot)
+	}
+}
+
+func addThirdPartyDependenciesToParams(params *AuditParams, tech techutils.Technology, flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
 	var dependenciesForApplicabilityScan []string
 	if shouldUseAllDependencies(params.thirdPartyApplicabilityScan, tech) {
-		dependenciesForApplicabilityScan = getDirectDependenciesFromTree([]*xrayCmdUtils.GraphNode{flatTree})
+		dependenciesForApplicabilityScan = getDirectDependenciesFromTree([]*xrayUtils.GraphNode{flatTree})
 	} else {
 		dependenciesForApplicabilityScan = getDirectDependenciesFromTree(fullDependencyTrees)
 	}
@@ -196,7 +284,7 @@ func shouldUseAllDependencies(thirdPartyApplicabilityScan bool, tech techutils.T
 }
 
 // This function retrieves the dependency trees of the scanned project and extracts a set that contains only the direct dependencies.
-func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []string {
+func getDirectDependenciesFromTree(dependencyTrees []*xrayUtils.GraphNode) []string {
 	directDependencies := datastructures.MakeSet[string]()
 	for _, tree := range dependencyTrees {
 		for _, node := range tree.Nodes {
@@ -206,7 +294,7 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
-func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
+func flatTreeToStringList(flatTree *xrayUtils.GraphNode) []string {
 	var uniqueNodes []string
 	for _, node := range flatTree.Nodes {
 		uniqueNodes = append(uniqueNodes, node.Id)
@@ -214,7 +302,7 @@ func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
 	return uniqueNodes
 }
 
-func logDeps(flatTree *xrayCmdUtils.GraphNode) (err error) {
+func logDeps(flatTree *xrayUtils.GraphNode) (err error) {
 	if log.GetLogger().GetLogLevel() != log.DEBUG {
 		// Avoid printing and marshaling if not on DEBUG mode.
 		return
