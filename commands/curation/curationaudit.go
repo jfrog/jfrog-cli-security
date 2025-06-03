@@ -34,7 +34,7 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -413,11 +413,11 @@ func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) 
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
 	params := ca.getAuditParamsByTech(tech)
-	serverDetails, err := audit.SetResolutionRepoInAuditParamsIfExists(params, tech)
+	serverDetails, err := buildinfo.SetResolutionRepoInAuditParamsIfExists(params, tech)
 	if err != nil {
 		return err
 	}
-	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
+	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		return err
 	}
