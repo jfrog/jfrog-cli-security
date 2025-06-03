@@ -9,32 +9,18 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/swift"
-	// "github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
 	"os"
-	// "time"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
-	// _go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/nuget"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
-	// "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -220,158 +206,6 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayCmdUtils.GraphNode) []
 	return directDependencies.ToSlice()
 }
 
-func getCurationCacheByTech(tech techutils.Technology) (string, error) {
-	if tech == techutils.Maven || tech == techutils.Go {
-		return xrayutils.GetCurationCacheFolderByTech(tech)
-	}
-	return "", nil
-}
-
-// type DependencyTreeResult struct {
-// 	FlatTree     *xrayCmdUtils.GraphNode
-// 	FullDepTrees []*xrayCmdUtils.GraphNode
-// 	DownloadUrls map[string]string
-// }
-
-// func GetTechDependencyTree(params xrayutils.AuditParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {
-// 	logMessage := fmt.Sprintf("Calculating %s dependencies", tech.ToFormal())
-// 	curationLogMsg, curationCacheFolder, err := getCurationCacheFolderAndLogMsg(params, tech)
-// 	if err != nil {
-// 		return
-// 	}
-// 	// In case it's not curation command these 'curationLogMsg' be empty
-// 	logMessage += curationLogMsg
-// 	log.Info(logMessage + "...")
-// 	if params.Progress() != nil {
-// 		params.Progress().SetHeadlineMsg(logMessage)
-// 	}
-
-// 	var uniqueDeps []string
-// 	var uniqDepsWithTypes map[string]*xray.DepTreeNode
-// 	startTime := time.Now()
-
-// 	switch tech {
-// 	case techutils.Maven, techutils.Gradle:
-// 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
-// 			Server:                  artifactoryServerDetails,
-// 			DepsRepo:                params.DepsRepo(),
-// 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
-// 			UseWrapper:              params.UseWrapper(),
-// 			IsCurationCmd:           params.IsCurationCmd(),
-// 			CurationCacheFolder:     curationCacheFolder,
-// 		}, tech)
-// 	case techutils.Npm:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
-// 	case techutils.Pnpm:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
-// 	case techutils.Conan:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = conan.BuildDependencyTree(params)
-// 	case techutils.Yarn:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
-// 	case techutils.Go:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
-// 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
-// 		depTreeResult.FullDepTrees, uniqueDeps,
-// 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(params, tech)
-// 	case techutils.Nuget:
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
-// 	case techutils.Cocoapods:
-// 		xrayVersion := params.GetXrayVersion()
-// 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
-// 		if err != nil {
-// 			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", xrayVersion)
-// 		}
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
-// 	case techutils.Swift:
-// 		xrayVersion := params.GetXrayVersion()
-// 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
-// 		if err != nil {
-// 			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", xrayVersion)
-// 		}
-// 		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
-// 	default:
-// 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
-// 	}
-// 	if err != nil || (len(uniqueDeps) == 0 && len(uniqDepsWithTypes) == 0) {
-// 		return
-// 	}
-// 	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
-// 	if len(uniqDepsWithTypes) > 0 {
-// 		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsWithTypes)
-// 		return
-// 	}
-// 	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
-// 	return
-// }
-
-// func getCurationCacheFolderAndLogMsg(params xrayutils.AuditParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
-// 	if !params.IsCurationCmd() {
-// 		return
-// 	}
-// 	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
-// 		return
-// 	}
-
-// 	dirExist, err := fileutils.IsDirExists(curationCacheFolder, false)
-// 	if err != nil {
-// 		return
-// 	}
-
-// 	if dirExist {
-// 		if dirIsEmpty, scopErr := fileutils.IsDirEmpty(curationCacheFolder); scopErr != nil || !dirIsEmpty {
-// 			err = scopErr
-// 			return
-// 		}
-// 	}
-
-// 	logMessage = ". Quick note: we're running our first scan on the project with curation-audit. Expect this one to take a bit longer. Subsequent scans will be faster. Thanks for your patience"
-
-// 	return logMessage, curationCacheFolder, err
-// }
-
-func SetResolutionRepoInAuditParamsIfExists(params utils.AuditParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
-	if serverDetails, err = params.ServerDetails(); err != nil {
-		return
-	}
-	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
-		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
-		return
-	}
-	artifactoryDetails, err := artifactory.GetResolutionRepoIfExists(tech)
-	if err != nil {
-		return
-	}
-	if artifactoryDetails == nil {
-		return params.ServerDetails()
-	}
-	// If the configuration file is found, the server details and the target repository are extracted from it.
-	params.SetDepsRepo(artifactoryDetails.TargetRepository)
-	params.SetServerDetails(artifactoryDetails.ServerDetails)
-	serverDetails = artifactoryDetails.ServerDetails
-	return
-}
-
-func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayCmdUtils.GraphNode {
-	var uniqueNodes []*xrayCmdUtils.GraphNode
-	for uniqueDep, nodeAttr := range uniqueDeps {
-		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
-		if nodeAttr != nil {
-			node.Types = nodeAttr.Types
-			node.Classifier = nodeAttr.Classifier
-		}
-		uniqueNodes = append(uniqueNodes, node)
-	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
-}
-
-func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
-	uniqueNodes := []*xrayCmdUtils.GraphNode{}
-	for _, uniqueDep := range uniqueDeps {
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
-	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
-}
-
 func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
 	var uniqueNodes []string
 	for _, node := range flatTree.Nodes {
@@ -405,49 +239,3 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 	}
 	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
 }
-
-// // This method will change the working directory to the scan's working directory.
-// func buildDependencyTree(scan *results.TargetResults, params *AuditParams) (*buildinfo.DependencyTreeResult, error) {
-// 	if err := os.Chdir(scan.Target); err != nil {
-// 		return nil, errorutils.CheckError(err)
-// 	}
-// 	serverDetails, err := SetResolutionRepoInAuditParamsIfExists(params.AuditBasicParams, scan.Technology)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	treeResult, techErr := GetTechDependencyTree(params.AuditBasicParams, serverDetails, scan.Technology)
-// 	if techErr != nil {
-// 		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
-// 	}
-// 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
-// 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
-// 	}
-// 	scan.SetSbom(results.DepTreeToSbom(treeResult.FullDepTrees))
-// 	return &treeResult, nil
-// }
-
-// Collect dependencies exists in target and not in resultsToCompare
-// func getDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayCmdUtils.GraphNode) (*DependencyTreeResult, error) {
-// 	if resultsToCompare == nil {
-// 		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
-// 	}
-// 	log.Debug(fmt.Sprintf("Comparing %s SBOM with %s to get diff", scanResults.Target, resultsToCompare.Target))
-// 	// Compare the dependency trees
-// 	filterDepsMap := datastructures.MakeSet[string]()
-// 	for _, component := range resultsToCompare.Sbom.Components {
-// 		filterDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
-// 	}
-// 	addedDepsMap := datastructures.MakeSet[string]()
-// 	for _, component := range scanResults.Sbom.Components {
-// 		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
-// 		if exists := filterDepsMap.Exists(componentId); !exists {
-// 			// Dependency in scan results but not in results to compare
-// 			addedDepsMap.Add(componentId)
-// 		}
-// 	}
-// 	diffDepTree := DependencyTreeResult{
-// 		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
-// 		FullDepTrees: fullDepTrees,
-// 	}
-// 	return &diffDepTree, nil
-// }
