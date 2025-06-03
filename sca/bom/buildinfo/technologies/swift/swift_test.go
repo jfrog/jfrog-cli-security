@@ -2,16 +2,17 @@ package swift
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/owenrumney/go-sarif/v2/sarif"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ import (
 
 func TestBuildSwiftDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	server := &config.ServerDetails{
@@ -62,7 +63,7 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 }
 
 func TestGetTechDependencyLocation(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 	defer cleanUp()
 	currentDir, err := coreutils.GetWorkingDirectory()
 	assert.NoError(t, err)
@@ -107,7 +108,7 @@ func TestFixTechDependencySingleLocation_Range(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
+			_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "swift"))
 			defer cleanUp()
 			currentDir, err := coreutils.GetWorkingDirectory()
 			assert.NoError(t, err)

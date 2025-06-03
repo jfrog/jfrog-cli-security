@@ -3,16 +3,17 @@ package _go
 import (
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -22,7 +23,7 @@ import (
 
 func TestBuildGoDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-project"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "go", "go-project"))
 	defer cleanUp()
 
 	err := removeTxtSuffix("go.mod.txt")
@@ -91,7 +92,7 @@ func Test_handleCurationGoError(t *testing.T) {
 		{
 			name:          "curation error 403",
 			err:           errors.New("package download failed due to 403 forbidden test failure"),
-			expectedError: fmt.Errorf(sca.CurationErrorMsgToUserTemplate, techutils.Go),
+			expectedError: fmt.Errorf(technologies.CurationErrorMsgToUserTemplate, techutils.Go),
 		},
 		{
 			name: "not curation error 500",

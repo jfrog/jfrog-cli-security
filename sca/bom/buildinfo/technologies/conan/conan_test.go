@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -25,7 +25,7 @@ var expectedResult = &xrayUtils.GraphNode{
 var expectedUniqueDeps = []string{"conan://openssl:3.0.9", "conan://zlib:1.3.1", "conan://meson:1.4.1", "conan://ninja:1.12.1"}
 
 func TestParseConanDependencyTree(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("other", "conan"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("other", "conan"))
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
@@ -42,7 +42,7 @@ func TestParseConanDependencyTree(t *testing.T) {
 }
 
 func TestBuildDependencyTree(t *testing.T) {
-	dir, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
+	dir, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
 	defer cleanUp()
 	params := &utils.AuditBasicParams{}
 	params.SetConanProfile(filepath.Join(dir, "profile"))

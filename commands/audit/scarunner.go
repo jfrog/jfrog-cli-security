@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	biutils "github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/conan"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/swift"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/swift"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"golang.org/x/exp/slices"
 
@@ -16,15 +18,14 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/cocoapods"
-	_go "github.com/jfrog/jfrog-cli-security/commands/audit/sca/go"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/java"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/npm"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/nuget"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/pnpm"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/yarn"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
+	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/nuget"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/pnpm"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
@@ -149,7 +150,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		auditParallelRunner.ResultsMu.Lock()
 		defer auditParallelRunner.ResultsMu.Unlock()
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		scan.NewScaScanResults(sca.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
+		scan.NewScaScanResults(technologies.GetScaScansStatusCode(xrayErr, scanResults...), scanResults...).IsMultipleRootProject = clientutils.Pointer(len(treeResult.FullDepTrees) > 1)
 		addThirdPartyDependenciesToParams(auditParams, scan.Technology, treeResult.FlatTree, treeResult.FullDepTrees)
 
 		if xrayErr != nil {
@@ -178,12 +179,12 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 		SetSeverityLevel(params.minSeverityFilter.String())
 
 	log.Info(fmt.Sprintf("Scanning %d %s dependencies", len(flatTree.Nodes), tech) + "...")
-	techResults, err = sca.RunXrayDependenciesTreeScanGraph(scanGraphParams)
+	techResults, err = technologies.RunXrayDependenciesTreeScanGraph(scanGraphParams)
 	if err != nil {
 		return
 	}
 	log.Info(fmt.Sprintf("Finished '%s' dependency tree scan. %s", tech.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations), -1)))
-	techResults = sca.BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
+	techResults = technologies.BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
 	return
 }
 

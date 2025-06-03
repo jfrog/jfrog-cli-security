@@ -2,16 +2,17 @@ package nuget
 
 import (
 	"encoding/json"
-	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
-	"github.com/jfrog/build-info-go/utils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
-	xrayUtils2 "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
+	"github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	xrayUtils2 "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/build-info-go/entities"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -22,7 +23,7 @@ var testDataDir = filepath.Join("..", "..", "..", "..", "tests", "testdata", "pr
 
 func TestBuildNugetDependencyTree(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("other", "nuget"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("other", "nuget"))
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
@@ -198,7 +199,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			// Create and change directory to test workspace
-			_, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			params := (&xrayUtils2.AuditBasicParams{}).SetSkipAutoInstall(true)

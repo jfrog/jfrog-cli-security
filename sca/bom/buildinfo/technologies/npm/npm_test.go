@@ -2,25 +2,26 @@ package npm
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	buildinfo "github.com/jfrog/build-info-go/entities"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
 )
 
 func TestParseNpmDependenciesList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("other", "npm"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("other", "npm"))
 	defer cleanUp()
 	dependenciesJson, err := os.ReadFile("dependencies.json")
 	assert.NoError(t, err)
@@ -115,7 +116,7 @@ func TestParseNpmDependenciesList(t *testing.T) {
 
 func TestIgnoreScripts(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-scripts"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-scripts"))
 	defer cleanUp()
 
 	// The package.json file contain a postinstall script running an "exit 1" command.
@@ -157,7 +158,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
-			dirPath, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			dirPath, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			exists, err := fileutils.IsFileExists(filepath.Join(dirPath, "package-lock.json"), false)

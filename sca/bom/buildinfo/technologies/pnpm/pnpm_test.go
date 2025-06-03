@@ -14,13 +14,13 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-big-tree"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-big-tree"))
 	defer cleanUp()
 	testCases := []struct {
 		name               string
@@ -84,7 +84,7 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 
 func TestBuildDependencyTree(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
 	defer cleanUp()
 
 	testCases := []struct {
@@ -154,7 +154,7 @@ func TestBuildDependencyTree(t *testing.T) {
 }
 
 func TestInstallProjectIfNeeded(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "npm", "npm-no-lock"))
 	defer cleanUp()
 
 	currentDir, err := coreutils.GetWorkingDirectory()

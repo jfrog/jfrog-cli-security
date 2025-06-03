@@ -1,29 +1,30 @@
 package python
 
 import (
-	"github.com/jfrog/build-info-go/utils/pythonutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	clisecurityutils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jfrog/build-info-go/utils/pythonutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	clisecurityutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
@@ -49,7 +50,7 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	// Create and change directory to test workspace
 	mainPath := filepath.Join("projects", "package-managers", "python", "pip", "pip")
-	actualMainPath, cleanUp := sca.CreateTestWorkspace(t, mainPath)
+	actualMainPath, cleanUp := technologies.CreateTestWorkspace(t, mainPath)
 	defer cleanUp()
 	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
@@ -61,7 +62,7 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 
 func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
@@ -93,7 +94,7 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 
 func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
 	params := clisecurityutils.AuditBasicParams{}
@@ -117,7 +118,7 @@ func validatePipRequirementsProject(t *testing.T, err error, uniqueDeps []string
 
 func TestBuildPipDependencyListRequirements(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
 	params := clisecurityutils.AuditBasicParams{}
@@ -140,7 +141,7 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 
 func TestBuildPipenvDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pipenv", "pipenv", "pipenvproject"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pipenv", "pipenv", "pipenvproject"))
 	defer cleanUp()
 	expectedPipenvUniqueDeps := []string{
 		PythonPackageTypeIdentifier + "toml:0.10.2",
@@ -168,7 +169,7 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 
 func TestBuildPoetryDependencyList(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "poetry", "my-poetry-project"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "poetry", "my-poetry-project"))
 	defer cleanUp()
 	expectedPoetryUniqueDeps := []string{
 		PythonPackageTypeIdentifier + "wcwidth:0.2.13",
@@ -239,7 +240,7 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			testDir, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			testDir, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			// Create virtual env according to package manager if needed

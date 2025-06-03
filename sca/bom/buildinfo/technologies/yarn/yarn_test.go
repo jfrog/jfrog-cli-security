@@ -12,7 +12,7 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -200,7 +200,7 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			// Create and change directory to test workspace
-			dirPath, cleanUp := sca.CreateTestWorkspace(t, test.testDir)
+			dirPath, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
 			expectedLockFilePath := filepath.Join(dirPath, "yarn.lock")
