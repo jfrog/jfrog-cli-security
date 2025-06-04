@@ -397,21 +397,6 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-// func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) utils.AuditParams {
-// 	switch tech {
-// 	case techutils.Npm:
-// 		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
-// 			SetNpmIgnoreNodeModules(true).
-// 			SetNpmOverwritePackageLock(true)
-// 	case techutils.Maven:
-// 		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
-// 	case techutils.Gradle:
-// 		ca.AuditParams.SetIsGradleDepTreeInstalled(false)
-// 	}
-
-// 	return ca.AuditParams
-// }
-
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	serverDetails, err := ca.AuditParams.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
@@ -432,6 +417,9 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 		// Java params
 		IsMavenDepTreeInstalled: true,
 		UseWrapper:              ca.AuditParams.UseWrapper(),
+		// Npm params
+		NpmIgnoreNodeModules:    true,
+		NpmOverwritePackageLock: true,
 		// Python params
 		PipRequirementsFile: ca.AuditParams.PipRequirementsFile(),
 	}, err

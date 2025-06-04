@@ -1,7 +1,6 @@
 package buildinfo
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -201,28 +200,6 @@ func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
 		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
 	}
 	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
-}
-
-func flatTreeToStringList(flatTree *xrayCmdUtils.GraphNode) []string {
-	var uniqueNodes []string
-	for _, node := range flatTree.Nodes {
-		uniqueNodes = append(uniqueNodes, node.Id)
-	}
-	return uniqueNodes
-}
-
-func logDeps(flatTree *xrayCmdUtils.GraphNode) (err error) {
-	if log.GetLogger().GetLogLevel() != log.DEBUG {
-		// Avoid printing and marshaling if not on DEBUG mode.
-		return
-	}
-	jsonList, err := json.Marshal(flatTreeToStringList(flatTree))
-	if errorutils.CheckError(err) != nil {
-		return err
-	}
-	log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
-
-	return
 }
 
 // Collect dependencies exists in target and not in resultsToCompare
