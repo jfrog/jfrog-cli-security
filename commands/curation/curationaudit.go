@@ -397,7 +397,7 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
+func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildInfoBomGeneratorParams, error) {
 	serverDetails, err := ca.AuditParams.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
 		XrayVersion:      ca.AuditParams.GetXrayVersion(),
@@ -426,7 +426,7 @@ func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technolo
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	params, err := ca.getBuildInfoParamsByTech(tech)
+	params, err := ca.getBuildInfoParamsByTech()
 	if err != nil {
 		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
 	}
