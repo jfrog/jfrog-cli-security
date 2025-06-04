@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var testDataDir = filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
+var testDataDir = filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", "projects", "package-managers")
 
 func TestBuildNugetDependencyTree(t *testing.T) {
 	// Create and change directory to test workspace
