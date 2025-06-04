@@ -197,11 +197,6 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (restore
 		return nil
 	}
 	if params.DependenciesRepository != "" {
-		// var serverDetails *config.ServerDetails
-		// serverDetails, err = params.ServerDetails()
-		// if err != nil {
-		// 	return restoreEnv, err
-		// }
 		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(params.ServerDetails, params.DependenciesRepository, false)
 		if err != nil {
 			return restoreEnv, err
