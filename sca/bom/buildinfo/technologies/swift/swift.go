@@ -180,6 +180,7 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 func extractNameFromSwiftRepo(name string) string {
 	name = strings.TrimSuffix(name, ".git")
 	name = strings.TrimPrefix(name, "https://")
+	// jfrog-ignore - false positive, not used for communication
 	name = strings.TrimPrefix(name, "http://")
 	name = strings.TrimPrefix(name, "sso://")
 	return name
