@@ -34,8 +34,9 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca/python"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -396,28 +397,44 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 	return
 }
 
-func (ca *CurationAuditCommand) getAuditParamsByTech(tech techutils.Technology) utils.AuditParams {
-	switch tech {
-	case techutils.Npm:
-		return utils.AuditNpmParams{AuditParams: ca.AuditParams}.
-			SetNpmIgnoreNodeModules(true).
-			SetNpmOverwritePackageLock(true)
-	case techutils.Maven:
-		ca.AuditParams.SetIsMavenDepTreeInstalled(true)
-	case techutils.Gradle:
-		ca.AuditParams.SetIsGradleDepTreeInstalled(false)
-	}
-
-	return ca.AuditParams
+func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildInfoBomGeneratorParams, error) {
+	serverDetails, err := ca.AuditParams.ServerDetails()
+	return technologies.BuildInfoBomGeneratorParams{
+		XrayVersion:      ca.AuditParams.GetXrayVersion(),
+		ExclusionPattern: technologies.GetExcludePattern(ca.AuditParams.GetConfigProfile(), ca.AuditParams.IsRecursiveScan(), ca.AuditParams.Exclusions()...),
+		Progress:         ca.AuditParams.Progress(),
+		// Artifactory Repository params
+		ServerDetails:          serverDetails,
+		DependenciesRepository: ca.AuditParams.DepsRepo(),
+		IgnoreConfigFile:       ca.AuditParams.IgnoreConfigFile(),
+		InsecureTls:            ca.AuditParams.InsecureTls(),
+		// Install params
+		InstallCommandName: ca.AuditParams.InstallCommandName(),
+		Args:               ca.AuditParams.Args(),
+		InstallCommandArgs: ca.AuditParams.InstallCommandArgs(),
+		// Curation params
+		IsCurationCmd: true,
+		// Java params
+		IsMavenDepTreeInstalled: true,
+		UseWrapper:              ca.AuditParams.UseWrapper(),
+		// Npm params
+		NpmIgnoreNodeModules:    true,
+		NpmOverwritePackageLock: true,
+		// Python params
+		PipRequirementsFile: ca.AuditParams.PipRequirementsFile(),
+	}, err
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {
-	params := ca.getAuditParamsByTech(tech)
-	serverDetails, err := audit.SetResolutionRepoInAuditParamsIfExists(params, tech)
+	params, err := ca.getBuildInfoParamsByTech()
+	if err != nil {
+		return errorutils.CheckErrorf("failed to get build info params for %s: %v", tech.String(), err)
+	}
+	serverDetails, err := buildinfo.SetResolutionRepoInParamsIfExists(&params, tech)
 	if err != nil {
 		return err
 	}
-	depTreeResult, err := audit.GetTechDependencyTree(params, serverDetails, tech)
+	depTreeResult, err := buildinfo.GetTechDependencyTree(params, serverDetails, tech)
 	if err != nil {
 		return err
 	}
