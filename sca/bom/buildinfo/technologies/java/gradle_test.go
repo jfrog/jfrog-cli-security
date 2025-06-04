@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -44,7 +45,7 @@ allprojects {
 
 func TestGradleTreesWithoutConfig(t *testing.T) {
 	// Create and change directory to test workspace
-	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 
@@ -68,7 +69,7 @@ func TestGradleTreesWithoutConfig(t *testing.T) {
 
 func TestGradleTreesWithConfig(t *testing.T) {
 	// Create and change directory to test workspace
-	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle-example-config"))
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle-example-config"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 
@@ -97,7 +98,7 @@ func TestIsGradleWrapperExist(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check Gradle wrapper exist
-	_, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	isWrapperExist, err = isGradleWrapperExist()
 	assert.NoError(t, err)

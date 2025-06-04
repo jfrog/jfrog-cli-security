@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetGradleGraphFromDepTree(t *testing.T) {
 	// Create and change directory to test workspace
-	tempDirPath, cleanUp := tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "gradle", "gradle"))
+	tempDirPath, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gradle", "gradle"))
 	defer cleanUp()
 	assert.NoError(t, os.Chmod(filepath.Join(tempDirPath, "gradlew"), 0700))
 	expectedTree := map[string]map[string]string{

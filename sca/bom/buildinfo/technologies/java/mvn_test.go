@@ -1,18 +1,20 @@
 package java
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
 )
 
 const (
@@ -172,7 +174,7 @@ const (
 
 func TestMavenTreesMultiModule(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := coreTests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "maven-example"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example"))
 	defer cleanUp()
 
 	expectedUniqueDeps := []string{
@@ -214,7 +216,7 @@ func TestMavenTreesMultiModule(t *testing.T) {
 
 func TestMavenWrapperTrees(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := coreTests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "maven-example-with-wrapper"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example-with-wrapper"))
 	err := os.Chmod("mvnw", 0700)
 	defer cleanUp()
 	assert.NoError(t, err)
@@ -263,7 +265,7 @@ func TestMavenWrapperTrees(t *testing.T) {
 
 func TestMavenWrapperTreesTypes(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := coreTests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "maven-example-with-many-types"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example-with-many-types"))
 	defer cleanUp()
 	tree, uniqueDeps, err := buildMavenDependencyTree(&DepTreeParams{})
 	require.NoError(t, err)
@@ -306,7 +308,7 @@ func TestMavenWrapperTreesTypes(t *testing.T) {
 
 func TestDepTreeWithDedicatedCache(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := coreTests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "maven-example-with-wrapper"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example-with-wrapper"))
 	err := os.Chmod("mvnw", 0700)
 	defer cleanUp()
 	assert.NoError(t, err)
@@ -386,7 +388,7 @@ func TestCreateSettingsXmlWithConfiguredArtifactory(t *testing.T) {
 
 func TestRunProjectsCmd(t *testing.T) {
 	// Create and change directory to test workspace
-	_, cleanUp := coreTests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "tests", "testdata", "projects", "package-managers", "maven", "maven-example"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "maven", "maven-example"))
 	defer cleanUp()
 	mvnDepTreeManager := NewMavenDepTreeManager(&DepTreeParams{}, Projects)
 	output, clearMavenDepTreeRun, err := mvnDepTreeManager.RunMavenDepTree()
