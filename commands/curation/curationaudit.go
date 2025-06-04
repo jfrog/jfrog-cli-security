@@ -412,17 +412,29 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 // 	return ca.AuditParams
 // }
 
-func(ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
+func (ca *CurationAuditCommand) getBuildInfoParamsByTech(tech techutils.Technology) (technologies.BuildInfoBomGeneratorParams, error) {
 	serverDetails, err := ca.AuditParams.ServerDetails()
-	if err != nil {
-		return technologies.BuildInfoBomGeneratorParams{}, err
-	}
 	return technologies.BuildInfoBomGeneratorParams{
-		Progress: ca.AuditParams.Progress(),
+		XrayVersion:      ca.AuditParams.GetXrayVersion(),
+		ExclusionPattern: technologies.GetExcludePattern(ca.AuditParams.GetConfigProfile(), ca.AuditParams.IsRecursiveScan(), ca.AuditParams.Exclusions()...),
+		Progress:         ca.AuditParams.Progress(),
 		// Artifactory Repository params
-		ServerDetails: serverDetails,
-		DependenciesRepository: ca.PackageManagerConfig.TargetRepo(),
-	}, nil
+		ServerDetails:          serverDetails,
+		DependenciesRepository: ca.AuditParams.DepsRepo(),
+		IgnoreConfigFile:       ca.AuditParams.IgnoreConfigFile(),
+		InsecureTls:            ca.AuditParams.InsecureTls(),
+		// Install params
+		InstallCommandName: ca.AuditParams.InstallCommandName(),
+		Args:               ca.AuditParams.Args(),
+		InstallCommandArgs: ca.AuditParams.InstallCommandArgs(),
+		// Curation params
+		IsCurationCmd: true,
+		// Java params
+		IsMavenDepTreeInstalled: true,
+		UseWrapper:              ca.AuditParams.UseWrapper(),
+		// Python params
+		PipRequirementsFile: ca.AuditParams.PipRequirementsFile(),
+	}, err
 }
 
 func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map[string]*CurationReport) error {

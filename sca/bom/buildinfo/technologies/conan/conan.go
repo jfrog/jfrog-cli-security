@@ -108,7 +108,7 @@ func calculateUniqueDependencies(nodes map[string]conanRef) []string {
 }
 
 func calculateDependencies(executablePath, workingDir string, params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
-	graphInfo := append([]string{"info", ".", "--format=json"}, params.Args()...)
+	graphInfo := append([]string{"info", ".", "--format=json"}, params.Args...)
 	conanGraphInfoContent, err := getConanCmd(executablePath, workingDir, "graph", graphInfo...).RunWithOutput()
 	if err != nil {
 		return

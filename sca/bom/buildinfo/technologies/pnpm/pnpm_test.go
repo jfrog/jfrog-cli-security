@@ -15,7 +15,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
@@ -64,8 +63,8 @@ func TestBuildDependencyTreeLimitedDepth(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Build dependency tree
-			params := &utils.AuditBasicParams{}
-			rootNode, uniqueDeps, err := BuildDependencyTree(params.SetMaxTreeDepth(testCase.treeDepth))
+			params := technologies.BuildInfoBomGeneratorParams{MaxTreeDepth: testCase.treeDepth}
+			rootNode, uniqueDeps, err := BuildDependencyTree(params)
 			require.NoError(t, err)
 			sort.Slice(uniqueDeps, func(i, j int) bool {
 				return uniqueDeps[i] < uniqueDeps[j]
@@ -138,8 +137,8 @@ func TestBuildDependencyTree(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Build dependency tree
-			params := &utils.AuditBasicParams{}
-			rootNode, uniqueDeps, err := BuildDependencyTree(params.SetNpmScope(testCase.depType))
+			params := technologies.BuildInfoBomGeneratorParams{}
+			rootNode, uniqueDeps, err := BuildDependencyTree(*params.SetNpmScope(testCase.depType))
 			require.NoError(t, err)
 			// Validations
 			assert.ElementsMatch(t, uniqueDeps, testCase.expectedUniqueDeps, "First is actual, Second is Expected")

@@ -82,10 +82,10 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	case techutils.Maven, techutils.Gradle:
 		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  artifactoryServerDetails,
-			DepsRepo:                params.DepsRepo(),
-			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
-			UseWrapper:              params.UseWrapper(),
-			IsCurationCmd:           params.IsCurationCmd(),
+			DepsRepo:                params.DependenciesRepository,
+			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled,
+			UseWrapper:              params.UseWrapper,
+			IsCurationCmd:           params.IsCurationCmd,
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
 	case techutils.Npm:
@@ -104,17 +104,15 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	case techutils.Nuget:
 		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
-		xrayVersion := params.GetXrayVersion()
-		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.CocoapodsScanMinXrayVersion)
+		err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, scangraph.CocoapodsScanMinXrayVersion)
 		if err != nil {
-			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", xrayVersion)
+			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", params.XrayVersion)
 		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
 	case techutils.Swift:
-		xrayVersion := params.GetXrayVersion()
-		err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, scangraph.SwiftScanMinXrayVersion)
+		err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, scangraph.SwiftScanMinXrayVersion)
 		if err != nil {
-			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", xrayVersion)
+			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", params.XrayVersion)
 		}
 		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
 	default:
@@ -133,7 +131,7 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 }
 
 func getCurationCacheFolderAndLogMsg(params technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
-	if !params.IsCurationCmd() {
+	if !params.IsCurationCmd {
 		return
 	}
 	if curationCacheFolder, err = getCurationCacheByTech(tech); err != nil || curationCacheFolder == "" {
@@ -166,7 +164,7 @@ func getCurationCacheByTech(tech techutils.Technology) (string, error) {
 
 func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (serverDetails *config.ServerDetails, err error) {
 	serverDetails = params.ServerDetails
-	if params.DepsRepo() != "" || params.IgnoreConfigFile() {
+	if params.DependenciesRepository != "" || params.IgnoreConfigFile {
 		// If the depsRepo is already set or the configuration file is ignored, there is no need to search for the configuration file.
 		return
 	}
@@ -178,7 +176,7 @@ func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGenerato
 		return params.ServerDetails, nil
 	}
 	// If the configuration file is found, the server details and the target repository are extracted from it.
-	params.SetDepsRepo(artifactoryDetails.TargetRepository)
+	params.DependenciesRepository = artifactoryDetails.TargetRepository
 	params.ServerDetails = artifactoryDetails.ServerDetails
 	serverDetails = artifactoryDetails.ServerDetails
 	return

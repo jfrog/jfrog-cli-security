@@ -2,7 +2,6 @@ package _go
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	biutils "github.com/jfrog/build-info-go/utils"
@@ -27,15 +26,10 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
-	server, err := params.ServerDetails()
-	if err != nil {
-		err = fmt.Errorf("failed while getting server details: %s", err.Error())
-		return
-	}
 	goProxyParams := goutils.GoProxyUrlParams{Direct: true}
 	// in case of curation command, we set an alternative cache folder when building go dep tree,
 	// also, it's not using the "direct" option, artifacts should be resolved only from the configured repo.
-	if params.IsCurationCmd() {
+	if params.IsCurationCmd {
 		goProxyParams.EndpointPrefix = coreutils.CurationPassThroughApi
 		goProxyParams.Direct = false
 		projCacheDir, errCacheFolder := utils.GetCurationCacheFolderByTech(techutils.Go)
@@ -48,9 +42,9 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		}
 	}
 
-	remoteGoRepo := params.DepsRepo()
+	remoteGoRepo := params.DependenciesRepository
 	if remoteGoRepo != "" {
-		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(server, remoteGoRepo, goProxyParams); err != nil {
+		if err = goartifactoryutils.SetArtifactoryAsResolutionServer(params.ServerDetails, remoteGoRepo, goProxyParams); err != nil {
 			return
 		}
 	}
@@ -79,7 +73,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	populateGoDependencyTree(rootNode, dependenciesGraph, dependenciesList, uniqueDepsSet)
 
 	// In case of curation command, go version is not relevant as it can't be resolved from go repo
-	if !params.IsCurationCmd() {
+	if !params.IsCurationCmd {
 		if gotErr := addGoVersionToTree(rootNode, uniqueDepsSet); gotErr != nil {
 			err = gotErr
 			return

@@ -10,7 +10,6 @@ import (
 	"github.com/jfrog/build-info-go/build/utils/dotnet/solution"
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	xrayUtils2 "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
@@ -141,8 +140,7 @@ func TestRunDotnetRestoreAndLoadSolution(t *testing.T) {
 		assert.Empty(t, sol.GetProjects())
 		assert.Empty(t, sol.GetDependenciesSources())
 
-		params := &xrayUtils2.AuditBasicParams{}
-		sol, err = runDotnetRestoreAndLoadSolution(params, tempDirPath, "", true)
+		sol, err = runDotnetRestoreAndLoadSolution(technologies.BuildInfoBomGeneratorParams{}, tempDirPath, "", true)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, sol.GetProjects())
 		assert.NotEmpty(t, sol.GetDependenciesSources())
@@ -202,10 +200,11 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 			_, cleanUp := technologies.CreateTestWorkspace(t, test.testDir)
 			defer cleanUp()
 
-			params := (&xrayUtils2.AuditBasicParams{}).SetSkipAutoInstall(true)
+			params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
 			if test.installCommand != "" {
 				splitInstallCommand := strings.Split(test.installCommand, " ")
-				params = params.SetInstallCommandName(splitInstallCommand[0]).SetInstallCommandArgs(splitInstallCommand[1:])
+				params.InstallCommandName = splitInstallCommand[0]
+				params.InstallCommandArgs = splitInstallCommand[1:]
 			}
 
 			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)

@@ -12,7 +12,6 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -121,8 +120,7 @@ func TestIgnoreScripts(t *testing.T) {
 
 	// The package.json file contain a postinstall script running an "exit 1" command.
 	// Without the "--ignore-scripts" flag, the test will fail.
-	params := &utils.AuditBasicParams{}
-	_, _, err := BuildDependencyTree(params)
+	_, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{})
 	assert.NoError(t, err)
 }
 
@@ -169,10 +167,11 @@ func TestSkipBuildDepTreeWhenInstallForbidden(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			params := (&utils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
 			if test.installCommand != "" {
 				splitInstallCommand := strings.Split(test.installCommand, " ")
-				params = params.SetInstallCommandName(splitInstallCommand[0]).SetInstallCommandArgs(splitInstallCommand[1:])
+				params.InstallCommandName = splitInstallCommand[0]
+				params.InstallCommandArgs = splitInstallCommand[1:]
 			}
 			dependencyTrees, uniqueDeps, err := BuildDependencyTree(params)
 			if !test.successfulTreeBuiltExpected {

@@ -13,8 +13,6 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,8 +44,8 @@ func TestBuildSwiftDependencyList(t *testing.T) {
 		techutils.Swift.GetPackageTypeId() + packageInfo,
 	}
 
-	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
-	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
+	params := technologies.BuildInfoBomGeneratorParams{ServerDetails: server}
+	rootNode, uniqueDeps, err := BuildDependencyTree(params)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")
 	assert.NotEmpty(t, rootNode)

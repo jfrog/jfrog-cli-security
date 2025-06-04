@@ -14,7 +14,6 @@ import (
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 
@@ -50,7 +49,7 @@ func TestBuildGoDependencyList(t *testing.T) {
 		goVersionID.Id,
 	}
 
-	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server).SetDepsRepo("test-remote")
+	auditBasicParams := technologies.BuildInfoBomGeneratorParams{ServerDetails: server, DependenciesRepository: "test-remote"}
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")

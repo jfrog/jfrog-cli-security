@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
@@ -18,6 +17,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/artifactory/services/fspatterns"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
@@ -32,10 +32,47 @@ var CurationErrorMsgToUserTemplate = "Failed to retrieve the dependencies tree f
 	"Artifactory administrator to verify pass-through for Curation audit is enabled for your project"
 
 type BuildInfoBomGeneratorParams struct {
-	Progress      ioUtils.ProgressMgr
+	XrayVersion         string
+	Progress            ioUtils.ProgressMgr
+	ExclusionPattern    string
+	AllowPartialResults bool
 	// Artifactory Repository params
-	ServerDetails *config.ServerDetails
+	ServerDetails          *config.ServerDetails
 	DependenciesRepository string
+	IgnoreConfigFile       bool
+	InsecureTls            bool
+	// Install params
+	SkipAutoInstall    bool
+	InstallCommandName string
+	Args               []string
+	InstallCommandArgs []string
+	// Curation params
+	IsCurationCmd bool
+	// Java params
+	IsMavenDepTreeInstalled bool
+	UseWrapper              bool
+	// Python params
+	PipRequirementsFile string
+	// Npm params
+	NpmIgnoreNodeModules    bool
+	NpmOverwritePackageLock bool
+	// Pnpm params
+	MaxTreeDepth string
+}
+
+func (bbp *BuildInfoBomGeneratorParams) SetNpmScope(depType string) *BuildInfoBomGeneratorParams {
+	switch depType {
+	case "devOnly":
+		bbp.Args = []string{"--dev"}
+	case "prodOnly":
+		bbp.Args = []string{"--prod"}
+	}
+	return bbp
+}
+
+func (bbp *BuildInfoBomGeneratorParams) SetConanProfile(file string) *BuildInfoBomGeneratorParams {
+	bbp.Args = append(bbp.Args, "--profile:build", file)
+	return bbp
 }
 
 func GetExcludePattern(configProfile *xscservices.ConfigProfile, isRecursive bool, exclusions ...string) string {

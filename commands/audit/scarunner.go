@@ -121,10 +121,29 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 
 func toBuildInfoBomGeneratorParams(auditParams *AuditParams, serverDetails *config.ServerDetails) technologies.BuildInfoBomGeneratorParams {
 	return technologies.BuildInfoBomGeneratorParams{
-		Progress: 	   auditParams.Progress(),
+		XrayVersion:         auditParams.GetXrayVersion(),
+		Progress:            auditParams.Progress(),
+		ExclusionPattern:    technologies.GetExcludePattern(auditParams.GetConfigProfile(), auditParams.IsRecursiveScan(), auditParams.Exclusions()...),
+		AllowPartialResults: auditParams.AllowPartialResults(),
 		// Artifactory Repository params
-		ServerDetails: serverDetails,
+		ServerDetails:          serverDetails,
 		DependenciesRepository: auditParams.DepsRepo(),
+		IgnoreConfigFile:       auditParams.IgnoreConfigFile(),
+		InsecureTls:            auditParams.InsecureTls(),
+		// Install params
+		SkipAutoInstall:    auditParams.SkipAutoInstall(),
+		InstallCommandName: auditParams.InstallCommandName(),
+		Args:               auditParams.Args(),
+		InstallCommandArgs: auditParams.InstallCommandArgs(),
+		// Curation params
+		IsCurationCmd: auditParams.IsCurationCmd(),
+		// Java params
+		IsMavenDepTreeInstalled: auditParams.IsMavenDepTreeInstalled(),
+		UseWrapper:              auditParams.UseWrapper(),
+		// Python params
+		PipRequirementsFile: auditParams.PipRequirementsFile(),
+		// Pnpm params
+		MaxTreeDepth: auditParams.MaxTreeDepth(),
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/dotnet"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -47,22 +46,21 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	if err != nil {
 		return
 	}
-	exclusionPattern := technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...)
-	sol, err := solution.Load(wd, "", exclusionPattern, log.Logger)
+	sol, err := solution.Load(wd, "", params.ExclusionPattern, log.Logger)
 	if err != nil && !strings.Contains(err.Error(), globalPackagesNotFoundErrorMessage) {
 		// In older NuGet projects that utilize NuGet Cli and package.config, if the project is not installed, the solution.Load function raises an error because it cannot find global package paths.
 		// This issue is resolved by executing the 'nuget restore' command followed by running solution.Load again. Therefore, in this scenario, we need to proceed with this process.
 		return
 	}
 
-	installRequired, err := isInstallRequired(params, sol, params.SkipAutoInstall(), wd)
+	installRequired, err := isInstallRequired(params, sol, params.SkipAutoInstall, wd)
 	if err != nil {
 		return
 	}
 
 	var buildInfo *entities.BuildInfo
 	if installRequired {
-		buildInfo, err = restoreInTempDirAndGetBuildInfo(params, wd, exclusionPattern)
+		buildInfo, err = restoreInTempDirAndGetBuildInfo(params, wd, params.ExclusionPattern)
 	} else {
 		buildInfo, err = sol.BuildInfo("", log.Logger)
 	}
@@ -93,7 +91,7 @@ func restoreInTempDirAndGetBuildInfo(params technologies.BuildInfoBomGeneratorPa
 	}
 
 	log.Info("Dependencies sources were not detected nor 'install' command provided. Running 'restore' command")
-	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern, params.InsecureTls())
+	sol, err := runDotnetRestoreAndLoadSolution(params, tmpWd, exclusionPattern, params.InsecureTls)
 	if err != nil {
 		return
 	}
@@ -106,9 +104,9 @@ func isInstallRequired(params technologies.BuildInfoBomGeneratorParams, sol solu
 	// Additionally, if dependency sources were not identified during the construction of the Solution struct, the project will necessitate an 'install'
 	solDependencySourcesExists := len(sol.GetDependenciesSources()) > 0
 	solProjectsExists := len(sol.GetProjects()) > 0
-	installRequired := !solDependencySourcesExists || !solProjectsExists || params.IsCurationCmd()
+	installRequired := !solDependencySourcesExists || !solProjectsExists || params.IsCurationCmd
 
-	if len(params.InstallCommandArgs()) > 0 {
+	if len(params.InstallCommandArgs) > 0 {
 		return true, nil
 	} else if installRequired && skipAutoInstall {
 		return false, &biutils.ErrProjectNotInstalled{UninstalledDir: curWd}
@@ -117,7 +115,7 @@ func isInstallRequired(params technologies.BuildInfoBomGeneratorParams, sol solu
 }
 
 func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorParams, tmpWd, exclusionPattern string, allowInsecureConnections bool) (sol solution.Solution, err error) {
-	toolName := params.InstallCommandName()
+	toolName := params.InstallCommandName
 	if toolName == "" {
 		// Determine if the project is a NuGet or .NET project
 		toolName, err = getProjectToolName(tmpWd)
@@ -131,24 +129,24 @@ func runDotnetRestoreAndLoadSolution(params technologies.BuildInfoBomGeneratorPa
 
 	var installCommandArgs []string
 	// Set up an Artifactory server as a resolution server if needed
-	depsRepo := params.DepsRepo()
+	depsRepo := params.DependenciesRepository
 	if depsRepo != "" {
-		var serverDetails *config.ServerDetails
-		serverDetails, err = params.ServerDetails()
+		// var serverDetails *config.ServerDetails
+		// serverDetails, err = params.ServerDetails()
 
 		// Use the pass-through URL if the project is being restored as part of Curation Audit
-		if params.IsCurationCmd() {
-			serverDetails.ArtifactoryUrl += "api/curation/audit"
+		if params.IsCurationCmd {
+			params.ServerDetails.ArtifactoryUrl += "api/curation/audit"
 		}
 		if err != nil {
 			err = fmt.Errorf("failed to get server details: %s", err.Error())
 			return
 		}
 
-		log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
+		log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", params.ServerDetails.Url, depsRepo))
 
 		var configFile *os.File
-		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, serverDetails, false, allowInsecureConnections)
+		configFile, err = dotnet.InitNewConfig(tmpWd, depsRepo, params.ServerDetails, false, allowInsecureConnections)
 		if err != nil {
 			err = fmt.Errorf("failed while attempting to generate a configuration file for setting up Artifactory as a resolution server")
 			return
@@ -261,10 +259,10 @@ func getEnvVariablesForCurationAudit() ([]string, error) {
 
 func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams, toolType bidotnet.ToolchainType, commandExtraArgs []string) (err error) {
 	var completeCommandArgs []string
-	if len(params.InstallCommandArgs()) > 0 {
+	if len(params.InstallCommandArgs) > 0 {
 		// If the user has specified an 'install' command, we execute the command that has been provided.
-		completeCommandArgs = append(completeCommandArgs, params.InstallCommandName())
-		completeCommandArgs = append(completeCommandArgs, params.InstallCommandArgs()...)
+		completeCommandArgs = append(completeCommandArgs, params.InstallCommandName)
+		completeCommandArgs = append(completeCommandArgs, params.InstallCommandArgs...)
 	} else {
 		completeCommandArgs = append(completeCommandArgs, toolType.String(), installCommandName)
 	}
@@ -273,7 +271,7 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 	completeCommandArgs = append(completeCommandArgs, commandExtraArgs...)
 	command := exec.Command(completeCommandArgs[0], completeCommandArgs[1:]...)
 	command.Dir = wd
-	if params.IsCurationCmd() {
+	if params.IsCurationCmd {
 		command.Env, err = getEnvVariablesForCurationAudit()
 		if err != nil {
 			return err

@@ -93,7 +93,7 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 	}
 
 	pythonTool := pythonutils.PythonTool(technology)
-	if technology == techutils.Pipenv || !params.SkipAutoInstall() {
+	if technology == techutils.Pipenv || !params.SkipAutoInstall {
 		var restoreEnv func() error
 		restoreEnv, err = runPythonInstall(params, pythonTool)
 		defer func() {
@@ -116,7 +116,7 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 		technologies.LogExecutableVersion("python")
 		technologies.LogExecutableVersion(string(pythonTool))
 	}
-	if !params.IsCurationCmd() {
+	if !params.IsCurationCmd {
 		return
 	}
 	pipUrls, errProcessed := processPipDownloadsUrlsFromReportFile()
@@ -196,18 +196,18 @@ func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (restore
 	restoreEnv = func() error {
 		return nil
 	}
-	if params.DepsRepo() != "" {
-		var serverDetails *config.ServerDetails
-		serverDetails, err = params.ServerDetails()
-		if err != nil {
-			return restoreEnv, err
-		}
-		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(serverDetails, params.DepsRepo(), false)
+	if params.DependenciesRepository != "" {
+		// var serverDetails *config.ServerDetails
+		// serverDetails, err = params.ServerDetails()
+		// if err != nil {
+		// 	return restoreEnv, err
+		// }
+		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(params.ServerDetails, params.DependenciesRepository, false)
 		if err != nil {
 			return restoreEnv, err
 		}
 		if password != "" {
-			err = artifactoryutils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DepsRepo())
+			err = artifactoryutils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DependenciesRepository)
 			if err != nil {
 				return restoreEnv, err
 			}
@@ -227,13 +227,8 @@ func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (restore
 	restoreEnv = func() error {
 		return os.Unsetenv("WORKON_HOME")
 	}
-	if params.DepsRepo() != "" {
-		var serverDetails *config.ServerDetails
-		serverDetails, err = params.ServerDetails()
-		if err != nil {
-			return
-		}
-		return restoreEnv, runPipenvInstallFromRemoteRegistry(serverDetails, params.DepsRepo())
+	if params.DependenciesRepository != "" {
+		return restoreEnv, runPipenvInstallFromRemoteRegistry(params.ServerDetails, params.DependenciesRepository)
 	}
 	// Run 'pipenv install -d'
 	_, err = executeCommand("pipenv", "install", "-d")
@@ -247,13 +242,8 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 	}
 
 	remoteUrl := ""
-	if params.DepsRepo() != "" {
-		var serverDetails *config.ServerDetails
-		serverDetails, err = params.ServerDetails()
-		if err != nil {
-			return
-		}
-		remoteUrl, err = artifactoryutils.GetPypiRepoUrl(serverDetails, params.DepsRepo(), params.IsCurationCmd())
+	if params.DependenciesRepository != "" {
+		remoteUrl, err = artifactoryutils.GetPypiRepoUrl(params.ServerDetails, params.DependenciesRepository, params.IsCurationCmd)
 		if err != nil {
 			return
 		}
@@ -261,7 +251,7 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 
 	var curationCachePip string
 	var reportFileName string
-	if params.IsCurationCmd() {
+	if params.IsCurationCmd {
 		// upgrade pip version to 23.0.0, as it is required for the curation command.
 		if err = upgradePipVersion(CurationPipMinimumVersion); err != nil {
 			log.Warn(fmt.Sprintf("Failed to upgrade pip version, err: %v", err))
@@ -272,11 +262,11 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 		reportFileName = pythonReportFile
 	}
 
-	pipInstallArgs := getPipInstallArgs(params.PipRequirementsFile(), remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
+	pipInstallArgs := getPipInstallArgs(params.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs...)
 	var reqErr error
 	_, err = executeCommand("python", pipInstallArgs...)
-	if err != nil && params.PipRequirementsFile() == "" {
-		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs()...)
+	if err != nil && params.PipRequirementsFile == "" {
+		pipInstallArgs = getPipInstallArgs("requirements.txt", remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs...)
 		_, reqErr = executeCommand("python", pipInstallArgs...)
 		if reqErr != nil {
 			// Return Pip install error and log the requirements fallback error.
@@ -286,7 +276,7 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 		}
 	}
 	if err != nil || reqErr != nil {
-		if msgToUser := technologies.GetMsgToUserForCurationBlock(params.IsCurationCmd(), techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
+		if msgToUser := technologies.GetMsgToUserForCurationBlock(params.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {
 			err = errors.Join(err, errors.New(msgToUser))
 		}
 	}

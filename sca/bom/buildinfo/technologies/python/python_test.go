@@ -9,7 +9,6 @@ import (
 	"github.com/jfrog/build-info-go/utils/pythonutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	clisecurityutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
@@ -27,8 +26,7 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{}, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -54,9 +52,8 @@ func TestPipDependencyListCustomInstallArgs(t *testing.T) {
 	defer cleanUp()
 	assert.NoError(t, os.Chdir(filepath.Join(actualMainPath, "referenceproject")))
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	params.SetInstallCommandArgs([]string{"--force-reinstall"})
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
+	params := technologies.BuildInfoBomGeneratorParams{InstallCommandArgs: []string{"--force-reinstall"}}
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(params, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -65,9 +62,8 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "setuppyproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	params.SetIsCurationCmd(true)
-	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(&params, techutils.Pip)
+	params := technologies.BuildInfoBomGeneratorParams{IsCurationCmd: true}
+	rootNode, uniqueDeps, downloadUrls, err := BuildDependencyTree(params, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.8.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -97,8 +93,7 @@ func TestPipDependencyListRequirementsFallback(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// No requirements file field specified, expect the command to use the fallback 'pip install -r requirements.txt' command
-	params := clisecurityutils.AuditBasicParams{}
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{}, techutils.Pip)
 	validatePipRequirementsProject(t, err, uniqueDeps, rootNode)
 }
 
@@ -121,9 +116,7 @@ func TestBuildPipDependencyListRequirements(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"))
 	defer cleanUp()
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	params.SetPipRequirementsFile("requirements.txt")
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pip)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{PipRequirementsFile: "requirements.txt"}, techutils.Pip)
 	assert.NoError(t, err)
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pexpect:4.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
@@ -149,8 +142,7 @@ func TestBuildPipenvDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "ptyprocess:0.7.0",
 	}
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Pipenv)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{}, techutils.Pipenv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,8 +177,7 @@ func TestBuildPoetryDependencyList(t *testing.T) {
 		PythonPackageTypeIdentifier + "pytest:5.4.3",
 	}
 	// Run getModulesDependencyTrees
-	params := clisecurityutils.AuditBasicParams{}
-	rootNode, uniqueDeps, _, err := BuildDependencyTree(&params, techutils.Poetry)
+	rootNode, uniqueDeps, _, err := BuildDependencyTree(technologies.BuildInfoBomGeneratorParams{}, techutils.Poetry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,9 +247,9 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			}
 
 			// Setting scan params
-			params := (&clisecurityutils.AuditBasicParams{}).SetSkipAutoInstall(true)
+			params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
 			if test.technology == techutils.Pip {
-				params.SetPipRequirementsFile("requirements.txt")
+				params.PipRequirementsFile = "requirements.txt"
 			}
 
 			if test.installBeforeFetchingInitialDeps {

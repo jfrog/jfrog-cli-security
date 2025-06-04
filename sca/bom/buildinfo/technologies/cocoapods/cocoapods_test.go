@@ -14,7 +14,6 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -44,7 +43,7 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
 
-	auditBasicParams := (&xrayutils.AuditBasicParams{}).SetServerDetails(server)
+	auditBasicParams := technologies.BuildInfoBomGeneratorParams{ServerDetails: server}
 	rootNode, uniqueDeps, err := BuildDependencyTree(auditBasicParams)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "First is actual, Second is Expected")

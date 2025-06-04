@@ -35,9 +35,9 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
-	treeDepsParam := createTreeDepsParam(params)
+	treeDepsParam := createTreeDepsParam(&params)
 
-	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(params)
+	clearResolutionServerFunc, err := configNpmResolutionServerIfNeeded(&params)
 	if err != nil {
 		err = fmt.Errorf("failed while configuring a resolution server: %s", err.Error())
 		return
@@ -49,7 +49,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	}()
 
 	// Calculate npm dependencies
-	dependenciesMap, err := biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall())
+	dependenciesMap, err := biutils.CalculateDependenciesMap(npmExecutablePath, currentDir, packageInfo.BuildInfoModuleId(), treeDepsParam, log.Logger, params.SkipAutoInstall)
 	if err != nil {
 		log.Info("Used npm version:", npmVersion.GetVersion())
 		return
@@ -65,34 +65,27 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 }
 
 // Generates a .npmrc file to configure an Artifactory server as the resolver server.
-func configNpmResolutionServerIfNeeded(params technologies.BuildInfoBomGeneratorParams) (clearResolutionServerFunc func() error, err error) {
+func configNpmResolutionServerIfNeeded(params *technologies.BuildInfoBomGeneratorParams) (clearResolutionServerFunc func() error, err error) {
 	// If we don't have an artifactory repo's name we don't need to configure any Artifactory server as resolution server
-	if params.DepsRepo() == "" {
+	if params.DependenciesRepository == "" {
 		return
 	}
 
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return
-	}
-
-	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(serverDetails, params.DepsRepo())
+	clearResolutionServerFunc, err = npm.SetArtifactoryAsResolutionServer(params.ServerDetails, params.DependenciesRepository)
 	return
 }
 
-func createTreeDepsParam(params technologies.BuildInfoBomGeneratorParams) biutils.NpmTreeDepListParam {
+func createTreeDepsParam(params *technologies.BuildInfoBomGeneratorParams) biutils.NpmTreeDepListParam {
 	if params == nil {
 		return biutils.NpmTreeDepListParam{
 			Args: addIgnoreScriptsFlag([]string{}),
 		}
 	}
 	npmTreeDepParam := biutils.NpmTreeDepListParam{
-		Args:               addIgnoreScriptsFlag(params.Args()),
-		InstallCommandArgs: params.InstallCommandArgs(),
-	}
-	if npmParams, ok := params.(utils.AuditNpmParams); ok {
-		npmTreeDepParam.IgnoreNodeModules = npmParams.NpmIgnoreNodeModules()
-		npmTreeDepParam.OverwritePackageLock = npmParams.NpmOverwritePackageLock()
+		Args:                 addIgnoreScriptsFlag(params.Args),
+		InstallCommandArgs:   params.InstallCommandArgs,
+		IgnoreNodeModules:    params.NpmIgnoreNodeModules,
+		OverwritePackageLock: params.NpmOverwritePackageLock,
 	}
 	return npmTreeDepParam
 }

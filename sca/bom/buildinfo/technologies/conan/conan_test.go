@@ -11,7 +11,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 var expectedResult = &xrayUtils.GraphNode{
@@ -44,9 +43,8 @@ func TestParseConanDependencyTree(t *testing.T) {
 func TestBuildDependencyTree(t *testing.T) {
 	dir, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "conan"))
 	defer cleanUp()
-	params := &utils.AuditBasicParams{}
-	params.SetConanProfile(filepath.Join(dir, "profile"))
-	graph, uniqueDeps, err := BuildDependencyTree(params)
+	params := technologies.BuildInfoBomGeneratorParams{}
+	graph, uniqueDeps, err := BuildDependencyTree(*params.SetConanProfile(filepath.Join(dir, "profile")))
 	assert.NoError(t, err)
 	if !tests.CompareTree(expectedResult, graph[0]) {
 		t.Errorf("expected %+v, got: %+v", expectedResult.Nodes, graph)

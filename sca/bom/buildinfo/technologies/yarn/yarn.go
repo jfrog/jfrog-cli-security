@@ -13,7 +13,6 @@ import (
 	bibuildutils "github.com/jfrog/build-info-go/build/utils"
 	"github.com/jfrog/gofrog/version"
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/yarn"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/ioutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -59,7 +58,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return
 	}
 
-	installRequired, err := isInstallRequired(currentDir, params.InstallCommandArgs(), params.SkipAutoInstall())
+	installRequired, err := isInstallRequired(currentDir, params.InstallCommandArgs, params.SkipAutoInstall)
 	if err != nil {
 		return
 	}
@@ -73,7 +72,7 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	}
 
 	// Calculate Yarn dependencies
-	dependenciesMap, root, err := bibuildutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger, params.AllowPartialResults())
+	dependenciesMap, root, err := bibuildutils.GetYarnDependencies(executablePath, currentDir, packageInfo, log.Logger, params.AllowPartialResults)
 	if err != nil {
 		return
 	}
@@ -93,10 +92,10 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 // Sets up Artifactory server configurations for dependency resolution, if such were provided by the user.
 // Executes the user's 'install' command or a default 'install' command if none was specified.
 func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBomGeneratorParams, curWd, yarnExecPath string) (err error) {
-	depsRepo := params.DepsRepo()
+	depsRepo := params.DependenciesRepository
 	if depsRepo == "" {
 		// Run install without configuring an Artifactory server
-		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs())
+		return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs)
 	}
 
 	executableYarnVersion, err := bibuildutils.GetVersion(yarnExecPath, curWd)
@@ -110,20 +109,13 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		return
 	}
 
-	var serverDetails *config.ServerDetails
-	serverDetails, err = params.ServerDetails()
-	if err != nil {
-		err = fmt.Errorf("failed to get server details while building yarn dependency tree: %s", err.Error())
-		return
-	}
-
 	// If an Artifactory resolution repository was provided we first configure to resolve from it and only then run the 'install' command
 	restoreYarnrcFunc, err := ioutils.BackupFile(filepath.Join(curWd, yarn.YarnrcFileName), yarn.YarnrcBackupFileName)
 	if err != nil {
 		return
 	}
 
-	registry, repoAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(serverDetails, depsRepo)
+	registry, repoAuthIdent, npmAuthToken, err := yarn.GetYarnAuthDetails(params.ServerDetails, depsRepo)
 	if err != nil {
 		err = errors.Join(err, restoreYarnrcFunc())
 		return
@@ -142,8 +134,8 @@ func configureYarnResolutionServerAndRunInstall(params technologies.BuildInfoBom
 		err = errors.Join(err, yarn.RestoreConfigurationsFromBackup(backupEnvMap, restoreYarnrcFunc))
 	}()
 
-	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", serverDetails.Url, depsRepo))
-	return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs())
+	log.Info(fmt.Sprintf("Resolving dependencies from '%s' from repo '%s'", params.ServerDetails.Url, depsRepo))
+	return runYarnInstallAccordingToVersion(curWd, yarnExecPath, params.InstallCommandArgs)
 }
 
 // We verify the project's installation status by examining the presence of the yarn.lock file and the presence of an installation command provided by the user.
