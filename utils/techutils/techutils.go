@@ -44,10 +44,11 @@ const (
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
 	NoTech    Technology = ""
+	Gem       Technology = "gem"
 )
 const Pypi = "pypi"
 
-var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.String(), Pnpm.String(), Yarn.String(), Go.String(), Pip.String(), Pipenv.String(), Poetry.String(), Nuget.String(), Dotnet.String(), Docker.String(), Oci.String(), Conan.String()}
+var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.String(), Pnpm.String(), Yarn.String(), Go.String(), Pip.String(), Pipenv.String(), Poetry.String(), Nuget.String(), Dotnet.String(), Docker.String(), Oci.String(), Conan.String(), Gem.String()}
 
 type CodeLanguage string
 
@@ -216,6 +217,11 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{"Package.swift", "Package.resolved"},
 		formal:             "Swift",
 		packageTypeId:      "swift://",
+	},
+	Gem: {
+		indicators:         []string{"Gemfile"},
+		packageDescriptors: []string{"Gemfile"},
+		formal:             "gem",
 	},
 }
 
