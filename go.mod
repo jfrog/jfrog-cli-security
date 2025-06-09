@@ -1,6 +1,8 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.23.7
+go 1.24.2
+
+toolchain go1.24.3
 
 require (
 	github.com/beevik/etree v1.4.0
@@ -111,11 +113,17 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250603084355-e6f8fcd8ff6b
+replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250606121944-5c0f425fc4ca
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250603091014-12d19a1a5331
+// replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250603092020-012c618b63dd
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250609140436-3a07b64f58c8
+
+// replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
+
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250609140724-c66141653c34
+
+// replace github.com/jfrog/jfrog-cli-artifactory => ../jfrog-cli-artifactory
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
