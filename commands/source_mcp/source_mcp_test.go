@@ -12,6 +12,7 @@ import (
 )
 
 func TestRunSourceMcpHappyFlow(t *testing.T) {
+	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	scanner, init_error := jas.NewJasScanner(&config.ServerDetails{
 		Url:      *configTests.JfrogUrl,
 		Password: *configTests.JfrogPassword,
