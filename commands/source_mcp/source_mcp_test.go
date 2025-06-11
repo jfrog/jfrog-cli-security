@@ -5,18 +5,24 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRunSourceMcpHappyFlow(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
+	scanner, init_error := jas.NewJasScanner(&config.ServerDetails{
+		Url:      *configTests.JfrogUrl,
+		Password: *configTests.JfrogPassword,
+		User:     *configTests.JfrogUser})
+	assert.NoError(t, init_error)
 	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
 	input_buffer := *bytes.NewBufferString(query)
 	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
 	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
+	t.Log(scanner.ServerDetails)
 	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 
 	mcp_cmd := McpCommand{
