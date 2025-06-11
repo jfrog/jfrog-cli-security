@@ -14,9 +14,9 @@ import (
 func TestRunSourceMcpHappyFlow(t *testing.T) {
 	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
 	scanner, init_error := jas.NewJasScanner(&config.ServerDetails{
-		Url:      *configTests.JfrogUrl,
-		Password: *configTests.JfrogPassword,
-		User:     *configTests.JfrogUser})
+		Url:         *configTests.JfrogUrl,
+		AccessToken: *configTests.JfrogAccessToken,
+	})
 	assert.NoError(t, init_error)
 	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
