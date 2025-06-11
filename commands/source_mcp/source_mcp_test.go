@@ -22,7 +22,6 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 	input_buffer := *bytes.NewBufferString(query)
 	output_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
 	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
-	t.Log(scanner.ServerDetails)
 	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 
 	mcp_cmd := McpCommand{
