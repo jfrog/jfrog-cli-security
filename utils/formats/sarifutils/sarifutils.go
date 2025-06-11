@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	OriginSarifPropertyKey          = "origin"
 	WatchSarifPropertyKey           = "watch"
 	PoliciesSarifPropertyKey        = "policies"
 	JasIssueIdSarifPropertyKey      = "issueId"
@@ -19,6 +20,15 @@ const (
 )
 
 // Specific JFrog Sarif Utils
+
+func GetRuleOrigin(rule *sarif.ReportingDescriptor) (origin string) {
+	if originProperty, ok := rule.Properties[OriginSarifPropertyKey]; ok {
+		if originValue, ok := originProperty.(string); ok {
+			return originValue
+		}
+	}
+	return
+}
 
 func GetResultWatches(result *sarif.Result) (watches string) {
 	if watchesProperty, ok := result.Properties[WatchSarifPropertyKey]; ok {
