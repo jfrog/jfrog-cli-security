@@ -867,7 +867,7 @@ func ToPackageRef(compName, version, packageType string) (output string) {
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id
 func PurlToXrayComponentId(purl string) (xrayComponentId string) {
 	compName, compVersion, compType := SplitPackageURL(purl)
-	return ToXrayComponentId(compName, compVersion, CdxPackageTypeToXrayPackageType(compType))
+	return ToXrayComponentId(CdxPackageTypeToXrayPackageType(compType), compName, compVersion)
 }
 
 func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
