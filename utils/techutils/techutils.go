@@ -107,7 +107,6 @@ var cdxPackageTypes = map[string]string{
 	"nuget":    "nuget",
 	"generic":  "generic",
 	"npm":      "npm",
-	"pip":      "pypi",
 	"pypi":     "pypi",
 	"composer": "composer",
 	"go":       "golang",

@@ -721,7 +721,6 @@ func TestToCdxPackageType(t *testing.T) {
 	}{
 		{"gav to maven", "gav", "maven"},
 		{"docker to docker", "docker", "docker"},
-		{"pip to pypi", "pip", "pypi"},
 		{"go to golang", "go", "golang"},
 		{"unknown passthrough", "foobar", "foobar"},
 	}
@@ -740,7 +739,6 @@ func TestCdxPackageTypeToXrayPackageType(t *testing.T) {
 	}{
 		{"maven to gav", "maven", "gav"},
 		{"docker to docker", "docker", "docker"},
-		{"pypi to pip", "pypi", "pip"},
 		{"golang to go", "golang", "go"},
 		{"unknown passthrough", "foobar", "foobar"},
 	}

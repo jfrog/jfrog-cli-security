@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	// "github.com/jfrog/gofrog/datastructures"
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/gofrog/datastructures"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -207,27 +207,29 @@ func createFlatTree(uniqueDeps []string) *xrayUtils.GraphNode {
 
 // Collect dependencies exists in target and not in resultsToCompare
 func GetDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayUtils.GraphNode) (*DependencyTreeResult, error) {
-	if resultsToCompare == nil {
+	if resultsToCompare == nil || resultsToCompare.ScaResults == nil || resultsToCompare.ScaResults.Sbom == nil || resultsToCompare.ScaResults.Sbom.Components == nil {
 		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
+	}
+	if scanResults == nil || scanResults.ScaResults == nil || scanResults.ScaResults.Sbom == nil || scanResults.ScaResults.Sbom.Components == nil {
+		return nil, fmt.Errorf("failed to get diff dependency tree: no scan results found for target %s", scanResults.Target)
 	}
 	log.Debug(fmt.Sprintf("Comparing %s SBOM with %s to get diff", scanResults.Target, resultsToCompare.Target))
 	// Compare the dependency trees
-	// filterDepsMap := datastructures.MakeSet[string]()
-	// for _, component := range resultsToCompare.ScaResults.Components {
-	// 	filterDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
-	// }
-	// addedDepsMap := datastructures.MakeSet[string]()
-	// for _, component := range scanResults.ScaResults.Components {
-	// 	componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
-	// 	if exists := filterDepsMap.Exists(componentId); !exists {
-	// 		// Dependency in scan results but not in results to compare
-	// 		addedDepsMap.Add(componentId)
-	// 	}
-	// }
-	// diffDepTree := DependencyTreeResult{
-	// 	FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
-	// 	FullDepTrees: fullDepTrees,
-	// }
-	// return &diffDepTree, nil
-	return nil, fmt.Errorf("diff dependency tree is not implemented yet for %s", scanResults.Technology)
+	filterDepsMap := datastructures.MakeSet[string]()
+	for _, component := range *resultsToCompare.ScaResults.Sbom.Components {
+		filterDepsMap.Add(techutils.PurlToXrayComponentId(component.PackageURL))
+	}
+	addedDepsMap := datastructures.MakeSet[string]()
+	for _, component := range *scanResults.ScaResults.Sbom.Components {
+		id := techutils.PurlToXrayComponentId(component.PackageURL)
+		if exists := filterDepsMap.Exists(id); !exists {
+			// Dependency in scan results but not in results to compare
+			addedDepsMap.Add(id)
+		}
+	}
+	diffDepTree := DependencyTreeResult{
+		FlatTree:     createFlatTree(addedDepsMap.ToSlice()),
+		FullDepTrees: fullDepTrees,
+	}
+	return &diffDepTree, nil
 }
