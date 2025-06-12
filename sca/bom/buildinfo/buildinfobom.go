@@ -6,11 +6,12 @@ import (
 	"time"
 
 	// "github.com/jfrog/gofrog/datastructures"
+	"github.com/CycloneDX/cyclonedx-go"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
@@ -35,8 +36,8 @@ import (
 )
 
 type DependencyTreeResult struct {
-	FlatTree     *xrayCmdUtils.GraphNode
-	FullDepTrees []*xrayCmdUtils.GraphNode
+	FlatTree     *xrayUtils.GraphNode
+	FullDepTrees []*xrayUtils.GraphNode
 	DownloadUrls map[string]string
 }
 
@@ -56,7 +57,9 @@ func BuildDependencyTree(scan *results.TargetResults, params technologies.BuildI
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
-	// scan.SetSbom(results.DepTreeToSbom(treeResult.FullDepTrees))
+	sbom := cyclonedx.NewBOM()
+	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
+	scan.SetSbom(sbom)
 	return &treeResult, nil
 }
 
@@ -181,29 +184,29 @@ func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGenerato
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayCmdUtils.GraphNode {
-	var uniqueNodes []*xrayCmdUtils.GraphNode
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayUtils.GraphNode {
+	var uniqueNodes []*xrayUtils.GraphNode
 	for uniqueDep, nodeAttr := range uniqueDeps {
-		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
+		node := &xrayUtils.GraphNode{Id: uniqueDep}
 		if nodeAttr != nil {
 			node.Types = nodeAttr.Types
 			node.Classifier = nodeAttr.Classifier
 		}
 		uniqueNodes = append(uniqueNodes, node)
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
+	return &xrayUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
-func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
-	uniqueNodes := []*xrayCmdUtils.GraphNode{}
+func createFlatTree(uniqueDeps []string) *xrayUtils.GraphNode {
+	uniqueNodes := []*xrayUtils.GraphNode{}
 	for _, uniqueDep := range uniqueDeps {
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
+		uniqueNodes = append(uniqueNodes, &xrayUtils.GraphNode{Id: uniqueDep})
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
+	return &xrayUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
 // Collect dependencies exists in target and not in resultsToCompare
-func GetDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayCmdUtils.GraphNode) (*DependencyTreeResult, error) {
+func GetDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayUtils.GraphNode) (*DependencyTreeResult, error) {
 	if resultsToCompare == nil {
 		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
 	}

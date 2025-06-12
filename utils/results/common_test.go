@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	// "github.com/CycloneDX/cyclonedx-go"
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 
@@ -13,7 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	// xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 func TestViolationFailBuild(t *testing.T) {
@@ -810,298 +810,376 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 	}
 }
 
-// func TestDepTreeToSbom(t *testing.T) {
-// 	tests := []struct {
-// 		name         string
-// 		depTrees     []*xrayCmdUtils.GraphNode
-// 		expectedSbom *cyclonedx.BOM
-// 	}{
-// 		{
-// 			name:         "no deps",
-// 			depTrees:     []*xrayCmdUtils.GraphNode{},
-// 			expectedSbom: cyclonedx.NewBOM(),
-// 		},
-// 		{
-// 			name: "one tree with one node",
-// 			depTrees: []*xrayCmdUtils.GraphNode{
-// 				{
-// 					Id:    "root",
-// 					Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://A:1.0.1"}},
-// 				},
-// 			},
-// 			expectedSbom: &cyclonedx.BOM{
-// 				Components: &[]cyclonedx.Component{
-// 					{
-// 						BOMRef:  "npm:A:1.0.1",
-// 						Name:    "A",
-// 						Version: "1.0.1",
-// 						Type:    "library",
-// 					},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			name: "one tree with multiple nodes",
-// 			depTrees: []*xrayCmdUtils.GraphNode{
-// 				{
-// 					Id: "root",
-// 					Nodes: []*xrayCmdUtils.GraphNode{
-// 						{
-// 							Id:    "npm://A:1.0.1",
-// 							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
-// 						},
-// 						{
-// 							Id:    "npm://D:2.0.0",
-// 							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://C:1.0.1"}},
-// 						},
-// 						{
-// 							Id: "npm://B:1.0.0",
-// 						},
-// 					},
-// 				},
-// 			},
-// 			expectedSbom: &cyclonedx.BOM{
-// 				Components: &[]cyclonedx.Component{
-// 					{
-// 						// Direct
-// 						PackageURL: "pkg:npm/A@1.0.1",
-// 						BOMRef:    "npm:A:1.0.1",
-// 						Name:   "A",
-// 						Version: "1.0.1",
-// 						Type: "library",
-// 					},
-// 					{
-// 						// Direct
-// 						PackageURL: "pkg:npm/B@1.0.0",
-// 						BOMRef:    "npm:B:1.0.0",
-// 						Name:   "B",
-// 						Version: "1.0.0",
-// 						Type: "library",
-// 					},
-// 					{
-// 						// Indirect
-// 						PackageURL: "pkg:npm/C@1.0.1",
-// 						BOMRef:    "npm:C:1.0.1",
-// 						Name:   "C",
-// 						Version: "1.0.1",
-// 						Type: "library",
-// 					},
-// 					{
-// 						// Direct
-// 						PackageURL: "pkg:npm/D@2.0.0",
-// 						BOMRef:    "npm:D:2.0.0",
-// 						Name:   "D",
-// 						Version: "2.0.0",
-// 						Type: "library",
-// 					},
-// 				},
-// 				Dependencies: &[]cyclonedx.Dependency{
-// 					{
-// 						Ref: "npm:A:1.0.1",
-// 						Dependencies: &[]string{"npm:B:1.0.0", "npm:C:1.0.1"},
-// 					},
-// 					{
-// 						Ref: "npm:D:2.0.0",
-// 						Dependencies: &[]string{"npm:C:1.0.1"},
-// 					},
-// 					{
-// 						Ref: "npm:B:1.0.0",
-// 						Dependencies: &[]string{},
-// 					},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			name: "multiple trees",
-// 			depTrees: []*xrayCmdUtils.GraphNode{
-// 				{
-// 					Id: "root",
-// 					Nodes: []*xrayCmdUtils.GraphNode{
-// 						{
-// 							Id:    "npm://A:1.0.1",
-// 							Nodes: []*xrayCmdUtils.GraphNode{{Id: "go://B:1.0.0"}},
-// 						},
-// 						{
-// 							Id: "npm://C:1.0.1",
-// 						},
-// 						{
-// 							Id: "npm://D:1.0.0",
-// 						},
-// 					},
-// 				},
-// 				{
-// 					Id: "root",
-// 					Nodes: []*xrayCmdUtils.GraphNode{
-// 						{
-// 							Id:    "npm://A:2.0.1",
-// 							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}, {Id: "npm://D:1.2.3"}},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			expectedSbom: Sbom{
-// 				Components: []SbomEntry{
-// 					{
-// 						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "D", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
-// 					},
-// 					{
-// 						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
-// 					},
-// 					{
-// 						Component: "D", Version: "1.2.3", Type: "npm", XrayType: "npm", Direct: false,
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
+func TestDepTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		depTrees     []*xrayUtils.GraphNode
+		expectedSbom *cyclonedx.BOM
+	}{
+		{
+			name:         "no deps",
+			depTrees:     []*xrayUtils.GraphNode{},
+			expectedSbom: cyclonedx.NewBOM(),
+		},
+		{
+			name: "one tree with one node",
+			depTrees: []*xrayUtils.GraphNode{
+				{
+					Id:    "root",
+					Nodes: []*xrayUtils.GraphNode{{Id: "npm://A:1.0.1"}},
+				},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:  "npm:A:1.0.1",
+						Name:    "A",
+						Version: "1.0.1",
+						Type:    "library",
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			depTrees: []*xrayUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id:    "npm://D:2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://C:1.0.1"}},
+						},
+						{
+							Id: "npm://B:1.0.0",
+						},
+					},
+				},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						// Direct
+						PackageURL: "pkg:npm/A@1.0.1",
+						BOMRef:     "npm:A:1.0.1",
+						Name:       "A",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						// Direct
+						PackageURL: "pkg:npm/B@1.0.0",
+						BOMRef:     "npm:B:1.0.0",
+						Name:       "B",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:npm/C@1.0.1",
+						BOMRef:     "npm:C:1.0.1",
+						Name:       "C",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						// Direct
+						PackageURL: "pkg:npm/D@2.0.0",
+						BOMRef:     "npm:D:2.0.0",
+						Name:       "D",
+						Version:    "2.0.0",
+						Type:       "library",
+					},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{
+						Ref:          "npm:A:1.0.1",
+						Dependencies: &[]string{"npm:B:1.0.0", "npm:C:1.0.1"},
+					},
+					{
+						Ref:          "npm:D:2.0.0",
+						Dependencies: &[]string{"npm:C:1.0.1"},
+					},
+					{
+						Ref:          "npm:B:1.0.0",
+						Dependencies: &[]string{},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			depTrees: []*xrayUtils.GraphNode{
+				{
+					Id: "root",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://A:1.0.1",
+							Nodes: []*xrayUtils.GraphNode{{Id: "go://B:1.0.0"}},
+						},
+						{
+							Id: "npm://C:1.0.1",
+						},
+						{
+							Id: "npm://D:1.0.0",
+						},
+					},
+				},
+				{
+					Id: "root",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://A:2.0.1",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}, {Id: "npm://D:1.2.3"}},
+						},
+					},
+				},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						// Direct
+						PackageURL: "pkg:npm/A@1.0.1",
+						BOMRef:     "npm:A:1.0.1",
+						Name:       "A",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						// Direct
+						PackageURL: "pkg:npm/A@2.0.1",
+						BOMRef:     "npm:A:2.0.1",
+						Name:       "A",
+						Version:    "2.0.1",
+						Type:       "library",
+					},
+					{
+						// Direct
+						PackageURL: "pkg:go/B@1.0.0",
+						BOMRef:     "npm:C:1.0.1",
+						Name:       "C",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:npm/B@1.0.0",
+						BOMRef:     "npm:B:1.0.0",
+						Name:       "B",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:npm/D@1.0.0",
+						BOMRef:     "npm:D:1.0.0",
+						Name:       "D",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+				},
+			},
+		},
+	}
 
-// 	for _, test := range tests {
-// 		t.Run(test.name, func(t *testing.T) {
-// 			sbom := DepTreeToSbom(test.depTrees)
-// 			SortSbom(sbom.Components)
-// 			assert.Equal(t, test.expectedSbom, sbom)
-// 		})
-// 	}
-// }
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := cyclonedx.NewBOM()
+			sbom.Components, sbom.Dependencies = DepsTreeToSbom(test.depTrees...)
+			assert.Equal(t, test.expectedSbom, sbom)
+		})
+	}
+}
 
-// func TestCompTreeToSbom(t *testing.T) {
-// 	tests := []struct {
-// 		name         string
-// 		compTrees    *xrayCmdUtils.BinaryGraphNode
-// 		expectedSbom Sbom
-// 	}{
-// 		{
-// 			name:         "no deps",
-// 			compTrees:    &xrayCmdUtils.BinaryGraphNode{},
-// 			expectedSbom: Sbom{Components: []SbomEntry{}},
-// 		},
-// 		{
-// 			name: "one tree with one node",
-// 			compTrees: &xrayCmdUtils.BinaryGraphNode{
-// 				Id:    "root",
-// 				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://A:1.0.1"}},
-// 			},
-// 			expectedSbom: Sbom{
-// 				Components: []SbomEntry{
-// 					{
-// 						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			name: "one tree rpm",
-// 			compTrees: &xrayCmdUtils.BinaryGraphNode{
-// 				Id:    "npm://root:1.0.0",
-// 				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "rpm://OS-1:A:1111:1.0.1"}},
-// 				Path:  "file.rpm",
-// 			},
-// 			expectedSbom: Sbom{
-// 				Components: []SbomEntry{
-// 					{
-// 						Component: "root", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "A", Version: "1111:1.0.1", Type: "RPM", XrayType: "rpm", Direct: false,
-// 					},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			name: "one tree with multiple nodes",
-// 			compTrees: &xrayCmdUtils.BinaryGraphNode{
-// 				Id: "root",
-// 				Nodes: []*xrayCmdUtils.BinaryGraphNode{
-// 					{
-// 						Id:    "npm://A:1.0.1",
-// 						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
-// 					},
-// 					{
-// 						Id:    "npm://D:2.0.0",
-// 						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://C:1.0.1"}},
-// 					},
-// 					{
-// 						Id: "npm://B:1.0.0",
-// 					},
-// 					{
-// 						Id: "npm://No-Version",
-// 					},
-// 				},
-// 			},
-// 			expectedSbom: Sbom{
-// 				Components: []SbomEntry{
-// 					{
-// 						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "D", Version: "2.0.0", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: false,
-// 					},
-// 				},
-// 			},
-// 		},
-// 		{
-// 			name: "multiple trees",
-// 			compTrees: &xrayCmdUtils.BinaryGraphNode{
-// 				Id: "root",
-// 				Nodes: []*xrayCmdUtils.BinaryGraphNode{
-// 					{
-// 						Id:    "npm://A:1.0.1",
-// 						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "go://B:1.0.0"}},
-// 					},
-// 					{
-// 						Id: "npm://C:1.0.1",
-// 					},
-// 					{
-// 						Id:    "npm://A:2.0.1",
-// 						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
-// 					},
-// 				},
-// 			},
-// 			expectedSbom: Sbom{
-// 				Components: []SbomEntry{
-// 					{
-// 						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-// 					},
-// 					{
-// 						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
-// 					},
-// 					{
-// 						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
+func TestCompTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name         string
+		compTrees    *xrayUtils.BinaryGraphNode
+		expectedSbom *cyclonedx.BOM
+	}{
+		{
+			name:         "no deps",
+			compTrees:    &xrayUtils.BinaryGraphNode{},
+			expectedSbom: cyclonedx.NewBOM(),
+		},
+		{
+			name: "one tree with one node",
+			compTrees: &xrayUtils.BinaryGraphNode{
+				Id:    "root",
+				Nodes: []*xrayUtils.BinaryGraphNode{{Id: "npm://A:1.0.1"}},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "npm:A:1.0.1",
+						PackageURL: "pkg:npm/A@1.0.1",
+						Name:       "A",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+				},
+			},
+		},
+		{
+			name: "one tree rpm",
+			compTrees: &xrayUtils.BinaryGraphNode{
+				Id:    "npm://root:1.0.0",
+				Nodes: []*xrayUtils.BinaryGraphNode{{Id: "rpm://OS-1:A:1111:1.0.1"}},
+				Path:  "file.rpm",
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						// Indirect
+						BOMRef:     "rpm:OS-1:A:1111:1.0.1",
+						PackageURL: "pkg:rpm/OS-1/A@1111:1.0.1",
+						Name:       "A",
+						Version:    "1111:1.0.1",
+						Type:       "library",
+					},
+					{
+						// Direct
+						BOMRef:     "npm:root:1.0.0",
+						PackageURL: "pkg:npm/root@1.0.0",
+						Name:       "root",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{
+						Ref:          "npm:root:1.0.0",
+						Dependencies: &[]string{"rpm:OS-1:A:1111:1.0.1"},
+					},
+				},
+			},
+		},
+		{
+			name: "one tree with multiple nodes",
+			compTrees: &xrayUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id:    "npm://D:2.0.0",
+						Nodes: []*xrayUtils.BinaryGraphNode{{Id: "npm://C:1.0.1"}},
+					},
+					{
+						Id: "npm://B:1.0.0",
+					},
+					{
+						Id: "npm://No-Version",
+					},
+				},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						PackageURL: "pkg:npm/A@1.0.1",
+						BOMRef:     "npm:A:1.0.1",
+						Name:       "A",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						PackageURL: "pkg:npm/B@1.0.0",
+						BOMRef:     "npm:B:1.0.0",
+						Name:       "B",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+					{
+						PackageURL: "pkg:npm/D@2.0.0",
+						BOMRef:     "npm:D:2.0.0",
+						Name:       "D",
+						Version:    "2.0.0",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:npm/C@1.0.1",
+						BOMRef:     "npm:C:1.0.1",
+						Name:       "C",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple trees",
+			compTrees: &xrayUtils.BinaryGraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.BinaryGraphNode{
+					{
+						Id:    "npm://A:1.0.1",
+						Nodes: []*xrayUtils.BinaryGraphNode{{Id: "go://B:1.0.0"}},
+					},
+					{
+						Id: "npm://C:1.0.1",
+					},
+					{
+						Id:    "npm://A:2.0.1",
+						Nodes: []*xrayUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+					},
+				},
+			},
+			expectedSbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						PackageURL: "pkg:npm/A@1.0.1",
+						BOMRef:     "npm:A:1.0.1",
+						Name:       "A",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						PackageURL: "pkg:npm/A@2.0.1",
+						BOMRef:     "npm:A:2.0.1",
+						Name:       "A",
+						Version:    "2.0.1",
+						Type:       "library",
+					},
+					{
+						PackageURL: "pkg:npm/C@1.0.1",
+						BOMRef:     "npm:C:1.0.1",
+						Name:       "C",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:go/B@1.0.0",
+						BOMRef:     "go:B:1.0.0",
+						Name:       "B",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+					{
+						// Indirect
+						PackageURL: "pkg:npm/B@1.0.0",
+						BOMRef:     "npm:B:1.0.0",
+						Name:       "B",
+						Version:    "1.0.0",
+						Type:       "library",
+					},
+				},
+			},
+		},
+	}
 
-// 	for _, test := range tests {
-// 		t.Run(test.name, func(t *testing.T) {
-// 			sbom := CompTreeToSbom(test.compTrees)
-// 			SortSbom(sbom.Components)
-// 			assert.Equal(t, test.expectedSbom, sbom)
-// 		})
-// 	}
-// }
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sbom := cyclonedx.NewBOM()
+			sbom.Components, sbom.Dependencies = CompTreeToSbom(test.compTrees)
+			assert.Equal(t, test.expectedSbom, sbom)
+		})
+	}
+}

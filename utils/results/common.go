@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -18,7 +19,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	// xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
@@ -712,4 +713,12 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 		}
 	}
 	return best
+}
+
+func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	return
+}
+
+func CompTreeToSbom(trees ...*xrayUtils.BinaryGraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	return
 }
