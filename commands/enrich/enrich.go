@@ -4,19 +4,20 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/results/output"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/jfrog/jfrog-cli-security/utils/results/output"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 
 	"github.com/beevik/etree"
 	"github.com/jfrog/gofrog/parallel"
 	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
 	"github.com/jfrog/jfrog-cli-security/commands/enrich/enrichgraph"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -263,7 +264,7 @@ func (enrichCmd *EnrichCommand) createIndexerHandlerFunc(indexedFileProducer par
 				if err != nil {
 					return targetResults.AddTargetError(fmt.Errorf("%s failed to import graph: %s", logPrefix, err.Error()), false)
 				}
-				targetResults.NewScaScanResults(sca.GetScaScansStatusCode(err, *scanResults), *scanResults)
+				targetResults.NewScaScanResults(technologies.GetScaScansStatusCode(err, *scanResults), *scanResults)
 				targetResults.Technology = techutils.Technology(scanResults.ScannedPackageType)
 				return
 			}
