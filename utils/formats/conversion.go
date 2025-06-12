@@ -169,6 +169,7 @@ func ConvertToSecretsTableRow(rows []SourceCodeRow) (tableRows []secretsTableRow
 			severity:        rows[i].Severity,
 			file:            rows[i].File,
 			lineColumn:      strconv.Itoa(rows[i].StartLine) + ":" + strconv.Itoa(rows[i].StartColumn),
+			origin: 	  rows[i].Origin,
 			secret:          rows[i].Snippet,
 			tokenValidation: jasutils.TokenValidationStatus(status).ToString(),
 			tokenInfo:       info,
