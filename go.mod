@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.23.7
+go 1.24.2
 
 require (
 	github.com/beevik/etree v1.4.0
@@ -15,7 +15,7 @@ require (
 	github.com/jfrog/jfrog-cli-core/v2 v2.59.0
 	github.com/jfrog/jfrog-client-go v1.54.1
 	github.com/magiconair/properties v1.8.9
-	github.com/owenrumney/go-sarif/v2 v2.3.0
+	github.com/owenrumney/go-sarif/v3 v3.1.4
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
@@ -97,6 +97,9 @@ require (
 	github.com/vbauerster/mpb/v8 v8.9.1 // indirect
 	github.com/xanzy/go-gitlab v0.110.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/multierr v1.11.0 // indirect

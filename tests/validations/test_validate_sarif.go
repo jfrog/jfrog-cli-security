@@ -10,7 +10,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -78,51 +78,57 @@ func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabi
 		for _, result := range run.Results {
 			// If watch property exists, add to security violations or license violations else add to vulnerabilities
 			isViolations := false
-			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok {
-				isViolations = true
-				violations++
-				if !isSecurityIssue(result) {
-					licenseViolations++
-					continue
+			if result.Properties != nil {
+				if _, ok := result.Properties.Properties[sarifutils.WatchSarifPropertyKey]; ok {
+					isViolations = true
+					violations++
+					if !isSecurityIssue(result) {
+						licenseViolations++
+						continue
+					}
+					securityViolations++
+				} else {
+					vulnerabilities++
 				}
-				securityViolations++
 			} else {
 				vulnerabilities++
 			}
 
 			// Get the applicability status in the result properties (convert to string) and add count to the appropriate category
-			applicabilityProperty := result.Properties[jasutils.ApplicabilitySarifPropertyKey]
-			if applicability, ok := applicabilityProperty.(string); ok {
-				switch applicability {
-				case jasutils.Applicable.String():
-					if isViolations {
-						applicableViolationsResults++
-					} else {
-						applicableVulnerabilitiesResults++
-					}
-				case jasutils.NotApplicable.String():
-					if isViolations {
-						notApplicableViolationsResults++
-					} else {
-						notApplicableVulnerabilitiesResults++
-					}
-				case jasutils.ApplicabilityUndetermined.String():
-					if isViolations {
-						undeterminedViolationsResults++
-					} else {
-						undeterminedVulnerabilitiesResults++
-					}
-				case jasutils.NotCovered.String():
-					if isViolations {
-						notCoveredViolationsResults++
-					} else {
-						notCoveredVulnerabilitiesResults++
-					}
-				case jasutils.MissingContext.String():
-					if isViolations {
-						missingContextViolationsResults++
-					} else {
-						missingContextVulnerabilitiesResults++
+			if result.Properties != nil {
+				applicabilityProperty := result.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey]
+				if applicability, ok := applicabilityProperty.(string); ok {
+					switch applicability {
+					case jasutils.Applicable.String():
+						if isViolations {
+							applicableViolationsResults++
+						} else {
+							applicableVulnerabilitiesResults++
+						}
+					case jasutils.NotApplicable.String():
+						if isViolations {
+							notApplicableViolationsResults++
+						} else {
+							notApplicableVulnerabilitiesResults++
+						}
+					case jasutils.ApplicabilityUndetermined.String():
+						if isViolations {
+							undeterminedViolationsResults++
+						} else {
+							undeterminedVulnerabilitiesResults++
+						}
+					case jasutils.NotCovered.String():
+						if isViolations {
+							notCoveredViolationsResults++
+						} else {
+							notCoveredVulnerabilitiesResults++
+						}
+					case jasutils.MissingContext.String():
+						if isViolations {
+							missingContextViolationsResults++
+						} else {
+							missingContextVulnerabilitiesResults++
+						}
 					}
 				}
 			}
@@ -137,9 +143,13 @@ func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnera
 		for _, result := range run.Results {
 			isViolation := false
 			// JAS results may not have watch property, we should also try to infer by prefix in msg
-			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
-				isViolation = true
-				violations++
+			if result.Properties != nil {
+				if _, ok := result.Properties.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
+					isViolation = true
+					violations++
+				} else {
+					vulnerabilities++
+				}
 			} else {
 				vulnerabilities++
 			}
@@ -159,7 +169,11 @@ func countJasResults(runs []*sarif.Run) (vulnerabilities, violations int) {
 	for _, run := range runs {
 		for _, result := range run.Results {
 			// JAS results may not have watch property, we should also try to infer by prefix in msg
-			if _, ok := result.Properties[sarifutils.WatchSarifPropertyKey]; ok || strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
+			if result.Properties == nil || !strings.HasPrefix(sarifutils.GetResultMsgMarkdown(result), "Security Violation") {
+				vulnerabilities++
+				continue
+			}
+			if _, ok := result.Properties.Properties[sarifutils.WatchSarifPropertyKey]; ok {
 				violations++
 			} else {
 				vulnerabilities++
@@ -189,7 +203,7 @@ func ValidateSarifReport(t *testing.T, exactMatch bool, expected, actual *sarif.
 		if !assert.Len(t, run.Invocations, 1, "Expected exactly one invocation for run with tool name %s", run.Tool.Driver.Name) {
 			continue
 		}
-		actualRun := getRunByInvocationTargetAndToolName(sarifutils.GetInvocationWorkingDirectory(run.Invocations[0]), run.Tool.Driver.Name, actual.Runs)
+		actualRun := getRunByInvocationTargetAndToolName(sarifutils.GetInvocationWorkingDirectory(run.Invocations[0]), sarifutils.GetRunToolName(run), actual.Runs)
 		if !assert.NotNil(t, actualRun, "Expected run with tool name %s and working directory %s not found", run.Tool.Driver.Name, sarifutils.GetInvocationWorkingDirectory(run.Invocations[0])) {
 			continue
 		}
@@ -200,7 +214,7 @@ func ValidateSarifReport(t *testing.T, exactMatch bool, expected, actual *sarif.
 func getRunByInvocationTargetAndToolName(target, toolName string, content []*sarif.Run) *sarif.Run {
 	potentialRuns := sarifutils.GetRunsByWorkingDirectory(target, content...)
 	for _, run := range potentialRuns {
-		if run.Tool.Driver != nil && run.Tool.Driver.Name == toolName {
+		if sarifutils.GetRunToolName(run) == toolName {
 			return run
 		}
 	}
@@ -209,26 +223,25 @@ func getRunByInvocationTargetAndToolName(target, toolName string, content []*sar
 
 func validateSarifRun(t *testing.T, exactMatch bool, expected, actual *sarif.Run) {
 	ValidateContent(t, exactMatch,
-		PointerValidation[string]{Expected: expected.Tool.Driver.InformationURI, Actual: actual.Tool.Driver.InformationURI, Msg: fmt.Sprintf("Run tool information URI mismatch for tool %s", expected.Tool.Driver.Name)},
-		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", expected.Tool.Driver.Name)},
+		PointerValidation[string]{Expected: expected.Tool.Driver.InformationURI, Actual: actual.Tool.Driver.InformationURI, Msg: fmt.Sprintf("Run tool information URI mismatch for tool %s", sarifutils.GetRunToolName(expected))},
+		PointerValidation[string]{Expected: expected.Tool.Driver.Version, Actual: actual.Tool.Driver.Version, Msg: fmt.Sprintf("Run tool version mismatch for tool %s", sarifutils.GetRunToolName(expected))},
 	)
-	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, expected.Tool.Driver.Name, "run")
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, sarifutils.GetRunToolName(expected), "run")
 	// validate rules
 	for _, expectedRule := range expected.Tool.Driver.Rules {
-		rule, err := actual.GetRuleById(expectedRule.ID)
-		if !(assert.NoError(t, err, fmt.Sprintf("Run tool %s: Expected rule with ID %s not found", expected.Tool.Driver.Name, expectedRule.ID)) ||
-			assert.NotNil(t, rule, fmt.Sprintf("Run tool %s: Expected rule with ID %s not found", expected.Tool.Driver.Name, expectedRule.ID))) {
+		rule := sarifutils.GetRuleById(actual, sarifutils.GetRuleId(expectedRule))
+		if assert.NotNil(t, rule, fmt.Sprintf("Run tool %s: Expected rule with ID %s not found", sarifutils.GetRunToolName(expected), sarifutils.GetRuleId(expectedRule))) {
 			continue
 		}
-		validateSarifRule(t, exactMatch, expected.Tool.Driver.Name, expectedRule, rule)
+		validateSarifRule(t, exactMatch, sarifutils.GetRunToolName(expected), expectedRule, rule)
 	}
 	// validate results
 	for _, expectedResult := range expected.Results {
 		result := getResultByResultId(expectedResult, actual.Results)
-		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found in %v", expected.Tool.Driver.Name, sarifutils.GetResultRuleId(expectedResult), getResultsRuleIds(actual.Results))) {
+		if !assert.NotNil(t, result, fmt.Sprintf("Run tool %s: Expected result with rule ID %s not found in %v", sarifutils.GetRunToolName(expected), sarifutils.GetResultRuleId(expectedResult), getResultsRuleIds(actual.Results))) {
 			continue
 		}
-		validateSarifResult(t, exactMatch, expected.Tool.Driver.Name, expectedResult, result)
+		validateSarifResult(t, exactMatch, sarifutils.GetRunToolName(expected), expectedResult, result)
 	}
 }
 
@@ -242,14 +255,14 @@ func getResultsRuleIds(results []*sarif.Result) []string {
 
 func validateSarifRule(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.ReportingDescriptor) {
 	ValidateContent(t, exactMatch,
-		StringValidation{Expected: sarifutils.GetRuleFullDescription(expected), Actual: sarifutils.GetRuleFullDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description mismatch for rule %s", toolName, expected.ID)},
-		StringValidation{Expected: sarifutils.GetRuleFullDescriptionMarkdown(expected), Actual: sarifutils.GetRuleFullDescriptionMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description markdown mismatch for rule %s", toolName, expected.ID)},
-		StringValidation{Expected: sarifutils.GetRuleShortDescription(expected), Actual: sarifutils.GetRuleShortDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule short description mismatch for rule %s", toolName, expected.ID)},
-		StringValidation{Expected: sarifutils.GetRuleHelp(expected), Actual: sarifutils.GetRuleHelp(actual), Msg: fmt.Sprintf("Run tool %s: Rule help mismatch for rule %s", toolName, expected.ID)},
-		StringValidation{Expected: sarifutils.GetRuleHelpMarkdown(expected), Actual: sarifutils.GetRuleHelpMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule help markdown mismatch for rule %s", toolName, expected.ID)},
+		StringValidation{Expected: sarifutils.GetRuleFullDescription(expected), Actual: sarifutils.GetRuleFullDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description mismatch for rule %s", toolName, sarifutils.GetRuleId(expected))},
+		StringValidation{Expected: sarifutils.GetRuleFullDescriptionMarkdown(expected), Actual: sarifutils.GetRuleFullDescriptionMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule full description markdown mismatch for rule %s", toolName, sarifutils.GetRuleId(expected))},
+		StringValidation{Expected: sarifutils.GetRuleShortDescription(expected), Actual: sarifutils.GetRuleShortDescription(actual), Msg: fmt.Sprintf("Run tool %s: Rule short description mismatch for rule %s", toolName, sarifutils.GetRuleId(expected))},
+		StringValidation{Expected: sarifutils.GetRuleHelp(expected), Actual: sarifutils.GetRuleHelp(actual), Msg: fmt.Sprintf("Run tool %s: Rule help mismatch for rule %s", toolName, sarifutils.GetRuleId(expected))},
+		StringValidation{Expected: sarifutils.GetRuleHelpMarkdown(expected), Actual: sarifutils.GetRuleHelpMarkdown(actual), Msg: fmt.Sprintf("Run tool %s: Rule help markdown mismatch for rule %s", toolName, sarifutils.GetRuleId(expected))},
 	)
 	// validate properties
-	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, fmt.Sprintf("rule %s", expected.ID))
+	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, fmt.Sprintf("rule %s", sarifutils.GetRuleId(expected)))
 }
 
 func getResultByResultId(expected *sarif.Result, actual []*sarif.Result) *sarif.Result {
@@ -296,7 +309,7 @@ func hasSameLocations(expected, actual *sarif.Result) bool {
 
 func validateSarifResult(t *testing.T, exactMatch bool, toolName string, expected, actual *sarif.Result) {
 	ValidateContent(t, exactMatch,
-		StringValidation{Expected: sarifutils.GetResultLevel(expected), Actual: sarifutils.GetResultLevel(actual), Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, sarifutils.GetResultRuleId(expected))},
+		StringValidation{Expected: expected.Level, Actual: actual.Level, Msg: fmt.Sprintf("Run tool %s: Result level mismatch for rule %s", toolName, sarifutils.GetResultRuleId(expected))},
 	)
 	// validate properties
 	validateSarifProperties(t, exactMatch, expected.Properties, actual.Properties, toolName, fmt.Sprintf("result rule %s", sarifutils.GetResultRuleId(expected)))
@@ -318,9 +331,21 @@ func getLocationById(expected *sarif.Location, actual []*sarif.Location) *sarif.
 	return nil
 }
 
-func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual map[string]interface{}, toolName, id string) {
-	for key, expectedValue := range expected {
-		actualValue, ok := actual[key]
+func validateSarifProperties(t *testing.T, exactMatch bool, expected, actual *sarif.PropertyBag, toolName, id string) {
+	expectedMap := expected.Properties
+	actualMap := actual.Properties
+	if expectedMap == nil && actualMap == nil {
+		return
+	}
+	if expectedMap == nil || actualMap == nil {
+		assert.Fail(t, fmt.Sprintf("Run tool %s: Expected properties not found for %s", toolName, id))
+		return
+	}
+	if !assert.Len(t, actualMap, len(expectedMap), fmt.Sprintf("Run tool %s: Expected properties count mismatch for %s", toolName, id)) {
+		return
+	}
+	for key, expectedValue := range expectedMap {
+		actualValue, ok := actualMap[key]
 		if !assert.True(t, ok, fmt.Sprintf("Run tool %s: Expected property with key %s not found for %s", toolName, key, id)) {
 			continue
 		}

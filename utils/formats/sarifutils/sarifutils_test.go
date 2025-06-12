@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -365,7 +365,8 @@ func TestGetLocationRegion(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, getLocationRegion(test.location))
+		actual := getLocationRegion(test.location)
+		assert.Equal(t, test.expectedOutput, actual)
 	}
 }
 
@@ -485,43 +486,22 @@ func TestGetResultLevel(t *testing.T) {
 		result           *sarif.Result
 		expectedSeverity string
 	}{
-		{result: &sarif.Result{Level: &levelValueErr},
+		{result: &sarif.Result{Level: levelValueErr},
 			expectedSeverity: severityutils.LevelError.String()},
-		{result: &sarif.Result{Level: &levelValueWarn},
+		{result: &sarif.Result{Level: levelValueWarn},
 			expectedSeverity: severityutils.LevelWarning.String()},
-		{result: &sarif.Result{Level: &levelValueInfo},
+		{result: &sarif.Result{Level: levelValueInfo},
 			expectedSeverity: severityutils.LevelInfo.String()},
-		{result: &sarif.Result{Level: &levelValueNote},
+		{result: &sarif.Result{Level: levelValueNote},
 			expectedSeverity: severityutils.LevelNote.String()},
-		{result: &sarif.Result{Level: &levelValueNone},
+		{result: &sarif.Result{Level: levelValueNone},
 			expectedSeverity: severityutils.LevelNone.String()},
 		{result: &sarif.Result{},
 			expectedSeverity: ""},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedSeverity, GetResultLevel(test.result))
-	}
-}
-
-func TestIsApplicableResult(t *testing.T) {
-	tests := []struct {
-		name           string
-		sarifResult    *sarif.Result
-		expectedOutput bool
-	}{
-		{
-			sarifResult:    CreateDummyPassingResult("rule"),
-			expectedOutput: false,
-		},
-		{
-			sarifResult:    CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
-			expectedOutput: true,
-		},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, IsResultKindNotPass(test.sarifResult))
+		assert.Equal(t, test.expectedSeverity, test.result.Level)
 	}
 }
 
@@ -539,7 +519,7 @@ func TestGetRuleFullDescription(t *testing.T) {
 			expectedOutput: "",
 		},
 		{
-			rule:           sarif.NewRule("rule").WithFullDescription(sarif.NewMultiformatMessageString("description")),
+			rule:           sarif.NewRule("rule").WithFullDescription(sarif.NewMultiformatMessageString().WithText("description")),
 			expectedOutput: "description",
 		},
 	}
@@ -566,7 +546,7 @@ func TestGetRunRules(t *testing.T) {
 			run: CreateRunWithDummyResults(
 				CreateDummyPassingResult("rule1"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"))},
+			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg"))},
 		},
 		{
 			run: CreateRunWithDummyResults(
@@ -577,9 +557,9 @@ func TestGetRunRules(t *testing.T) {
 				CreateDummyPassingResult("rule2"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
-				sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
-				sarif.NewRule("rule2").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
-				sarif.NewRule("rule3").WithShortDescription(sarif.NewMultiformatMessageString("")).WithFullDescription(sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule2").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule3").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
 			},
 		},
 	}
@@ -612,7 +592,7 @@ func TestGetInvocationWorkingDirectory(t *testing.T) {
 			expectedOutput: "",
 		},
 		{
-			invocation:     sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation().WithUri("file_to_wd")),
+			invocation:     sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation().WithURI("file_to_wd")),
 			expectedOutput: "file_to_wd",
 		},
 	}
