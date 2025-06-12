@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -228,7 +229,7 @@ func (sc *CmdResultsSarifConverter) ParseLicenses(_ results.ScanTarget, _ result
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
 	return
 }

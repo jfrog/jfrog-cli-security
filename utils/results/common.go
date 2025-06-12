@@ -4,11 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -21,7 +18,8 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	// xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -695,101 +693,6 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 		}
 	}
 	return true, nil
-}
-
-func CompTreeToSbom(graph *xrayCmdUtils.BinaryGraphNode) (sbom Sbom) {
-	if graph == nil {
-		return
-	}
-	// Recursively parse the tree
-	parsed := map[string]SbomEntry{}
-	if strings.HasSuffix(graph.Path, ".rpm") {
-		// For rmp package manager, root is also included in the graph
-		parseBinaryNode(graph, parsed, true)
-	} else {
-		for _, node := range graph.Nodes {
-			parseBinaryNode(node, parsed, true)
-		}
-	}
-
-	sbom.Components = maps.Values(parsed)
-	return
-}
-
-func DepTreeToSbom(fullDepTrees []*xrayCmdUtils.GraphNode) (sbom Sbom) {
-	if len(fullDepTrees) == 0 {
-		// No dependencies
-		return
-	}
-	parsed := map[string]SbomEntry{}
-	// Recursively parse the tree
-	for _, projectTree := range fullDepTrees {
-		// First node is the root (project node), skip it
-		for _, directNode := range projectTree.Nodes {
-			// First node is direct, the rest are transitive
-			parseNode(directNode, parsed, true)
-		}
-	}
-	sbom.Components = maps.Values(parsed)
-	return
-}
-
-func parseNode(node *xrayCmdUtils.GraphNode, parsed map[string]SbomEntry, direct bool) {
-	if parsedEntry, exists := parsed[node.Id]; exists {
-		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
-		if direct {
-			parsedEntry.Direct = true
-			parsed[node.Id] = parsedEntry
-		}
-		return
-	}
-	// If the node is not parsed yet, parse it and its children
-	component, version, xrayPackageType := techutils.SplitComponentIdRaw(node.Id)
-	entry := SbomEntry{Component: component, Version: version, Type: techutils.ConvertXrayPackageType(xrayPackageType), XrayType: xrayPackageType, Direct: direct}
-	parsed[node.Id] = entry
-	for _, child := range node.Nodes {
-		parseNode(child, parsed, false)
-	}
-}
-
-func parseBinaryNode(node *xrayCmdUtils.BinaryGraphNode, parsed map[string]SbomEntry, direct bool) {
-	if parsedEntry, exists := parsed[node.Id]; exists {
-		// Node is parsed already, if it's direct, update the flag (can be indirect from another dep, but also direct at the project level)
-		if direct {
-			parsedEntry.Direct = true
-			parsed[node.Id] = parsedEntry
-		}
-		return
-	}
-	// If the node is not parsed yet, parse it and its children
-	component, version, xrayPackageType := techutils.SplitComponentIdRaw(node.Id)
-	if version != "" {
-		// For docker images, binary graph also contains layer information not relevant for the sbom
-		entry := SbomEntry{Component: component, Version: version, Type: techutils.ConvertXrayPackageType(xrayPackageType), XrayType: xrayPackageType, Direct: direct}
-		parsed[node.Id] = entry
-	}
-	for _, child := range node.Nodes {
-		parseBinaryNode(child, parsed, false)
-	}
-}
-
-func SortSbom(components []SbomEntry) {
-	sort.Slice(components, func(i, j int) bool {
-		if components[i].Direct == components[j].Direct {
-			if components[i].Component == components[j].Component {
-				if components[i].Version == components[j].Version {
-					// Last order by type
-					return components[i].Type < components[j].Type
-				}
-				// Third order by version
-				return components[i].Version < components[j].Version
-			}
-			// Second order by component
-			return components[i].Component < components[j].Component
-		}
-		// First order by direct components
-		return components[i].Direct
-	})
 }
 
 func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {

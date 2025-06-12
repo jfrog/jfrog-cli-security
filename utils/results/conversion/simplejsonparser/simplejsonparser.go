@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -133,7 +134,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseLicenses(target results.ScanTarge
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in the simple-json
 	return
 }

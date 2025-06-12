@@ -2,16 +2,18 @@ package audit
 
 import (
 	"fmt"
-	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	configTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	"github.com/stretchr/testify/assert"
 
@@ -957,25 +959,30 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 							Target:     tempDirPath,
 							Technology: techutils.Pip,
 						},
-						Sbom: results.Sbom{
-							Components: []results.SbomEntry{
-								{
-									Component: "werkzeug",
-									Version:   "1.0.2",
-									Type:      "Python",
-									XrayType:  "pypi",
-								},
-								{
-									Component: "pyyaml",
-									Version:   "5.2",
-									Type:      "Python",
-									XrayType:  "pypi",
-								},
-								{
-									Component: "wasabi",
-									Version:   "1.1.3",
-									Type:      "Python",
-									XrayType:  "pypi",
+						ScaResults: &results.ScaScanResults{
+							Sbom: &cyclonedx.BOM{
+								Components: &[]cyclonedx.Component{
+									{
+										PackageURL: "pkg:pypi/werkzeug@1.0.2",
+										BOMRef:     "pypi:werkzeug@1.0.2",
+										Name:       "werkzeug",
+										Version:    "1.0.2",
+										Type:       "Python",
+									},
+									{
+										PackageURL: "pkg:pypi/pyyaml@5.2",
+										BOMRef:     "pypi:pyyaml@5.2",
+										Name:       "pyyaml",
+										Version:    "5.2",
+										Type:       "Python",
+									},
+									{
+										PackageURL: "pkg:pypi/wasabi@1.1.3",
+										BOMRef:     "pypi:wasabi@1.1.3",
+										Name:       "wasabi",
+										Version:    "1.1.3",
+										Type:       "Python",
+									},
 								},
 							},
 						},

@@ -96,19 +96,6 @@ type ScaScanResults struct {
 	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 }
 
-type SbomEntry struct {
-	Component string `json:"component"`
-	Version   string `json:"version"`
-	Type      string `json:"type"`
-	XrayType  string `json:"xray_type"`
-	// Direct dependency or transitive dependency
-	Direct bool `json:"direct"`
-}
-
-func (se SbomEntry) String() string {
-	return fmt.Sprintf("%s:%s (%s)", se.Component, se.Version, se.Type)
-}
-
 type JasScansResults struct {
 	JasVulnerabilities       JasScanResults             `json:"jas_vulnerabilities,omitempty"`
 	JasViolations            JasScanResults             `json:"jas_violations,omitempty"`
