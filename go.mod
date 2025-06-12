@@ -7,13 +7,13 @@ require (
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/gookit/color v1.5.4
-	github.com/jfrog/build-info-go v1.10.12
+	github.com/jfrog/build-info-go v1.10.14
 	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.3.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.58.7
-	github.com/jfrog/jfrog-client-go v1.53.1
+	github.com/jfrog/jfrog-cli-artifactory v0.3.2
+	github.com/jfrog/jfrog-cli-core/v2 v2.59.0
+	github.com/jfrog/jfrog-client-go v1.54.1
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v3 v3.1.4
 	github.com/stretchr/testify v1.10.0
@@ -37,7 +37,7 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/c-bata/go-prompt v0.2.5 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
-	github.com/cloudflare/circl v1.6.0 // indirect
+	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
