@@ -6,12 +6,17 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRunSourceMcpHappyFlow(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
+	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
+	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	defer mockServer.Close()
+	scanner, init_error := jas.NewJasScanner(serverDetails)
+	assert.NoError(t, init_error)
 	scanned_path := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	query := "{\"jsonrpc\": \"2.0\",  \"id\": 1, \"method\": \"initialize\", \"params\": {\"protocolVersion\": \"2024-11-05\", \"capabilities\": {}, \"clientInfo\": {\"name\": \"ExampleClient\",  \"version\": \"1.0.0\" }}}"
 	input_buffer := *bytes.NewBufferString(query)
@@ -39,8 +44,12 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 }
 
 func TestRunSourceMcpScannerError(t *testing.T) {
-	scanner, cleanUp := jas.InitJasTest(t)
-	defer cleanUp()
+	assert.NoError(t, jas.DownloadAnalyzerManagerIfNeeded(0))
+	mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: utils.EntitlementsMinVersion})
+	defer mockServer.Close()
+	scanner, init_error := jas.NewJasScanner(serverDetails)
+	assert.NoError(t, init_error)
+
 	// no such path
 	scanned_path := ""
 	input_buffer := *bytes.NewBufferString("")
