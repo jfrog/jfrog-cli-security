@@ -1,6 +1,7 @@
 package summaryparser
 
 import (
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -254,7 +255,7 @@ func (sc *CmdResultsSummaryConverter) ParseLicenses(_ results.ScanTarget, _ resu
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in the summary
 	return
 }

@@ -1,8 +1,9 @@
 package tableparser
 
 import (
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
-	"golang.org/x/exp/maps"
+	// "golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -14,13 +15,13 @@ import (
 
 type CmdResultsTableConverter struct {
 	simpleJsonConvertor *simplejsonparser.CmdResultsSimpleJsonConverter
-	sbomInfo            map[string]results.SbomEntry
+	sbomInfo            map[string]formats.SbomTableRow
 	// If supported, pretty print the output in the tables
 	pretty bool
 }
 
 func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
-	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]results.SbomEntry)}
+	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]formats.SbomTableRow)}
 }
 
 func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
@@ -30,7 +31,7 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 	}
 	return formats.ResultsTables{
 		LicensesTable: formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
-		SbomTable:     convertToSbomTableRow(maps.Values(tc.sbomInfo)),
+		// SbomTable:     convertToSbomTableRow(maps.Values(tc.sbomInfo)),
 
 		SecurityVulnerabilitiesTable:   formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.Vulnerabilities),
 		SecurityViolationsTable:        formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.SecurityViolations),
@@ -73,35 +74,35 @@ func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViola
 	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom results.Sbom) (err error) {
-	for _, entry := range sbom.Components {
-		if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
-			if entry.Direct && !parsedEntry.Direct {
-				// If the entry is direct, we want to override the existing entry
-				tc.sbomInfo[entry.String()] = entry
-			}
-			continue
-		}
-		// If the entry does not exist, we want to add it
-		tc.sbomInfo[entry.String()] = entry
-	}
+func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
+	// for _, entry := range sbom.Components {
+	// 	if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
+	// 		if entry.Direct && !parsedEntry.Direct {
+	// 			// If the entry is direct, we want to override the existing entry
+	// 			tc.sbomInfo[entry.String()] = entry
+	// 		}
+	// 		continue
+	// 	}
+	// 	// If the entry does not exist, we want to add it
+	// 	tc.sbomInfo[entry.String()] = entry
+	// }
 	return
 }
 
-func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
-	results.SortSbom(rows)
-	for _, entry := range rows {
-		relation := "Direct"
-		if !entry.Direct {
-			relation = "Transitive"
-		}
-		tableRows = append(tableRows, formats.SbomTableRow{
-			Component:   entry.Component,
-			PackageType: entry.Type,
-			Direct:      entry.Direct,
-			Version:     entry.Version,
-			Relation:    relation,
-		})
-	}
-	return
-}
+// func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
+// 	results.SortSbom(rows)
+// 	for _, entry := range rows {
+// 		relation := "Direct"
+// 		if !entry.Direct {
+// 			relation = "Transitive"
+// 		}
+// 		tableRows = append(tableRows, formats.SbomTableRow{
+// 			Component:   entry.Component,
+// 			PackageType: entry.Type,
+// 			Direct:      entry.Direct,
+// 			Version:     entry.Version,
+// 			Relation:    relation,
+// 		})
+// 	}
+// 	return
+// }
