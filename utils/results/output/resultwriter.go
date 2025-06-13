@@ -211,11 +211,39 @@ func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTabl
 			return
 		}
 	}
+	// --- START MODIFIED BLOCK ---
 	if rw.commandResults.IncludesVulnerabilities() {
-		if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
-			return
+		// Check if the results actually contain any vulnerabilities to display.
+		// We assume 'tableContent.SecurityVulnerabilitiesTable' holds the data prepared for the table.
+		// If this isn't the right way to check count, you might need to inspect 'tableContent' or 'rw.commandResults' further.
+		vulnerabilitiesExist := len(tableContent.SecurityVulnerabilitiesTable) > 0
+
+		if !vulnerabilitiesExist {
+			// CASE 1: No vulnerabilities were found. Now check *why*.
+			attemptedTargetCount := len(rw.commandResults.Targets)
+			hasScannable := rw.commandResults.HasScannableComponents // Use the flag you added
+
+			if attemptedTargetCount > 0 && !hasScannable {
+				// Sub-case: Files were attempted, but none were scannable. Print specific message.
+				log.Output() // Add spacing for consistent formatting
+				fmt.Println("✨ Scan completed: No files of a supported type were found or scanned. ✨")
+				// Do not call PrintVulnerabilitiesTable
+			} else {
+				// Sub-case: No vulnerabilities found AND (either no files were attempted OR scannable files *were* found and clean).
+				// Let PrintVulnerabilitiesTable handle printing the standard "No vulnerable components" message.
+				if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+					return
+				}
+			}
+		} else {
+			// CASE 2: Vulnerabilities *were* found. Print the table as usual.
+			if err = PrintVulnerabilitiesTable(tableContent, rw.commandResults.CmdType, len(rw.commandResults.GetTechnologies()) > 0, rw.printExtended); err != nil {
+				return
+			}
 		}
 	}
+	// --- END MODIFIED BLOCK ---
+
 	if rw.commandResults.IncludesLicenses() {
 		if err = PrintLicensesTable(tableContent, rw.printExtended, rw.commandResults.CmdType); err != nil {
 			return

@@ -200,6 +200,10 @@ func (scanCmd *ScanCommand) indexFile(filePath string) (*xrayUtils.BinaryGraphNo
 		var e *exec.ExitError
 		if errors.As(err, &e) {
 			if e.ExitCode() == fileNotSupportedExitCode {
+
+				// --- ADDED LINE ---
+				log.Warn(fmt.Sprintf("Skipping scan for file '%s': File type not supported by JFrog Xray.", filePath))
+				// --- END ADDED LINE ---
 				log.Debug(fmt.Sprintf("File %s is not supported by Xray indexer app.", filePath))
 				return &indexerResults, nil
 			}
@@ -312,6 +316,21 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	// while the consumer uses the indexer to index those files.
 	scanCmd.prepareScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer, cmdResults)
 	scanCmd.performScanTasks(fileProducerConsumer, indexedFileProducerConsumer, &JasScanProducerConsumer)
+
+	// Initialize the flag to false by default
+	cmdResults.HasScannableComponents = false
+	// Iterate through the collected target results
+	for _, target := range cmdResults.Targets {
+		// Check if a technology was identified for the target. This implies
+		// successful indexing and that an SCA scan was likely performed or attempted.
+		// Check if Technology was identified (meaning indexing likely succeeded and scan was attempted)
+		if target.Technology != "" {
+
+			cmdResults.HasScannableComponents = true
+			// Found at least one scannable component, no need to check further
+			break
+		}
+	}
 	return
 }
 
