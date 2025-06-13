@@ -113,14 +113,17 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
+// replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go feature/support-multiple-sources
 replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250612223352-8bf50cddd4bd
 
 // replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
 
+// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 dev
 replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250612225153-44cbb944f16f
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
 
+// replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory feature/support-multiple-sources
 replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250612225735-0c71fe131507
 
 // replace github.com/jfrog/jfrog-cli-artifactory => ../jfrog-cli-artifactory
