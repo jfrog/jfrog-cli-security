@@ -860,7 +860,7 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 }
 
 func ToPackageRef(compName, version, packageType string) (output string) {
-	return fmt.Sprintf("%s:%s@%s", packageType, compName, version)
+	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
 }
 
 // Extract the component name, version and type from PackageUrl and translate it to an Xray component id

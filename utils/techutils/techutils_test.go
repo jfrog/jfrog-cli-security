@@ -838,8 +838,8 @@ func TestToPackageRef(t *testing.T) {
 		packageType string
 		expected    string
 	}{
-		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish@v0.1.2"},
-		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min@1.1.4c"},
+		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish:v0.1.2"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min:1.1.4c"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -891,9 +891,9 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min@1.1.4c"},
-		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package@1.0.0"},
-		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish@v0.1.2"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min:1.1.4c"},
+		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
+		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish:v0.1.2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -716,9 +717,149 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 }
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	parsed := datastructures.MakeSet[string]()
+	components = &[]cyclonedx.Component{}
+	dependencies = &[]cyclonedx.Dependency{}
+	for _, root := range trees {
+		components, dependencies = getDataFromNode(root, parsed, components, dependencies)
+	}
+	if len(*components) == 0 {
+		components = nil
+	}
+	if len(*dependencies) == 0 {
+		dependencies = nil
+	}
+	return
+}
+
+func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string], components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+	if parsed.Exists(node.Id) {
+		// The node was already parsed, no need to parse it again
+		return components, dependencies
+	}
+	parsed.Add(node.Id)
+	// Create a new component and add it to the sbom
+	*components = append(*components, CreateScaComponentFromXrayCompId(node.Id))
+	if len(node.Nodes) > 0 {
+		// Create a matching dependency entry describing the direct dependencies
+		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: techutils.XrayComponentIdToCdxComponentRef(node.Id), Dependencies: getNodeDirectDependencies(node)})
+	}
+	// Go through the dependencies and add them to the sbom
+	for _, dependencyNode := range node.Nodes {
+		components, dependencies = getDataFromNode(dependencyNode, parsed, components, dependencies)
+	}
+	return components, dependencies
+}
+
+func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
+	dependencies = &[]string{}
+	for _, dep := range node.Nodes {
+		*dependencies = append(*dependencies, techutils.XrayComponentIdToCdxComponentRef(dep.Id))
+	}
+	return
+}
+
+func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties ...cyclonedx.Property) (component cyclonedx.Component) {
+	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
+	component = cyclonedx.Component{
+		BOMRef:     techutils.XrayComponentIdToCdxComponentRef(xrayImpactedPackageId),
+		Type:       cyclonedx.ComponentTypeLibrary,
+		Name:       compName,
+		Version:    compVersion,
+		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
+	}
+	component.Properties = cdxutils.AppendProperties(component.Properties, properties...)
+	return
+}
+
+func CreateScaComponentFromBinaryNode(node *xrayUtils.BinaryGraphNode) (component cyclonedx.Component) {
+	// Create the component
+	component = CreateScaComponentFromXrayCompId(node.Id)
+
+	// Add license information to the component if it exists
+	licenses := cyclonedx.Licenses{}
+	for _, license := range node.Licenses {
+		if license == "" {
+			continue
+		}
+		licenses = append(licenses, cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: license}})
+	}
+	if len(licenses) > 0 {
+		component.Licenses = &licenses
+	}
+
+	// Add the path property if it exists
+	if node.Path != "" {
+		if component.Evidence == nil {
+			component.Evidence = &cyclonedx.Evidence{}
+		}
+		if component.Evidence.Occurrences == nil {
+			component.Evidence.Occurrences = &[]cyclonedx.EvidenceOccurrence{}
+		}
+		// Add the path as an occurrence
+		*component.Evidence.Occurrences = append(*component.Evidence.Occurrences, cyclonedx.EvidenceOccurrence{
+			// The path is the location of the binary
+			Location: node.Path,
+		})
+	}
+
+	if node.Sha1 == "" && node.Sha256 == "" {
+		return
+	}
+
+	// Add hashes to the component if they exist
+	hashes := []cyclonedx.Hash{}
+	if node.Sha1 != "" {
+		hashes = append(hashes, cyclonedx.Hash{Algorithm: cyclonedx.HashAlgoSHA1, Value: node.Sha1})
+	}
+	if node.Sha256 != "" {
+		hashes = append(hashes, cyclonedx.Hash{Algorithm: cyclonedx.HashAlgoSHA256, Value: node.Sha256})
+	}
+	if len(hashes) > 0 {
+		component.Hashes = &hashes
+	}
 	return
 }
 
 func CompTreeToSbom(trees ...*xrayUtils.BinaryGraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
+	parsed := datastructures.MakeSet[string]()
+	components = &[]cyclonedx.Component{}
+	dependencies = &[]cyclonedx.Dependency{}
+	for _, root := range trees {
+		components, dependencies = getDataFromBinaryNode(root, parsed, components, dependencies)
+	}
+	if len(*components) == 0 {
+		components = nil
+	}
+	if len(*dependencies) == 0 {
+		dependencies = nil
+	}
+	return
+}
+
+func getDataFromBinaryNode(node *xrayUtils.BinaryGraphNode, parsed *datastructures.Set[string], components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+	if parsed.Exists(node.Id) {
+		// The node was already parsed, no need to parse it again
+		return components, dependencies
+	}
+	parsed.Add(node.Id)
+	// Create a new component and add it to the sbom
+	*components = append(*components, CreateScaComponentFromBinaryNode(node))
+	if len(node.Nodes) > 0 {
+		// Create a matching dependency entry describing the direct dependencies
+		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: techutils.XrayComponentIdToCdxComponentRef(node.Id), Dependencies: getBinaryNodeDirectDependencies(node)})
+	}
+	// Go through the dependencies and add them to the sbom
+	for _, dependencyNode := range node.Nodes {
+		components, dependencies = getDataFromBinaryNode(dependencyNode, parsed, components, dependencies)
+	}
+	return components, dependencies
+}
+
+func getBinaryNodeDirectDependencies(node *xrayUtils.BinaryGraphNode) (dependencies *[]string) {
+	dependencies = &[]string{}
+	for _, dep := range node.Nodes {
+		*dependencies = append(*dependencies, techutils.XrayComponentIdToCdxComponentRef(dep.Id))
+	}
 	return
 }
