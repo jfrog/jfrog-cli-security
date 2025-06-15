@@ -237,7 +237,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.IsDirectDependency(bom.Components, bom.Dependencies, component.BOMRef),
+			cdxutils.IsDirectDependency(bom.Dependencies, component.BOMRef),
 		); err != nil {
 			return err
 		}
