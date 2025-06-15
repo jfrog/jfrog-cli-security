@@ -3,6 +3,7 @@ module github.com/jfrog/jfrog-cli-security
 go 1.23.7
 
 require (
+	github.com/CycloneDX/cyclonedx-go v0.9.2
 	github.com/beevik/etree v1.4.0
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/google/go-github/v56 v56.0.0
@@ -16,6 +17,7 @@ require (
 	github.com/jfrog/jfrog-client-go v1.54.1
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v2 v2.3.0
+	github.com/package-url/packageurl-go v0.1.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
@@ -28,7 +30,6 @@ require (
 require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/CycloneDX/cyclonedx-go v0.9.2 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
@@ -75,7 +76,6 @@ require (
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nwaples/rardecode v1.1.3 // indirect
-	github.com/package-url/packageurl-go v0.1.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
