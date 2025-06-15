@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -14,28 +15,30 @@ import (
 func TestGetDiffDependencyTree(t *testing.T) {
 	targetResults := &results.TargetResults{
 		ScanTarget: results.ScanTarget{Target: "targetPath"},
-		Sbom: results.Sbom{
-			Components: []results.SbomEntry{
-				{
-					Component: "pip",
-					Version:   "20.3.4",
-					Type:      "Python",
-					XrayType:  "pypi",
-					Direct:    true,
-				},
-				{
-					Component: "pyyaml",
-					Version:   "5.2",
-					Type:      "Python",
-					XrayType:  "pypi",
-					Direct:    true,
-				},
-				{
-					Component: "werkzeug",
-					Version:   "1.0.1",
-					Type:      "Python",
-					XrayType:  "pypi",
-					Direct:    true,
+		ScaResults: &results.ScaScanResults{
+			Sbom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "pypi:pip@20.3.4",
+						PackageURL: "pkg:pypi/pip@20.3.4",
+						Name:       "pip",
+						Version:    "20.3.4",
+						Type:       "library",
+					},
+					{
+						BOMRef:     "pypi:pyyaml@5.2",
+						PackageURL: "pkg:pypi/pyyaml@5.2",
+						Name:       "pyyaml",
+						Version:    "5.2",
+						Type:       "library",
+					},
+					{
+						BOMRef:     "pypi:werkzeug@1.0.1",
+						PackageURL: "pkg:pypi/werkzeug@1.0.1",
+						Name:       "werkzeug",
+						Version:    "1.0.1",
+						Type:       "library",
+					},
 				},
 			},
 		},
@@ -59,25 +62,30 @@ func TestGetDiffDependencyTree(t *testing.T) {
 			name: "different results",
 			resultsToCompare: &results.TargetResults{
 				ScanTarget: results.ScanTarget{Target: "targetPath"},
-				Sbom: results.Sbom{
-					Components: []results.SbomEntry{
-						{
-							Component: "werkzeug",
-							Version:   "1.0.2",
-							Type:      "Python",
-							XrayType:  "pypi",
-						},
-						{
-							Component: "pyyaml",
-							Version:   "5.2",
-							Type:      "Python",
-							XrayType:  "pypi",
-						},
-						{
-							Component: "wasabi",
-							Version:   "1.1.3",
-							Type:      "Python",
-							XrayType:  "pypi",
+				ScaResults: &results.ScaScanResults{
+					Sbom: &cyclonedx.BOM{
+						Components: &[]cyclonedx.Component{
+							{
+								BOMRef:     "pypi:werkzeug@1.0.2",
+								PackageURL: "pkg:pypi/werkzeug@1.0.2",
+								Name:       "werkzeug",
+								Version:    "1.0.2",
+								Type:       "library",
+							},
+							{
+								BOMRef:     "pypi:pyyaml@5.2",
+								PackageURL: "pkg:pypi/pyyaml@5.2",
+								Name:       "pyyaml",
+								Version:    "5.2",
+								Type:       "library",
+							},
+							{
+								BOMRef:     "pypi:wasabi@1.1.3",
+								PackageURL: "pkg:pypi/wasabi@1.1.3",
+								Name:       "wasabi",
+								Version:    "1.1.3",
+								Type:       "library",
+							},
 						},
 					},
 				},

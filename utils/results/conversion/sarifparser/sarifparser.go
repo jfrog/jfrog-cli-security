@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -228,7 +229,7 @@ func (sc *CmdResultsSarifConverter) ParseLicenses(_ results.ScanTarget, _ result
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
 	return
 }
@@ -294,7 +295,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.ApplyHandlerToScaViolations(
+	_, _, err := results.ForEachScanGraphViolation(
 		target,
 		violations,
 		entitledForJas,
@@ -310,7 +311,7 @@ func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTar
 func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	err := results.ApplyHandlerToScaVulnerabilities(
+	err := results.ForEachScanGraphVulnerability(
 		target,
 		vulnerabilities,
 		entitledForJas,
@@ -320,7 +321,7 @@ func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.Sc
 	return sarifResults, rules, err
 }
 
-func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScaVulnerabilityFunc {
+func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
@@ -356,7 +357,7 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 	}
 }
 
-func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScaViolationFunc {
+func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
@@ -397,7 +398,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 	}
 }
 
-func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScaViolationFunc {
+func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
