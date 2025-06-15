@@ -8,9 +8,9 @@ import (
 // SbomGenerator is an interface for generating SBOMs from different sources.
 type SbomGenerator interface {
 	// PrepareGenerator prepares the generator for SBOM generation, should be called once before generating SBOMs.
-	PrepareGenerator() error
-	// SetThreadId sets the thread ID for the SBOM generation.
-	SetThreadId(threadId int) SbomGenerator
+	PrepareGenerator(options ...SbomGeneratorOption) error
 	// GenerateSbom generates a CycloneDX SBOM for the given target.
 	GenerateSbom(target results.ScanTarget) (*cyclonedx.BOM, error)
 }
+
+type SbomGeneratorOption func(sg SbomGenerator)

@@ -22,6 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
@@ -34,6 +35,37 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/swift"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
+
+type BuildInfoBomGenerator struct {
+	Params technologies.BuildInfoBomGeneratorParams
+}
+
+func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
+	return &BuildInfoBomGenerator{
+		Params: technologies.BuildInfoBomGeneratorParams{},
+	}
+}
+
+func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		bi, ok := sg.(*BuildInfoBomGenerator)
+		if !ok {
+			return
+		}
+		bi.Params = params
+	}
+}
+
+func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) error {
+	for _, option := range options {
+		option(b)
+	}
+	return nil
+}
+
+func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
+	return
+}
 
 type DependencyTreeResult struct {
 	FlatTree     *xrayUtils.GraphNode
