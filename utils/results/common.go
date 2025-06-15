@@ -230,9 +230,20 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 
 // ForEachSbomComponent allows to iterate over the provided CycloneDX SBOM components and call the provided handler for each component to process it.
 func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (err error) {
-	return nil
+	if handler == nil || bom == nil || bom.Components == nil {
+		return
+	}
+	for _, component := range *bom.Components {
+		if err := handler(
+			component,
+			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
+			cdxutils.IsDirectDependency(bom.Components, bom.Dependencies, component.BOMRef),
+		); err != nil {
+			return err
+		}
+	}
+	return
 }
-
 
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {

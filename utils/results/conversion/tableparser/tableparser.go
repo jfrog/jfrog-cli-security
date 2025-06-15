@@ -3,25 +3,25 @@ package tableparser
 import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
-	// "golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
 type CmdResultsTableConverter struct {
 	simpleJsonConvertor *simplejsonparser.CmdResultsSimpleJsonConverter
-	sbomInfo            map[string]formats.SbomTableRow
+	sbomRows            []formats.SbomTableRow
 	// If supported, pretty print the output in the tables
 	pretty bool
 }
 
 func NewCmdResultsTableConverter(pretty bool) *CmdResultsTableConverter {
-	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomInfo: make(map[string]formats.SbomTableRow)}
+	return &CmdResultsTableConverter{pretty: pretty, simpleJsonConvertor: simplejsonparser.NewCmdResultsSimpleJsonConverter(pretty, true), sbomRows: []formats.SbomTableRow{}}
 }
 
 func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
@@ -75,34 +75,24 @@ func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViola
 }
 
 func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
-	// for _, entry := range sbom.Components {
-	// 	if parsedEntry, exists := tc.sbomInfo[entry.String()]; exists {
-	// 		if entry.Direct && !parsedEntry.Direct {
-	// 			// If the entry is direct, we want to override the existing entry
-	// 			tc.sbomInfo[entry.String()] = entry
-	// 		}
-	// 		continue
-	// 	}
-	// 	// If the entry does not exist, we want to add it
-	// 	tc.sbomInfo[entry.String()] = entry
-	// }
+	if sbom == nil || sbom.Components == nil {
+		return nil
+	}
+	err = results.ForEachSbomComponent(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error {
+		relation := "Direct"
+		if !isDirect {
+			relation = "Transitive"
+		}
+		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
+			Component:   compName,
+			Version:     compVersion,
+			PackageType: compType,
+			Relation:    relation,
+			// For sorting
+			Direct: isDirect,
+		})
+		return nil
+	})
 	return
 }
-
-// func convertToSbomTableRow(rows []results.SbomEntry) (tableRows []formats.SbomTableRow) {
-// 	results.SortSbom(rows)
-// 	for _, entry := range rows {
-// 		relation := "Direct"
-// 		if !entry.Direct {
-// 			relation = "Transitive"
-// 		}
-// 		tableRows = append(tableRows, formats.SbomTableRow{
-// 			Component:   entry.Component,
-// 			PackageType: entry.Type,
-// 			Direct:      entry.Direct,
-// 			Version:     entry.Version,
-// 			Relation:    relation,
-// 		})
-// 	}
-// 	return
-// }
