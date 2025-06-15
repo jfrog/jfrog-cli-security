@@ -160,6 +160,7 @@ type secretsTableRow struct {
 	severity        string `col-name:"Severity"`
 	file            string `col-name:"File"`
 	lineColumn      string `col-name:"Line:Column"`
+	origin          string `col-name:"Origin" omitempty:"true"`
 	secret          string `col-name:"Secret"`
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
 	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
