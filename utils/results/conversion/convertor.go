@@ -3,6 +3,7 @@ package conversion
 import (
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -56,7 +57,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	// Parse SCA content to the current scan target
 	ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
-	ParseSbom(target results.ScanTarget, sbom results.Sbom) error
+	ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
 	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
@@ -147,7 +148,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		}
 	}
 	if params.IncludeSbom {
-		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.Sbom); err != nil {
+		if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.Sbom); err != nil {
 			return
 		}
 	}

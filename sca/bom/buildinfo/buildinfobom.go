@@ -5,12 +5,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
@@ -35,8 +36,8 @@ import (
 )
 
 type DependencyTreeResult struct {
-	FlatTree     *xrayCmdUtils.GraphNode
-	FullDepTrees []*xrayCmdUtils.GraphNode
+	FlatTree     *xrayUtils.GraphNode
+	FullDepTrees []*xrayUtils.GraphNode
 	DownloadUrls map[string]string
 }
 
@@ -56,7 +57,9 @@ func BuildDependencyTree(scan *results.TargetResults, params technologies.BuildI
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
-	scan.SetSbom(results.DepTreeToSbom(treeResult.FullDepTrees))
+	sbom := cyclonedx.NewBOM()
+	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
+	scan.SetSbom(sbom)
 	return &treeResult, nil
 }
 
@@ -181,44 +184,47 @@ func SetResolutionRepoInParamsIfExists(params *technologies.BuildInfoBomGenerato
 	return
 }
 
-func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayCmdUtils.GraphNode {
-	var uniqueNodes []*xrayCmdUtils.GraphNode
+func createFlatTreeWithTypes(uniqueDeps map[string]*xray.DepTreeNode) *xrayUtils.GraphNode {
+	var uniqueNodes []*xrayUtils.GraphNode
 	for uniqueDep, nodeAttr := range uniqueDeps {
-		node := &xrayCmdUtils.GraphNode{Id: uniqueDep}
+		node := &xrayUtils.GraphNode{Id: uniqueDep}
 		if nodeAttr != nil {
 			node.Types = nodeAttr.Types
 			node.Classifier = nodeAttr.Classifier
 		}
 		uniqueNodes = append(uniqueNodes, node)
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
+	return &xrayUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
-func createFlatTree(uniqueDeps []string) *xrayCmdUtils.GraphNode {
-	uniqueNodes := []*xrayCmdUtils.GraphNode{}
+func createFlatTree(uniqueDeps []string) *xrayUtils.GraphNode {
+	uniqueNodes := []*xrayUtils.GraphNode{}
 	for _, uniqueDep := range uniqueDeps {
-		uniqueNodes = append(uniqueNodes, &xrayCmdUtils.GraphNode{Id: uniqueDep})
+		uniqueNodes = append(uniqueNodes, &xrayUtils.GraphNode{Id: uniqueDep})
 	}
-	return &xrayCmdUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
+	return &xrayUtils.GraphNode{Id: "root", Nodes: uniqueNodes}
 }
 
 // Collect dependencies exists in target and not in resultsToCompare
-func GetDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayCmdUtils.GraphNode) (*DependencyTreeResult, error) {
-	if resultsToCompare == nil {
+func GetDiffDependencyTree(scanResults *results.TargetResults, resultsToCompare *results.TargetResults, fullDepTrees ...*xrayUtils.GraphNode) (*DependencyTreeResult, error) {
+	if resultsToCompare == nil || resultsToCompare.ScaResults == nil || resultsToCompare.ScaResults.Sbom == nil || resultsToCompare.ScaResults.Sbom.Components == nil {
 		return nil, fmt.Errorf("failed to get diff dependency tree: no results to compare")
+	}
+	if scanResults == nil || scanResults.ScaResults == nil || scanResults.ScaResults.Sbom == nil || scanResults.ScaResults.Sbom.Components == nil {
+		return nil, fmt.Errorf("failed to get diff dependency tree: no scan results found for target %s", scanResults.Target)
 	}
 	log.Debug(fmt.Sprintf("Comparing %s SBOM with %s to get diff", scanResults.Target, resultsToCompare.Target))
 	// Compare the dependency trees
 	filterDepsMap := datastructures.MakeSet[string]()
-	for _, component := range resultsToCompare.Sbom.Components {
-		filterDepsMap.Add(techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version))
+	for _, component := range *resultsToCompare.ScaResults.Sbom.Components {
+		filterDepsMap.Add(techutils.PurlToXrayComponentId(component.PackageURL))
 	}
 	addedDepsMap := datastructures.MakeSet[string]()
-	for _, component := range scanResults.Sbom.Components {
-		componentId := techutils.ToXrayComponentId(component.XrayType, component.Component, component.Version)
-		if exists := filterDepsMap.Exists(componentId); !exists {
+	for _, component := range *scanResults.ScaResults.Sbom.Components {
+		id := techutils.PurlToXrayComponentId(component.PackageURL)
+		if exists := filterDepsMap.Exists(id); !exists {
 			// Dependency in scan results but not in results to compare
-			addedDepsMap.Add(componentId)
+			addedDepsMap.Add(id)
 		}
 	}
 	diffDepTree := DependencyTreeResult{
