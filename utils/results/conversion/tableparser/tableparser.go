@@ -1,6 +1,8 @@
 package tableparser
 
 import (
+	"sort"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
@@ -29,9 +31,10 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 	if err != nil {
 		return formats.ResultsTables{}, err
 	}
+	sortSbom(tc.sbomRows)
 	return formats.ResultsTables{
 		LicensesTable: formats.ConvertToLicenseTableRow(simpleJsonFormat.Licenses),
-		// SbomTable:     convertToSbomTableRow(maps.Values(tc.sbomInfo)),
+		SbomTable:     tc.sbomRows,
 
 		SecurityVulnerabilitiesTable:   formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.Vulnerabilities),
 		SecurityViolationsTable:        formats.ConvertToScaVulnerabilityOrViolationTableRow(simpleJsonFormat.SecurityViolations),
@@ -95,4 +98,23 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 		return nil
 	})
 	return
+}
+
+func sortSbom(components []formats.SbomTableRow) {
+	sort.Slice(components, func(i, j int) bool {
+		if components[i].Direct == components[j].Direct {
+			if components[i].Component == components[j].Component {
+				if components[i].Version == components[j].Version {
+					// Last order by type
+					return components[i].PackageType < components[j].PackageType
+				}
+				// Third order by version
+				return components[i].Version < components[j].Version
+			}
+			// Second order by component
+			return components[i].Component < components[j].Component
+		}
+		// First order by direct components
+		return components[i].Direct
+	})
 }
