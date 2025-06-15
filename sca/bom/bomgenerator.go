@@ -13,4 +13,4 @@ type SbomGenerator interface {
 	GenerateSbom(target results.ScanTarget) (*cyclonedx.BOM, error)
 }
 
-type SbomGeneratorOption func(sg SbomGenerator)
+type SbomGeneratorOption func(sg SbomGenerator) error

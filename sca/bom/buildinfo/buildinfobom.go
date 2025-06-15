@@ -47,18 +47,21 @@ func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
 }
 
 func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) {
+	return func(sg bom.SbomGenerator) error {
 		bi, ok := sg.(*BuildInfoBomGenerator)
 		if !ok {
-			return
+			return nil
 		}
 		bi.Params = params
+		return nil
 	}
 }
 
 func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) error {
 	for _, option := range options {
-		option(b)
+		if err := option(b); err != nil {
+			return err
+		}
 	}
 	return nil
 }
