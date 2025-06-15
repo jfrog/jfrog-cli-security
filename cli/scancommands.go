@@ -29,7 +29,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
-
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -374,7 +375,7 @@ func AuditCmd(c *components.Context) error {
 
 	// Check if user used specific technologies flags
 	allTechnologies := techutils.GetAllTechnologiesList()
-	technologies := []string{}
+	technologiesToScan := []string{}
 	for _, tech := range allTechnologies {
 		var techExists bool
 		if tech == techutils.Maven {
@@ -384,10 +385,10 @@ func AuditCmd(c *components.Context) error {
 			techExists = c.GetBoolFlagValue(tech.String())
 		}
 		if techExists {
-			technologies = append(technologies, tech.String())
+			technologiesToScan = append(technologiesToScan, tech.String())
 		}
 	}
-	auditCmd.SetTechnologies(technologies)
+	auditCmd.SetTechnologies(technologiesToScan)
 
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error
@@ -397,6 +398,13 @@ func AuditCmd(c *components.Context) error {
 	if c.GetBoolFlagValue(flags.SecretValidation) && !c.GetBoolFlagValue(flags.Secrets) {
 		// No secrets flag but secret validation is provided, error
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
+	}
+
+	// Set dynamic command logic based on flags
+	if bomGenerator, err := getScanDynamicLogic(c); err != nil {
+		return err
+	} else {
+		auditCmd.SetBomGenerator(bomGenerator)
 	}
 
 	if subScans, err := getSubScansToPreform(c); err != nil {
@@ -412,6 +420,10 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
+}
+
+func getScanDynamicLogic(_ *components.Context) (bom.SbomGenerator, error) {
+	return buildinfo.NewBuildInfoBomGenerator(), nil
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

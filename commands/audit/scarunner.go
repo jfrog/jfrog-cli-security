@@ -62,6 +62,10 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 	if generalError != nil {
 		return
 	}
+	buildParams, generalError := auditParams.ToBuildInfoBomGenParams()
+	if generalError != nil {
+		return fmt.Errorf("failed to convert audit params to build info bom generator params: %w", generalError)
+	}
 	if !hasAtLeastOneTech(cmdResults) {
 		log.Info("Couldn't determine a package manager or build tool used by this project. Skipping the SCA scan...")
 		return
@@ -78,7 +82,7 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 			continue
 		}
 		// Get the dependency tree for the technology in the working directory.
-		treeResult, bdtErr := buildinfo.BuildDependencyTree(targetResult, toBuildInfoBomGeneratorParams(auditParams, serverDetails))
+		treeResult, bdtErr := buildinfo.BuildDependencyTree(targetResult, buildParams)
 		if bdtErr != nil {
 			var projectNotInstalledErr *biutils.ErrProjectNotInstalled
 			if errors.As(bdtErr, &projectNotInstalledErr) {
@@ -117,34 +121,6 @@ func buildDepTreeAndRunScaScan(auditParallelRunner *utils.SecurityParallelRunner
 		}
 	}
 	return
-}
-
-func toBuildInfoBomGeneratorParams(auditParams *AuditParams, serverDetails *config.ServerDetails) technologies.BuildInfoBomGeneratorParams {
-	return technologies.BuildInfoBomGeneratorParams{
-		XrayVersion:         auditParams.GetXrayVersion(),
-		Progress:            auditParams.Progress(),
-		ExclusionPattern:    technologies.GetExcludePattern(auditParams.GetConfigProfile(), auditParams.IsRecursiveScan(), auditParams.Exclusions()...),
-		AllowPartialResults: auditParams.AllowPartialResults(),
-		// Artifactory Repository params
-		ServerDetails:          serverDetails,
-		DependenciesRepository: auditParams.DepsRepo(),
-		IgnoreConfigFile:       auditParams.IgnoreConfigFile(),
-		InsecureTls:            auditParams.InsecureTls(),
-		// Install params
-		SkipAutoInstall:    auditParams.SkipAutoInstall(),
-		InstallCommandName: auditParams.InstallCommandName(),
-		Args:               auditParams.Args(),
-		InstallCommandArgs: auditParams.InstallCommandArgs(),
-		// Curation params
-		IsCurationCmd: auditParams.IsCurationCmd(),
-		// Java params
-		IsMavenDepTreeInstalled: auditParams.IsMavenDepTreeInstalled(),
-		UseWrapper:              auditParams.UseWrapper(),
-		// Python params
-		PipRequirementsFile: auditParams.PipRequirementsFile(),
-		// Pnpm params
-		MaxTreeDepth: auditParams.MaxTreeDepth(),
-	}
 }
 
 func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]string {
