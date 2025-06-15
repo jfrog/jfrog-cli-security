@@ -121,7 +121,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		for _, id := range getCveIds(cves, violation.IssueId) {
 			// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
@@ -137,7 +137,7 @@ func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *dat
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.License == nil {
 			sc.currentScan.Violations.ScaResults.License = formats.ResultSummary{}
@@ -156,7 +156,7 @@ func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *data
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.OperationalRisk == nil {
 			sc.currentScan.Violations.ScaResults.OperationalRisk = formats.ResultSummary{}
@@ -211,7 +211,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) getScaVulnerabilityHandler(parsed *datastructures.Set[string]) results.ParseScaVulnerabilityFunc {
+func (sc *CmdResultsSummaryConverter) getScaVulnerabilityHandler(parsed *datastructures.Set[string]) results.ParseScanGraphVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		for _, id := range getCveIds(cves, vulnerability.IssueId) {
 			// PrepareScaVulnerabilities calls the handler for each vulnerability and impacted component pair, we want to count unique vulnerabilities
@@ -321,7 +321,7 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles
-func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasFunc {
+func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasIssueFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		if location == nil {
 			// Only count the issue if it has a location
