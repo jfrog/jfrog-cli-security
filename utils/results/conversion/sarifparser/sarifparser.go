@@ -295,7 +295,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.ApplyHandlerToScaViolations(
+	_, _, err := results.ForEachScanGraphViolation(
 		target,
 		violations,
 		entitledForJas,
@@ -311,7 +311,7 @@ func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTar
 func PrepareSarifScaVulnerabilities(cmdType utils.CommandType, target results.ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	err := results.ApplyHandlerToScaVulnerabilities(
+	err := results.ForEachScanGraphVulnerability(
 		target,
 		vulnerabilities,
 		entitledForJas,

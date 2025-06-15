@@ -215,7 +215,7 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 	var securityViolationsRows []formats.VulnerabilityOrViolationRow
 	var licenseViolationsRows []formats.LicenseViolationRow
 	var operationalRiskViolationsRows []formats.OperationalRiskViolationRow
-	_, _, err := results.ApplyHandlerToScaViolations(
+	_, _, err := results.ForEachScanGraphViolation(
 		target,
 		scaResponse.Violations,
 		jasEntitled,
@@ -229,7 +229,7 @@ func PrepareSimpleJsonViolations(target results.ScanTarget, scaResponse services
 
 func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse services.ScanResponse, pretty, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]formats.VulnerabilityOrViolationRow, error) {
 	var vulnerabilitiesRows []formats.VulnerabilityOrViolationRow
-	err := results.ApplyHandlerToScaVulnerabilities(
+	err := results.ForEachScanGraphVulnerability(
 		target,
 		scaResponse.Vulnerabilities,
 		entitledForJas,
@@ -358,7 +358,7 @@ func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]form
 
 func PrepareSimpleJsonLicenses(target results.ScanTarget, licenses []services.License) ([]formats.LicenseRow, error) {
 	var licensesRows []formats.LicenseRow
-	err := results.ApplyHandlerToLicenses(target, licenses, addSimpleJsonLicense(&licensesRows))
+	err := results.ForEachLicense(target, licenses, addSimpleJsonLicense(&licensesRows))
 	return licensesRows, err
 }
 
@@ -382,7 +382,7 @@ func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow) results.P
 
 func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif.Run) ([]formats.SourceCodeRow, error) {
 	var rows []formats.SourceCodeRow
-	err := results.ApplyHandlerToJasIssues(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
+	err := results.ForEachJasIssue(jasIssues, entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error {
 		rows = append(rows,
 			formats.SourceCodeRow{
 				ScannerInfo: formats.ScannerInfo{

@@ -104,7 +104,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	}
 	// Parse violations
 	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := results.ApplyHandlerToScaViolations(
+	watches, failBuild, err := results.ForEachScanGraphViolation(
 		target,
 		scaResponse.Scan.Violations,
 		sc.entitledForJas,
@@ -201,7 +201,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	}
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
-	err = results.ApplyHandlerToScaVulnerabilities(
+	err = results.ForEachScanGraphVulnerability(
 		target,
 		scaResponse.Scan.Vulnerabilities,
 		sc.entitledForJas,
@@ -277,7 +277,7 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViola
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(secrets...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -297,7 +297,7 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(iacs...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -317,7 +317,7 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(sast...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles

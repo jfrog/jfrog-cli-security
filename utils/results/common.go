@@ -61,7 +61,7 @@ type ParseLicensesFunc func(license services.License, impactedPackagesName, impa
 type ParseJasFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
-func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
+func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasFunc) error {
 	if !entitledForJas || handler == nil {
 		return nil
 	}
@@ -92,8 +92,8 @@ func ApplyHandlerToJasIssues(runs []*sarif.Run, entitledForJas bool, handler Par
 	return nil
 }
 
-// ApplyHandlerToScaVulnerabilities allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
-func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
+// ForEachScanGraphVulnerability allows to iterate over the provided SCA security vulnerabilities and call the provided handler for each impacted component/package with a vulnerability to process it.
+func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services.Vulnerability, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseScaVulnerabilityFunc) error {
 	if handler == nil {
 		return nil
 	}
@@ -121,7 +121,7 @@ func ApplyHandlerToScaVulnerabilities(target ScanTarget, vulnerabilities []servi
 }
 
 // Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
+func ForEachScanGraphViolation(target ScanTarget, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScaViolationFunc, licenseHandler ParseScaViolationFunc, operationalRiskHandler ParseScaViolationFunc) (watches []string, failBuild bool, err error) {
 	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
 		return
 	}
@@ -206,8 +206,8 @@ func ApplyHandlerToScaViolations(target ScanTarget, violations []services.Violat
 	return
 }
 
-// ApplyHandlerToLicenses allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
-func ApplyHandlerToLicenses(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
+// ForEachLicense allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
+func ForEachLicense(target ScanTarget, licenses []services.License, handler ParseLicensesFunc) error {
 	if handler == nil {
 		return nil
 	}
