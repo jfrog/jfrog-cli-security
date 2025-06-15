@@ -781,10 +781,10 @@ func TestSplitPackageUrlWithQualifiers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, version, typ, qualifiers := SplitPackageUrlWithQualifiers(tt.purl)
+			name, version, compType, qualifiers := SplitPackageUrlWithQualifiers(tt.purl)
 			assert.Equalf(t, tt.compName, name, "compName")
 			assert.Equalf(t, tt.compVersion, version, "compVersion")
-			assert.Equalf(t, tt.packageType, typ, "packageType")
+			assert.Equalf(t, tt.packageType, compType, "packageType")
 			assert.Equalf(t, tt.qualifiers, qualifiers, "qualifiers")
 		})
 	}
