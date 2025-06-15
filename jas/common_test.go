@@ -285,19 +285,52 @@ func TestFilterUniqueAndConvertToFilesExcludePatterns(t *testing.T) {
 		name            string
 		excludePatterns []string
 		expectedOutput  []string
+		extraEnvVars    map[string]string
 	}{
 		{
+			name:            "excludePatterns_emptyPatterns",
 			excludePatterns: []string{},
 			expectedOutput:  []string(nil),
 		},
 		{
+			name:            "excludePatterns_defaultBehaviour",
+			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
+			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**"},
+		},
+		{
+			name: "excludePatterns_FolderEnvVarIsFalse",
+			extraEnvVars: map[string]string{
+				"JF_EXCLUDE_FOLDERS_ONLY": "false",
+			},
 			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
 			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**", "*.git*", "*node_modules*", "*target*", "*test*", "*venv*"},
 		},
+		{
+			name: "excludePatterns_FolderEnvVarExistsAndEmpty",
+			extraEnvVars: map[string]string{
+				"JF_EXCLUDE_FOLDERS_ONLY": "",
+			},
+			excludePatterns: []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"},
+			expectedOutput:  []string{"**/*.git*/**", "**/*node_modules*/**", "**/*target*/**", "**/*test*/**", "**/*venv*/**"},
+		},
 	}
 
+	var filteredExcludePatterns []string
 	for _, test := range tests {
-		filteredExcludePatterns := filterUniqueAndConvertToFilesExcludePatterns(test.excludePatterns)
+		if len(test.extraEnvVars) > 0 {
+			for env, envValue := range test.extraEnvVars {
+				err := os.Setenv(env, envValue)
+				assert.NoError(t, err)
+
+				filteredExcludePatterns = filterUniqueAndConvertToFilesExcludePatterns(test.excludePatterns)
+
+				err = os.Unsetenv("JF_EXCLUDE_FOLDERS_ONLY")
+				assert.NoError(t, err)
+			}
+		} else {
+			filteredExcludePatterns = filterUniqueAndConvertToFilesExcludePatterns(test.excludePatterns)
+		}
+
 		// Sort is needed since we create the response slice from a Set (unordered)
 		slices.Sort(filteredExcludePatterns)
 		assert.EqualValues(t, test.expectedOutput, filteredExcludePatterns)

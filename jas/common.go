@@ -426,9 +426,10 @@ func filterUniqueAndConvertToFilesExcludePatterns(excludePatterns []string) []st
 	uniqueExcludePatterns := datastructures.MakeSet[string]()
 	for _, excludePattern := range excludePatterns {
 
-		// Add ignore for the pattern as-is, not only the pattern as a directory
-		uniqueExcludePatterns.Add(excludePattern)
-
+		if strings.ToLower(os.Getenv(utils.JfExcludeFoldersOnlyEnv)) == "false" {
+			// Add ignore for the pattern as-is, not only the pattern as a directory
+			uniqueExcludePatterns.Add(excludePattern)
+		}
 		// Avoid adding the pattern as a directory twice
 		if !strings.HasPrefix(excludePattern, "**/") {
 			excludePattern = "**/" + excludePattern

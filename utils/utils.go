@@ -35,6 +35,8 @@ const (
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
 	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
 	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
+
+	JfExcludeFoldersOnlyEnv = "JF_EXCLUDE_FOLDERS_ONLY"
 )
 
 var (
