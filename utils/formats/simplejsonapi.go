@@ -105,13 +105,13 @@ type SourceCodeRow struct {
 	Location
 	Finding       string         `json:"finding,omitempty"`
 	Fingerprint   string         `json:"fingerprint,omitempty"`
-	Origin        string         `json:"origin,omitempty"`
 	Applicability *Applicability `json:"applicability,omitempty"`
 	CodeFlow      [][]Location   `json:"codeFlow,omitempty"`
 }
 
 type ScannerInfo struct {
 	RuleId                  string   `json:"ruleId"`
+	Origin                  string   `json:"origin,omitempty"`
 	Cwe                     []string `json:"cwe,omitempty"`
 	ScannerShortDescription string   `json:"scannerShortDescription,omitempty"`
 	ScannerDescription      string   `json:"scannerDescription,omitempty"`

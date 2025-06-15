@@ -386,6 +386,7 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 			formats.SourceCodeRow{
 				ScannerInfo: formats.ScannerInfo{
 					RuleId:                  sarifutils.GetResultRuleId(result),
+					Origin:                  sarifutils.GetRuleOrigin(rule),
 					Cwe:                     sarifutils.GetRuleCWE(rule),
 					ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
 					ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),
@@ -398,7 +399,6 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 				SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
 				Finding:         sarifutils.GetResultMsgText(result),
 				Fingerprint:     sarifutils.GetResultFingerprint(result),
-				Origin:          sarifutils.GetRuleOrigin(rule),
 				Location: formats.Location{
 					File:        sarifutils.GetRelativeLocationFileName(location, run.Invocations),
 					StartLine:   sarifutils.GetLocationStartLine(location),
