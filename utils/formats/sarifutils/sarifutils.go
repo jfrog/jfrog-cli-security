@@ -14,6 +14,7 @@ const (
 	WatchSarifPropertyKey           = "watch"
 	PoliciesSarifPropertyKey        = "policies"
 	JasIssueIdSarifPropertyKey      = "issueId"
+	FailPrSarifPropertyKey          = "failPullRequest"
 	CWEPropertyKey                  = "CWE"
 	SarifImpactPathsRulePropertyKey = "impactPaths"
 )
@@ -49,6 +50,15 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 		}
 	}
 	return
+}
+
+func GetResultFailPrValue(result *sarif.Result) (failPr bool) {
+	if failPrProperty, ok := result.Properties[FailPrSarifPropertyKey]; ok {
+		if failPrValue, ok := failPrProperty.(bool); ok {
+			return failPrValue
+		}
+	}
+	return false
 }
 
 func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
