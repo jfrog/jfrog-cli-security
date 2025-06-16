@@ -29,8 +29,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
-	"github.com/jfrog/jfrog-cli-security/sca/bom"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -416,10 +414,6 @@ func AuditCmd(c *components.Context) error {
 	auditCmd.SetThreads(threads)
 	// Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
-}
-
-func getScanDynamicLogic(_ *components.Context) bom.SbomGenerator {
-	return buildinfo.NewBuildInfoBomGenerator()
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

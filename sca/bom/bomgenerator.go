@@ -56,9 +56,11 @@ func logLibComponents(components *[]cyclonedx.Component) (err error) {
 		return
 	}
 	libs := []string{}
-	for _, component := range *components {
-		if component.Type == cyclonedx.ComponentTypeLibrary {
-			libs = append(libs, component.Name)
+	if components != nil {
+		for _, component := range *components {
+			if component.Type == cyclonedx.ComponentTypeLibrary {
+				libs = append(libs, component.Name)
+			}
 		}
 	}
 	if len(libs) == 0 {
