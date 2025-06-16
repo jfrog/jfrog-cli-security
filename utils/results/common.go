@@ -883,3 +883,80 @@ func getBinaryNodeDirectDependencies(node *xrayUtils.BinaryGraphNode) (dependenc
 func IsMultiProject(sbom *cyclonedx.BOM) bool {
 	return len(cdxutils.GetRootDependenciesEntries(sbom.Dependencies)) > 1
 }
+
+func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
+	return BomToFlatTree(sbom), BomToFullTree(sbom, true)
+}
+
+func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
+	flatTree = &xrayUtils.GraphNode{Id: "root"}
+	if sbom == nil || sbom.Components == nil {
+		return
+	}
+	components := datastructures.MakeSet[string]()
+	// Collect all components as Xray component IDs and create a node in the flat tree
+	for _, component := range *sbom.Components {
+		if component.Type != cyclonedx.ComponentTypeLibrary {
+			// We are only interested in libraries for the dependency tree
+			continue
+		}
+		id := techutils.PurlToXrayComponentId(component.PackageURL)
+		if components.Exists(id) {
+			// The component is already added, skip it
+			continue
+		}
+		// Add the component to the flat tree
+		components.Add(id)
+		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id})
+	}
+	return
+}
+
+func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
+	if sbom == nil || sbom.Dependencies == nil {
+		// No dependencies or components in the SBOM, return an empty slice
+		return
+	}
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom.Dependencies) {
+		// Create a new GraphNode with ref as the ID
+		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
+		// Populate application tree
+		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
+		// Add the tree to the output list
+		fullDependencyTrees = append(fullDependencyTrees, currentTree)
+	}
+	// Translate refs to IDs
+	for _, node := range fullDependencyTrees {
+		convertRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+	}
+	return
+}
+
+func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cyclonedx.Dependency) {
+	if node == nil || node.NodeHasLoop() {
+		// If the node is nil or has a loop, return
+		return
+	}
+	for _, dep := range cdxutils.GetDirectDependencies(dependencies, node.Id) {
+		depNode := &xrayUtils.GraphNode{Id: dep, Parent: node}
+		// Add the dependency to the current node
+		node.Nodes = append(node.Nodes, depNode)
+		// Recursively populate the node data
+		populateDepsNodeDataFromBom(depNode, dependencies)
+	}
+}
+
+func convertRefsToPackageID(node *xrayUtils.GraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+	if node == nil {
+		return
+	}
+	if component := cdxutils.SearchComponentByRef(&components, node.Id); component != nil {
+		node.Id = component.PackageURL
+		if isBuildInfoXray {
+			node.Id = techutils.PurlToXrayComponentId(node.Id)
+		}
+	}
+	for _, dep := range node.Nodes {
+		convertRefsToPackageID(dep, isBuildInfoXray, components...)
+	}
+}
