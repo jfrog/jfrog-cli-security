@@ -22,10 +22,16 @@ const (
 // Specific JFrog Sarif Utils
 
 func GetRuleOrigin(rule *sarif.ReportingDescriptor) (origin string) {
-	if originProperty, ok := rule.Properties[OriginSarifPropertyKey]; ok {
-		if originValue, ok := originProperty.(string); ok {
-			return originValue
-		}
+	if rule == nil || rule.Properties == nil {
+		return
+	}
+	// Check if the property exists
+	originProperty, exists := rule.Properties.Properties[OriginSarifPropertyKey]
+	if !exists {
+		return
+	}
+	if originValue, ok := originProperty.(string); ok {
+		return originValue
 	}
 	return
 }
