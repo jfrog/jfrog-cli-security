@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
-	orderedJson "github.com/virtuald/go-ordered-json"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	orderedJson "github.com/virtuald/go-ordered-json"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
@@ -265,21 +267,32 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
-	// TODO this function should be in utils/results/results.go after the refactor, since it is a common code for Jas and SCA scanners
-	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and convert results to Sarif before writing them to file
-	var curTimeHash string
-	if curTimeHash, err = Md5Hash(time.Now().String()); err != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string) (err error) {
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTimeHash()))
+	file, err := os.Create(pathToSave)
+	if err != nil {
+		return errorutils.CheckError(err)
 	}
+	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
+}
 
-	resultsFileName := strings.ToLower(scanType) + "_results_" + curTimeHash + ".json"
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, resultsFileName)
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_results_%s.json", strings.ToLower(scanType), getCurrentTimeHash()))
 	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
+}
+
+func getCurrentTimeHash() string {
+	now := time.Now().String()
+	if curTimeHash, err := Md5Hash(now); err != nil {
+		log.Warn(fmt.Sprintf("Failed to generate hash for current time '%s': %s", now, err.Error()))
+		return now
+	} else {
+		return curTimeHash
+	}
 }
 
 // Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report
