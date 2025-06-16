@@ -14,7 +14,7 @@ import (
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
 	for _, property := range newProperties {
 		// Check if the property already exists
-		if existingProperty := SearchProperty(properties, property.Name); existingProperty != nil {
+		if existingProperty := searchProperty(properties, property.Name); existingProperty != nil {
 			// The property already exists
 			continue
 		}
@@ -28,7 +28,7 @@ func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclone
 }
 
 // SearchProperty searches for a property by name in the provided properties list.
-func SearchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
+func searchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
 	if properties == nil || len(*properties) == 0 {
 		return nil
 	}
@@ -78,11 +78,11 @@ func IsDirectDependency(dependencies *[]cyclonedx.Dependency, ref string) bool {
 	return false
 }
 
-func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) (depRefs []string) {
+func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {
 	depEntry := SearchDependencyEntry(dependencies, ref)
 	if depEntry == nil || depEntry.Dependencies == nil || len(*depEntry.Dependencies) == 0 {
 		// No dependencies found for the given reference
-		return
+		return []string{}
 	}
 	return *depEntry.Dependencies
 }
@@ -131,14 +131,14 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 
 func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
-		BOMRef: GetFileRef(filePathOrUri),
+		BOMRef: getFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
 		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
 	return
 }
 
-func GetFileRef(filePathOrUri string) string {
+func getFileRef(filePathOrUri string) string {
 	uri := convertToFileUrlIfNeeded(filePathOrUri)
 	wdRef, err := utils.Md5Hash(uri)
 	if err != nil {
