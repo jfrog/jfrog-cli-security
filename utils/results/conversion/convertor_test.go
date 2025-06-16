@@ -17,7 +17,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -337,7 +337,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	// Contextual analysis scan results
 	npmTargetResults.JasResults.AddApplicabilityScanResults(0,
 		&sarif.Run{
-			Tool: sarif.Tool{
+			Tool: &sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
 					validations.CreateDummyApplicabilityRule("CVE-2024-39249", "applicable"),
 					validations.CreateDummyApplicabilityRule("CVE-2018-16487", "not_applicable"),
@@ -357,7 +357,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	// Iac scan results
 	npmTargetResults.JasResults.AddJasScanResults(jasutils.IaC,
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.IacToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.IacToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummyJasResult("aws_cloudfront_tls_only", severityutils.LevelError, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "req_sw_terraform_aws_cloudfront_tls_only.tf"), StartLine: 2, StartColumn: 1, EndLine: 21, EndColumn: 1, Snippet: "viewer_protocol_policy..."}),
@@ -369,7 +369,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	// Secrets scan results
 	npmTargetResults.JasResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummySecretResult("REQ.SECRET.KEYS", jasutils.Active, "active token", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
@@ -377,7 +377,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 		}},
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.KEYS"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummySecretViolationResult("REQ.SECRET.KEYS", jasutils.Active, "active token", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "fake-creds.txt"), StartLine: 2, StartColumn: 1, EndLine: 2, EndColumn: 11, Snippet: "Sqc************"}),
@@ -389,11 +389,11 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	npmTargetResults.JasResults.AddJasScanResults(jasutils.Sast,
 		// No Vulnerabilities
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("aws_cloudfront_tls_only"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 		}},
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("js-template-injection", "73"), validations.CreateDummyJasRule("js-insecure-random", "338"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SastToolName, validations.CreateDummyJasRule("js-template-injection", "73"), validations.CreateDummyJasRule("js-insecure-random", "338"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummySastViolationResult("js-insecure-random", severityutils.LevelNote, "watch", "sast-violation-1", []string{"policy", "policy2"}, formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "public", "js", "bootstrap.bundle.js"), StartLine: 136, StartColumn: 22, EndLine: 136, EndColumn: 35, Snippet: "Math.random()"}),
@@ -539,7 +539,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	// Contextual analysis scan results
 	dockerImageTarget.JasResults.AddApplicabilityScanResults(0,
 		&sarif.Run{
-			Tool: sarif.Tool{
+			Tool: &sarif.Tool{
 				Driver: sarifutils.CreateDummyDriver(validations.ContextualAnalysisToolName,
 					validations.CreateDummyApplicabilityRule("CVE-2024-6119", "applicable"),
 					validations.CreateDummyApplicabilityRule("CVE-2024-38428", "undetermined"),
@@ -552,14 +552,14 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	// Secrets scan results
 	dockerImageTarget.JasResults.AddJasScanResults(jasutils.Secrets,
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
 			Results: []*sarif.Result{
 				validations.CreateDummySecretResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),
 			},
 		}},
 		[]*sarif.Run{{
-			Tool:        sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
+			Tool:        &sarif.Tool{Driver: sarifutils.CreateDummyDriver(validations.SecretsToolName, validations.CreateDummyJasRule("REQ.SECRET.GENERIC.CODE"))},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
 			Results: []*sarif.Result{
 				validations.CreateDummySecretViolationResult("REQ.SECRET.GENERIC.CODE", jasutils.Inactive, "expired", "watch", "sec-violation-1", []string{"policy"}, formats.Location{File: filepath.Join("temp", "folders", "T", "tmpsfyn_3d1", "unpacked", "sha256", "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "usr", "src", "app", "server", "index.js"), StartLine: 5, StartColumn: 7, EndLine: 5, EndColumn: 57, Snippet: "tok************"}),

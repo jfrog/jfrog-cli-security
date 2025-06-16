@@ -6,10 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"golang.org/x/exp/slices"
-
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slices"
 
 	jfrogAppsConfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -139,8 +138,7 @@ func TestGetExcludePatterns(t *testing.T) {
 }
 
 func TestReadJasScanRunsFromFile(t *testing.T) {
-	dummyReport, err := sarifutils.NewReport()
-	assert.NoError(t, err)
+	dummyReport := sarif.NewReport()
 	dummyReport.AddRun(sarifutils.CreateRunWithDummyResults(
 		sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
 		sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
@@ -218,7 +216,7 @@ func TestExcludeSuppressResults(t *testing.T) {
 		},
 		{
 			sarifResults: []*sarif.Result{
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
 				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2"),
 			},
 			expectedOutput: []*sarif.Result{
@@ -227,8 +225,8 @@ func TestExcludeSuppressResults(t *testing.T) {
 		},
 		{
 			sarifResults: []*sarif.Result{
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
-				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppression([]*sarif.Suppression{sarif.NewSuppression("")}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet1", "ruleId1", "level1").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
+				sarifutils.CreateResultWithOneLocation("", 0, 0, 0, 0, "snippet2", "ruleId2", "level2").WithSuppressions([]*sarif.Suppression{sarif.NewSuppression()}),
 			},
 			expectedOutput: []*sarif.Result{},
 		},
@@ -276,7 +274,7 @@ func TestAddScoreToRunRules(t *testing.T) {
 
 	for _, test := range tests {
 		addScoreToRunRules(test.sarifRun)
-		assert.Equal(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
+		assert.ElementsMatch(t, test.expectedOutput, test.sarifRun.Tool.Driver.Rules)
 	}
 }
 

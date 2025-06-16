@@ -22,7 +22,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"golang.org/x/exp/slices"
 )
 
@@ -68,14 +68,11 @@ func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIss
 	}
 	for _, run := range runs {
 		for _, result := range run.Results {
-			severity, err := severityutils.ParseSeverity(sarifutils.GetResultLevel(result), true)
+			severity, err := severityutils.ParseSeverity(result.Level, true)
 			if err != nil {
 				return err
 			}
-			rule, err := run.GetRuleById(sarifutils.GetResultRuleId(result))
-			if errorutils.CheckError(err) != nil {
-				return err
-			}
+			rule := sarifutils.GetRuleById(run, sarifutils.GetResultRuleId(result))
 			if len(result.Locations) == 0 {
 				// If there are no locations, the issue is not specific to a location, and we should handle it as a general issue.
 				if err := handler(run, rule, severity, result, nil); err != nil {
@@ -482,24 +479,25 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	resultFound := false
 	var applicabilityStatuses []jasutils.ApplicabilityStatus
 	for _, applicabilityRun := range applicabilityScanResults {
-		if rule, _ := applicabilityRun.GetRuleById(jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
+		if rule := sarifutils.GetRuleById(applicabilityRun, jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
 			applicability.UndeterminedReason = GetRuleUndeterminedReason(rule)
 			status := getApplicabilityStatusFromRule(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
 			}
-
 		}
-		result, _ := applicabilityRun.GetResultByRuleId(jasutils.CveToApplicabilityRuleId(cveId))
-		if result == nil {
+		cveResults := sarifutils.GetResultsByRuleId(jasutils.CveToApplicabilityRuleId(cveId), applicabilityRun)
+		if len(cveResults) == 0 {
 			continue
 		}
 		resultFound = true
-		// Add new evidences from locations
-		for _, location := range result.Locations {
-			if evidence := getEvidence(components, result, location, applicabilityRun.Invocations...); evidence != nil {
-				applicability.Evidence = append(applicability.Evidence, *evidence)
+		for _, result := range cveResults {
+			// Add new evidences from locations
+			for _, location := range result.Locations {
+				if evidence := getEvidence(components, result, location, applicabilityRun.Invocations...); evidence != nil {
+					applicability.Evidence = append(applicability.Evidence, *evidence)
+				}
 			}
 		}
 	}
@@ -563,10 +561,10 @@ func GetResultPropertyMetadata(result *sarif.Result) string {
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {
-	if rule.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
-		status, ok := rule.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
+	if rule != nil && rule.Properties != nil && rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey] != nil {
+		status, ok := rule.Properties.Properties[jasutils.ApplicabilitySarifPropertyKey].(string)
 		if !ok {
-			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", rule.ID))
+			log.Debug(fmt.Sprintf("Failed to get applicability status from rule properties for rule_id %s", sarifutils.GetRuleId(rule)))
 		}
 		switch status {
 		case "not_covered":
@@ -581,7 +579,7 @@ func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.Ap
 			return jasutils.MissingContext
 		}
 	}
-	return ""
+	return jasutils.NotScanned
 }
 
 func GetDependencyId(depName, version string) string {
