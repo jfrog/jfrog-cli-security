@@ -1,9 +1,12 @@
 package cdxutils
 
 import (
+	"path/filepath"
+
 	"github.com/CycloneDX/cyclonedx-go"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
 // AppendProperties appends new properties to the existing properties list.
@@ -75,6 +78,15 @@ func IsDirectDependency(dependencies *[]cyclonedx.Dependency, ref string) bool {
 	return false
 }
 
+func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) (depRefs []string) {
+	depEntry := SearchDependencyEntry(dependencies, ref)
+	if depEntry == nil || depEntry.Dependencies == nil || len(*depEntry.Dependencies) == 0 {
+		// No dependencies found for the given reference
+		return
+	}
+	return *depEntry.Dependencies
+}
+
 func GetRootDependenciesEntries(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
 	if dependencies == nil || len(*dependencies) == 0 {
@@ -103,4 +115,38 @@ func GetRootDependenciesEntries(dependencies *[]cyclonedx.Dependency) (roots []c
 		}
 	}
 	return
+}
+
+func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (component *cyclonedx.Component) {
+	if components == nil || len(*components) == 0 {
+		return
+	}
+	for _, comp := range *components {
+		if comp.BOMRef == ref {
+			return &comp
+		}
+	}
+	return
+}
+
+func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
+	component = cyclonedx.Component{
+		BOMRef: GetFileRef(filePathOrUri),
+		Type:   cyclonedx.ComponentTypeFile,
+		Name:   convertToFileUrlIfNeeded(filePathOrUri),
+	}
+	return
+}
+
+func GetFileRef(filePathOrUri string) string {
+	uri := convertToFileUrlIfNeeded(filePathOrUri)
+	wdRef, err := utils.Md5Hash(uri)
+	if err != nil {
+		return uri
+	}
+	return wdRef
+}
+
+func convertToFileUrlIfNeeded(location string) string {
+	return filepath.ToSlash(location)
 }
