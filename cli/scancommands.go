@@ -401,11 +401,7 @@ func AuditCmd(c *components.Context) error {
 	}
 
 	// Set dynamic command logic based on flags
-	if bomGenerator, err := getScanDynamicLogic(c); err != nil {
-		return err
-	} else {
-		auditCmd.SetBomGenerator(bomGenerator)
-	}
+	auditCmd.SetBomGenerator(getScanDynamicLogic(c))
 
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
@@ -422,8 +418,8 @@ func AuditCmd(c *components.Context) error {
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
 }
 
-func getScanDynamicLogic(_ *components.Context) (bom.SbomGenerator, error) {
-	return buildinfo.NewBuildInfoBomGenerator(), nil
+func getScanDynamicLogic(_ *components.Context) bom.SbomGenerator {
+	return buildinfo.NewBuildInfoBomGenerator()
 }
 
 func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {

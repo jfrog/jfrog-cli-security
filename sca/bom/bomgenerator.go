@@ -33,7 +33,7 @@ func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) 
 	// Generate the SBOM for the target
 	sbom, err := generator.GenerateSbom(params.Target.ScanTarget)
 	if err != nil {
-		params.Target.AddTargetError(fmt.Errorf("failed to generate SBOM for %s: %s", params.Target.Target, err.Error()), params.AllowPartialResults)
+		_ = params.Target.AddTargetError(fmt.Errorf("failed to generate SBOM for %s: %s", params.Target.Target, err.Error()), params.AllowPartialResults)
 		return
 	}
 	if err = logLibComponents(sbom.Components); err != nil {
@@ -48,7 +48,6 @@ func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) 
 	if err = utils.DumpCdxContentToFile(sbom, params.ScanResultsOutputDir, "bom"); err != nil {
 		log.Warn(fmt.Sprintf("Failed to dump CycloneDX SBOM for %s: %s", params.Target.Target, err.Error()))
 	}
-	return
 }
 
 func logLibComponents(components *[]cyclonedx.Component) (err error) {

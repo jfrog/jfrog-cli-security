@@ -19,7 +19,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -282,28 +281,6 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayUtils.GraphNode) []str
 		}
 	}
 	return directDependencies.ToSlice()
-}
-
-func flatTreeToStringList(flatTree *xrayUtils.GraphNode) []string {
-	var uniqueNodes []string
-	for _, node := range flatTree.Nodes {
-		uniqueNodes = append(uniqueNodes, node.Id)
-	}
-	return uniqueNodes
-}
-
-func logDeps(flatTree *xrayUtils.GraphNode) (err error) {
-	if log.GetLogger().GetLogLevel() != log.DEBUG {
-		// Avoid printing and marshaling if not on DEBUG mode.
-		return
-	}
-	jsonList, err := json.Marshal(flatTreeToStringList(flatTree))
-	if errorutils.CheckError(err) != nil {
-		return err
-	}
-	log.Debug("Unique dependencies list:\n" + clientutils.IndentJsonArray(jsonList))
-
-	return
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
