@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/CycloneDX/cyclonedx-go"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
