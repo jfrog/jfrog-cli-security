@@ -674,7 +674,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-		SetScansResultsOutputDir(outputDirPath)
+		SetScansResultsOutputDir(outputDirPath).
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -682,8 +683,9 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 5)
+	assert.Len(t, filesList, 6)
 
+	searchForStrWithSubString(t, filesList, "bom")
 	searchForStrWithSubString(t, filesList, "sca_results")
 	searchForStrWithSubString(t, filesList, "iac_results")
 	searchForStrWithSubString(t, filesList, "sast_results")
