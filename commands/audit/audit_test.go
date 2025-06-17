@@ -1022,7 +1022,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetDiffMode(true).
-				SetResultsToCompare(tc.resultsToCompare)
+				SetResultsToCompare(tc.resultsToCompare).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
