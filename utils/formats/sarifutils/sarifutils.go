@@ -67,6 +67,9 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 }
 
 func GetResultFailPrValue(result *sarif.Result) (failPr bool) {
+	if result == nil || result.Properties == nil {
+		return
+	}
 	if failPrProperty, ok := result.Properties.Properties[FailPrSarifPropertyKey]; ok {
 		if failPrValue, ok := failPrProperty.(bool); ok {
 			return failPrValue
