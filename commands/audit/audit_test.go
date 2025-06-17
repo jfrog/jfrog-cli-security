@@ -811,7 +811,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
-				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
+				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
