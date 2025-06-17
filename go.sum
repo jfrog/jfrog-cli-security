@@ -204,6 +204,7 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617145505-d27239698b98 h1:8rO0kN0IujC3WSVsP3f8VoXVAEwdYkIW1gzCkO3rgk4=
 github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617145505-d27239698b98/go.mod h1:b7Hc8UYtNVarG2zKFiTZN80GLbAtskN3BtHVMgoWCyw=
+github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617160209-d2f3fdf235bf/go.mod h1:b7Hc8UYtNVarG2zKFiTZN80GLbAtskN3BtHVMgoWCyw=
 github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250617145201-c031363bfbd8 h1:FgvaRCQoCbEqTUHv+K282jTgmWgDEUhql4Rp3o7UaLY=
 github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250617145201-c031363bfbd8/go.mod h1:1/HK1X05/o9DFKvuyTybPj2fPm1igy7wi4CD/JoZ/v8=
 github.com/rimapol/jfrog-client-go v0.0.0-20250617144823-0fc05ece58c5 h1:k4kpAuYdSduJ5yk2UulJUaUONgea/HM63iMgsN4fbG0=

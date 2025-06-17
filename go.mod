@@ -123,7 +123,7 @@ replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617145505-d27239698b98
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617160209-d2f3fdf235bf
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250612225735-0c71fe131507
 
