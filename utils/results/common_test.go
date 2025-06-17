@@ -1,6 +1,7 @@
 package results
 
 import (
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -8,10 +9,12 @@ import (
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
@@ -810,6 +813,66 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 	}
 }
 
+func TestSearchTargetResultsByPath(t *testing.T) {
+	oneTargetCmdResults := NewCommandResults(utils.SourceCode)
+	oneTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "path", "to", "dir")})
+
+	multiTargetCmdResults := NewCommandResults(utils.SourceCode)
+	multiTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "dir")})
+	multiTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "another", "dir")})
+
+	testCases := []struct {
+		name          string
+		target        string
+		cmdResults    *SecurityCommandResults
+		expectedFound bool
+	}{
+		{
+			name:          "One target in results - same path",
+			target:        path.Join("root", "path", "to", "dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "One target in results - same relative",
+			target:        path.Join("path", "to", "dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: false,
+		},
+		{
+			name:          "One target in results - not found",
+			target:        path.Join("some", "scan-dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: false,
+		},
+		{
+			name:          "Multiple targets in results - same path",
+			target:        path.Join("root", "dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "Multiple targets in results - same relative",
+			target:        path.Join("another", "dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "Multiple targets in results - not found",
+			target:        path.Join("a", "scan-dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			foundTarget := SearchTargetResultsByPath(tc.target, tc.cmdResults)
+			assert.Equal(t, tc.expectedFound, foundTarget != nil)
+		})
+	}
+}
+
 func TestDepTreeToSbom(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -1372,5 +1435,406 @@ func TestCompTreeToSbom(t *testing.T) {
 			assert.Equal(t, test.expectedComponents, components)
 			assert.Equal(t, test.expectedDependencies, dependencies)
 		})
+	}
+}
+
+func TestIsMultiProject(t *testing.T) {
+	tests := []struct {
+		name     string
+		bom      *cyclonedx.BOM
+		expected bool
+	}{
+		{
+			name: "no root",
+		},
+		{
+			name: "single root",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple roots",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"dep1", "dep2"}},
+					{Ref: "root2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep5"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep6"}},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, IsMultiProject(test.bom))
+		})
+	}
+}
+
+func TestBomToFlatTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		bom      *cyclonedx.BOM
+		expected *xrayUtils.GraphNode
+	}{
+		{
+			name:     "No components",
+			bom:      cyclonedx.NewBOM(),
+			expected: &xrayUtils.GraphNode{Id: "root"},
+		},
+		{
+			name: "BOM with components",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "component1",
+						Name:       "Component 1",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component1@1.0.0",
+					},
+					{
+						BOMRef: "3fac3b2",
+						Name:   path.Join("path", "to", "file.txt"),
+						Type:   "file",
+					},
+					{
+						BOMRef:     "component2",
+						Name:       "Component 2",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:golang/component2@2.0.0",
+					},
+				},
+			},
+			expected: &xrayUtils.GraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "npm://component1:1.0.0"},
+					{Id: "go://component2:2.0.0"},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom))
+		})
+	}
+}
+
+func TestBomToFullTree(t *testing.T) {
+	tests := []struct {
+		name            string
+		bom             *cyclonedx.BOM
+		isBuildInfoXray bool
+		expected        []*xrayUtils.GraphNode
+	}{
+		{
+			name: "BOM with no libraries",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef: "3fac3b2",
+						Name:   path.Join("path", "to", "file.txt"),
+						Type:   "file",
+					},
+				},
+			},
+			expected: []*xrayUtils.GraphNode{},
+		},
+		{
+			name: "BOM with one tree",
+			bom:  getTestBom(true),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "pkg:npm/root@1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "pkg:npm/component1@1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component2@2.1.2"}},
+						},
+						{
+							Id:    "pkg:npm/component2@2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+						},
+						{
+							Id: "pkg:npm/component3@3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "pkg:npm/component2@2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:            "BOM with one tree (converted to xray-component-id)",
+			isBuildInfoXray: true,
+			bom:             getTestBom(true),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://component1:1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component2:2.1.2"}},
+						},
+						{
+							Id:    "npm://component2:2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+						},
+						{
+							Id: "npm://component3:3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "npm://component2:2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "BOM with multiple trees",
+			bom:  getTestBom(false),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "pkg:npm/root@1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "pkg:npm/component1@1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component2@2.1.2"}},
+						},
+						{
+							Id:    "pkg:npm/component2@2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+						},
+						{
+							Id: "pkg:npm/component3@3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "pkg:npm/component2@2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+								},
+							},
+						},
+					},
+				},
+				{
+					Id: "pkg:golang/root@v1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id: "pkg:golang/component1@v1.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{Id: "pkg:golang/component2@v2.0.0"},
+								{Id: "pkg:golang/component3@v3.0.0"},
+							},
+						},
+						{
+							Id: "pkg:golang/component2@v2.0.0",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:            "BOM with multiple trees (converted to xray-component-id)",
+			isBuildInfoXray: true,
+			bom:             getTestBom(false),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://component1:1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component2:2.1.2"}},
+						},
+						{
+							Id:    "npm://component2:2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+						},
+						{
+							Id: "npm://component3:3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "npm://component2:2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+								},
+							},
+						},
+					},
+				},
+				{
+					Id: "go://root:v1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id: "go://component1:v1.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{Id: "go://component2:v2.0.0"},
+								{Id: "go://component3:v3.0.0"},
+							},
+						},
+						{
+							Id: "go://component2:v2.0.0",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, root := range test.expected {
+				setParentsToTestNodes(nil, root)
+			}
+			result := BomToFullTree(test.bom, test.isBuildInfoXray)
+			assert.ElementsMatch(t, test.expected, result)
+		})
+	}
+}
+
+func getTestBom(oneRoot bool) *cyclonedx.BOM {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				// Root component
+				BOMRef:     "npm:root:1.0.0",
+				Name:       "root",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/root@1.0.0",
+			},
+			{
+
+				BOMRef:     "npm:component1:1.0.0",
+				Name:       "Component 1",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component1@1.0.0",
+			},
+			{
+				BOMRef: "3fac3b2",
+				Name:   path.Join("path", "to", "file.txt"),
+				Type:   "file",
+			},
+			{
+				BOMRef:     "npm:component2:2.0.0",
+				Name:       "Component 2",
+				Version:    "2.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component2@2.0.0",
+			},
+			{
+				BOMRef:     "npm:component2:2.1.2",
+				Name:       "Component 2",
+				Version:    "2.1.2",
+				Type:       "library",
+				PackageURL: "pkg:npm/component2@2.1.2",
+			},
+			{
+				BOMRef:     "npm:component3:3.0.0",
+				Name:       "Component 3",
+				Version:    "3.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component3@3.0.0",
+			},
+			{
+				BOMRef:     "npm:component4:4.0.0",
+				Name:       "Component 4",
+				Version:    "4.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component4@4.0.0",
+			},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{
+				Ref:          "npm:root:1.0.0",
+				Dependencies: &[]string{"npm:component1:1.0.0", "npm:component2:2.0.0", "npm:component3:3.0.0"},
+			},
+			{
+				Ref:          "npm:component2:2.0.0",
+				Dependencies: &[]string{"npm:component4:4.0.0"},
+			},
+			{
+				Ref:          "npm:component1:1.0.0",
+				Dependencies: &[]string{"npm:component2:2.1.2"},
+			},
+			{
+				Ref:          "npm:component3:3.0.0",
+				Dependencies: &[]string{"npm:component2:2.0.0"},
+			},
+		},
+	}
+	if oneRoot {
+		return bom
+	}
+	// Multiple roots case
+	*bom.Components = append(*bom.Components,
+		// Root 2
+		cyclonedx.Component{
+			BOMRef:     "golang:root:v1.0.0",
+			Name:       "root",
+			Version:    "v1.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/root@v1.0.0",
+		},
+		// Component 1
+		cyclonedx.Component{
+			BOMRef:     "golang:component1:v1.0.0",
+			Name:       "Component 1",
+			Version:    "v1.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component1@v1.0.0",
+		},
+		// Component 2
+		cyclonedx.Component{
+			BOMRef:     "golang:component2:v2.0.0",
+			Name:       "Component 2",
+			Version:    "v2.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component2@v2.0.0",
+		},
+		// Component 3
+		cyclonedx.Component{
+			BOMRef:     "golang:component3:v3.0.0",
+			Name:       "Component 3",
+			Version:    "v3.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component3@v3.0.0",
+		},
+	)
+	*bom.Dependencies = append(*bom.Dependencies,
+		cyclonedx.Dependency{
+			Ref:          "golang:root:v1.0.0",
+			Dependencies: &[]string{"golang:component1:v1.0.0", "golang:component2:v2.0.0"},
+		},
+		cyclonedx.Dependency{
+			Ref:          "golang:component1:v1.0.0",
+			Dependencies: &[]string{"golang:component2:v2.0.0", "golang:component3:v3.0.0"},
+		},
+	)
+	return bom
+}
+
+func setParentsToTestNodes(parent *xrayUtils.GraphNode, nodes ...*xrayUtils.GraphNode) {
+	for _, node := range nodes {
+		node.Parent = parent
+		setParentsToTestNodes(node, node.Nodes...)
 	}
 }

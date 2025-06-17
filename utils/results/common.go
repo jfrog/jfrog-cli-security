@@ -881,6 +881,10 @@ func getBinaryNodeDirectDependencies(node *xrayUtils.BinaryGraphNode) (dependenc
 }
 
 func IsMultiProject(sbom *cyclonedx.BOM) bool {
+	if sbom == nil || sbom.Dependencies == nil {
+		// No dependencies or components in the SBOM, return false
+		return false
+	}
 	return len(cdxutils.GetRootDependenciesEntries(sbom.Dependencies)) > 1
 }
 
