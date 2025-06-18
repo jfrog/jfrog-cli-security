@@ -134,7 +134,7 @@ func executeScaScanTask(auditParallelRunner *utils.SecurityParallelRunner, serve
 		if xrayErr != nil {
 			return fmt.Errorf("%s Xray dependency tree scan request on '%s' failed:\n%s", clientutils.GetLogMsgPrefix(threadId, false), scan.Technology, xrayErr.Error())
 		}
-		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan)
+		err = dumpScanResponseToFileIfNeeded(scanResults, auditParams.scanResultsOutputDir, utils.ScaScan, threadId)
 		return
 	}
 }
@@ -161,7 +161,7 @@ func runScaWithTech(tech techutils.Technology, params *AuditParams, serverDetail
 	if err != nil {
 		return
 	}
-	log.Info(fmt.Sprintf("Finished '%s' dependency tree scan. %s", tech.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations), -1)))
+	log.Info(fmt.Sprintf("Finished '%s' dependency tree scan. %s", tech.ToFormal(), utils.GetScanFindingsLog(utils.ScaScan, len(techResults[0].Vulnerabilities), len(techResults[0].Violations))))
 	techResults = BuildImpactPathsForScanResponse(techResults, fullDependencyTrees)
 	return
 }
@@ -284,7 +284,7 @@ func getDirectDependenciesFromTree(dependencyTrees []*xrayUtils.GraphNode) []str
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
-func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType) (err error) {
+func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResultsOutputDir string, scanType utils.SubScanType, threadId int) (err error) {
 	if scanResultsOutputDir == "" || results == nil {
 		return
 	}
@@ -292,5 +292,5 @@ func dumpScanResponseToFileIfNeeded(results []services.ScanResponse, scanResults
 	if err != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
-	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String())
+	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId)
 }
