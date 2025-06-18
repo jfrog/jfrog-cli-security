@@ -16,11 +16,15 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
-	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+
+	// "github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
+
+	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/exp/slices"
 
@@ -169,6 +173,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
+		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
@@ -257,13 +262,21 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
-	// Initialize the bom generator
+	// Initialize the BOM generator
 	buildParams, err := params.ToBuildInfoBomGenParams()
 	if err != nil {
 		return results.NewCommandResults(utils.SourceCode).AddGeneralError(fmt.Errorf("failed to create build info params: %s", err.Error()), false)
 	}
 	if err = params.bomGenerator.PrepareGenerator(buildinfo.WithParams(buildParams)); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
+	}
+	scanGraphParams, err := params.ToXrayScanGraphParams()
+	if err != nil {
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to create scan graph params: %s", err.Error()), false)
+	}
+	// Initialize the SCA scan strategy
+	if err = params.scaScanStrategy.PrepareStrategy(scanGraphStrategy.WithParams(scanGraphParams)); err != nil {
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
 	}
 	// Populate the scan targets
 	populateScanTargets(cmdResults, params)
@@ -277,9 +290,9 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
-		return cmdResults.AddGeneralError(err, false)
-	}
+	// if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
+	// 	return cmdResults.AddGeneralError(err, false)
+	// }
 	cmdResults.SetXrayVersion(params.GetXrayVersion())
 	cmdResults.SetXscVersion(params.GetXscVersion())
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
@@ -399,7 +412,7 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
-	if generalScaScanError := AddScaScansToRunner(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
+	if generalScaScanError := addScaScansToRunner(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}
 	// Start the parallel runner to run the scans.
@@ -410,6 +423,26 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 		}
 
 	}).Start()
+}
+
+func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (generalError error) {
+	isNewFlow := false
+	// Perform SCA scans
+	for _, targetResult := range scanResults.Targets {
+		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
+			ScanResults:         targetResult,
+			ScansToPerform:      auditParams.ScansToPerform(),
+			ConfigProfile:       auditParams.GetConfigProfile(),
+			AllowPartialResults: auditParams.AllowPartialResults(),
+			ResultsOutputDir:    auditParams.scanResultsOutputDir,
+			Runner:              auditParallelRunner,
+			// TODO: remove this field once the new flow is fully implemented.
+			IsNewFlow: isNewFlow,
+		}); err != nil {
+			generalError = errors.Join(generalError, fmt.Errorf("failed to run SCA scan for target %s: %s", targetResult.Target, err.Error()))
+		}
+	}
+	return
 }
 
 func AddJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {

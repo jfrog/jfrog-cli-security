@@ -5,9 +5,11 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -26,7 +28,8 @@ type AuditParams struct {
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Dynamic logic params
-	bomGenerator bom.SbomGenerator
+	bomGenerator    bom.SbomGenerator
+	scaScanStrategy scan.SbomScanStrategy
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -63,6 +66,15 @@ func (params *AuditParams) SetBomGenerator(bomGenerator bom.SbomGenerator) *Audi
 
 func (params *AuditParams) BomGenerator() bom.SbomGenerator {
 	return params.bomGenerator
+}
+
+func (params *AuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *AuditParams {
+	params.scaScanStrategy = scaScanStrategy
+	return params
+}
+
+func (params *AuditParams) ScaScanStrategy() scan.SbomScanStrategy {
+	return params.scaScanStrategy
 }
 
 func (params *AuditParams) SetStartTime(startTime time.Time) *AuditParams {
@@ -174,6 +186,29 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 		// Pnpm params
 		MaxTreeDepth: params.MaxTreeDepth(),
 	}
+	return
+}
+
+func (params *AuditParams) ToXrayScanGraphParams() (scanGraphParams scangraph.ScanGraphParams, err error) {
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return
+	}
+	// Create the scan graph parameters.
+	xrayScanGraphParams := params.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XrayVersion = params.GetXrayVersion()
+	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+
+	// xrayScanGraphParams.Technology = tech.String()
+	// xrayScanGraphParams.DependenciesGraph = &flatTree
+	// 	SetTechnology(tech).
+
+	scanGraphParams = *scangraph.NewScanGraphParams().
+		SetServerDetails(serverDetails).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetFixableOnly(params.fixableOnly).
+		SetSeverityLevel(params.minSeverityFilter.String())
 	return
 }
 

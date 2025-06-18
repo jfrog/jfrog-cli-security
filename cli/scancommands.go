@@ -399,7 +399,8 @@ func AuditCmd(c *components.Context) error {
 	}
 
 	// Set dynamic command logic based on flags
-	auditCmd.SetBomGenerator(getScanDynamicLogic(c))
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	auditCmd.SetBomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
