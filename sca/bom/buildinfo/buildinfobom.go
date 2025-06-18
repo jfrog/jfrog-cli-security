@@ -188,13 +188,20 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 	if err != nil || (len(uniqueDeps) == 0 && len(uniqDepsWithTypes) == 0) {
 		return
 	}
-	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), len(uniqueDeps), time.Since(startTime).Seconds()))
+	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), getUniqueDepsCount(uniqueDeps, uniqDepsWithTypes), time.Since(startTime).Seconds()))
 	if len(uniqDepsWithTypes) > 0 {
 		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsWithTypes)
 		return
 	}
 	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
 	return
+}
+
+func getUniqueDepsCount(uniqueDeps []string, uniqDepsWithTypes map[string]*xray.DepTreeNode) int {
+	if len(uniqDepsWithTypes) > 0 {
+		return len(uniqDepsWithTypes)
+	}
+	return len(uniqueDeps)
 }
 
 func getCurationCacheFolderAndLogMsg(params technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {
