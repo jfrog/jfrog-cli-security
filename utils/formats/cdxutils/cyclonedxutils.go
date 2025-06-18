@@ -150,3 +150,62 @@ func getFileRef(filePathOrUri string) string {
 func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
 }
+
+func Exclude(bom *cyclonedx.BOM, components ...cyclonedx.Component) *cyclonedx.BOM {
+	if bom == nil {
+		return bom
+	}
+	filteredSbom := cyclonedx.NewBOM()
+	filteredSbom.Components = excludeFromComponents(bom.Components, components...)
+	filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, components...)
+	return filteredSbom
+}
+
+func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Component {
+	if components == nil || len(*components) == 0 || len(excludeComponents) == 0 {
+		return components
+	}
+	excludeRefs := datastructures.MakeSet[string]()
+	for _, comp := range excludeComponents {
+		excludeRefs.Add(comp.BOMRef)
+	}
+	filteredComponents := []cyclonedx.Component{}
+	for _, comp := range *components {
+		if !excludeRefs.Exists(comp.BOMRef) {
+			filteredComponents = append(filteredComponents, comp)
+		}
+	}
+	return &filteredComponents
+}
+
+func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Dependency {
+	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
+		return dependencies
+	}
+	excludeRefs := datastructures.MakeSet[string]()
+	for _, comp := range excludeComponents {
+		excludeRefs.Add(comp.BOMRef)
+	}
+	filteredDependencies := []cyclonedx.Dependency{}
+	for _, dep := range *dependencies {
+		if excludeRefs.Exists(dep.Ref) {
+			// This dependency is excluded, skip it
+			continue
+		}
+		filteredDep := cyclonedx.Dependency{Ref: dep.Ref}
+		depDirectDependencies := []string{}
+		if dep.Dependencies != nil {
+			// Also filter the components from the dependencies of this dependency
+			for _, depRef := range *dep.Dependencies {
+				if !excludeRefs.Exists(depRef) {
+					depDirectDependencies = append(depDirectDependencies, depRef)
+				}
+			}
+		}
+		if len(depDirectDependencies) > 0 {
+			filteredDep.Dependencies = &depDirectDependencies
+		}
+		filteredDependencies = append(filteredDependencies, filteredDep)
+	}
+	return &filteredDependencies
+}

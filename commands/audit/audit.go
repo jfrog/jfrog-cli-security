@@ -341,10 +341,18 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			// No need to generate the SBOM if we are not going to use it.
 			continue
 		}
+		targetResultsToCompare, err := getTargetResultsToCompare(cmdResults, params.ResultsToCompare(), targetResult)
+		if err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to get target results to compare: %s", err.Error()), false)
+			continue
+		}
 		bom.GenerateSbomForTarget(params.BomGenerator(), bom.SbomGeneratorParams{
 			Target:               targetResult,
 			AllowPartialResults:  params.AllowPartialResults(),
 			ScanResultsOutputDir: params.scanResultsOutputDir,
+			// Diff mode - SCA
+			DiffMode:              params.DiffMode(),
+			TargetResultToCompare: targetResultsToCompare,
 		})
 	}
 	// Print the scan targets
@@ -353,6 +361,21 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 		return
 	}
 	log.Info(fmt.Sprintf("Performing scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
+}
+
+func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults, err error) {
+	if resultsToCompare == nil {
+		// No results to compare, return nil.
+		return
+	}
+	targetResultsToCompare = results.SearchTargetResultsByPath(
+		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
+		resultsToCompare,
+	)
+	if targetResultsToCompare == nil || targetResultsToCompare.ScaResults == nil || targetResultsToCompare.ScaResults.Sbom == nil {
+		err = fmt.Errorf("no target results found to compare")
+	}
+	return
 }
 
 func detectScanTargets(cmdResults *results.SecurityCommandResults, params *AuditParams) {
@@ -426,6 +449,12 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 }
 
 func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (generalError error) {
+	if auditParams.DiffMode() && auditParams.ResultsToCompare() == nil {
+		// First call to audit scan on target branch, no diff to compare - no need to run the scan.
+		log.Debug("Diff scan - calculated components for target, skipping scan part")
+		return
+	}
+	// TODO: old flow only if scan-graph implementation, else new
 	isNewFlow := false
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
