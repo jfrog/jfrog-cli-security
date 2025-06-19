@@ -713,7 +713,7 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	return true, nil
 }
 
-func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
 		return
 	}
@@ -721,12 +721,16 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
 	for _, potential := range resultsToCompare.Targets {
-		if target == potential.Target {
+		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
 			return potential
 		}
-		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); target == relative && (best == nil || len(best.Target) > len(potential.Target)) {
-			best = potential
+		// Check if the target is a relative path of the source base path
+		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); relativeTarget == relative {
+			// Check if this is the best match so far
+			if best == nil || len(best.Target) > len(potential.Target) {
+				best = potential
+			}
 		}
 	}
 	return best
@@ -758,7 +762,10 @@ func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[strin
 	*components = append(*components, CreateScaComponentFromXrayCompId(node.Id))
 	if len(node.Nodes) > 0 {
 		// Create a matching dependency entry describing the direct dependencies
-		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: techutils.XrayComponentIdToCdxComponentRef(node.Id), Dependencies: getNodeDirectDependencies(node)})
+		*dependencies = append(*dependencies, cyclonedx.Dependency{
+			Ref:          techutils.XrayComponentIdToCdxComponentRef(node.Id),
+			Dependencies: getNodeDirectDependencies(node),
+		})
 	}
 	// Go through the dependencies and add them to the sbom
 	for _, dependencyNode := range node.Nodes {

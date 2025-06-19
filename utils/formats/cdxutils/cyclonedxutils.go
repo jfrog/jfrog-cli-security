@@ -6,8 +6,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 )
 
-// AppendProperties appends new properties to the existing properties list.
-// Returns the updated properties list.
+// AppendProperties appends new properties to the existing properties list and returns the updated list.
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
 	for _, property := range newProperties {
 		// Check if the property already exists
@@ -26,7 +25,7 @@ func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclone
 
 // SearchProperty searches for a property by name in the provided properties list.
 func SearchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
-	if properties == nil || len(*properties) == 0 {
+	if properties == nil || len(*properties) == 0 || name == "" {
 		return nil
 	}
 	for _, property := range *properties {
@@ -50,13 +49,14 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
-// IsDirectDependency checks if a component is a direct dependency of a root component in the provided components and dependencies.
-func IsDirectDependency(dependencies *[]cyclonedx.Dependency, ref string) bool {
+// IsDirectDependency checks if a component is a direct dependency given a list of dependencies and the component's reference.
+func IsDirectDependency(dependencies *[]cyclonedx.Dependency, componentRef string) bool {
 	if dependencies == nil || len(*dependencies) == 0 {
 		return false
 	}
+	// Calculate the root components
 	for _, root := range GetRootDependenciesEntries(dependencies) {
-		if root.Ref == ref {
+		if root.Ref == componentRef {
 			// The component is a root, hence it is not a direct dependency
 			return false
 		}
@@ -64,8 +64,8 @@ func IsDirectDependency(dependencies *[]cyclonedx.Dependency, ref string) bool {
 			// No dependencies, continue to the next root
 			continue
 		}
-		for _, dep := range *root.Dependencies {
-			if dep == ref {
+		for _, directDependencyRef := range *root.Dependencies {
+			if directDependencyRef == componentRef {
 				// The component is a direct dependency of this root
 				return true
 			}

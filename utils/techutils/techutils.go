@@ -99,7 +99,7 @@ var packageTypes = map[string]string{
 
 // The identifier of the package type used in cdx.
 // https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
-var cdxPackageTypes = map[string]string{
+var cdxPurlPackageTypes = map[string]string{
 	"gav":      "maven",
 	"docker":   "docker",
 	"rpm":      "rpm",
@@ -780,14 +780,14 @@ func ToXrayComponentId(packageType, componentName, componentVersion string) stri
 }
 
 func ToCdxPackageType(packageType string) string {
-	if cdxPackageType, exist := cdxPackageTypes[packageType]; exist {
+	if cdxPackageType, exist := cdxPurlPackageTypes[packageType]; exist {
 		return cdxPackageType
 	}
 	return packageType
 }
 
 func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
-	for xrayPackageType, cdxType := range cdxPackageTypes {
+	for xrayPackageType, cdxType := range cdxPurlPackageTypes {
 		if cdxType == cdxPackageType {
 			return xrayPackageType
 		}
@@ -798,25 +798,13 @@ func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
 // https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
 // Parse a given Package URL (purl) and return the component name, version, and package type.
 // Examples:
-//  1. purl: "pkg:golang/github.com/gophish/gophish@v0.1.2"
-//     Returned values:
-//     Component name: "github.com/gophish/gophish"
-//     Component version: "v0.1.2"
-//     Package type: "golang"
-//     Qualifiers: map[string]string{}
-//  2. purl: "pkg:golang/github.com/go-gitea/gitea"
+//  1. purl: "pkg:golang/github.com/go-gitea/gitea"
 //     Returned values:
 //     Component name: "github.com/go-gitea/gitea"
 //     Component version: ""
 //     Package type: "golang"
 //     Qualifiers: map[string]string{}
-//  3. purl: "pkg:gav/xpp3:xpp3_min@1.1.4c"
-//     Returned values:
-//     Component name: "xpp3:xpp3_min"
-//     Component version: "1.1.4c"
-//     Package type: "gav"
-//     Qualifiers: map[string]string{}
-//  4. purl: "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f"
+//  2. purl: "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f"
 //     Returned values:
 //     Component name: "org.apache.commons/commons-lang3"
 //     Component version: "3.12.0"
