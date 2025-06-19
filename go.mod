@@ -114,23 +114,11 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250619090125-b763fb1d780a
+replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250619121353-6ff3439c999d
 
-// replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v0.0.0-20250612223352-8bf50cddd4bd
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250619122826-54ff6f65b128
 
-// replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
-
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250619111525-4351e686cca4
-
-// replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250612225153-44cbb944f16f
-
-// replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
-
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250619111759-38ef4806e931
-
-// replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250612225735-0c71fe131507
-
-//replace github.com/jfrog/jfrog-cli-artifactory => ../jfrog-cli-artifactory
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250619124342-b7fdc5494ce6
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
