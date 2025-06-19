@@ -117,13 +117,13 @@ replace github.com/jfrog/jfrog-client-go => github.com/rimapol/jfrog-client-go v
 
 // replace github.com/jfrog/jfrog-client-go => ../jfrog-client-go
 
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250617145201-c031363bfbd8
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250619081812-d2a25c96240c
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/rimapol/jfrog-cli-core/v2 v2.0.0-20250612225153-44cbb944f16f
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => ../jfrog-cli-core
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250617160209-d2f3fdf235bf
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250619082239-c71ef96f43c7
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/rimapol/jfrog-cli-artifactory v0.0.0-20250612225735-0c71fe131507
 
