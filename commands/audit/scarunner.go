@@ -95,7 +95,7 @@ func getTargetCompTree(targetResult *results.TargetResults, auditParams *AuditPa
 		return nil
 	}
 	// Second scan, we need to compare the dependency tree with the one from the first scan.
-	treeResult, err := buildinfo.GetDiffDependencyTree(targetResult, results.SearchTargetResultsByPath(utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()), auditParams.ResultsToCompare()), treeResult.FullDepTrees...)
+	treeResult, err := buildinfo.GetDiffDependencyTree(targetResult, results.SearchTargetResultsByRelativePath(utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()), auditParams.ResultsToCompare()), treeResult.FullDepTrees...)
 	if err != nil {
 		_ = targetResult.AddTargetError(fmt.Errorf("failed to build diff dependency tree in source branch: %s", err.Error()), auditParams.AllowPartialResults())
 		return nil

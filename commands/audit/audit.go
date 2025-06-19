@@ -488,7 +488,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                      appsConfigModule,
 				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:              auditParams.ScansToPerform(),
-				SourceResultsToCompare:      scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare:      scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:             secrets.SecretsScannerType,
 				DirectDependencies:          auditParams.DirectDependencies(),
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,

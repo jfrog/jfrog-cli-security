@@ -813,7 +813,7 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 	}
 }
 
-func TestSearchTargetResultsByPath(t *testing.T) {
+func TestSearchTargetResultsByRelativePath(t *testing.T) {
 	oneTargetCmdResults := NewCommandResults(utils.SourceCode)
 	oneTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "path", "to", "dir")})
 
@@ -867,7 +867,7 @@ func TestSearchTargetResultsByPath(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			foundTarget := SearchTargetResultsByPath(tc.target, tc.cmdResults)
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
 			assert.Equal(t, tc.expectedFound, foundTarget != nil)
 		})
 	}

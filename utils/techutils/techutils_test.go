@@ -759,6 +759,16 @@ func TestSplitPackageUrlWithQualifiers(t *testing.T) {
 		qualifiers  map[string]string
 	}{
 		{
+			"npm scope with version",
+			"pkg:npm/@scope/package@1.0.0",
+			"@scope/package", "1.0.0", "npm", map[string]string{},
+		},
+		{
+			"escaped npm scope with version",
+			"pkg:npm/%40scope/package@1.0.0",
+			"@scope/package", "1.0.0", "npm", map[string]string{},
+		},
+		{
 			"golang with version",
 			"pkg:golang/github.com/gophish/gophish@v0.1.2",
 			"github.com/gophish/gophish", "v0.1.2", "golang", map[string]string{},
@@ -798,6 +808,8 @@ func TestSplitPackageURL(t *testing.T) {
 		compVersion string
 		packageType string
 	}{
+		{"npm scope with version", "pkg:npm/@scope/package@1.0.0", "@scope/package", "1.0.0", "npm"},
+		{"escaped npm scope with version", "pkg:npm/%40scope/package@1.0.0", "@scope/package", "1.0.0", "npm"},
 		{"golang with version", "pkg:golang/github.com/gophish/gophish@v0.1.2", "github.com/gophish/gophish", "v0.1.2", "golang"},
 		{"gav with version", "pkg:gav/xpp3:xpp3_min@1.1.4c", "xpp3:xpp3_min", "1.1.4c", "gav"},
 	}
@@ -819,6 +831,7 @@ func TestToPackageUrl(t *testing.T) {
 		packageType string
 		expected    string
 	}{
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/@scope/package@1.0.0"},
 		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
 		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3:xpp3_min@1.1.4c"},
 	}
@@ -838,6 +851,7 @@ func TestToPackageRef(t *testing.T) {
 		packageType string
 		expected    string
 	}{
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "npm:@scope/package:1.0.0"},
 		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish:v0.1.2"},
 		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min:1.1.4c"},
 	}
@@ -873,6 +887,7 @@ func TestXrayComponentIdToPurl(t *testing.T) {
 		input    string
 		expected string
 	}{
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
 		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3:xpp3_min@1.1.4c"},
 		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
 		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
@@ -891,6 +906,7 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		input    string
 		expected string
 	}{
+		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
 		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min:1.1.4c"},
 		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
 		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish:v0.1.2"},
