@@ -98,7 +98,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If the scan is not requested, skip it.
 	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, utils.ScaScan) {
-		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan for %s as requested by input...", params.ScanResults.Target))
+		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as requested by input...", params.ScanResults.Target))
 		return false, nil
 	}
 	// If the scan is turned off in the config profile, skip it.
@@ -108,7 +108,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 			return false, fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
 		}
 		if !params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
-			log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan as requested by '%s' config profile...", params.ConfigProfile.ProfileName))
+			log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA as requested by '%s' config profile...", params.ConfigProfile.ProfileName))
 			return false, nil
 		}
 	}
@@ -117,7 +117,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If nothing to scan, skip it.
 	if params.ScanResults.ScaResults == nil || params.ScanResults.ScaResults.Sbom == nil || params.ScanResults.ScaResults.Sbom.Components == nil || len(*params.ScanResults.ScaResults.Sbom.Components) == 0 {
-		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA scan for %s as no dependencies were found in the target", params.ScanResults.Target))
+		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no dependencies were found in the target", params.ScanResults.Target))
 		return false, nil
 	}
 	// Run the scan.
@@ -129,7 +129,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if params.ThreadId >= 0 {
 		logPrefix = clientUtils.GetLogMsgPrefix(params.ThreadId, false)
 	}
-	log.Info(logPrefix + fmt.Sprintf("Running SCA scan for %d components at %s", len(*params.ScanResults.ScaResults.Sbom.Components), params.ScanResults.String()))
+	log.Info(logPrefix + fmt.Sprintf("Running SCA for %d components at %s", len(*params.ScanResults.ScaResults.Sbom.Components), params.ScanResults.String()))
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
