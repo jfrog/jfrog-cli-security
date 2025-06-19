@@ -38,8 +38,8 @@ type JasRunnerParams struct {
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
 	// Contextual Analysis scan flags
+	CvesProvider                CveProvider
 	ApplicableScanType          applicability.ApplicabilityScanType
-	DirectDependencies          *[]string
 	ThirdPartyApplicabilityScan bool
 	// SAST scan flags
 	SignedDescriptions bool
@@ -47,6 +47,9 @@ type JasRunnerParams struct {
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
+
+// Cves are only available after the SCA scan is performed, so we need a provider to dynamically pass the discovered cves.
+type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
@@ -184,14 +187,19 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		params.Runner.ScaScansWg.Wait()
+		// Get the direct and indirect cves from the sca scan.
+		directCves, indirectCves := params.CvesProvider()
+		// Run the applicability scan only if we have cves to scan.
 		caScanResults, err := applicability.RunApplicabilityScan(
-			params.ScanResults.GetScaScansXrayResults(),
-			*params.DirectDependencies,
+			applicability.ContextualAnalysisScanParams{
+				DirectDependenciesCves:       directCves,
+				IndirectDependenciesCves:     indirectCves,
+				ScanType:                     params.ApplicableScanType,
+				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
+				ThreadId:                     threadId,
+				Module:                       params.Module,
+			},
 			params.Scanner,
-			params.ThirdPartyApplicabilityScan,
-			params.ApplicableScanType,
-			params.Module,
-			threadId,
 		)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()

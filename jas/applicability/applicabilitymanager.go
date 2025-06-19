@@ -3,7 +3,6 @@ package applicability
 import (
 	"path/filepath"
 
-	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -13,7 +12,6 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -39,88 +37,52 @@ type ApplicabilityScanManager struct {
 	resultsFileName          string
 }
 
+type ContextualAnalysisScanParams struct {
+	DirectDependenciesCves       []string
+	IndirectDependenciesCves     []string
+	ScanType                     ApplicabilityScanType
+	ThirdPartyContextualAnalysis bool
+	ThreadId                     int
+	Module                       jfrogappsconfig.Module
+}
+
 // The getApplicabilityScanResults function runs the applicability scan flow, which includes the following steps:
 // Creating an ApplicabilityScanManager object.
 // Checking if the scanned project is eligible for applicability scan.
 // Running the analyzer manager executable.
 // Parsing the analyzer manager results.
-func RunApplicabilityScan(xrayResults []services.ScanResponse, directDependencies []string,
-	scanner *jas.JasScanner, thirdPartyContextualAnalysis bool, scanType ApplicabilityScanType, module jfrogappsconfig.Module, threadId int) (results []*sarif.Run, err error) {
+func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	var scannerTempDir string
 	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
 		return
 	}
-	applicabilityScanManager := newApplicabilityScanManager(xrayResults, directDependencies, scanner, thirdPartyContextualAnalysis, scanType, scannerTempDir)
+	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
-		log.Debug(clientutils.GetLogMsgPrefix(threadId, false), "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
+		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false), "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "Running applicability scan...")
+	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "Running applicability scan...")
 	// Applicability scan does not produce violations.
-	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, module); err != nil {
+	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Module); err != nil {
 		return
 	}
 	applicableCveCount := sarifutils.GetRulesPropertyCount("applicability", "applicable", results...)
 	if applicableCveCount > 0 {
-		log.Info(clientutils.GetLogMsgPrefix(threadId, false)+"Found", applicableCveCount, "applicable cves")
+		log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false)+"Found", applicableCveCount, "applicable cves")
 	}
 	return
 }
 
-func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
-	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
+func newApplicabilityScanManager(directDependenciesCves, indirectDependenciesCves []string, scanner *jas.JasScanner, thirdPartyScan bool, scanType ApplicabilityScanType, scannerTempDir string) (manager *ApplicabilityScanManager) {
 	return &ApplicabilityScanManager{
 		directDependenciesCves:   directDependenciesCves,
 		indirectDependenciesCves: indirectDependenciesCves,
-		xrayResults:              xrayScanResults,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
 		commandType:              string(scanType),
 		configFileName:           filepath.Join(scannerTempDir, "config.yaml"),
 		resultsFileName:          filepath.Join(scannerTempDir, "results.sarif"),
 	}
-}
-
-func addCvesToSet(cves []services.Cve, set *datastructures.Set[string]) {
-	for _, cve := range cves {
-		if cve.Id != "" {
-			set.Add(cve.Id)
-		}
-	}
-}
-
-// This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
-// lists of the direct and indirect CVEs
-func extractDependenciesCvesFromScan(xrayScanResults []services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
-	directCvesSet := datastructures.MakeSet[string]()
-	indirectCvesSet := datastructures.MakeSet[string]()
-	for _, scanResult := range xrayScanResults {
-		for _, vulnerability := range scanResult.Vulnerabilities {
-			if isDirectComponents(maps.Keys(vulnerability.Components), directDependencies) {
-				addCvesToSet(vulnerability.Cves, directCvesSet)
-			} else {
-				addCvesToSet(vulnerability.Cves, indirectCvesSet)
-			}
-		}
-		for _, violation := range scanResult.Violations {
-			if isDirectComponents(maps.Keys(violation.Components), directDependencies) {
-				addCvesToSet(violation.Cves, directCvesSet)
-			} else {
-				addCvesToSet(violation.Cves, indirectCvesSet)
-			}
-		}
-	}
-
-	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
-}
-
-func isDirectComponents(components []string, directDependencies []string) bool {
-	for _, component := range components {
-		if slices.Contains(directDependencies, component) {
-			return true
-		}
-	}
-	return false
 }
 
 func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (vulnerabilitiesSarifRuns []*sarif.Run, violationsSarifRuns []*sarif.Run, err error) {

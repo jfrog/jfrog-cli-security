@@ -14,6 +14,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -813,6 +814,89 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 	}
 }
 
+func TestExtractXrayDirectViolations(t *testing.T) {
+	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
+		{
+			Violations: []services.Violation{
+				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
+					Components: map[string]services.Component{"issueId_2_direct_dependency": {}}},
+			},
+		},
+	}
+	tests := []struct {
+		directDependencies []string
+		directCvesCount    int
+		indirectCvesCount  int
+	}{
+		{directDependencies: []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
+			directCvesCount:   2,
+			indirectCvesCount: 0,
+		},
+		// Vulnerability dependency, should be ignored by function
+		{directDependencies: []string{"issueId_1_direct_dependency"},
+			directCvesCount:   0,
+			indirectCvesCount: 2,
+		},
+		{directDependencies: []string{},
+			directCvesCount:   0,
+			indirectCvesCount: 2,
+		},
+	}
+
+	for _, test := range tests {
+		directCves, indirectCves := ExtractCvesFromScanResponse(xrayResponseForDirectViolationsTest, test.directDependencies)
+		assert.Len(t, directCves, test.directCvesCount)
+		assert.Len(t, indirectCves, test.indirectCvesCount)
+	}
+}
+
+func TestExtractXrayDirectVulnerabilities(t *testing.T) {
+	var xrayResponseForDirectVulnerabilitiesTest = []services.ScanResponse{
+		{
+			ScanId: "scanId_1",
+			Vulnerabilities: []services.Vulnerability{
+				{
+					IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+					Components: map[string]services.Component{"issueId_1_direct_dependency": {}},
+				},
+				{
+					IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
+					Components: map[string]services.Component{"issueId_2_direct_dependency": {}},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		directDependencies []string
+		directCvesCount    int
+		indirectCvesCount  int
+	}{
+		{
+			directDependencies: []string{"issueId_1_direct_dependency"},
+			directCvesCount:    3,
+			indirectCvesCount:  2,
+		},
+		{
+			directDependencies: []string{"issueId_2_direct_dependency"},
+			directCvesCount:    2,
+			indirectCvesCount:  3,
+		},
+		{directDependencies: []string{},
+			directCvesCount:   0,
+			indirectCvesCount: 5,
+		},
+	}
+
+	for _, test := range tests {
+		directCves, indirectCves := ExtractCvesFromScanResponse(xrayResponseForDirectVulnerabilitiesTest, test.directDependencies)
+		assert.Len(t, directCves, test.directCvesCount)
+		assert.Len(t, indirectCves, test.indirectCvesCount)
+	}
+}
+
 func TestSearchTargetResultsByPath(t *testing.T) {
 	oneTargetCmdResults := NewCommandResults(utils.SourceCode)
 	oneTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "path", "to", "dir")})
@@ -1527,7 +1611,7 @@ func TestBomToFlatTree(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expected, BomToFlatTree(test.bom))
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom, true))
 		})
 	}
 }

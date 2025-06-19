@@ -4,11 +4,13 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
@@ -237,4 +239,19 @@ func (params *AuditParams) SetDiffMode(diffMode bool) *AuditParams {
 
 func (params *AuditParams) DiffMode() bool {
 	return params.diffMode
+}
+
+// When building pip dependency tree using pipdeptree, some of the direct dependencies are recognized as transitive and missed by the CA scanner.
+// Our solution for this case is to send all dependencies to the CA scanner.
+// When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
+// Only npm is supported for this flag.
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+	if params.bomGenerator == nil {
+		return false
+	}
+	// Check if bomGenerator is BuildInfo type, if not, return false
+	if _, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); !success {
+		return false
+	}
+	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
 }

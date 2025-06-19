@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -23,7 +26,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -713,6 +715,83 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	return true, nil
 }
 
+// This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
+// lists of the direct and indirect CVEs
+func ExtractCvesFromScanResponse(xrayScanResults []services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
+	directCvesSet := datastructures.MakeSet[string]()
+	indirectCvesSet := datastructures.MakeSet[string]()
+	for _, scanResult := range xrayScanResults {
+		for _, vulnerability := range scanResult.Vulnerabilities {
+			if isDirectComponents(maps.Keys(vulnerability.Components), directDependencies) {
+				addCvesToSet(vulnerability.Cves, directCvesSet)
+			} else {
+				addCvesToSet(vulnerability.Cves, indirectCvesSet)
+			}
+		}
+		for _, violation := range scanResult.Violations {
+			if isDirectComponents(maps.Keys(violation.Components), directDependencies) {
+				addCvesToSet(violation.Cves, directCvesSet)
+			} else {
+				addCvesToSet(violation.Cves, indirectCvesSet)
+			}
+		}
+	}
+
+	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
+}
+
+func isDirectComponents(components []string, directDependencies []string) bool {
+	for _, component := range components {
+		if slices.Contains(directDependencies, component) {
+			return true
+		}
+	}
+	return false
+}
+
+func addCvesToSet(cves []services.Cve, set *datastructures.Set[string]) {
+	for _, cve := range cves {
+		if cve.Id != "" {
+			set.Add(cve.Id)
+		}
+	}
+}
+
+func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertToXrayCompId bool) (slice []string) {
+	slice = []string{}
+	if targetResult.ScaResults == nil || targetResult.ScaResults.Sbom == nil || targetResult.ScaResults.Sbom.Components == nil || targetResult.ScaResults.Sbom.Dependencies == nil {
+		return
+	}
+	if flatTree {
+		// If the flat tree is requested, we will use the flat tree of the SBOM
+		if root := BomToFlatTree(targetResult.ScaResults.Sbom, convertToXrayCompId); root != nil {
+			for _, component := range root.Nodes {
+				if component != nil && component.Id != "" {
+					// Add the component ID to the slice
+					slice = append(slice, component.Id)
+				}
+			}
+		}
+		return
+	}
+	// Translate refs to IDs
+	directIdsSet := datastructures.MakeSet[string]()
+	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom.Dependencies) {
+		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
+			continue
+		}
+		// Collect the IDs of the direct dependencies
+		for _, directDepRef := range *root.Dependencies {
+			if component := cdxutils.SearchComponentByRef(targetResult.ScaResults.Sbom.Components, directDepRef); component != nil {
+				directIdsSet.Add(techutils.PurlToXrayComponentId(component.PackageURL))
+			}
+		}
+	}
+	return directIdsSet.ToSlice()
+}
+
+// func extract
+
 func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
 		return
@@ -889,10 +968,10 @@ func IsMultiProject(sbom *cyclonedx.BOM) bool {
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
-	return BomToFlatTree(sbom), BomToFullTree(sbom, true)
+	return BomToFlatTree(sbom, true), BomToFullTree(sbom, true)
 }
 
-func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
+func BomToFlatTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (flatTree *xrayUtils.GraphNode) {
 	flatTree = &xrayUtils.GraphNode{Id: "root"}
 	if sbom == nil || sbom.Components == nil {
 		return
@@ -904,19 +983,23 @@ func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
 			// We are only interested in libraries for the dependency tree
 			continue
 		}
-		id := techutils.PurlToXrayComponentId(component.PackageURL)
+		// Get the component ID
+		id := component.PackageURL
+		if convertToXrayCompId {
+			id = techutils.PurlToXrayComponentId(id)
+		}
 		if components.Exists(id) {
 			// The component is already added, skip it
 			continue
 		}
 		// Add the component to the flat tree
 		components.Add(id)
-		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id})
+		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id, Parent: flatTree})
 	}
 	return
 }
 
-func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
+func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
 	if sbom == nil || sbom.Dependencies == nil {
 		// No dependencies or components in the SBOM, return an empty slice
 		return
@@ -931,7 +1014,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTre
 	}
 	// Translate refs to IDs
 	for _, node := range fullDependencyTrees {
-		convertRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+		convertRefsToPackageID(node, convertToXrayCompId, *sbom.Components...)
 	}
 	return
 }
@@ -950,17 +1033,17 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cycl
 	}
 }
 
-func convertRefsToPackageID(node *xrayUtils.GraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+func convertRefsToPackageID(node *xrayUtils.GraphNode, convertToXrayCompId bool, components ...cyclonedx.Component) {
 	if node == nil {
 		return
 	}
 	if component := cdxutils.SearchComponentByRef(&components, node.Id); component != nil {
 		node.Id = component.PackageURL
-		if isBuildInfoXray {
+		if convertToXrayCompId {
 			node.Id = techutils.PurlToXrayComponentId(node.Id)
 		}
 	}
 	for _, dep := range node.Nodes {
-		convertRefsToPackageID(dep, isBuildInfoXray, components...)
+		convertRefsToPackageID(dep, convertToXrayCompId, components...)
 	}
 }

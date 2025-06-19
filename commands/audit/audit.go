@@ -544,15 +544,22 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                      auditParallelRunner,
-				ServerDetails:               serverDetails,
-				Scanner:                     scanner,
-				Module:                      appsConfigModule,
-				ConfigProfile:               auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:              auditParams.ScansToPerform(),
-				SourceResultsToCompare:      scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:             secrets.SecretsScannerType,
-				DirectDependencies:          auditParams.DirectDependencies(),
+				Runner:                 auditParallelRunner,
+				ServerDetails:          serverDetails,
+				Scanner:                scanner,
+				Module:                 appsConfigModule,
+				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:         auditParams.ScansToPerform(),
+				SourceResultsToCompare: scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:        secrets.SecretsScannerType,
+				CvesProvider: func() (directCves []string, indirectCves []string) {
+					// if len(targetResult.GetScaScansXrayResults()) > 0 {
+					// TODO: remove this once the new SCA flow with cdx is fully implemented.
+					return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology), true))
+					// } else {
+					// 	return applicability.ExtractCdxDependenciesCves(targetResult.ScaResults.EnrichedSbom)
+					// }
+				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
 				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
