@@ -3,7 +3,7 @@ package sarifutils
 import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 // TODO: Create a Builder struct (with dynamic setters) and refactor sarif tests for better maintenance
@@ -28,7 +28,7 @@ func CreateRunWithDummyResults(results ...*sarif.Result) *sarif.Run {
 
 func CreateDummyDriver(toolName string, rules ...*sarif.ReportingDescriptor) *sarif.ToolComponent {
 	return &sarif.ToolComponent{
-		Name:  toolName,
+		Name:  &toolName,
 		Rules: rules,
 	}
 }
@@ -38,7 +38,7 @@ func CreateRunNameWithResults(toolName string, results ...*sarif.Result) *sarif.
 }
 
 func createRunWithDummyResults(toolName, ruleShortTxtDescription, ruleMsg, ruleMarkdown, ruleHelpMsg, ruleHelpMarkdown string, results ...*sarif.Result) *sarif.Run {
-	run := sarif.NewRun(*sarif.NewSimpleTool(toolName))
+	run := sarif.NewRun().WithTool(sarif.NewTool().WithDriver(sarif.NewToolComponent().WithName(toolName)))
 	for _, result := range results {
 		if result.RuleID != nil {
 			rule := run.AddRule(*result.RuleID)
@@ -73,9 +73,9 @@ func CreateRunWithDummyResultAndRuleProperties(result *sarif.Result, properties,
 	if rule == nil {
 		return nil
 	}
-	rule.Properties = map[string]interface{}{}
+	rule.Properties = sarif.NewPropertyBag()
 	for index := range properties {
-		rule.Properties[properties[index]] = values[index]
+		rule.Properties.Add(properties[index], values[index])
 	}
 	return run
 }
@@ -84,8 +84,8 @@ func CreateDummyRule(impactPaths [][]formats.ComponentRow, ruleId, ruleDescripti
 	var ruleProperties = sarif.NewPropertyBag()
 	ruleProperties.Add(severityutils.SarifSeverityRuleProperty, maxCveScore)
 	ruleProperties.Add(SarifImpactPathsRulePropertyKey, impactPaths)
-	description := sarif.NewMultiformatMessageString(summary).WithMarkdown(markdownDescription)
-	return sarif.NewRule(ruleId).WithName(ruleId).WithProperties(ruleProperties.Properties).WithDescription(ruleDescription).WithHelp(description).WithFullDescription(description)
+	description := sarif.NewMultiformatMessageString().WithText(summary).WithMarkdown(markdownDescription)
+	return sarif.NewRule(ruleId).WithName(ruleId).WithProperties(ruleProperties).WithDescription(ruleDescription).WithHelp(description).WithFullDescription(description)
 
 }
 
@@ -95,8 +95,8 @@ func CreateDummyResultInPath(fileName string) *sarif.Result {
 
 func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
 	result := &sarif.Result{
-		Message: sarif.Message{Text: &msg, Markdown: &markdown},
-		Level:   &level,
+		Message: &sarif.Message{Text: &msg, Markdown: &markdown},
+		Level:   level,
 		RuleID:  &ruleId,
 	}
 	if len(locations) > 0 {
@@ -107,21 +107,22 @@ func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.
 
 func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {
 	result := &sarif.Result{
-		Message:   *sarif.NewTextMessage(msg),
-		Level:     &level,
+		Message:   sarif.NewTextMessage(msg),
+		Level:     level,
 		RuleID:    &ruleId,
 		Locations: locations,
 	}
-	result.Properties = map[string]interface{}{}
+	result.Properties = sarif.NewPropertyBag()
 	for key, val := range properties {
-		result.Properties[key] = val
+		result.Properties.Properties[key] = val
 	}
 	return result
 }
 
 func CreateResultWithDummyLocationAmdProperty(fileName, property, value string) *sarif.Result {
 	resultWithLocation := CreateDummyResultInPath(fileName)
-	resultWithLocation.Properties = map[string]interface{}{property: value}
+	resultWithLocation.Properties = sarif.NewPropertyBag()
+	resultWithLocation.Properties.Add(property, value)
 	return resultWithLocation
 }
 
@@ -133,16 +134,9 @@ func CreateResultWithLocations(msg, ruleId, level string, locations ...*sarif.Lo
 
 func CreateDummyResultWithFingerprint(markdown, msg, algorithm, value string, locations ...*sarif.Location) *sarif.Result {
 	result := CreateDummyResult(markdown, msg, "rule", "level")
-	if result.RuleIndex == nil {
-		result.RuleIndex = newUintPtr(0)
-	}
 	result.Locations = locations
-	result.Fingerprints = map[string]interface{}{algorithm: value}
+	result.Fingerprints = map[string]string{algorithm: value}
 	return result
-}
-
-func newUintPtr(v uint) *uint {
-	return &v
 }
 
 func CreateDummyResultWithPathAndLogicalLocation(fileName, logicalName, kind, property, value string) *sarif.Result {
@@ -162,28 +156,24 @@ func CreateDummyLocationInPath(fileName string) *sarif.Location {
 }
 
 func CreateLocation(fileName string, startLine, startCol, endLine, endCol int, snippet string) *sarif.Location {
-	return &sarif.Location{
-		PhysicalLocation: &sarif.PhysicalLocation{
-			ArtifactLocation: &sarif.ArtifactLocation{URI: &fileName},
-			Region: &sarif.Region{
-				StartLine:   &startLine,
-				StartColumn: &startCol,
-				EndLine:     &endLine,
-				EndColumn:   &endCol,
-				Snippet:     &sarif.ArtifactContent{Text: &snippet}}},
-	}
+	return sarif.NewLocation().WithPhysicalLocation(&sarif.PhysicalLocation{
+		ArtifactLocation: sarif.NewArtifactLocation().WithURI(fileName),
+		Region:           sarif.NewRegion().WithStartLine(startLine).WithStartColumn(startCol).WithEndLine(endLine).WithEndColumn(endCol).WithSnippet(sarif.NewArtifactContent().WithText(snippet)),
+	})
 }
 
 func CreateLogicalLocationWithProperty(name, kind, property, value string) *sarif.LogicalLocation {
-	location := sarif.NewLogicalLocation().WithName(name).WithKind(kind)
-	location.Properties = map[string]interface{}{property: value}
+	location := &sarif.LogicalLocation{}
+	location.WithName(name).WithKind(kind)
+	location.Properties = sarif.NewPropertyBag()
+	location.Properties.Add(property, value)
 	return location
 }
 
 func CreateDummyPassingResult(ruleId string) *sarif.Result {
 	kind := "pass"
 	return &sarif.Result{
-		Kind:   &kind,
+		Kind:   kind,
 		RuleID: &ruleId,
 	}
 }
@@ -209,10 +199,13 @@ func CreateThreadFlow(locations ...*sarif.Location) *sarif.ThreadFlow {
 }
 
 func CreateDummyRuleWithProperties(id string, properties sarif.Properties) *sarif.ReportingDescriptor {
-	return &sarif.ReportingDescriptor{
-		ID:               id,
-		Properties:       properties,
-		ShortDescription: sarif.NewMultiformatMessageString(""),
-		FullDescription:  sarif.NewMarkdownMultiformatMessageString("rule-markdown").WithText("rule-msg"),
+	propertyBag := sarif.NewPropertyBag()
+	for key, value := range properties {
+		propertyBag.Add(key, value)
 	}
+	return sarif.NewReportingDescriptor().
+		WithID(id).
+		WithProperties(propertyBag).
+		WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).
+		WithFullDescription(sarif.NewMultiformatMessageString().WithText("rule-msg").WithMarkdown("rule-markdown"))
 }

@@ -14,7 +14,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
@@ -216,8 +216,8 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		cves := *potentialCves
 		for i := range cves {
 			if cves[i].Applicability != nil {
-				for i := range cves[i].Applicability.Evidence {
-					cves[i].Applicability.Evidence[i].Location.File = filepath.FromSlash(cves[i].Applicability.Evidence[i].Location.File)
+				for j := range cves[i].Applicability.Evidence {
+					cves[i].Applicability.Evidence[j].Location.File = filepath.FromSlash(cves[i].Applicability.Evidence[j].Location.File)
 				}
 			}
 		}
