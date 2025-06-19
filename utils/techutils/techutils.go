@@ -3,6 +3,7 @@ package techutils
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +21,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/package-url/packageurl-go"
 )
 
 const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
@@ -96,6 +98,23 @@ var packageTypes = map[string]string{
 	"go":       "Go",
 	"alpine":   "Alpine",
 	"rubygems": "Gem",
+}
+
+// The identifier of the package type used in cdx.
+// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
+var cdxPurlPackageTypes = map[string]string{
+	"gav":      "maven",
+	"docker":   "docker",
+	"rpm":      "rpm",
+	"deb":      "deb",
+	"nuget":    "nuget",
+	"generic":  "generic",
+	"npm":      "npm",
+	"pypi":     "pypi",
+	"composer": "composer",
+	"go":       "golang",
+	"alpine":   "alpine",
+	"swift":    "swift",
 }
 
 type TechData struct {
@@ -766,4 +785,92 @@ func ConvertXrayPackageType(xrayPackageType string) string {
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
 	return fmt.Sprintf("%s://%s:%s", packageType, componentName, componentVersion)
+}
+
+func ToCdxPackageType(packageType string) string {
+	if cdxPackageType, exist := cdxPurlPackageTypes[packageType]; exist {
+		return cdxPackageType
+	}
+	return packageType
+}
+
+func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
+	for xrayPackageType, cdxType := range cdxPurlPackageTypes {
+		if cdxType == cdxPackageType {
+			return xrayPackageType
+		}
+	}
+	return cdxPackageType
+}
+
+// https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
+// Parse a given Package URL (purl) and return the component name, version, and package type.
+// Examples:
+//  1. purl: "pkg:golang/github.com/go-gitea/gitea"
+//     Returned values:
+//     Component name: "github.com/go-gitea/gitea"
+//     Component version: ""
+//     Package type: "golang"
+//     Qualifiers: map[string]string{}
+//  2. purl: "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f"
+//     Returned values:
+//     Component name: "org.apache.commons/commons-lang3"
+//     Component version: "3.12.0"
+//     Package type: "maven"
+//     Qualifiers: map[string]string{"package-id": "d3f8d67af404667f"}
+func SplitPackageUrlWithQualifiers(purl string) (compName, compVersion, packageType string, qualifiers map[string]string) {
+	parsed, err := packageurl.FromString(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to parse package URL '%s': %s", purl, err))
+		return purl, "", "", nil
+	}
+	compName = parsed.Name
+	if parsed.Namespace != "" {
+		compName = parsed.Namespace + "/" + compName
+	}
+	compVersion = parsed.Version
+	packageType = parsed.Type
+	if err := parsed.Qualifiers.Normalize(); err != nil {
+		log.Debug(fmt.Sprintf("Failed to normalize '%s' qualifiers: %s", purl, err))
+		return
+	}
+	qualifiers = parsed.Qualifiers.Map()
+	return
+}
+
+func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
+	compName, compVersion, packageType, _ = SplitPackageUrlWithQualifiers(purl)
+	return
+}
+
+func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
+	purl := packageurl.NewPackageURL(packageType, "", compName, version, properties, "").String()
+	// Unescape the output
+	output, err := url.QueryUnescape(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
+		// Return the original output
+		return purl
+	}
+	return
+}
+
+func ToPackageRef(compName, version, packageType string) (output string) {
+	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
+}
+
+// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
+func PurlToXrayComponentId(purl string) (xrayComponentId string) {
+	compName, compVersion, compType := SplitPackageURL(purl)
+	return ToXrayComponentId(CdxPackageTypeToXrayPackageType(compType), compName, compVersion)
+}
+
+func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
+	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
+}
+
+func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
+	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
 }

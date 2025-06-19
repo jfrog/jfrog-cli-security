@@ -33,7 +33,6 @@ const (
 type TokenValidationStatus string
 
 type JasScanType string
-type JasPackageScanType string
 
 func (jst JasScanType) String() string {
 	return string(jst)
