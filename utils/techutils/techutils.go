@@ -84,6 +84,8 @@ var TechToProjectType = map[Technology]project.ProjectType{
 
 var packageTypes = map[string]string{
 	"gav":      "Maven",
+	"maven":    "Maven",
+	"gradle":   "Gradle",
 	"docker":   "Docker",
 	"rpm":      "RPM",
 	"deb":      "Debian",
@@ -734,7 +736,7 @@ func SplitComponentIdRaw(componentId string) (string, string, string) {
 	// Generic identifier structure: generic://sha256:<Checksum>/name
 	if packageType == "generic" {
 		lastSlashIndex := strings.LastIndex(packageId, "/")
-		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
+		return packageId[lastSlashIndex+1:], "", packageType
 	}
 
 	var compName, compVersion string

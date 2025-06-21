@@ -100,7 +100,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
 			Component:   compName,
 			Version:     compVersion,
-			PackageType: compType,
+			PackageType: techutils.ConvertXrayPackageType(compType),
 			Relation:    relationStr,
 			// For sorting
 			Direct: isDirect,

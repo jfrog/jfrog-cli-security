@@ -971,3 +971,88 @@ func convertRefsToPackageID(node *xrayUtils.GraphNode, isBuildInfoXray bool, com
 		convertRefsToPackageID(dep, isBuildInfoXray, components...)
 	}
 }
+
+func BomToFullCompTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.BinaryGraphNode) {
+	if sbom == nil || sbom.Components == nil {
+		// No dependencies or components in the SBOM, return an empty slice
+		return
+	}
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+		// Create a new GraphNode with ref as the ID
+		currentTree := toBinaryNode(sbom, rootEntry.Ref)
+		// Populate application tree
+		populateBinaryNodeDataFromBom(currentTree, sbom)
+		// Add the tree to the output list
+		fullDependencyTrees = append(fullDependencyTrees, currentTree)
+	}
+	// Translate refs to IDs
+	for _, node := range fullDependencyTrees {
+		convertBinaryRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+	}
+	return
+}
+
+func populateBinaryNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
+	if node == nil {
+		return
+	}
+	for _, dep := range cdxutils.GetDirectDependencies(sbom.Dependencies, node.Id) {
+		depNode := toBinaryNode(sbom, dep)
+		// Add the dependency to the current node
+		node.Nodes = append(node.Nodes, depNode)
+		// Recursively populate the node data
+		populateBinaryNodeDataFromBom(depNode, sbom)
+	}
+}
+
+func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
+	component := cdxutils.SearchComponentByRef(sbom.Components, ref)
+	if component == nil {
+		log.Debug("Binary Component with ref %s not found in SBOM, skipping.", ref)
+		return nil
+	}
+	// Create a new BinaryGraphNode and set its ID
+	node := &xrayUtils.BinaryGraphNode{Id: component.BOMRef}
+	if component.Licenses != nil {
+		// Add the licenses to the node
+		for _, license := range *component.Licenses {
+			if license.License != nil && license.License.ID != "" {
+				node.Licenses = append(node.Licenses, license.License.ID)
+			}
+		}
+	}
+	if component.Hashes != nil {
+		// Add the hashes to the node
+		for _, hash := range *component.Hashes {
+			switch hash.Algorithm {
+			case cyclonedx.HashAlgoSHA1:
+				node.Sha1 = hash.Value
+			case cyclonedx.HashAlgoSHA256:
+				node.Sha256 = hash.Value
+			}
+		}
+	}
+	if component.Evidence != nil && component.Evidence.Occurrences != nil && len(*component.Evidence.Occurrences) > 0 {
+		// Add the path property if it exists
+		if len(*component.Evidence.Occurrences) > 1 {
+			log.Warn(fmt.Sprintf("Multiple occurrences found for component %s, using the first one.", component.BOMRef))
+		}
+		node.Path = (*component.Evidence.Occurrences)[0].Location
+	}
+	return node
+}
+
+func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+	if node == nil {
+		return
+	}
+	if component := cdxutils.SearchComponentByRef(&components, node.Id); component != nil {
+		node.Id = component.PackageURL
+		if isBuildInfoXray {
+			node.Id = techutils.PurlToXrayComponentId(node.Id)
+		}
+	}
+	for _, dep := range node.Nodes {
+		convertBinaryRefsToPackageID(dep, isBuildInfoXray, components...)
+	}
+}

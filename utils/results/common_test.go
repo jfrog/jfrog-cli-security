@@ -1838,3 +1838,410 @@ func setParentsToTestNodes(parent *xrayUtils.GraphNode, nodes ...*xrayUtils.Grap
 		setParentsToTestNodes(node, node.Nodes...)
 	}
 }
+
+func TestBomToFullCompTree(t *testing.T) {
+	tests := []struct {
+		name         string
+		bom          *cyclonedx.BOM
+		isXrayCompId bool
+		expected     []*xrayUtils.BinaryGraphNode
+	}{
+		{
+			name: "BOM with no libraries",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef: "8624ef95f4305969d180d3b1eab81bef",
+						Name:   path.Join("path", "to", "binary.jar"),
+						Type:   "file",
+					},
+				},
+			},
+			expected: []*xrayUtils.BinaryGraphNode{},
+		},
+		{
+			name: "BOM with component no dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "generic://log4j-core-2.17.1.jar",
+						Name:       "log4j-core-2.17.1.jar",
+						Type:       "library",
+						PackageURL: "pkg:generic/log4j-core-2.17.1.jar",
+					},
+				},
+			},
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id: "pkg:generic/log4j-core-2.17.1.jar",
+				},
+			},
+		},
+		{
+			name: "Binary file BOM",
+			bom:  getBinaryTestBom(true),
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "pkg:generic/binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "pkg:maven/commons-lang:commons-lang@2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:         "Binary file BOM (converted to xray-component-id)",
+			bom:          getBinaryTestBom(true),
+			isXrayCompId: true,
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "generic://binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "gav://com.google.code.findbugs:jsr305:3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "gav://commons-lang:commons-lang:2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Multiple binaries BOM",
+			bom:  getBinaryTestBom(false),
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "pkg:generic/binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "pkg:maven/commons-lang:commons-lang@2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+				{
+					Id:     "pkg:docker/docker.io/library/nginx@1.27-alpine",
+					Sha1:   "b79749300dc03448c42b7005a11afff9cc40eba5",
+					Sha256: "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+					Path:   "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:generic/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Sha256: "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+							Path:   "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{
+									Id:       "pkg:alpine/alpine-baselayout@3.6.5-r0",
+									Licenses: []string{"GPL-2.0-only"},
+									Path:     "3.20:alpine-baselayout:3.6.5-r0",
+								},
+							},
+						},
+						{
+							Id:     "pkg:generic/scripts.tar",
+							Sha1:   "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+							Sha256: "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+							Path:   "lib/apk/db/scripts.tar",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:         "Multiple binaries BOM (converted to xray-component-id)",
+			bom:          getBinaryTestBom(false),
+			isXrayCompId: true,
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "generic://binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "gav://com.google.code.findbugs:jsr305:3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "gav://commons-lang:commons-lang:2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+				{
+					Id:     "docker://docker.io/library/nginx:1.27-alpine",
+					Sha1:   "b79749300dc03448c42b7005a11afff9cc40eba5",
+					Sha256: "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+					Path:   "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "generic://sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Sha256: "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+							Path:   "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{
+									Id:       "alpine://alpine-baselayout:3.6.5-r0",
+									Licenses: []string{"GPL-2.0-only"},
+									Path:     "3.20:alpine-baselayout:3.6.5-r0",
+								},
+							},
+						},
+						{
+							Id:     "generic://scripts.tar",
+							Sha1:   "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+							Sha256: "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+							Path:   "lib/apk/db/scripts.tar",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := BomToFullCompTree(test.bom, test.isXrayCompId)
+			assert.ElementsMatch(t, test.expected, result)
+		})
+	}
+}
+
+func getBinaryTestBom(oneBinary bool) *cyclonedx.BOM {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				// Root component
+				BOMRef:     "generic://binary-2.jar",
+				Name:       "binary-2.jar",
+				Type:       "library",
+				PackageURL: "pkg:generic/binary-2.jar",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "c8637440d377d5af307b8e4689148a12cf078807",
+					},
+					{
+						Algorithm: "SHA-256",
+						Value:     "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					},
+				},
+				Licenses: &cyclonedx.Licenses{
+					{
+						License: &cyclonedx.License{ID: "Apache-2.0"},
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "binary-2.jar",
+						},
+					},
+				},
+			},
+			{
+				// Direct dependency
+				BOMRef:     "maven:com.google.code.findbugs:jsr305:3.0.2",
+				Name:       "com.google.code.findbugs:jsr305",
+				Version:    "3.0.2",
+				Type:       "library",
+				PackageURL: "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "fbc25c55a6f50643a13473b762dd67857de459d5",
+					},
+					{
+						Algorithm: "SHA-256",
+						Value:     "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+					},
+				},
+			},
+			{
+				// Direct dependency
+				BOMRef:     "maven:commons-lang:commons-lang:2.4",
+				Name:       "commons-lang:commons-lang",
+				Version:    "2.4",
+				Type:       "library",
+				PackageURL: "pkg:maven/commons-lang:commons-lang@2.4",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+					},
+				},
+				Licenses: &cyclonedx.Licenses{
+					{
+						License: &cyclonedx.License{ID: "Apache-2.0"},
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{
+				Ref:          "generic://binary-2.jar",
+				Dependencies: &[]string{"maven:com.google.code.findbugs:jsr305:3.0.2", "maven:commons-lang:commons-lang:2.4"},
+			},
+		},
+	}
+	if oneBinary {
+		return bom
+	}
+	*bom.Components = append(*bom.Components,
+		cyclonedx.Component{
+			// Root Docker component
+			BOMRef:     "docker:docker.io/library/nginx:1.27-alpine",
+			Name:       "docker.io/library/nginx",
+			Version:    "1.27-alpine",
+			Type:       "library",
+			PackageURL: "pkg:docker/docker.io/library/nginx@1.27-alpine",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-1",
+					Value:     "b79749300dc03448c42b7005a11afff9cc40eba5",
+				},
+				{
+					Algorithm: "SHA-256",
+					Value:     "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			// Direct dependency
+			BOMRef:     "generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Name:       "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Type:       "library",
+			PackageURL: "pkg:generic/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-256",
+					Value:     "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			// Transitive dependency
+			BOMRef:     "alpine:3.20:alpine-baselayout:3.6.5-r0",
+			Name:       "alpine:3.20:alpine-baselayout",
+			Version:    "3.6.5-r0",
+			Type:       "library",
+			PackageURL: "pkg:alpine/alpine-baselayout@3.6.5-r0",
+			Licenses: &cyclonedx.Licenses{
+				{
+					License: &cyclonedx.License{ID: "GPL-2.0-only"},
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "3.20:alpine-baselayout:3.6.5-r0",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			BOMRef:     "generic:scripts.tar",
+			Name:       "scripts.tar",
+			Type:       "library",
+			PackageURL: "pkg:generic/scripts.tar",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-1",
+					Value:     "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+				},
+				{
+					Algorithm: "SHA-256",
+					Value:     "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "lib/apk/db/scripts.tar",
+					},
+				},
+			},
+		},
+	)
+	*bom.Dependencies = append(*bom.Dependencies,
+		cyclonedx.Dependency{
+			Ref:          "docker:docker.io/library/nginx:1.27-alpine",
+			Dependencies: &[]string{"generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "generic:scripts.tar"},
+		},
+		cyclonedx.Dependency{
+			Ref:          "generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Dependencies: &[]string{"alpine:3.20:alpine-baselayout:3.6.5-r0"},
+		},
+	)
+	return bom
+}
