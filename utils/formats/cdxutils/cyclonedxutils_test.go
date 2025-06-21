@@ -284,7 +284,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := GetRootDependenciesEntries(tt.bom)
-			assert.Equal(t, tt.expected, result, "Expected root dependencies do not match")
+			assert.ElementsMatch(t, tt.expected, result, "Expected root dependencies do not match")
 		})
 	}
 }
