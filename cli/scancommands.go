@@ -29,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -271,6 +272,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	scanCmd := scan.NewScanCommand().
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -703,6 +705,7 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand.SetImageTag(image).
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
