@@ -776,6 +776,10 @@ func ConvertXrayPackageType(xrayPackageType string) string {
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	if componentVersion == "" {
+		// If the component version is empty, we return the component name only
+		return fmt.Sprintf("%s://%s", packageType, componentName)
+	}
 	return fmt.Sprintf("%s://%s:%s", packageType, componentName, componentVersion)
 }
 
@@ -796,32 +800,17 @@ func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
 }
 
 // https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
-// Parse a given Package URL (purl) and return the component name, version, and package type.
-// Examples:
-//  1. purl: "pkg:golang/github.com/go-gitea/gitea"
-//     Returned values:
-//     Component name: "github.com/go-gitea/gitea"
-//     Component version: ""
-//     Package type: "golang"
-//     Qualifiers: map[string]string{}
-//  2. purl: "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f"
-//     Returned values:
-//     Component name: "org.apache.commons/commons-lang3"
-//     Component version: "3.12.0"
-//     Package type: "maven"
-//     Qualifiers: map[string]string{"package-id": "d3f8d67af404667f"}
-func SplitPackageUrlWithQualifiers(purl string) (compName, compVersion, packageType string, qualifiers map[string]string) {
+// Parse a given Package URL (purl) and return the component namespace, name, version, and package type.
+func SplitPackageUrlWithQualifiers(purl string) (packageType, compNamespace, compName, compVersion string, qualifiers map[string]string) {
 	parsed, err := packageurl.FromString(purl)
 	if err != nil {
 		log.Debug(fmt.Sprintf("Failed to parse package URL '%s': %s", purl, err))
-		return purl, "", "", nil
+		return "", "", purl, "", nil
 	}
-	compName = parsed.Name
-	if parsed.Namespace != "" {
-		compName = parsed.Namespace + "/" + compName
-	}
-	compVersion = parsed.Version
 	packageType = parsed.Type
+	compNamespace = parsed.Namespace
+	compName = parsed.Name
+	compVersion = parsed.Version
 	if err := parsed.Qualifiers.Normalize(); err != nil {
 		log.Debug(fmt.Sprintf("Failed to normalize '%s' qualifiers: %s", purl, err))
 		return
@@ -831,11 +820,17 @@ func SplitPackageUrlWithQualifiers(purl string) (compName, compVersion, packageT
 }
 
 func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
-	compName, compVersion, packageType, _ = SplitPackageUrlWithQualifiers(purl)
+	packageType, compNamespace, compName, compVersion, _ := SplitPackageUrlWithQualifiers(purl)
+	if compNamespace != "" {
+		compName = compNamespace + "/" + compName
+	}
 	return
 }
 
 func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
+	if packageType == "" {
+		packageType = "generic"
+	}
 	purl := packageurl.NewPackageURL(packageType, "", compName, version, properties, "").String()
 	// Unescape the output
 	output, err := url.QueryUnescape(purl)
@@ -848,6 +843,13 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 }
 
 func ToPackageRef(compName, version, packageType string) (output string) {
+	if packageType == "" {
+		packageType = "generic"
+	}
+	if version == "" {
+		// If the version is empty, we return the component name only
+		return fmt.Sprintf("%s:%s", packageType, compName)
+	}
 	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
 }
 
