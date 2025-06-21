@@ -404,11 +404,13 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	}
 	// Start the parallel runner to run the scans.
 	auditParallelRunner.OnScanEnd(func() {
-		// Wait for all scans to complete before cleaning up scanners temp dir
+		// Wait for all scans to complete before cleaning up
 		if jasScanner != nil && jasScanner.ScannerDirCleanupFunc != nil {
 			cmdResults.AddGeneralError(jasScanner.ScannerDirCleanupFunc(), false)
 		}
-
+		if auditParams.BomGenerator() != nil {
+			cmdResults.AddGeneralError(auditParams.BomGenerator().CleanUp(), false)
+		}
 	}).Start()
 }
 

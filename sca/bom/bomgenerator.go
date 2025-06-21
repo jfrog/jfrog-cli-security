@@ -19,6 +19,8 @@ type SbomGenerator interface {
 	PrepareGenerator(options ...SbomGeneratorOption) error
 	// GenerateSbom generates a CycloneDX SBOM for the given target.
 	GenerateSbom(target results.ScanTarget) (*cyclonedx.BOM, error)
+	// CleanUp cleans up any resources used by the generator, should be called after all SBOMs are generated.
+	CleanUp() error
 }
 
 type SbomGeneratorOption func(sg SbomGenerator) error
@@ -59,7 +61,7 @@ func logLibComponents(components *[]cyclonedx.Component) (err error) {
 	if components != nil {
 		for _, component := range *components {
 			if component.Type == cyclonedx.ComponentTypeLibrary {
-				libs = append(libs, component.Name)
+				libs = append(libs, techutils.PurlToXrayComponentId(component.PackageURL))
 			}
 		}
 	}
@@ -82,7 +84,7 @@ func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 		// Target name is already set, no need to update.
 		return
 	}
-	roots := cdxutils.GetRootDependenciesEntries(sbom.Dependencies)
+	roots := cdxutils.GetRootDependenciesEntries(sbom)
 	if len(roots) == 0 {
 		// No root dependencies found, nothing to update.
 		return

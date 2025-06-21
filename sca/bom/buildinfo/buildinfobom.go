@@ -69,6 +69,11 @@ func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOpt
 	return nil
 }
 
+func (b *BuildInfoBomGenerator) CleanUp() error {
+	// Nothing to do
+	return nil
+}
+
 func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	// Create the CycloneDX BOM
 	sbom = cyclonedx.NewBOM()
