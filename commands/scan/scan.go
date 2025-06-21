@@ -268,7 +268,11 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 		if err := scanCmd.bomGenerator.PrepareGenerator(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)); err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare indexer generator: %w", err), false)
 		}
-		defer scanCmd.bomGenerator.CleanUp()
+		defer func() {
+			if err := scanCmd.bomGenerator.CleanUp(); err != nil {
+				log.Error(fmt.Sprintf("Failed to clean up the BOM generator: %s", err.Error()))
+			}
+		}()
 	}
 
 	threads := 1
