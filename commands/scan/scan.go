@@ -413,14 +413,11 @@ func (scanCmd *ScanCommand) createIndexerHandlerFunc(file *spec.File, cmdResults
 }
 
 func (scanCmd *ScanCommand) GenerateBinaryBom(cmdType utils.CommandType, targetResults *results.TargetResults) (deprecatedGraph *xrayClientUtils.BinaryGraphNode) {
-	if cmdType == utils.Binary {
-		// Generate SBOM for the file.
-		bom.GenerateSbomForTarget(scanCmd.bomGenerator, bom.SbomGeneratorParams{Target: targetResults})
-		return
-	}
 	// TODO: For Docker image, scanGraph must binary graph must contains all attributes.
 	// Converting the SBOM to a binary graph is not supported for Docker images. since not all attributes are supported.
+	// We can't know at this point if the target is a Docker image or not, so we can't use the SBOM as a binary graph.
 	// When all attributes are supported, we can use the SBOM as a binary graph and remove the following code.
+	// Replacing it with the following code: bom.GenerateSbomForTarget(scanCmd.bomGenerator, bom.SbomGeneratorParams{Target: targetResults})
 	if indexerBomGenerator, ok := scanCmd.bomGenerator.(*indexer.IndexerBomGenerator); ok {
 		deprecatedGraph, err := indexerBomGenerator.IndexFile(targetResults.Target)
 		if err != nil {
@@ -518,7 +515,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	}
 	secretsScanType := secrets.SecretsScannerGenericScanType
 	applicabilityScanType := applicability.ApplicabilityGenericScanScanType
-	if cmdType == utils.DockerImage || targetResults.Technology == techutils.Docker || targetResults.Technology == techutils.Oci {
+	if isDockerBinary(cmdType, targetResults) {
 		log.Debug(scanLogPrefix + "Found root component is a docker container")
 		secretsScanType = secrets.SecretsScannerDockerScanType
 		applicabilityScanType = applicability.ApplicabilityDockerScanScanType
@@ -541,6 +538,10 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to add Jas scan tasks: %s", generalError.Error()), false)
 	}
 	return
+}
+
+func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResults) bool {
+	return cmdType == utils.DockerImage || targetResults.Technology == techutils.Docker || targetResults.Technology == techutils.Oci
 }
 
 func getJasModule(targetResults *results.TargetResults) (jfrogappsconfig.Module, error) {
