@@ -59,7 +59,7 @@ type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, 
 type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseLicenseFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
-type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error
+type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) error {
@@ -234,7 +234,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.IsDirectDependency(bom.Dependencies, component.BOMRef),
+			cdxutils.GetComponentRelation(bom, component.BOMRef),
 		); err != nil {
 			return err
 		}
@@ -892,7 +892,7 @@ func IsMultiProject(sbom *cyclonedx.BOM) bool {
 		// No dependencies or components in the SBOM, return false
 		return false
 	}
-	return len(cdxutils.GetRootDependenciesEntries(sbom.Dependencies)) > 1
+	return len(cdxutils.GetRootDependenciesEntries(sbom)) > 1
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
@@ -928,7 +928,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTre
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom.Dependencies) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		// Populate application tree

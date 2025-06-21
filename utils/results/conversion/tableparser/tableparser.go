@@ -8,10 +8,12 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -81,17 +83,25 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 	if sbom == nil || sbom.Components == nil {
 		return nil
 	}
-	err = results.ForEachSbomComponent(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error {
-		relation := "Direct"
+	err = results.ForEachSbomComponent(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error {
+		if relation == cdxutils.UnknownRelation || relation == cdxutils.RootRelation {
+			if relation == cdxutils.UnknownRelation {
+				log.Debug("Component %s (%s) has an unknown relation in the SBOM. It will not be included in the results table.", component.Name, component.PackageURL)
+			}
+			// No need to show the component as an entry
+			return nil
+		}
+		relationStr := "Direct"
+		isDirect := relation == cdxutils.DirectRelation
 		if !isDirect {
-			relation = "Transitive"
+			relationStr = "Transitive"
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
 			Component:   compName,
 			Version:     compVersion,
 			PackageType: compType,
-			Relation:    relation,
+			Relation:    relationStr,
 			// For sorting
 			Direct: isDirect,
 		})
