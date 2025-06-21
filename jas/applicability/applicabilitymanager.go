@@ -58,7 +58,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 	}
 	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
 	if !applicabilityScanManager.cvesExists() {
-		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false), "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
+		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
 	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "Running applicability scan...")

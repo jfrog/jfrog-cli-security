@@ -65,75 +65,79 @@ func TestSearchDependencyEntry(t *testing.T) {
 	}
 }
 
-func TestIsDirectDependency(t *testing.T) {
-	oneRootDependencies := &[]cyclonedx.Dependency{
-		{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
-		{Ref: "comp2", Dependencies: &[]string{"comp3", "comp4"}},
-	}
-	twoRootDependencies := &[]cyclonedx.Dependency{
-		{Ref: "comp1", Dependencies: &[]string{"comp2"}},
-		{Ref: "comp3", Dependencies: &[]string{"comp4"}},
-		{Ref: "comp4", Dependencies: &[]string{"comp5"}},
-	}
+func TestGetComponentRelation(t *testing.T) {
 	tests := []struct {
 		name         string
-		dependencies *[]cyclonedx.Dependency
-		ref          string
-		expected     bool
+		bom          *cyclonedx.BOM
+		componentRef string
+		expected     ComponentRelation
 	}{
 		{
-			name:         "Root component",
-			dependencies: oneRootDependencies,
-			ref:          "comp1",
-			expected:     false,
+			name: "Root component",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			componentRef: "root",
+			expected:     RootRelation,
 		},
 		{
-			name:         "Direct dependency",
-			dependencies: oneRootDependencies,
-			ref:          "comp2",
-			expected:     true,
+			name: "Root component with no dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: "library", Name: "Root Component"},
+					{BOMRef: "comp1", Type: "library", Name: "Component 1"},
+				},
+			},
+			componentRef: "root",
+			expected:     RootRelation,
 		},
 		{
-			name:         "Direct dependency (also indirect)",
-			dependencies: oneRootDependencies,
-			ref:          "comp3",
-			expected:     true,
+			name: "Direct dependency",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+				},
+			},
+			componentRef: "comp1",
+			expected:     DirectRelation,
 		},
 		{
-			name:         "Indirect dependency",
-			dependencies: oneRootDependencies,
-			ref:          "comp4",
-			expected:     false,
+			name: "Transitive dependency",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "comp2", Name: "Component 2"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+				},
+			},
+			componentRef: "comp2",
+			expected:     TransitiveRelation,
 		},
 		{
-			name:         "Non-existent dependency",
-			dependencies: oneRootDependencies,
-			ref:          "comp5",
-			expected:     false,
-		},
-		{
-			name:         "Two root components, direct dependency",
-			dependencies: twoRootDependencies,
-			ref:          "comp4",
-			expected:     true,
-		},
-		{
-			name:         "Two root components, indirect dependency",
-			dependencies: twoRootDependencies,
-			ref:          "comp5",
-			expected:     false,
-		},
-		{
-			name:         "Two root components, root component",
-			dependencies: twoRootDependencies,
-			ref:          "comp1",
-			expected:     false,
+			name: "Unknown relation",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Name: "Root Component"},
+					{BOMRef: "comp1", Name: "Component 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			componentRef: "comp2",
+			expected:     UnknownRelation,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, IsDirectDependency(tt.dependencies, tt.ref), "Expected direct dependency check result does not match")
+			result := GetComponentRelation(tt.bom, tt.componentRef)
+			assert.Equal(t, tt.expected, result, "Expected component relation does not match")
 		})
 	}
 }
@@ -244,9 +248,9 @@ func TestGetDirectDependencies(t *testing.T) {
 
 func TestGetRootDependenciesEntries(t *testing.T) {
 	tests := []struct {
-		name         string
-		dependencies *[]cyclonedx.Dependency
-		expected     []cyclonedx.Dependency
+		name     string
+		bom      *cyclonedx.BOM
+		expected []cyclonedx.Dependency
 	}{
 		{
 			name:     "No dependencies",
@@ -254,20 +258,24 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 		},
 		{
 			name: "Single root dependency",
-			dependencies: &[]cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
-				{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
-				{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+				},
 			},
 			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}},
 		},
 		{
 			name: "Multiple root dependencies",
-			dependencies: &[]cyclonedx.Dependency{
-				{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
-				{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
-				{Ref: "root2", Dependencies: &[]string{"dep4", "dep5"}},
-				{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "root2", Dependencies: &[]string{"dep4", "dep5"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+				},
 			},
 			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}, {Ref: "root2", Dependencies: &[]string{"dep4", "dep5"}}},
 		},
@@ -275,8 +283,8 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetRootDependenciesEntries(tt.dependencies)
-			assert.Equal(t, tt.expected, result, "Expected root dependencies do not match")
+			result := GetRootDependenciesEntries(tt.bom)
+			assert.ElementsMatch(t, tt.expected, result, "Expected root dependencies do not match")
 		})
 	}
 }

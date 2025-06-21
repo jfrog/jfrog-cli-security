@@ -61,7 +61,7 @@ type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, 
 type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseLicenseFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
-type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, isDirect bool) error
+type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) error {
@@ -236,7 +236,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.IsDirectDependency(bom.Dependencies, component.BOMRef),
+			cdxutils.GetComponentRelation(bom, component.BOMRef),
 		); err != nil {
 			return err
 		}
@@ -776,7 +776,7 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 	}
 	// Translate refs to IDs
 	directIdsSet := datastructures.MakeSet[string]()
-	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom.Dependencies) {
+	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom) {
 		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
 			continue
 		}
@@ -792,7 +792,7 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 
 // func extract
 
-func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
+func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
 		return
 	}
@@ -800,12 +800,16 @@ func SearchTargetResultsByPath(target string, resultsToCompare *SecurityCommandR
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
 	for _, potential := range resultsToCompare.Targets {
-		if target == potential.Target {
+		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
 			return potential
 		}
-		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); target == relative && (best == nil || len(best.Target) > len(potential.Target)) {
-			best = potential
+		// Check if the target is a relative path of the source base path
+		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); relativeTarget == relative {
+			// Check if this is the best match so far
+			if best == nil || len(best.Target) > len(potential.Target) {
+				best = potential
+			}
 		}
 	}
 	return best
@@ -837,7 +841,10 @@ func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[strin
 	*components = append(*components, CreateScaComponentFromXrayCompId(node.Id))
 	if len(node.Nodes) > 0 {
 		// Create a matching dependency entry describing the direct dependencies
-		*dependencies = append(*dependencies, cyclonedx.Dependency{Ref: techutils.XrayComponentIdToCdxComponentRef(node.Id), Dependencies: getNodeDirectDependencies(node)})
+		*dependencies = append(*dependencies, cyclonedx.Dependency{
+			Ref:          techutils.XrayComponentIdToCdxComponentRef(node.Id),
+			Dependencies: getNodeDirectDependencies(node),
+		})
 	}
 	// Go through the dependencies and add them to the sbom
 	for _, dependencyNode := range node.Nodes {
@@ -964,7 +971,7 @@ func IsMultiProject(sbom *cyclonedx.BOM) bool {
 		// No dependencies or components in the SBOM, return false
 		return false
 	}
-	return len(cdxutils.GetRootDependenciesEntries(sbom.Dependencies)) > 1
+	return len(cdxutils.GetRootDependenciesEntries(sbom)) > 1
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
@@ -1004,7 +1011,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom.Dependencies) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		// Populate application tree
@@ -1045,5 +1052,90 @@ func convertRefsToPackageID(node *xrayUtils.GraphNode, convertToXrayCompId bool,
 	}
 	for _, dep := range node.Nodes {
 		convertRefsToPackageID(dep, convertToXrayCompId, components...)
+	}
+}
+
+func BomToFullCompTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.BinaryGraphNode) {
+	if sbom == nil || sbom.Components == nil {
+		// No dependencies or components in the SBOM, return an empty slice
+		return
+	}
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+		// Create a new GraphNode with ref as the ID
+		currentTree := toBinaryNode(sbom, rootEntry.Ref)
+		// Populate application tree
+		populateBinaryNodeDataFromBom(currentTree, sbom)
+		// Add the tree to the output list
+		fullDependencyTrees = append(fullDependencyTrees, currentTree)
+	}
+	// Translate refs to IDs
+	for _, node := range fullDependencyTrees {
+		convertBinaryRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+	}
+	return
+}
+
+func populateBinaryNodeDataFromBom(node *xrayUtils.BinaryGraphNode, sbom *cyclonedx.BOM) {
+	if node == nil {
+		return
+	}
+	for _, dep := range cdxutils.GetDirectDependencies(sbom.Dependencies, node.Id) {
+		depNode := toBinaryNode(sbom, dep)
+		// Add the dependency to the current node
+		node.Nodes = append(node.Nodes, depNode)
+		// Recursively populate the node data
+		populateBinaryNodeDataFromBom(depNode, sbom)
+	}
+}
+
+func toBinaryNode(sbom *cyclonedx.BOM, ref string) *xrayUtils.BinaryGraphNode {
+	component := cdxutils.SearchComponentByRef(sbom.Components, ref)
+	if component == nil {
+		log.Debug("Binary Component with ref %s not found in SBOM, skipping.", ref)
+		return nil
+	}
+	// Create a new BinaryGraphNode and set its ID
+	node := &xrayUtils.BinaryGraphNode{Id: component.BOMRef}
+	if component.Licenses != nil {
+		// Add the licenses to the node
+		for _, license := range *component.Licenses {
+			if license.License != nil && license.License.ID != "" {
+				node.Licenses = append(node.Licenses, license.License.ID)
+			}
+		}
+	}
+	if component.Hashes != nil {
+		// Add the hashes to the node
+		for _, hash := range *component.Hashes {
+			switch hash.Algorithm {
+			case cyclonedx.HashAlgoSHA1:
+				node.Sha1 = hash.Value
+			case cyclonedx.HashAlgoSHA256:
+				node.Sha256 = hash.Value
+			}
+		}
+	}
+	if component.Evidence != nil && component.Evidence.Occurrences != nil && len(*component.Evidence.Occurrences) > 0 {
+		// Add the path property if it exists
+		if len(*component.Evidence.Occurrences) > 1 {
+			log.Warn(fmt.Sprintf("Multiple occurrences found for component %s, using the first one.", component.BOMRef))
+		}
+		node.Path = (*component.Evidence.Occurrences)[0].Location
+	}
+	return node
+}
+
+func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+	if node == nil {
+		return
+	}
+	if component := cdxutils.SearchComponentByRef(&components, node.Id); component != nil {
+		node.Id = component.PackageURL
+		if isBuildInfoXray {
+			node.Id = techutils.PurlToXrayComponentId(node.Id)
+		}
+	}
+	for _, dep := range node.Nodes {
+		convertBinaryRefsToPackageID(dep, isBuildInfoXray, components...)
 	}
 }

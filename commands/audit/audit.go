@@ -368,7 +368,7 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 		// No results to compare, return nil.
 		return
 	}
-	targetResultsToCompare = results.SearchTargetResultsByPath(
+	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
 		resultsToCompare,
 	)
@@ -440,11 +440,13 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	}
 	// Start the parallel runner to run the scans.
 	auditParallelRunner.OnScanEnd(func() {
-		// Wait for all scans to complete before cleaning up scanners temp dir
+		// Wait for all scans to complete before cleaning up
 		if jasScanner != nil && jasScanner.ScannerDirCleanupFunc != nil {
 			cmdResults.AddGeneralError(jasScanner.ScannerDirCleanupFunc(), false)
 		}
-
+		if auditParams.BomGenerator() != nil {
+			cmdResults.AddGeneralError(auditParams.BomGenerator().CleanUp(), false)
+		}
 	}).Start()
 }
 
@@ -550,7 +552,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				Module:                 appsConfigModule,
 				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
 				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompare(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					// if len(targetResult.GetScaScansXrayResults()) > 0 {

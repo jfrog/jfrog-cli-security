@@ -66,7 +66,7 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 
 func resolveTechnologyFromBOM(target *cyclonedx.BOM) (tech techutils.Technology) {
 	// Try to resolve the technology from the root dependencies of the BOM.
-	for _, root := range cdxutils.GetRootDependenciesEntries(target.Dependencies) {
+	for _, root := range cdxutils.GetRootDependenciesEntries(target) {
 		rootComponent := cdxutils.SearchComponentByRef(target.Components, root.Ref)
 		if rootComponent == nil {
 			continue
