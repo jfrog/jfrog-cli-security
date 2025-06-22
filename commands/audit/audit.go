@@ -286,18 +286,15 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
 	cmdResults = results.NewCommandResults(utils.SourceCode)
 	// Initialize general information
-	serverDetails, err := params.ServerDetails()
-	if err != nil {
-		return cmdResults.AddGeneralError(err, false)
-	}
-	// if err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.GetXrayVersion(), scangraph.GraphScanMinXrayVersion); err != nil {
-	// 	return cmdResults.AddGeneralError(err, false)
-	// }
 	cmdResults.SetXrayVersion(params.GetXrayVersion())
 	cmdResults.SetXscVersion(params.GetXscVersion())
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return cmdResults.AddGeneralError(err, false)
+	}
 	// Send entitlement requests
 	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
 	if err != nil {
