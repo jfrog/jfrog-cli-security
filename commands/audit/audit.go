@@ -555,12 +555,12 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
 				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
-					// if len(targetResult.GetScaScansXrayResults()) > 0 {
-					// TODO: remove this once the new SCA flow with cdx is fully implemented.
-					return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology), true))
-					// } else {
-					// 	return applicability.ExtractCdxDependenciesCves(targetResult.ScaResults.EnrichedSbom)
-					// }
+					if len(targetResult.GetScaScansXrayResults()) > 0 {
+						// TODO: remove this once the new SCA flow with cdx is fully implemented.
+						return results.ExtractCvesFromScanResponse(targetResult.GetScaScansXrayResults(), results.GetTargetDirectDependencies(targetResult, auditParams.ShouldGetFlatTreeForApplicableScan(targetResult.Technology), true))
+					} else {
+						return results.ExtractCdxDependenciesCves(targetResult.ScaResults.Sbom)
+					}
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
