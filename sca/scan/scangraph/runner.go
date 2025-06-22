@@ -49,14 +49,14 @@ func (sg *ScanGraphStrategy) PrepareStrategy(options ...scan.SbomScanOption) err
 }
 
 func (sg *ScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
-	scanReponse, err := sg.DeprecatedScanTask(target)
+	scanResponse, err := sg.DeprecatedScanTask(target)
 	if err != nil {
 		return
 	}
 	// Convert the scan results to CycloneDX BOM
-	violations = scanReponse.Violations
+	violations = scanResponse.Violations
 	enriched = target
-	err = results.ScanResponseToSbom(enriched, scanReponse)
+	err = results.ScanResponseToSbom(enriched, scanResponse)
 	return
 }
 
