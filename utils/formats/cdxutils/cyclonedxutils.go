@@ -381,7 +381,7 @@ func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclon
 		}
 	}
 	var ratings *[]cyclonedx.VulnerabilityRating
-	if params.Ratings != nil && len(params.Ratings) > 0 {
+	if len(params.Ratings) > 0 {
 		ratings = &params.Ratings
 	}
 	vuln := cyclonedx.Vulnerability{
@@ -399,7 +399,7 @@ func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclon
 }
 
 func getReferences(references []string) *[]cyclonedx.VulnerabilityReference {
-	if references == nil || len(references) == 0 {
+	if len(references) == 0 {
 		return nil
 	}
 	refs := []cyclonedx.VulnerabilityReference{}
@@ -421,7 +421,7 @@ func getReferences(references []string) *[]cyclonedx.VulnerabilityReference {
 }
 
 func convertCweToCycloneDx(cwe []string) (cweList *[]int) {
-	if cwe == nil || len(cwe) == 0 {
+	if len(cwe) == 0 {
 		return nil
 	}
 	cweList = &[]int{}

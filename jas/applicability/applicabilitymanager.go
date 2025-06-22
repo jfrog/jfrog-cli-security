@@ -10,7 +10,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"golang.org/x/exp/slices"
 )
@@ -29,7 +28,6 @@ type ApplicabilityScanType string
 type ApplicabilityScanManager struct {
 	directDependenciesCves   []string
 	indirectDependenciesCves []string
-	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
 	commandType              string
