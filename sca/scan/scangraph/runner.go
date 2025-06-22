@@ -48,9 +48,21 @@ func (sg *ScanGraphStrategy) PrepareStrategy(options ...scan.SbomScanOption) err
 	return clientutils.ValidateMinimumVersion(clientutils.Xray, sg.XrayGraphScanParams().XrayVersion, scangraph.GraphScanMinXrayVersion)
 }
 
+func (sg *ScanGraphStrategy) SbomEnrichTask(target *cyclonedx.BOM) (enriched *cyclonedx.BOM, violations []services.Violation, err error) {
+	scanReponse, err := sg.DeprecatedScanTask(target)
+	if err != nil {
+		return
+	}
+	// Convert the scan results to CycloneDX BOM
+	violations = scanReponse.Violations
+	enriched = target
+	err = results.ScanResponseToSbom(enriched, scanReponse)
+	return
+}
+
 func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResults services.ScanResponse, err error) {
 	if sg.ScanGraphParams.XrayGraphScanParams().ScanType != services.Dependency {
-		return services.ScanResponse{}, fmt.Errorf("scanning %s dependencies is not supported", sg.ScanGraphParams.XrayGraphScanParams().ScanType)
+		return services.ScanResponse{}, fmt.Errorf("scanning %s components is not supported", sg.ScanGraphParams.XrayGraphScanParams().ScanType)
 	}
 	// Transform the target BOM to the information needed for the scan graph.
 	flatTree, fullTree := results.BomToTree(target)

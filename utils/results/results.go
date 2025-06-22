@@ -94,9 +94,11 @@ type ScaScanResults struct {
 	Descriptors           []string `json:"descriptors,omitempty"`
 	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
 	// Sca scan results
-	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
-	// Sbom of the target
-	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
+	DeprecatedXrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
+	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
+	Sbom           *cyclonedx.BOM       `json:"sbom,omitempty"`
+	Violations     []services.Violation `json:"violations,omitempty"`
+	ScanStatusCode int                  `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {
@@ -281,7 +283,7 @@ func (r *SecurityCommandResults) HasMultipleTargets() bool {
 	}
 	for _, scanTarget := range r.Targets {
 		// If there is more than one SCA scan target (i.e multiple files with dependencies information)
-		if scanTarget.ScaResults != nil && (len(scanTarget.ScaResults.XrayResults) > 1 || (scanTarget.ScaResults.IsMultipleRootProject != nil && *scanTarget.ScaResults.IsMultipleRootProject)) {
+		if scanTarget.ScaResults != nil && (len(scanTarget.ScaResults.DeprecatedXrayResults) > 1 || (scanTarget.ScaResults.IsMultipleRootProject != nil && *scanTarget.ScaResults.IsMultipleRootProject)) {
 			return true
 		}
 	}
@@ -353,7 +355,7 @@ func (sr *TargetResults) GetScaScansXrayResults() (results []services.ScanRespon
 	if sr.ScaResults == nil {
 		return
 	}
-	for _, scanResult := range sr.ScaResults.XrayResults {
+	for _, scanResult := range sr.ScaResults.DeprecatedXrayResults {
 		results = append(results, scanResult.Scan)
 	}
 	return
@@ -367,7 +369,7 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	if sr.ScaResults == nil {
 		return technologiesSet.ToSlice()
 	}
-	for _, scaResult := range sr.ScaResults.XrayResults {
+	for _, scaResult := range sr.ScaResults.DeprecatedXrayResults {
 		xrayScanResult := scaResult.Scan
 		for _, vulnerability := range xrayScanResult.Vulnerabilities {
 			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
@@ -450,8 +452,16 @@ func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.
 		sr.ScaResults = &ScaScanResults{}
 	}
 	for _, response := range responses {
-		sr.ScaResults.XrayResults = append(sr.ScaResults.XrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
+		sr.ScaResults.DeprecatedXrayResults = append(sr.ScaResults.DeprecatedXrayResults, ScanResult[services.ScanResponse]{Scan: response, StatusCode: errorCode})
 	}
+	return sr.ScaResults
+}
+
+func (sr *TargetResults) NewEnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
+	// Update the existing BOM with the enriched BOM
+	sr.SetSbom(enrichedSbom)
+	sr.ScaResults.AddViolations(violations...)
+	sr.ScaResults.ScanStatusCode = errorCode
 	return sr.ScaResults
 }
 
@@ -459,7 +469,7 @@ func (ssr *ScaScanResults) HasInformation() bool {
 	if ssr.HasFindings() {
 		return true
 	}
-	for _, scanResults := range ssr.XrayResults {
+	for _, scanResults := range ssr.DeprecatedXrayResults {
 		if len(scanResults.Scan.Licenses) > 0 {
 			return true
 		}
@@ -468,12 +478,20 @@ func (ssr *ScaScanResults) HasInformation() bool {
 }
 
 func (ssr *ScaScanResults) HasFindings() bool {
-	for _, scanResults := range ssr.XrayResults {
+	for _, scanResults := range ssr.DeprecatedXrayResults {
 		if len(scanResults.Scan.Vulnerabilities) > 0 || len(scanResults.Scan.Violations) > 0 {
 			return true
 		}
 	}
 	return false
+}
+
+func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
+	if ssr.Violations == nil {
+		ssr.Violations = []services.Violation{}
+	}
+	ssr.Violations = append(ssr.Violations, violations...)
+	return ssr
 }
 
 func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {

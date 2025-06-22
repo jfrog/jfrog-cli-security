@@ -27,8 +27,8 @@ type SbomScanStrategy interface {
 	// Missing attributes:
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
 	DeprecatedScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
-	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and violations.
-	// SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
+	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations. (Violations will be moved at the future to the end of command)
+	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
 }
 
 type SbomScanOption func(ss SbomScanStrategy) error
@@ -140,18 +140,17 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(scanResults.Vulnerabilities), len(scanResults.Violations)))
 		return dumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 	}
-	// TODO: New flow: we scan the SBOM and enrich it with vulnerabilities and violations.
-	return
-	// bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
-	// // We add the results before checking for errors, so we can display the results even if an error occurred.
-	// params.ScanResults.NewEnrichedSbomScanResults(getScaScansStatusCode(err), bomWithVulnerabilities, violations...)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
-	// }
-	// if params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
-	// 	log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities), len(violations)))
-	// }
-	// return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
+	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
+	bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
+	// We add the results before checking for errors, so we can display the results even if an error occurred.
+	params.ScanResults.NewEnrichedSbomScanResults(getScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	if err != nil {
+		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
+	}
+	if params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
+		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities), len(violations)))
+	}
+	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 }
 
 // Infer the status code of SCA Xray scan, if err occurred or any of the results is `failed` return 1, otherwise return 0.
