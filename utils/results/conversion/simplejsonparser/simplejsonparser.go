@@ -87,6 +87,37 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target result
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	if len(components) == 0 {
+		return
+	}
+	// Iterate through the components and collect licenses
+	for _, component := range components {
+		if component.Licenses == nil || len(*component.Licenses) == 0 {
+			// No licenses found for this component, continue to the next one
+			continue
+		}
+		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+		for _, license := range *component.Licenses {
+			if license.License == nil && license.License.Name == "" {
+				// No license name found, continue to the next one
+				continue
+			}
+			sjc.current.Licenses = append(sjc.current.Licenses, formats.LicenseRow{
+				LicenseKey:  license.License.ID,
+				LicenseName: license.License.Name,
+				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+					ImpactedDependencyName:    compName,
+					ImpactedDependencyVersion: compVersion,
+					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
+					Components:                results.GetDirectDependenciesAsComponentRows(component, components, dependencies),
+				},
+				ImpactPaths: results.BuildImpactPath(component, components, dependencies...),
+			})
+		}
+	}
 	return
 }
 
