@@ -286,7 +286,7 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 }
 
 func getCurrentTime() string {
-	return time.Now().Format(time.RFC3339)
+	return fmt.Sprintf("%d", time.Now().UnixMilli())
 }
 
 // Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report
