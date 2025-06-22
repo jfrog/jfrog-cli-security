@@ -2,12 +2,21 @@ package cdxutils
 
 import (
 	"path/filepath"
+	"regexp"
+	"strconv"
 
 	"github.com/CycloneDX/cyclonedx-go"
 
 	"github.com/jfrog/gofrog/datastructures"
+
+	"github.com/jfrog/jfrog-client-go/utils/log"
+
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
+
+// Regular expression to match CWE IDs, which can be in the format "CWE-1234" or just "1234".
+var cweSupportedPattern = regexp.MustCompile(`(?:CWE-)?(\d+)`)
 
 const (
 	// Indicates that the component is a root component in the BOM
@@ -233,4 +242,242 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 		filteredDependencies = append(filteredDependencies, filteredDep)
 	}
 	return &filteredDependencies
+}
+
+func AttachLicenseToComponent(component *cyclonedx.Component, license cyclonedx.LicenseChoice) {
+	if component.Licenses == nil {
+		component.Licenses = &cyclonedx.Licenses{}
+	}
+	// Check if the license already exists in the component
+	if hasLicense(*component, license.License.ID) {
+		// The license already exists, no need to add it again
+		return
+	}
+	// Create a new license and add it to the component
+	*component.Licenses = append(*component.Licenses, license)
+}
+
+func hasLicense(component cyclonedx.Component, licenseName string) bool {
+	if component.Licenses == nil || len(*component.Licenses) == 0 {
+		return false
+	}
+	for _, license := range *component.Licenses {
+		if license.License != nil && license.License.ID == licenseName {
+			return true
+		}
+	}
+	return false
+}
+
+func AttachComponentAffects(issue *cyclonedx.Vulnerability, affectedComponent cyclonedx.Component, affectsGenerator func(affectedComponent cyclonedx.Component) cyclonedx.Affects, relatedProperties ...cyclonedx.Property) {
+	if !HasImpactedAffects(*issue, affectedComponent) {
+		// The affected component is not in the vulnerability, Add the affected component to the vulnerability
+		if issue.Affects == nil {
+			issue.Affects = &[]cyclonedx.Affects{}
+		}
+		*issue.Affects = append(*issue.Affects, affectsGenerator(affectedComponent))
+	}
+	if len(relatedProperties) == 0 {
+		// No properties to add
+		return
+	}
+	// Add the properties to the vulnerability
+	issue.Properties = AppendProperties(issue.Properties, relatedProperties...)
+}
+
+func HasImpactedAffects(vulnerability cyclonedx.Vulnerability, affectedComponent cyclonedx.Component) bool {
+	if vulnerability.Affects == nil {
+		return false
+	}
+	for _, affected := range *vulnerability.Affects {
+		if affected.Ref == affectedComponent.BOMRef {
+			return true
+		}
+	}
+	return false
+}
+
+func CreateScaImpactedAffects(impactedPackageComponent cyclonedx.Component, fixedVersions []string) (affect cyclonedx.Affects) {
+	_, impactedPackageVersion, _ := techutils.SplitPackageURL(impactedPackageComponent.PackageURL)
+	affect = cyclonedx.Affects{
+		Ref:   impactedPackageComponent.BOMRef,
+		Range: &[]cyclonedx.AffectedVersions{},
+	}
+	// Affected version
+	*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+		Version: impactedPackageVersion,
+		Status:  cyclonedx.VulnerabilityStatusAffected,
+	})
+	// Fixed versions
+	for _, fixedVersion := range fixedVersions {
+		*affect.Range = append(*affect.Range, cyclonedx.AffectedVersions{
+			Version: fixedVersion,
+			Status:  cyclonedx.VulnerabilityStatusNotAffected,
+		})
+	}
+	return
+}
+
+type CdxVulnerabilityParams struct {
+	Ref         string
+	ID          string
+	Details     string
+	Description string
+	Service     *cyclonedx.Service
+	CWE         []string
+	References  []string
+	Ratings     []cyclonedx.VulnerabilityRating
+}
+
+// Returns the index of the vulnerability in the BOM
+func GetOrCreateScaIssue(destination *cyclonedx.BOM, params CdxVulnerabilityParams, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
+	if scaVulnerability = SearchVulnerabilityByRef(destination, params.Ref); scaVulnerability != nil {
+		// The vulnerability already exists, update the ratings with the applicable status and attach properties if needed
+		UpdateOrAppendVulnerabilitiesRatings(scaVulnerability, params.Ratings...)
+		scaVulnerability.Properties = AppendProperties(scaVulnerability.Properties, properties...)
+		return scaVulnerability
+	}
+	// Create a new SCA vulnerability, add it to the BOM
+	if destination.Vulnerabilities == nil {
+		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
+	}
+	vulnerability := CreateBaseVulnerability(params, properties...)
+	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
+	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
+}
+
+func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+	var source *cyclonedx.Source
+	if params.Service != nil {
+		source = &cyclonedx.Source{
+			Name: params.Service.Name,
+		}
+	}
+	var ratings *[]cyclonedx.VulnerabilityRating
+	if params.Ratings != nil && len(params.Ratings) > 0 {
+		ratings = &params.Ratings
+	}
+	vuln := cyclonedx.Vulnerability{
+		BOMRef:      params.Ref,
+		ID:          params.ID,
+		Source:      source,
+		CWEs:        convertCweToCycloneDx(params.CWE),
+		Description: params.Description,
+		Detail:      params.Details,
+		Ratings:     ratings,
+		References:  getReferences(params.References),
+	}
+	vuln.Properties = AppendProperties(vuln.Properties, properties...)
+	return vuln
+}
+
+func getReferences(references []string) *[]cyclonedx.VulnerabilityReference {
+	if references == nil || len(references) == 0 {
+		return nil
+	}
+	refs := []cyclonedx.VulnerabilityReference{}
+	for _, ref := range references {
+		if ref == "" {
+			continue
+		}
+		refs = append(refs, cyclonedx.VulnerabilityReference{
+			Source: &cyclonedx.Source{
+				URL: ref,
+			},
+		})
+	}
+	if len(refs) == 0 {
+		// no valid references were found
+		return nil
+	}
+	return &refs
+}
+
+func convertCweToCycloneDx(cwe []string) (cweList *[]int) {
+	if cwe == nil || len(cwe) == 0 {
+		return nil
+	}
+	cweList = &[]int{}
+	for _, cweId := range cwe {
+		if cweInt, isSupportedCwe := extractCWENumber(cweId); !isSupportedCwe {
+			log.Warn("Failed to parse CWE ID: ", cweId)
+			continue
+		} else {
+			*cweList = append(*cweList, cweInt)
+		}
+	}
+	return
+}
+
+func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
+	matches := cweSupportedPattern.FindStringSubmatch(cweId)
+	if len(matches) < 2 {
+		// No CWE id found
+		return 0, false
+	}
+	cweID, err := strconv.Atoi(matches[1])
+	return cweID, err == nil
+}
+
+func UpdateOrAppendVulnerabilitiesRatings(vulnerability *cyclonedx.Vulnerability, ratings ...cyclonedx.VulnerabilityRating) {
+	if vulnerability == nil {
+		return
+	}
+	// Check if the ratings already exist in the vulnerability
+	for _, rating := range ratings {
+		if existingRating := SearchRating(vulnerability.Ratings, rating.Method, rating.Source); existingRating != nil {
+			// The rating already exists, update it
+			if rating.Source != nil {
+				existingRating.Source = rating.Source
+			}
+			if rating.Score != nil {
+				existingRating.Score = rating.Score
+			}
+			if rating.Vector != "" {
+				existingRating.Vector = rating.Vector
+			}
+			existingRating.Severity = rating.Severity
+			continue
+		}
+		if vulnerability.Ratings == nil {
+			vulnerability.Ratings = &[]cyclonedx.VulnerabilityRating{}
+		}
+		// The rating does not exist, append it to the vulnerability
+		*vulnerability.Ratings = append(*vulnerability.Ratings, rating)
+	}
+}
+
+func SearchRating(ratings *[]cyclonedx.VulnerabilityRating, method cyclonedx.ScoringMethod, sources ...*cyclonedx.Source) *cyclonedx.VulnerabilityRating {
+	if ratings == nil || len(*ratings) == 0 {
+		return nil
+	}
+	for _, rating := range *ratings {
+		if rating.Method != method {
+			continue // Skip if the method does not match
+		}
+		// If no sources are provided, return the first matching rating with the method
+		if len(sources) == 0 {
+			return &rating
+		}
+		for _, source := range sources {
+			// If the rating's source matches the provided source, return the rating
+			if rating.Source != nil && source.Name == rating.Source.Name {
+				// If the rating's source matches the provided source, return the rating
+				return &rating
+			}
+		}
+	}
+	return nil
+}
+
+func SearchVulnerabilityByRef(destination *cyclonedx.BOM, ref string) *cyclonedx.Vulnerability {
+	if destination == nil || destination.Vulnerabilities == nil {
+		return nil
+	}
+	for _, vulnerability := range *destination.Vulnerabilities {
+		if vulnerability.BOMRef == ref {
+			return &vulnerability
+		}
+	}
+	return nil
 }

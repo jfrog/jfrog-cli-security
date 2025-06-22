@@ -288,3 +288,304 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestAttachLicenseToComponent(t *testing.T) {
+	tests := []struct {
+		name     string
+		startLic []*cyclonedx.LicenseChoice
+		license  cyclonedx.LicenseChoice
+		expected []string
+	}{
+		{
+			name:     "Add new license",
+			startLic: nil,
+			license:  cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: "MIT"}},
+			expected: []string{"MIT"},
+		},
+		{
+			name:     "Add duplicate license",
+			startLic: []*cyclonedx.LicenseChoice{{License: &cyclonedx.License{ID: "MIT"}}},
+			license:  cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: "MIT"}},
+			expected: []string{"MIT"},
+		},
+		{
+			name:     "Add second license",
+			startLic: []*cyclonedx.LicenseChoice{{License: &cyclonedx.License{ID: "MIT"}}},
+			license:  cyclonedx.LicenseChoice{License: &cyclonedx.License{ID: "Apache-2.0"}},
+			expected: []string{"MIT", "Apache-2.0"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			comp := cyclonedx.Component{Name: "comp1"}
+			if tt.startLic != nil {
+				lics := cyclonedx.Licenses{}
+				for _, l := range tt.startLic {
+					lics = append(lics, *l)
+				}
+				comp.Licenses = &lics
+			}
+			AttachLicenseToComponent(&comp, tt.license)
+			var got []string
+			if comp.Licenses != nil {
+				for _, l := range *comp.Licenses {
+					got = append(got, l.License.ID)
+				}
+			}
+			assert.ElementsMatch(t, tt.expected, got)
+		})
+	}
+}
+
+func TestAttachComponentAffectsAndHasImpactedAffects(t *testing.T) {
+	tests := []struct {
+		name      string
+		startA    *[]cyclonedx.Affects
+		comp      cyclonedx.Component
+		expectedN int
+		expectedB bool
+	}{
+		{
+			name:      "Add new affect",
+			startA:    nil,
+			comp:      cyclonedx.Component{BOMRef: "comp1"},
+			expectedN: 1,
+			expectedB: true,
+		},
+		{
+			name:      "Add duplicate affect",
+			startA:    &[]cyclonedx.Affects{{Ref: "comp1"}},
+			comp:      cyclonedx.Component{BOMRef: "comp1"},
+			expectedN: 1,
+			expectedB: true,
+		},
+		{
+			name:      "Add second affect",
+			startA:    &[]cyclonedx.Affects{{Ref: "comp1"}},
+			comp:      cyclonedx.Component{BOMRef: "comp2"},
+			expectedN: 2,
+			expectedB: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vuln := &cyclonedx.Vulnerability{ID: "VULN-1", Affects: tt.startA}
+			AttachComponentAffects(vuln, tt.comp, func(c cyclonedx.Component) cyclonedx.Affects {
+				return cyclonedx.Affects{Ref: c.BOMRef}
+			})
+			assert.Equal(t, tt.expectedN, len(*vuln.Affects))
+			assert.Equal(t, tt.expectedB, HasImpactedAffects(*vuln, tt.comp))
+		})
+	}
+}
+
+func TestCreateScaImpactedAffects(t *testing.T) {
+	tests := []struct {
+		name          string
+		comp          cyclonedx.Component
+		fixed         []string
+		expAffected   string
+		expNotAffect1 string
+		expNotAffect2 string
+	}{
+		{
+			name:          "Maven with 2 fixed",
+			comp:          cyclonedx.Component{BOMRef: "comp1", PackageURL: "pkg:maven/group/artifact@1.2.3"},
+			fixed:         []string{"2.0.0", "3.0.0"},
+			expAffected:   "1.2.3",
+			expNotAffect1: "2.0.0",
+			expNotAffect2: "3.0.0",
+		},
+		{
+			name:        "No fixed",
+			comp:        cyclonedx.Component{BOMRef: "comp2", PackageURL: "pkg:docker/library/nginx@1.0.0"},
+			fixed:       nil,
+			expAffected: "1.0.0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			affect := CreateScaImpactedAffects(tt.comp, tt.fixed)
+			assert.Equal(t, tt.comp.BOMRef, affect.Ref)
+			assert.NotNil(t, affect.Range)
+			assert.Equal(t, tt.expAffected, (*affect.Range)[0].Version)
+			assert.Equal(t, cyclonedx.VulnerabilityStatusAffected, (*affect.Range)[0].Status)
+			if len(tt.fixed) > 0 {
+				assert.Equal(t, tt.expNotAffect1, (*affect.Range)[1].Version)
+				assert.Equal(t, cyclonedx.VulnerabilityStatusNotAffected, (*affect.Range)[1].Status)
+				assert.Equal(t, tt.expNotAffect2, (*affect.Range)[2].Version)
+			}
+		})
+	}
+}
+
+func TestGetOrCreateScaIssue(t *testing.T) {
+	tests := []struct {
+		name   string
+		params CdxVulnerabilityParams
+		id     string
+	}{
+		{
+			name:   "Create new issue",
+			params: CdxVulnerabilityParams{Ref: "comp1", ID: "VULN-1", Details: "details", Description: "desc", Service: &cyclonedx.Service{Name: "svc"}, CWE: []string{"CWE-79"}, References: []string{"https://ref"}, Ratings: []cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh}}},
+			id:     "VULN-1",
+		},
+		{
+			name:   "Create another issue",
+			params: CdxVulnerabilityParams{Ref: "comp2", ID: "VULN-2", Details: "d2", Description: "desc2", Service: &cyclonedx.Service{Name: "svc2"}, CWE: []string{"CWE-89"}, References: []string{"https://ref2"}, Ratings: []cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityCritical}}},
+			id:     "VULN-2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bom := cyclonedx.NewBOM()
+			vuln := GetOrCreateScaIssue(bom, tt.params)
+			assert.NotNil(t, vuln)
+			assert.Equal(t, tt.id, vuln.ID)
+			// Should return same vuln if called again
+			vuln2 := GetOrCreateScaIssue(bom, tt.params)
+			assert.Equal(t, vuln, vuln2)
+		})
+	}
+}
+
+func TestSearchVulnerabilityByRef(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   []CdxVulnerabilityParams
+		searchID string
+		exists   bool
+	}{
+		{
+			name: "Find existing vuln",
+			params: []CdxVulnerabilityParams{
+				{Ref: "comp1", ID: "VULN-1"},
+				{Ref: "comp2", ID: "VULN-2"},
+			},
+			searchID: "VULN-2",
+			exists:   true,
+		},
+		{
+			name: "Not found vuln",
+			params: []CdxVulnerabilityParams{
+				{Ref: "comp1", ID: "VULN-1"},
+			},
+			searchID: "VULN-3",
+			exists:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bom := cyclonedx.NewBOM()
+			for _, p := range tt.params {
+				GetOrCreateScaIssue(bom, p)
+			}
+			found := SearchVulnerabilityByRef(bom, tt.searchID)
+			if tt.exists {
+				assert.NotNil(t, found)
+				assert.Equal(t, tt.searchID, found.ID)
+			} else {
+				assert.Nil(t, found)
+			}
+		})
+	}
+}
+
+func TestCreateBaseVulnerability(t *testing.T) {
+	tests := []struct {
+		name   string
+		params CdxVulnerabilityParams
+		expID  string
+		expSvc string
+		expCWE []int
+		expSev cyclonedx.Severity
+		expRef string
+	}{
+		{
+			name:   "Critical vuln",
+			params: CdxVulnerabilityParams{Ref: "comp1", ID: "VULN-2", Details: "details2", Description: "desc2", Service: &cyclonedx.Service{Name: "svc2"}, CWE: []string{"CWE-89"}, References: []string{"https://ref2"}, Ratings: []cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityCritical}}},
+			expID:  "VULN-2",
+			expSvc: "svc2",
+			expCWE: []int{89},
+			expSev: cyclonedx.SeverityCritical,
+			expRef: "https://ref2",
+		},
+		{
+			name:   "No CWE vuln",
+			params: CdxVulnerabilityParams{Ref: "comp2", ID: "VULN-3", Details: "d3", Description: "desc3", Service: &cyclonedx.Service{Name: "svc3"}, References: []string{"https://ref3"}, Ratings: []cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityLow}}},
+			expID:  "VULN-3",
+			expSvc: "svc3",
+			expSev: cyclonedx.SeverityLow,
+			expRef: "https://ref3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vuln := CreateBaseVulnerability(tt.params)
+			assert.Equal(t, tt.expID, vuln.ID)
+			if vuln.Source != nil {
+				assert.Equal(t, tt.expSvc, vuln.Source.Name)
+			}
+			if len(tt.expCWE) > 0 {
+				assert.NotNil(t, vuln.CWEs)
+				assert.ElementsMatch(t, *vuln.CWEs, tt.expCWE)
+			} else {
+				assert.Nil(t, vuln.CWEs)
+			}
+			if vuln.Ratings != nil {
+				assert.Equal(t, tt.expSev, (*vuln.Ratings)[0].Severity)
+			}
+			if vuln.References != nil {
+				assert.Equal(t, tt.expRef, (*vuln.References)[0].Source.URL)
+			}
+		})
+	}
+}
+
+func TestUpdateOrAppendVulnerabilitiesRatingsAndSearchRating(t *testing.T) {
+	tests := []struct {
+		name      string
+		start     *[]cyclonedx.VulnerabilityRating
+		add       cyclonedx.VulnerabilityRating
+		searchM   cyclonedx.ScoringMethod
+		searchSrc *cyclonedx.Source
+		expSev    cyclonedx.Severity
+		expLen    int
+	}{
+		{
+			name:    "Update existing method",
+			start:   &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
+			add:     cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityCritical, Method: cyclonedx.ScoringMethodCVSSv3},
+			searchM: cyclonedx.ScoringMethodCVSSv3,
+			expSev:  cyclonedx.SeverityCritical,
+			expLen:  1,
+		},
+		{
+			name:      "Add new method",
+			start:     &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
+			add:       cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityLow, Method: cyclonedx.ScoringMethodOther, Source: &cyclonedx.Source{Name: "src"}},
+			searchM:   cyclonedx.ScoringMethodOther,
+			searchSrc: &cyclonedx.Source{Name: "src"},
+			expSev:    cyclonedx.SeverityLow,
+			expLen:    2,
+		},
+		{
+			name:    "SearchRating with no source",
+			start:   &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
+			add:     cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3},
+			searchM: cyclonedx.ScoringMethodCVSSv3,
+			expSev:  cyclonedx.SeverityHigh,
+			expLen:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vuln := &cyclonedx.Vulnerability{Ratings: tt.start}
+			UpdateOrAppendVulnerabilitiesRatings(vuln, tt.add)
+			assert.Equal(t, tt.expLen, len(*vuln.Ratings))
+			found := SearchRating(vuln.Ratings, tt.searchM, tt.searchSrc)
+			assert.NotNil(t, found)
+			assert.Equal(t, tt.expSev, found.Severity)
+		})
+	}
+}
