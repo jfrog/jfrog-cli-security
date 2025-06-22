@@ -1138,5 +1138,130 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 }
 
 func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
+	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
+	for _, vulnerability := range scanResponse.Vulnerabilities {
+		// Prepare the information needed to create the SCA vulnerability
+		impactedPackagesIds, fixedVersions, _, _, err := SplitComponents("", vulnerability.Components)
+		if err != nil {
+			return err
+		}
+		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
+		if err != nil {
+			return err
+		}
+		extendedDescription := ""
+		if vulnerability.ExtendedInformation != nil {
+			extendedDescription = vulnerability.ExtendedInformation.FullDescription
+		}
+		cves, _, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, convertCves(vulnerability.Cves), severity, jasutils.NotScanned, xrayService)
+		// Create vulnerability for each issueId
+		for id := 0; id < len(cves); id++ {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				// Create or get the affected component
+				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+				// Create or Get the SCA vulnerability
+				params := cdxutils.CdxVulnerabilityParams{
+					Ref:         cves[id],
+					Ratings:     ratings[id],
+					CWE:         cwes[id],
+					ID:          vulnerability.IssueId,
+					Description: vulnerability.Summary,
+					Details:     extendedDescription,
+					References:  vulnerability.References,
+					Service:     xrayService,
+				}
+				cycloneVulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
+				// Attach the affected impacted library component to the vulnerability
+				cdxutils.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[id])
+				})
+
+			}
+		}
+	}
+	for _, license := range scanResponse.Licenses {
+		// Prepare the information needed to create the SCA license
+		impactedPackagesIds, _, _, _, err := SplitComponents("", license.Components)
+		if err != nil {
+			return err
+		}
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			// Attach the license to the component
+			component := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+			cdxutils.AttachLicenseToComponent(component, cyclonedx.LicenseChoice{
+				License: &cyclonedx.License{
+					ID:   license.Key,
+					Name: license.Name,
+				},
+			})
+		}
+	}
 	return
+}
+
+func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
+	if len(cves) == 0 {
+		cveIds = append(cveIds, issueId)
+		ratings = [][]cyclonedx.VulnerabilityRating{{severityutils.CreateSeverityRating(severity, applicabilityStatus, service)}}
+		if applicabilityStatus != jasutils.NotScanned {
+			statuses = []*formats.Applicability{{Status: string(applicabilityStatus)}}
+		} else {
+			statuses = []*formats.Applicability{nil}
+		}
+		cwe = [][]string{{}}
+		return
+	}
+	for _, cve := range cves {
+		cveIds = append(cveIds, cve.Id)
+		cwe = append(cwe, cve.Cwe)
+		ratings = append(ratings, append(CreateCveRatings(cve), severityutils.CreateSeverityRating(severity, applicabilityStatus, service)))
+		if cve.Applicability != nil {
+			statuses = append(statuses, cve.Applicability)
+		} else if applicabilityStatus != jasutils.NotScanned {
+			statuses = append(statuses, &formats.Applicability{Status: applicabilityStatus.String()})
+		} else {
+			statuses = append(statuses, nil)
+		}
+	}
+	return
+}
+
+func CreateCveRatings(cve formats.CveRow) (ratings []cyclonedx.VulnerabilityRating) {
+	if cve.CvssV2 != "" {
+		ratings = append(ratings, cyclonedx.VulnerabilityRating{
+			Source: &cyclonedx.Source{
+				Name: utils.XrayToolName,
+			},
+			Score:  severityutils.GetCvssScore(cve.CvssV2),
+			Vector: cve.CvssV2Vector,
+			Method: cyclonedx.ScoringMethodCVSSv2,
+		})
+	}
+	if cve.CvssV3 != "" {
+		ratings = append(ratings, cyclonedx.VulnerabilityRating{
+			Source: &cyclonedx.Source{
+				Name: utils.XrayToolName,
+			},
+			Score:  severityutils.GetCvssScore(cve.CvssV3),
+			Vector: cve.CvssV3Vector,
+			Method: cyclonedx.ScoringMethodCVSSv3,
+		})
+	}
+	return
+}
+
+func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
+	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
+	// Check if the component already exists in the BOM
+	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {
+		// The component already exists, return it
+		return component
+	}
+	// Create a new component, add it to the BOM and return it
+	if destination.Components == nil {
+		destination.Components = &[]cyclonedx.Component{}
+	}
+	component := CreateScaComponentFromXrayCompId(xrayCompId)
+	*destination.Components = append(*destination.Components, component)
+	return &(*destination.Components)[len(*destination.Components)-1]
 }
