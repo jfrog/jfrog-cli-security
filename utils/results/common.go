@@ -924,7 +924,9 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
+	log.Debug(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
 	for _, potential := range resultsToCompare.Targets {
+		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
 			return potential
@@ -1121,10 +1123,8 @@ func BomToFlatTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (flatTree *xra
 			id = techutils.PurlToXrayComponentId(id)
 		}
 		if components.Exists(id) {
-			// The component is already added, skip it
 			continue
 		}
-		// Add the component to the flat tree
 		components.Add(id)
 		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id, Parent: flatTree})
 	}
@@ -1139,9 +1139,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
-		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
-		// Add the tree to the output list
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
 	// Translate refs to IDs

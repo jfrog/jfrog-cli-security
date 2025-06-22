@@ -166,6 +166,15 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 				Name:   "/path/to/directory/",
 			},
 		},
+		{
+			name: "file with special characters and spaces",
+			path: "/path/to/file with spaces.txt",
+			expected: cyclonedx.Component{
+				BOMRef: "b24231d78bc53506b3a74b40cf0e1e99",
+				Type:   cyclonedx.ComponentTypeFile,
+				Name:   "/path/to/file with spaces.txt",
+			},
+		},
 	}
 
 	for _, tt := range tests {

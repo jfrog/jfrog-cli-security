@@ -26,6 +26,8 @@ const (
 	fileNotSupportedExitCode = 3
 )
 
+// IndexerBomGenerator is a BomGenerator that uses the Xray Indexer to generate a CycloneDX SBOM.
+// It indexes a file and converts the resulting component graph to a CycloneDX SBOM.
 type IndexerBomGenerator struct {
 	BypassArchiveLimits bool
 
@@ -64,7 +66,7 @@ func WithBypassArchiveLimits(bypass bool) bom.SbomGeneratorOption {
 }
 
 func (ibg *IndexerBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) (err error) {
-	// Parse options
+	// Parse the generator options to prepare it for use.
 	for _, option := range options {
 		if err = option(ibg); err != nil {
 			return err
@@ -73,11 +75,11 @@ func (ibg *IndexerBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOpt
 	if ibg.xrayManager == nil || ibg.xrayVersion == "" {
 		return fmt.Errorf("Xray manager and version must be set using WithXray option")
 	}
-	// Download Xray Indexer if needed
+	// Download the indexer
 	if ibg.indexerPath, err = DownloadIndexerIfNeeded(ibg.xrayManager, ibg.xrayVersion); err != nil {
 		return
 	}
-	// Create Temp dir for Xray Indexer
+	// Create Temp dir for Xray Indexer, required for indexing files.
 	ibg.indexerTempDir, err = fileutils.CreateTempDir()
 	return
 }

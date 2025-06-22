@@ -270,7 +270,7 @@ func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix s
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTimeHash()))
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTime()))
 	log.Debug(fmt.Sprintf(logPrefix+"Scans output directory was provided, saving CycloneDX SBOM to file '%s'...", pathToSave))
 	file, err := os.Create(pathToSave)
 	if err != nil {
@@ -284,7 +284,7 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_results_%s.json", strings.ToLower(scanType), getCurrentTimeHash()))
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), getCurrentTime()))
 	log.Debug(fmt.Sprintf(logPrefix+"Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
@@ -292,14 +292,8 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	return
 }
 
-func getCurrentTimeHash() string {
-	now := time.Now().String()
-	if curTimeHash, err := Md5Hash(now); err != nil {
-		log.Warn(fmt.Sprintf("Failed to generate hash for current time '%s': %s", now, err.Error()))
-		return now
-	} else {
-		return curTimeHash
-	}
+func getCurrentTime() string {
+	return time.Now().Format(time.RFC3339)
 }
 
 // Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report

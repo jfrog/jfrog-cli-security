@@ -146,6 +146,7 @@ func (js *JasScanner) GetResultsToCompareByRelativePath(relativeTarget string) (
 
 func CreateJFrogAppsConfig(workingDirs []string) (*jfrogappsconfig.JFrogAppsConfig, error) {
 	if jfrogAppsConfig, err := jfrogappsconfig.LoadConfigIfExist(); err != nil {
+		log.Warn("Using deprecated 'jfrog-apps-config.yml' file.")
 		return nil, errorutils.CheckError(err)
 	} else if jfrogAppsConfig != nil {
 		// jfrog-apps-config.yml exist in the workspace

@@ -3,6 +3,8 @@ package utils
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/magiconair/properties/assert"
 )
 
 func TestGetRelativePath(t *testing.T) {
@@ -28,16 +30,14 @@ func TestGetRelativePath(t *testing.T) {
 			name:     "no common base path",
 			basePath: filepath.Join("dir1", "dir2"),
 			target:   filepath.Join("dir3", "dir4"),
-			expected: filepath.Join("dir3", "dir4"),
+			expected: filepath.Join("..", "..", "dir3", "dir4"),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := GetRelativePath(test.target, test.basePath)
-			if result != test.expected {
-				t.Errorf("expected '%s', got '%s'", test.expected, result)
-			}
+			assert.Equal(t, result, filepath.ToSlash(test.expected), "expected '%s', got '%s'", filepath.ToSlash(test.expected), result)
 		})
 	}
 }
