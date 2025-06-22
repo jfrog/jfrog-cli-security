@@ -63,6 +63,8 @@ type ParseLicenseFunc func(license services.License, impactedPackagesId string, 
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
 
+type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
+
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) error {
 	if !entitledForJas || handler == nil {
@@ -114,6 +116,64 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		}
 	}
 	return nil
+}
+
+func ForEachScaBomVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
+	if handler == nil || bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
+		return nil
+	}
+	for _, vulnerability := range *bom.Vulnerabilities {
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			// If there are no affected components, we skip the vulnerability.
+			log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no affected components", vulnerability.BOMRef))
+			continue
+		}
+		// Check the CA status of the vulnerability
+		var applicability *formats.Applicability
+		if entitledForJas && len(applicabilityRuns) > 0 {
+			applicability = GetCveApplicabilityField(vulnerability.BOMRef, applicabilityRuns)
+		}
+		// Get the related components for the vulnerability
+		for _, affectedComponent := range *vulnerability.Affects {
+			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
+			if relatedComponent == nil {
+				log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
+				continue
+			}
+			var fixedVersion *[]cyclonedx.AffectedVersions
+			if affectedComponent.Range != nil {
+				for _, affectedVersion := range *affectedComponent.Range {
+					if affectedVersion.Status == cyclonedx.VulnerabilityStatusNotAffected {
+						if fixedVersion == nil {
+							fixedVersion = &[]cyclonedx.AffectedVersions{}
+						}
+						*fixedVersion = append(*fixedVersion, affectedVersion)
+					}
+				}
+			}
+			// Pass the vulnerability to the handler with its related information
+			if err := handler(vulnerability, *relatedComponent, fixedVersion, applicability, ratingsToSeverity(vulnerability.Ratings)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func ratingsToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {
+	if ratings == nil || len(*ratings) == 0 {
+		return severityutils.Unknown
+	}
+	// If Xray provided ratings, we use them to determine the severity.
+	if xraySeverity := cdxutils.SearchRating(ratings, cyclonedx.ScoringMethodOther, &cyclonedx.Source{Name: utils.XrayToolName}); xraySeverity != nil {
+		return severityutils.CycloneDxSeverityToSeverity(xraySeverity.Severity)
+	}
+	// Xray didn't provide severity, Get the highest severity rating
+	severities := []severityutils.Severity{}
+	for _, rating := range *ratings {
+		severities = append(severities, severityutils.CycloneDxSeverityToSeverity(rating.Severity))
+	}
+	return severityutils.MostSevereSeverity(severities...)
 }
 
 // Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
@@ -295,6 +355,39 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 	return
 }
 
+func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
+	impactPathsRows = [][]formats.ComponentRow{}
+	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
+		impactedPath := buildImpactPathForComponent(parent, components, dependencies...)
+		// Add the affected component at the end of the impact path
+		impactedPath = append(impactedPath, formats.ComponentRow{
+			Name:    affectedComponent.Name,
+			Version: affectedComponent.Version,
+		})
+		// Add the impact path to the list of impact paths
+		impactPathsRows = append(impactPathsRows, impactedPath)
+	}
+	return
+}
+
+func buildImpactPathForComponent(component cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	// Build the impact path for the component
+	impactPath = []formats.ComponentRow{
+		{
+			Name:    component.Name,
+			Version: component.Version,
+		},
+	}
+	// Add the parent components to the impact path
+	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+		parentImpactPath := buildImpactPathForComponent(parent, components, dependencies...)
+		if len(parentImpactPath) > 0 {
+			impactPath = append(parentImpactPath, impactPath...)
+		}
+	}
+	return
+}
+
 func getComponentLocation(pathsByPriority ...string) *formats.Location {
 	for _, path := range pathsByPriority {
 		if path != "" {
@@ -322,7 +415,7 @@ func GetIssueIdentifier(cvesRow []formats.CveRow, issueId string, delimiter stri
 func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, applicabilityRuns []*sarif.Run, components map[string]services.Component) (convertedCves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus) {
 	convertedCves = convertCves(cves)
 	for i := range convertedCves {
-		convertedCves[i].Applicability = GetCveApplicabilityField(convertedCves[i].Id, applicabilityRuns, components)
+		convertedCves[i].Applicability = GetCveApplicabilityFieldAndFilterDisqualify(convertedCves[i].Id, applicabilityRuns, components)
 	}
 	applicabilityStatus = GetApplicableCveStatus(entitledForJas, applicabilityRuns, convertedCves)
 	return
@@ -470,7 +563,7 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run, components map[string]services.Component) *formats.Applicability {
+func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run) *formats.Applicability {
 	if len(applicabilityScanResults) == 0 {
 		return nil
 	}
@@ -494,7 +587,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		for _, result := range cveResults {
 			// Add new evidences from locations
 			for _, location := range result.Locations {
-				if evidence := getEvidence(components, result, location, applicabilityRun.Invocations...); evidence != nil {
+				if evidence := getEvidence(result, location, applicabilityRun.Invocations...); evidence != nil {
 					applicability.Evidence = append(applicability.Evidence, *evidence)
 				}
 			}
@@ -513,14 +606,29 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	return &applicability
 }
 
-func getEvidence(components map[string]services.Component, result *sarif.Result, location *sarif.Location, invocations ...*sarif.Invocation) *formats.Evidence {
-	fileName := sarifutils.GetRelativeLocationFileName(location, invocations)
-	if shouldDisqualifyEvidence(components, fileName) {
-		return nil
+func GetCveApplicabilityFieldAndFilterDisqualify(cveId string, applicabilityScanResults []*sarif.Run, components map[string]services.Component) (applicability *formats.Applicability) {
+	if applicability = GetCveApplicabilityField(cveId, applicabilityScanResults); applicability == nil || len(applicability.Evidence) == 0 {
+		// nothing more to do
+		return
 	}
+	// Filter out evidences that are disqualified
+	filteredEvidence := make([]formats.Evidence, 0, len(applicability.Evidence))
+	for _, evidence := range applicability.Evidence {
+		fileName := evidence.Location.File
+		if fileName == "" || !shouldDisqualifyEvidence(components, filepath.Clean(fileName)) {
+			// If the file name is empty, we cannot determine if it should be disqualified
+			// If the evidence is not disqualified, keep it
+			filteredEvidence = append(filteredEvidence, evidence)
+		}
+	}
+	applicability.Evidence = filteredEvidence
+	return
+}
+
+func getEvidence(result *sarif.Result, location *sarif.Location, invocations ...*sarif.Invocation) *formats.Evidence {
 	return &formats.Evidence{
 		Location: formats.Location{
-			File:        fileName,
+			File:        sarifutils.GetRelativeLocationFileName(location, invocations),
 			StartLine:   sarifutils.GetLocationStartLine(location),
 			StartColumn: sarifutils.GetLocationStartColumn(location),
 			EndLine:     sarifutils.GetLocationEndLine(location),
@@ -545,6 +653,14 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 		}
 	}
 	return getFinalApplicabilityStatus(applicableStatuses)
+}
+
+// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
+func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
+	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
+		return true
+	}
+	return false
 }
 
 func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
@@ -734,6 +850,18 @@ func ExtractCvesFromScanResponse(xrayScanResults []services.ScanResponse, direct
 		}
 	}
 
+	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
+}
+
+func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indirectCves []string) {
+	if bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
+		return
+	}
+	directCvesSet := datastructures.MakeSet[string]()
+	indirectCvesSet := datastructures.MakeSet[string]()
+	for _, vulnerability := range *bom.Vulnerabilities {
+		directCvesSet.Add(vulnerability.BOMRef)
+	}
 	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
 }
 
@@ -1264,4 +1392,83 @@ func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (lib
 	component := CreateScaComponentFromXrayCompId(xrayCompId)
 	*destination.Components = append(*destination.Components, component)
 	return &(*destination.Components)[len(*destination.Components)-1]
+}
+
+func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVersion []string) {
+	fixedVersion = []string{}
+	if affectedVersions == nil || len(*affectedVersions) == 0 {
+		return
+	}
+	for _, version := range *affectedVersions {
+		if version.Version != "" {
+			fixedVersion = append(fixedVersion, version.Version)
+		}
+	}
+	return
+}
+
+func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
+	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+		directComponents = append(directComponents, formats.ComponentRow{
+			Name:     parent.Name,
+			Version:  parent.Version,
+			Location: CdxEvidenceToLocation(parent.Evidence),
+		})
+	}
+	return
+}
+
+func CdxEvidenceToLocation(evidence *cyclonedx.Evidence) (location *formats.Location) {
+	if evidence == nil || evidence.Occurrences == nil || len(*evidence.Occurrences) == 0 {
+		return nil
+	}
+	// We take the first location as the main location
+	if len(*evidence.Occurrences) > 1 {
+		log.Debug("Multiple locations found for component evidence, using the first one as location")
+	}
+	loc := (*evidence.Occurrences)[0]
+	location = &formats.Location{
+		File: loc.Location,
+	}
+	return location
+}
+
+func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *formats.Applicability) (cveRows []formats.CveRow) {
+	cwes := []string{}
+	if vulnerability.CWEs != nil {
+		for _, cwe := range *vulnerability.CWEs {
+			cwes = append(cwes, strconv.Itoa(cwe))
+		}
+	}
+	cvssV2 := ""
+	cvssV2Vector := ""
+	if rating := cdxutils.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv2); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV2 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV2Vector = rating.Vector
+	}
+	cvssV3 := ""
+	cvssV3Vector := ""
+	if rating := cdxutils.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv3); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV3 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV3Vector = rating.Vector
+	}
+	// If vulnerability ID starts with "CVE-", we consider it a CVE ID.
+	if strings.HasPrefix(vulnerability.BOMRef, "CVE-") {
+		cveRows = append(cveRows, formats.CveRow{
+			Id:            vulnerability.BOMRef,
+			Cwe:           cwes,
+			Applicability: applicability,
+			CvssV2:        cvssV2,
+			CvssV2Vector:  cvssV2Vector,
+			CvssV3:        cvssV3,
+			CvssV3Vector:  cvssV3Vector,
+		})
+	}
+	return
 }

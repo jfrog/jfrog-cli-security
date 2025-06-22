@@ -1,6 +1,7 @@
 package cdxutils
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -101,6 +102,32 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 	}
 	// reference not found in the BOM components or dependencies
 	return UnknownRelation
+}
+
+func SearchParents(componentRef string, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) []cyclonedx.Component {
+	if len(dependencies) == 0 || len(components) == 0 {
+		return []cyclonedx.Component{}
+	}
+	parents := []cyclonedx.Component{}
+	for _, dependency := range dependencies {
+		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+			// No dependencies, continue to the next dependency
+			continue
+		}
+		// Check if the component is a direct dependency
+		for _, dep := range *dependency.Dependencies {
+			if dep == componentRef {
+				parentComponent := SearchComponentByRef(&components, dependency.Ref)
+				if parentComponent == nil {
+					log.Debug(fmt.Sprintf("Failed to find parent component for dependency '%s' in components", dependency.Ref))
+					continue
+				}
+				// The component is a direct dependency, return it
+				parents = append(parents, *parentComponent)
+			}
+		}
+	}
+	return parents
 }
 
 func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {

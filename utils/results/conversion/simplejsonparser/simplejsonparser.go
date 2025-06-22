@@ -66,23 +66,15 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
-func shouldUpdateStatus(currentStatus, newStatus *int) bool {
-	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
-		return true
-	}
-	return false
-}
-
 func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	if shouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &scaResponse.StatusCode) {
+	if results.ShouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &scaResponse.StatusCode) {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
 	for i := range applicableScan {
-		if shouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
@@ -99,6 +91,65 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanT
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	if results.ShouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &enrichedSbom.StatusCode) {
+		sjc.current.Statuses.ScaStatusCode = &enrichedSbom.StatusCode
+	}
+	for i := range applicableScan {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
+		}
+	}
+	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sjc.entitledForJas, results.ScanResultsToRuns(applicableScan),
+		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersions *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			// Prepare the required fields for the vulnerability row
+			applicabilityStatus := jasutils.NotScanned
+			if applicability != nil {
+				applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
+			}
+			compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+			dependencies := []cyclonedx.Dependency{}
+			if enrichedSbom.Scan.Dependencies != nil {
+				dependencies = append(dependencies, *enrichedSbom.Scan.Dependencies...)
+			}
+			// Convert the CycloneDX vulnerability to a simple JSON vulnerability row
+			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, formats.VulnerabilityOrViolationRow{
+				Summary: vulnerability.Description,
+				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
+					ImpactedDependencyName:    compName,
+					ImpactedDependencyVersion: compVersion,
+					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
+					Components:                results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Scan.Components, dependencies),
+				},
+				FixedVersions: results.CdxToFixedVersions(fixedVersions),
+				Cves:          results.CdxVulnToCveRows(vulnerability, applicability),
+				IssueId:       vulnerability.ID,
+				Technology:    results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), target.Technology),
+				Applicable:    applicabilityStatus.ToString(sjc.pretty),
+				References:    toReferences(vulnerability),
+				// TODO: implement JfrogResearchInformation conversion
+				// JfrogResearchInformation: nil,
+				ImpactPaths: results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
+			})
+			return
+		},
+	)
+}
+
+func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
+	references = []string{}
+	// If vulnerability has references, we convert them to a string slice.
+	if vulnerability.References == nil {
+		return
+	}
+	for _, ref := range *vulnerability.References {
+		if ref.Source != nil && ref.Source.URL != "" {
+			references = append(references, ref.Source.URL)
+		}
+	}
 	return
 }
 
@@ -160,7 +211,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isV
 		return results.ErrResetConvertor
 	}
 	for i := range secrets {
-		if shouldUpdateStatus(sjc.current.Statuses.SecretsStatusCode, &secrets[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.SecretsStatusCode, &secrets[i].StatusCode) {
 			sjc.current.Statuses.SecretsStatusCode = &secrets[i].StatusCode
 		}
 	}
@@ -184,7 +235,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for i := range iacs {
-		if shouldUpdateStatus(sjc.current.Statuses.IacStatusCode, &iacs[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.IacStatusCode, &iacs[i].StatusCode) {
 			sjc.current.Statuses.IacStatusCode = &iacs[i].StatusCode
 		}
 	}
@@ -208,7 +259,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for i := range sast {
-		if shouldUpdateStatus(sjc.current.Statuses.SastStatusCode, &sast[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.SastStatusCode, &sast[i].StatusCode) {
 			sjc.current.Statuses.SastStatusCode = &sast[i].StatusCode
 		}
 	}
