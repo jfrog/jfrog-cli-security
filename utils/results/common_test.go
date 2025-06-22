@@ -2329,3 +2329,30 @@ func getBinaryTestBom(oneBinary bool) *cyclonedx.BOM {
 	)
 	return bom
 }
+
+func TestScanResponseToSbom(t *testing.T) {
+	tests := []struct {
+		name     string
+		response services.ScanResponse
+		expected *cyclonedx.BOM
+	}{
+		{
+			name:     "Empty response",
+			response: services.ScanResponse{},
+			expected: &cyclonedx.BOM{},
+		},
+		{
+			name:     "Response with components and dependencies",
+			response: services.ScanResponse{},
+			expected: getTestBom(true),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			destination := &cyclonedx.BOM{}
+			assert.NoError(t, ScanResponseToSbom(destination, test.response))
+			assert.Equal(t, test.expected, destination)
+		})
+	}
+}

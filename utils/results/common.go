@@ -57,9 +57,9 @@ func CheckIfFailBuild(results []services.ScanResponse) bool {
 	return false
 }
 
-type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseLicenseFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseLicenseFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
 
@@ -98,7 +98,7 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -107,12 +107,8 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				vulnerability, cves, applicabilityStatus, severity,
-				impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-				fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
@@ -131,7 +127,7 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
 		// Prepare violation information
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)
 			continue
@@ -156,12 +152,8 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				continue
 			}
 
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := securityHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := securityHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -171,16 +163,12 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				// No handler was provided for license violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if impactedPackagesNames[compIndex] == "root" {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if impactedPackagesName, _, _ := techutils.SplitComponentId(impactedPackagesIds[compIndex]); impactedPackagesName == "root" {
 					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
 					continue
 				}
-				if e := licenseHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+				if e := licenseHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -190,12 +178,8 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				// No handler was provided for operational risk violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := operationalRiskHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -212,14 +196,12 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 		return nil
 	}
 	for _, license := range licenses {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
+		impactedPackagesIds, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				license, impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
@@ -244,16 +226,31 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 	return
 }
 
-func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+// func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+// 	if len(impactedPackages) == 0 {
+// 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
+// 		return
+// 	}
+// 	for currCompId, currComp := range impactedPackages {
+// 		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
+// 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
+// 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
+// 		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
+// 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
+// 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
+// 		directComponents = append(directComponents, currDirectComponents)
+// 		impactPaths = append(impactPaths, currImpactPaths)
+// 	}
+// 	return
+// }
+
+func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
-		impactedPackagesNames = append(impactedPackagesNames, currCompName)
-		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
-		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
+		impactedPackagesIds = append(impactedPackagesIds, currCompId)
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
 		directComponents = append(directComponents, currDirectComponents)
@@ -1138,4 +1135,8 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 	for _, dep := range node.Nodes {
 		convertBinaryRefsToPackageID(dep, isBuildInfoXray, components...)
 	}
+}
+
+func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
+	return
 }
