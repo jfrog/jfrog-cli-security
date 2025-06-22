@@ -25,7 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 const (
@@ -244,11 +244,7 @@ func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
 	if err != nil {
 		return
 	}
-	combined, err := sarifutils.CombineReports(reports...)
-	if err != nil {
-		return
-	}
-	return utils.GetAsJsonBytes(combined, false, false)
+	return utils.GetAsJsonBytes(sarifutils.CombineReports(reports...), false, false)
 }
 
 func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
