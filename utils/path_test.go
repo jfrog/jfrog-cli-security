@@ -36,7 +36,7 @@ func TestGetRelativePath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := GetRelativePath(test.target, test.basePath)
 			if result != test.expected {
-				t.Errorf("expected '%s', got '%s'", test.expected, result)
+				t.Errorf("expected '%s', got '%s'", filepath.ToSlash(test.expected), result)
 			}
 		})
 	}
