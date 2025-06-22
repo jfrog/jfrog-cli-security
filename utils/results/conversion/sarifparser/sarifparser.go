@@ -232,10 +232,84 @@ func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx
 }
 
 func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	// Not supported in Sarif format
 	return
 }
 
 func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+		return
+	}
+	sarifResults := []*sarif.Result{}
+	sarifRules := map[string]*sarif.ReportingDescriptor{}
+	err = results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sc.entitledForJas, results.ScanResultsToRuns(applicableScan), addCdxScaVulnerability(sc.currentCmdType, enrichedSbom.Scan, &sarifResults, &sarifRules))
+	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
+		return
+	}
+	sc.addScaResultsToCurrentRun(sarifRules, sarifResults...)
+	return
+}
+
+func addCdxScaVulnerability(cmdType utils.CommandType, enrichedSbom *cyclonedx.BOM, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseBomScaVulnerabilityFunc {
+	return func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+		// Prepare the required fields
+		applicabilityStatus, maxCveScore, cves, directDependencies, fixedVersions, markdownDescription, e := prepareCdxVulnerabilitiesForSarif(enrichedSbom, vulnerability, severity, applicability, component, fixedVersion)
+		if e != nil {
+			return
+		}
+		dependencies := []cyclonedx.Dependency{}
+		if enrichedSbom.Dependencies != nil {
+			dependencies = append(dependencies, *enrichedSbom.Dependencies...)
+		}
+		compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
+		currentResults, currentRule := parseScaToSarifFormat(scaParseParams{
+			CmdType:                 cmdType,
+			IssueId:                 vulnerability.ID,
+			Summary:                 vulnerability.Description,
+			MarkdownDescription:     markdownDescription,
+			CveScore:                maxCveScore,
+			GenerateTitleFunc:       getScaVulnerabilitySarifHeadline,
+			Cves:                    cves,
+			Severity:                severity,
+			ApplicabilityStatus:     applicabilityStatus,
+			ImpactedPackagesName:    compName,
+			ImpactedPackagesVersion: compVersion,
+			FixedVersions:           fixedVersions,
+			DirectComponents:        directDependencies,
+			ImpactPaths:             results.BuildImpactPath(component, *enrichedSbom.Components, dependencies...),
+		})
+		cveImpactedComponentRuleId := results.GetScaIssueId(compName, compVersion, vulnerability.ID)
+		if _, ok := (*rules)[cveImpactedComponentRuleId]; !ok {
+			// New Rule
+			(*rules)[cveImpactedComponentRuleId] = currentRule
+		}
+		*sarifResults = append(*sarifResults, currentResults...)
+		return
+	}
+}
+
+func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerability cyclonedx.Vulnerability, severity severityutils.Severity, applicability *formats.Applicability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions) (applicabilityStatus jasutils.ApplicabilityStatus, maxCveScore string, cves []formats.CveRow, directDependencies []formats.ComponentRow, fixedVersions []string, markdownDescription string, err error) {
+	// Extract the applicability status
+	applicabilityStatus = jasutils.NotScanned
+	if applicability != nil {
+		applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
+	}
+	// Extract the CVEs
+	cves = results.CdxVulnToCveRows(vulnerability, applicability)
+	// Extract the direct dependencies
+	dependencies := []cyclonedx.Dependency{}
+	if enrichedSbom.Dependencies != nil {
+		dependencies = append(dependencies, *enrichedSbom.Dependencies...)
+	}
+	directDependencies = results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Components, dependencies)
+	// Extract the fixed versions
+	fixedVersions = results.CdxToFixedVersions(fixedVersion)
+	// Extract the maximum CVE score
+	if maxCveScore, err = results.FindMaxCVEScore(severity, applicabilityStatus, cves); err != nil {
+		return
+	}
+	// Prepare the markdown description
+	markdownDescription, err = getScaIssueMarkdownDescription(directDependencies, maxCveScore, applicabilityStatus, fixedVersions)
 	return
 }
 
