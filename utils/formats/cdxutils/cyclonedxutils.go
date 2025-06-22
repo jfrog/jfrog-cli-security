@@ -182,9 +182,9 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 	if components == nil || len(*components) == 0 {
 		return
 	}
-	for _, comp := range *components {
+	for i, comp := range *components {
 		if comp.BOMRef == ref {
-			return &comp
+			return &(*components)[i]
 		}
 	}
 	return
