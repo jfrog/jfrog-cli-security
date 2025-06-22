@@ -270,11 +270,11 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if err = params.bomGenerator.PrepareGenerator(buildinfo.WithParams(buildParams)); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
 	}
+	// Initialize the SCA scan strategy
 	scanGraphParams, err := params.ToXrayScanGraphParams()
 	if err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to create scan graph params: %s", err.Error()), false)
 	}
-	// Initialize the SCA scan strategy
 	if err = params.scaScanStrategy.PrepareStrategy(scanGraphStrategy.WithParams(scanGraphParams)); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
 	}
@@ -431,7 +431,7 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	var generalJasScanErr error
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
 	// Add the scans to the parallel runner
-	if jasScanner, generalJasScanErr = AddJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
+	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
 	}
 	// The sca scan doesn't require the analyzer manager, so it can run separately from the analyzer manager download routine.
@@ -476,7 +476,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	return
 }
 
-func AddJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {
+func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {
 	if !scanResults.EntitledForJas {
 		log.Info("Not entitled for JAS, skipping advance security scans...")
 		return
