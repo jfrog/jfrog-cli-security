@@ -281,6 +281,13 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 			}
 		}()
 	}
+	// TODO: Use the following code when implementing SCA scan with interface
+	// Initialize the scan strategy
+	// if scanCmd.scanStrategy != nil {
+	// 	if err := scanCmd.scanStrategy.PrepareStrategy(scangraphstrategy.WithParams(*scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId))); err != nil {
+	// 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare scan strategy: %w", err), false)
+	// 	}
+	// }
 
 	threads := 1
 	if scanCmd.threads > 1 {
@@ -443,6 +450,15 @@ func (scanCmd *ScanCommand) GenerateBinaryBom(cmdType utils.CommandType, targetR
 }
 
 func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, deprecatedGraph *xrayClientUtils.BinaryGraphNode, scanThreadId int) (targetCompId string, graphScanResults *services.ScanResponse, err error) {
+	// TODO: Use the following code when implementing SCA scan with interface
+	// if scanGraphStrategy, ok := scanCmd.scanStrategy.(*scangraphstrategy.ScanGraphStrategy); ok {
+	// 	scanGraphStrategy.ScanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
+	// }
+	// err = scan.RunScaScan(scanCmd.scanStrategy, scan.ScaScanParams{
+	// 	ScanResults:        targetResults,
+	// 	ThreadId:           scanThreadId,
+	// })
+	// return
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	binaryTree := deprecatedGraph
 	if deprecatedGraph == nil {
@@ -458,23 +474,9 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	}
 	targetCompId = binaryTree.Id
 	// Prepare parameters for the SCA scan
-	params := &services.XrayGraphScanParams{
-		BinaryGraph:            binaryTree,
-		RepoPath:               getXrayRepoPathFromTarget(fileTarget),
-		Watches:                scanCmd.resultsContext.Watches,
-		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
-		ProjectKey:             scanCmd.resultsContext.ProjectKey,
-		ScanType:               services.Binary,
-		MultiScanId:            cmdResults.MultiScanId,
-		XscVersion:             cmdResults.XscVersion,
-		XrayVersion:            cmdResults.XrayVersion,
-	}
-	scanGraphParams := scangraph.NewScanGraphParams().
-		SetServerDetails(scanCmd.serverDetails).
-		SetXrayGraphScanParams(params).
-		SetFixableOnly(scanCmd.fixableOnly).
-		SetSeverityLevel(scanCmd.minSeverityFilter.String())
+	scanGraphParams := scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId)
+	scanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
+	scanGraphParams.XrayGraphScanParams().BinaryGraph = binaryTree
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
 	if err != nil {
 		err = targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to create Xray service manager: %s", err.Error()), false)
@@ -489,6 +491,24 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	targetResults.NewScaScanResults(technologies.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 	targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 	return
+}
+
+func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGraphParams {
+	params := &services.XrayGraphScanParams{
+		Watches:                scanCmd.resultsContext.Watches,
+		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
+		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+		ProjectKey:             scanCmd.resultsContext.ProjectKey,
+		ScanType:               services.Binary,
+		MultiScanId:            msi,
+		XscVersion:             scanCmd.xscVersion,
+		XrayVersion:            scanCmd.xrayVersion,
+	}
+	return scangraph.NewScanGraphParams().
+		SetServerDetails(scanCmd.serverDetails).
+		SetXrayGraphScanParams(params).
+		SetFixableOnly(scanCmd.fixableOnly).
+		SetSeverityLevel(scanCmd.minSeverityFilter.String())
 }
 
 func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi string, secretValidation bool, targetResults *results.TargetResults, targetCompId string, graphScanResults *services.ScanResponse, jasFileProducerConsumer *utils.SecurityParallelRunner, scanThreadId int) (err error) {
