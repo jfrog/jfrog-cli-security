@@ -915,10 +915,8 @@ func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
 		}
 		id := techutils.PurlToXrayComponentId(component.PackageURL)
 		if components.Exists(id) {
-			// The component is already added, skip it
 			continue
 		}
-		// Add the component to the flat tree
 		components.Add(id)
 		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id})
 	}
@@ -933,9 +931,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTre
 	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
-		// Populate application tree
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
-		// Add the tree to the output list
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
 	// Translate refs to IDs
