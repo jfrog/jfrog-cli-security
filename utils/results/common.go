@@ -720,7 +720,9 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
 	var best *TargetResults
+	log.Debug(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
 	for _, potential := range resultsToCompare.Targets {
+		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
 			return potential
