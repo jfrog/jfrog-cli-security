@@ -53,8 +53,6 @@ const (
 	BypassArchiveLimitsMinXrayVersion = "3.59.0"
 	indexingCommand                   = "graph"
 	fileNotSupportedExitCode          = 3
-	typeJASPackageScanTypeDocker      = "docker"
-	typeJASPackageScanTypeGeneric     = "generic"
 )
 
 type ScanCommand struct {

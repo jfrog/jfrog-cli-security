@@ -1,6 +1,7 @@
 package summaryparser
 
 import (
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -103,7 +104,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	}
 	// Parse violations
 	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := results.ApplyHandlerToScaViolations(
+	watches, failBuild, err := results.ForEachScanGraphViolation(
 		target,
 		scaResponse.Scan.Violations,
 		sc.entitledForJas,
@@ -120,7 +121,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		for _, id := range getCveIds(cves, violation.IssueId) {
 			// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
@@ -136,7 +137,7 @@ func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *dat
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.License == nil {
 			sc.currentScan.Violations.ScaResults.License = formats.ResultSummary{}
@@ -155,7 +156,7 @@ func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *data
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) results.ParseScaViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.OperationalRisk == nil {
 			sc.currentScan.Violations.ScaResults.OperationalRisk = formats.ResultSummary{}
@@ -200,7 +201,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	}
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
-	err = results.ApplyHandlerToScaVulnerabilities(
+	err = results.ForEachScanGraphVulnerability(
 		target,
 		scaResponse.Scan.Vulnerabilities,
 		sc.entitledForJas,
@@ -210,7 +211,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) getScaVulnerabilityHandler(parsed *datastructures.Set[string]) results.ParseScaVulnerabilityFunc {
+func (sc *CmdResultsSummaryConverter) getScaVulnerabilityHandler(parsed *datastructures.Set[string]) results.ParseScanGraphVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		for _, id := range getCveIds(cves, vulnerability.IssueId) {
 			// PrepareScaVulnerabilities calls the handler for each vulnerability and impacted component pair, we want to count unique vulnerabilities
@@ -254,7 +255,7 @@ func (sc *CmdResultsSummaryConverter) ParseLicenses(_ results.ScanTarget, _ resu
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSbom(target results.ScanTarget, sbom results.Sbom) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in the summary
 	return
 }
@@ -276,7 +277,7 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViola
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(secrets...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -296,7 +297,7 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(iacs...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -316,11 +317,11 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 		}
 		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(sast...)...)
 	}
-	return results.ApplyHandlerToJasIssues(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles
-func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasFunc {
+func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanType, violations bool) results.ParseJasIssueFunc {
 	return func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (err error) {
 		if location == nil {
 			// Only count the issue if it has a location
