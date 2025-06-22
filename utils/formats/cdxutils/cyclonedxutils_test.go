@@ -1,7 +1,6 @@
 package cdxutils
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -151,7 +150,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 	}{
 		{
 			name: "File component",
-			path: filepath.Join("path", "to", "file.txt"),
+			path: "/path/to/file.txt",
 			expected: cyclonedx.Component{
 				BOMRef: "f5aa4f4f1380b71acc56750e9f8ff825",
 				Type:   cyclonedx.ComponentTypeFile,
@@ -160,7 +159,7 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 		},
 		{
 			name: "Directory component",
-			path: filepath.Join("path", "to", "directory"),
+			path: "/path/to/directory/",
 			expected: cyclonedx.Component{
 				BOMRef: "0b02f93c6b83cab52b1024d1aebad31c",
 				Type:   cyclonedx.ComponentTypeFile,
@@ -169,9 +168,9 @@ func TestCreateFileOrDirComponent(t *testing.T) {
 		},
 		{
 			name: "file with special characters and spaces",
-			path: filepath.Join("path", "to", "file with spaces.txt"),
+			path: "/path/to/file with spaces.txt",
 			expected: cyclonedx.Component{
-				BOMRef: "f5aa4f4f1380b71acc56750e9f8ff825",
+				BOMRef: "b24231d78bc53506b3a74b40cf0e1e99",
 				Type:   cyclonedx.ComponentTypeFile,
 				Name:   "/path/to/file with spaces.txt",
 			},

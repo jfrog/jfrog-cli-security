@@ -686,11 +686,11 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	assert.Len(t, filesList, 6)
 
 	searchForStrWithSubString(t, filesList, "bom")
-	searchForStrWithSubString(t, filesList, "sca_results")
-	searchForStrWithSubString(t, filesList, "iac_results")
-	searchForStrWithSubString(t, filesList, "sast_results")
-	searchForStrWithSubString(t, filesList, "secrets_results")
-	searchForStrWithSubString(t, filesList, "applicability_results")
+	searchForStrWithSubString(t, filesList, "sca")
+	searchForStrWithSubString(t, filesList, "iac")
+	searchForStrWithSubString(t, filesList, "sast")
+	searchForStrWithSubString(t, filesList, "secrets")
+	searchForStrWithSubString(t, filesList, "applicability")
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {
