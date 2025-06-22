@@ -185,7 +185,15 @@ func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	for i := range applicableScan {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
+		}
+	}
+	return sjc.parseScaViolations(target, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
