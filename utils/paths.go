@@ -89,9 +89,7 @@ func GetRelativePath(fullPathWd, baseWd string) string {
 	if relativePath == "." {
 		return "" // If the paths are the same, return an empty string
 	}
-	// remove leading .. components
-	relativePath = filepath.Clean(relativePath)
-	return relativePath
+	return filepath.ToSlash(filepath.Clean(relativePath))
 }
 
 // Calculate the common parent directory of the given paths.
