@@ -183,7 +183,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if violations {
 		if err = sc.parseScaViolations(target, scaResponse, applicableScan...); err != nil {
 			return
@@ -221,13 +221,29 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
 func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return
+}
+
+func (sc *CmdResultsSarifConverter) ParseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
 	return
 }
 

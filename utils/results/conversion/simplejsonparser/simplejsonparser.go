@@ -73,7 +73,7 @@ func shouldUpdateStatus(currentStatus, newStatus *int) bool {
 	return false
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -90,6 +90,18 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarg
 	} else {
 		err = sjc.parseScaVulnerabilities(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	}
+	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	return
 }
 
@@ -119,7 +131,7 @@ func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}

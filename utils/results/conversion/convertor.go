@@ -54,14 +54,21 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewTargetResults(target results.ScanTarget, errors ...error) error
+	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
+	// Missing attributes:
+	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
+	DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
+	DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
 	// Parse SCA content to the current scan target
-	ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) error
-	ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) error
 	ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) error
+	ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) error
+	ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	// Parse JAS content to the current scan target
 	ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) error
 	ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) error
 	ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) error
+	// Parse JFrog violations to the current scan target
+	ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
 }
@@ -118,31 +125,31 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	if targetScansResults.ScaResults == nil {
 		return
 	}
-	for _, scaResults := range targetScansResults.ScaResults.XrayResults {
+	for _, scaResults := range targetScansResults.ScaResults.DeprecatedXrayResults {
 		actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 		var applicableRuns []results.ScanResult[[]*sarif.Run]
 		if jasEntitled && targetScansResults.JasResults != nil {
 			applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
 		}
 		if params.IncludeVulnerabilities {
-			if err = parser.ParseScaIssues(actualTarget, false, scaResults, applicableRuns...); err != nil {
+			if err = parser.DeprecatedParseScaIssues(actualTarget, false, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		}
 		if params.HasViolationContext {
-			if err = parser.ParseScaIssues(actualTarget, true, scaResults, applicableRuns...); err != nil {
+			if err = parser.DeprecatedParseScaIssues(actualTarget, true, scaResults, applicableRuns...); err != nil {
 				return
 			}
 		} else if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
 			// If no violations were found, check if there are licenses that are not allowed
 			if scaResults.Scan.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
-				if err = parser.ParseScaIssues(actualTarget, true, scaResults); err != nil {
+				if err = parser.DeprecatedParseScaIssues(actualTarget, true, scaResults); err != nil {
 					return
 				}
 			}
 		}
 		if params.IncludeLicenses {
-			if err = parser.ParseLicenses(actualTarget, scaResults); err != nil {
+			if err = parser.DeprecatedParseLicenses(actualTarget, scaResults); err != nil {
 				return
 			}
 		}
