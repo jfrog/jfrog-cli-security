@@ -719,14 +719,12 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 	}
 	// Results to compare could be a results from the same path or a relative path
 	sourceBasePath := resultsToCompare.GetCommonParentPath()
-	log.Info(fmt.Sprintf("Searching for target %s in results with base path %s", relativeTarget, sourceBasePath))
 	var best *TargetResults
 	for _, potential := range resultsToCompare.Targets {
 		if relativeTarget == potential.Target {
 			// If the target is exactly the same, return it
 			return potential
 		}
-		log.Debug(fmt.Sprintf("Comparing target %s with relative target %s, relative: %s", potential.Target, relativeTarget, utils.GetRelativePath(potential.Target, sourceBasePath)))
 		// Check if the target is a relative path of the source base path
 		if relative := utils.GetRelativePath(potential.Target, sourceBasePath); relativeTarget == relative {
 			// Check if this is the best match so far
