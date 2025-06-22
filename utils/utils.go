@@ -34,6 +34,8 @@ const (
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
 
+	XrayToolName = "JFrog Xray Scanner"
+
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
 	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
 	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"

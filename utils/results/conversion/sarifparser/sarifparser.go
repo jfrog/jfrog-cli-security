@@ -36,7 +36,6 @@ const (
 
 	// #nosec G101 -- Not credentials.
 	BinarySecretScannerToolName = "JFrog Binary Secrets Scanner"
-	ScaScannerToolName          = "JFrog Xray Scanner"
 )
 
 var (
@@ -159,7 +158,7 @@ func (sc *CmdResultsSarifConverter) flush() {
 }
 
 func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, errorCount int) *sarif.Run {
-	run := sarif.NewRunWithInformationURI(ScaScannerToolName, utils.BaseDocumentationURL+"sca")
+	run := sarif.NewRunWithInformationURI(utils.XrayToolName, utils.BaseDocumentationURL+"sca")
 	run.Tool.Driver.Version = &sc.xrayVersion
 	wd := target.Target
 	if sc.currentCmdType.IsTargetBinary() {
