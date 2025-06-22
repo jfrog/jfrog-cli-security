@@ -68,15 +68,15 @@ func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(target results.ScanT
 }
 
 func (tc *CmdResultsTableConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
-	return
+	return tc.simpleJsonConvertor.ParseSbomLicenses(target, components, dependencies...)
 }
 
 func (tc *CmdResultsTableConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	return tc.simpleJsonConvertor.ParseCVEs(target, enrichedSbom, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	return tc.simpleJsonConvertor.ParseViolations(target, violations, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
