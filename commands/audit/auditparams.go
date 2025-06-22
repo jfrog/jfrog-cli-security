@@ -201,10 +201,7 @@ func (params *AuditParams) ToXrayScanGraphParams() (scanGraphParams scangraph.Sc
 	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
 	xrayScanGraphParams.XrayVersion = params.GetXrayVersion()
 	xrayScanGraphParams.XscVersion = params.GetXscVersion()
-
-	// xrayScanGraphParams.Technology = tech.String()
-	// xrayScanGraphParams.DependenciesGraph = &flatTree
-	// 	SetTechnology(tech).
+	xrayScanGraphParams.IncludeLicenses = params.resultsContext.IncludeLicenses
 
 	scanGraphParams = *scangraph.NewScanGraphParams().
 		SetServerDetails(serverDetails).
