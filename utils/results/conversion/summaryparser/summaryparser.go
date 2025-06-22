@@ -261,15 +261,59 @@ func (sc *CmdResultsSummaryConverter) ParseSbom(_ results.ScanTarget, _ *cyclone
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	// Not supported in the summary
 	return
 }
 
 func (sc *CmdResultsSummaryConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
+		return
+	}
+	if sc.currentScan.Vulnerabilities.ScaResults == nil {
+		sc.currentScan.Vulnerabilities.ScaResults = &formats.ScaScanResultSummary{}
+	}
+	// Parse general SCA results
+	if enrichedSbom.IsScanFailed() {
+		return
+	}
+	applicabilityRuns := []*sarif.Run{}
+	for _, scan := range applicableScan {
+		if scan.IsScanFailed() {
+			continue
+		}
+		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
+	}
+	// Parse vulnerabilities
+	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sc.entitledForJas, applicabilityRuns, sc.getBomScaVulnerabilityHandler())
+}
+
+func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.ParseBomScaVulnerabilityFunc {
+	parsed := datastructures.MakeSet[string]()
+	return func(vulnerability cyclonedx.Vulnerability, _ cyclonedx.Component, _ *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (err error) {
+		if parsed.Exists(vulnerability.BOMRef) {
+			return
+		}
+		parsed.Add(vulnerability.BOMRef)
+		// Count the vulnerability
+		applicabilityStatus := jasutils.NotScanned
+		if applicability != nil {
+			applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
+		}
+		scaSecurityHandler(sc.currentScan.Vulnerabilities.ScaResults, severity, applicabilityStatus)
+		return
+	}
 }
 
 func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	scanResponse := results.ScanResult[services.ScanResponse]{
+		Scan: services.ScanResponse{
+			Violations: violations,
+			// ScanId and XrayDataUrl are not supported in the summary for new flow, will be implemented after the JPD can produce the new UI
+			ScanId:      "",
+			XrayDataUrl: "",
+		},
+	}
+	return sc.parseScaViolations(target, scanResponse, applicableScan...)
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
