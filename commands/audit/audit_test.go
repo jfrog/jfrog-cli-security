@@ -13,6 +13,7 @@ import (
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -619,6 +620,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			auditParams := NewAuditParams().
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -676,7 +678,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -813,7 +816,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -1024,7 +1028,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetDiffMode(true).
 				SetResultsToCompare(tc.resultsToCompare).
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())

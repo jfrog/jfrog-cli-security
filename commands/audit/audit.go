@@ -22,8 +22,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
-	// "github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
-
+	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/exp/slices"
@@ -173,6 +172,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).

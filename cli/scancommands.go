@@ -274,7 +274,7 @@ func ScanCmd(c *components.Context) error {
 	}
 	scanCmd := scan.NewScanCommand().
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
-		SetScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -709,7 +709,7 @@ func DockerScan(c *components.Context, image string) error {
 	}
 	containerScanCommand.SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
-		SetScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).

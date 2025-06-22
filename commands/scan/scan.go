@@ -88,7 +88,7 @@ func (scanCmd *ScanCommand) SetBomGenerator(bomGenerator bom.SbomGenerator) *Sca
 	return scanCmd
 }
 
-func (scanCmd *ScanCommand) SetScanStrategy(scanStrategy scan.SbomScanStrategy) *ScanCommand {
+func (scanCmd *ScanCommand) SetScaScanStrategy(scanStrategy scan.SbomScanStrategy) *ScanCommand {
 	scanCmd.scanStrategy = scanStrategy
 	return scanCmd
 }
