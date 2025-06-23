@@ -264,9 +264,6 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
-	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
@@ -437,9 +434,6 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return "", "", nil, nil, err
-	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
 	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
@@ -699,9 +693,6 @@ func DockerScan(c *components.Context, image string) error {
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
-	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
 	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {

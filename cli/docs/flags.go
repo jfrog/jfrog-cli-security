@@ -229,10 +229,10 @@ var flagsMap = map[string]components.Flag{
 	Watches:       components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs and Licenses. Incompatible with --project and --repo-path."),
 	RepoPath:      components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
 	Licenses:      components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
-	Sbom:          components.NewBoolFlag(Sbom, fmt.Sprintf("For displaying the SBOM for this project, set to true. Relevant only with --%s flag. Ignored if provided 'format' is not 'table'.", Sca)),
+	Sbom:          components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
-		"Defines the output format of the command. Acceptable values are: table, json, simple-json and sarif. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
+		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
 		components.WithStrDefaultValue("table"),
 	),
 	Fail:                components.NewBoolFlag(Fail, fmt.Sprintf("When using one of the flags --%s, --%s or --%s and a 'Fail build' rule is matched, the command will return exit code 3. Set to false if you'd like to see violations with exit code 0.", Watches, Project, RepoPath), components.WithBoolDefaultValue(true)),

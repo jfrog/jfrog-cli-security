@@ -112,6 +112,11 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
+		if params.IncludeSbom {
+			if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.Sbom); err != nil {
+				return
+			}
+		}
 		if utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.RequestedScans...) && targetScansResults.ScaResults != nil {
 			if err = parseScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
 				return
@@ -137,12 +142,6 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 	var applicableRuns []results.ScanResult[[]*sarif.Run]
 	if jasEntitled && targetScansResults.JasResults != nil {
 		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
-	}
-	// Parse SBOM
-	if params.IncludeSbom {
-		if err = parser.ParseSbom(actualTarget, targetScansResults.ScaResults.Sbom); err != nil {
-			return
-		}
 	}
 	// If no enriched SBOM was provided, we can't parse new flow
 	if err = parseDeprecatedScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
