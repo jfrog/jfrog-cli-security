@@ -1,6 +1,7 @@
 package cyclonedxparser
 
 import (
+	"os"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -40,6 +41,40 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	component := cdxutils.CreateFileOrDirComponent(target.Target)
+	if cdc.bom.Metadata.Component == nil {
+		// Single target
+		cdc.bom.Metadata.Component = &component
+		return
+	}
+	// Multiple targets
+	if cdc.bom.Metadata.Component.Components == nil || len(*cdc.bom.Metadata.Component.Components) == 0 {
+		if cdc.bom.Metadata.Component.BOMRef == component.BOMRef {
+			// The component is already in the BOM
+			return
+		}
+		// The component is not in the BOM, Convert from single target to multiple targets
+		if currentWd, e := os.Getwd(); e != nil {
+			return e
+		} else {
+			wdComponent := cdxutils.CreateFileOrDirComponent(currentWd)
+			// Add the old main component as a sub-component
+			wdComponent.Components = &[]cyclonedx.Component{*cdc.bom.Metadata.Component}
+			// Set the current working directory as the main component
+			cdc.bom.Metadata.Component = &wdComponent
+		}
+	}
+	for _, existingComponent := range *cdc.bom.Metadata.Component.Components {
+		if existingComponent.BOMRef == component.BOMRef {
+			// The component is already in the BOM
+			return
+		}
+	}
+	// The component is not in the BOM, Add the new sub-component
+	*cdc.bom.Metadata.Component.Components = append(*cdc.bom.Metadata.Component.Components, component)
 	return
 }
 
