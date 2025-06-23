@@ -2635,3 +2635,110 @@ func TestScanResponseToSbom(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractCdxDependenciesCves(t *testing.T) {
+	tests := []struct {
+		name                 string
+		bom                  *cyclonedx.BOM
+		expectedDirectCves   []string
+		expectedIndirectCves []string
+	}{
+		{
+			name:                 "Empty response",
+			bom:                  &cyclonedx.BOM{},
+			expectedDirectCves:   []string{},
+			expectedIndirectCves: []string{},
+		},
+		{
+			name: "Response with vulnerabilities",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "npm:root:1.0.0",
+						Name:       "root",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/root@1.0.0",
+					},
+					{
+						BOMRef:     "npm:component1:1.0.0",
+						Name:       "component1",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component1@1.0.0",
+					},
+					{
+						BOMRef:     "npm:component2:2.0.0",
+						Name:       "component2",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component2@2.0.0",
+					},
+					{
+						BOMRef:     "npm:component3:3.0.0",
+						Name:       "component3",
+						Version:    "3.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component3@3.0.0",
+					},
+					{
+						BOMRef:     "npm:component4:4.0.0",
+						Name:       "component4",
+						Version:    "4.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component4@4.0.0",
+					},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{
+						Ref:          "npm:root:1.0.0",
+						Dependencies: &[]string{"npm:component1:1.0.0", "npm:component2:2.0.0", "npm:component3:3.0.0"},
+					},
+					{
+						Ref:          "npm:component1:1.0.0",
+						Dependencies: &[]string{"npm:component3:3.0.0", "npm:component4:4.0.0"},
+					},
+				},
+				Vulnerabilities: &[]cyclonedx.Vulnerability{
+					{
+						BOMRef: "CVE-2023-1234",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component1:1.0.0",
+							},
+							{
+								Ref: "npm:component2:2.0.0",
+							},
+						},
+					},
+					{
+						BOMRef: "CVE-2023-5678",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component3:3.0.0",
+							},
+						},
+					},
+					{
+						BOMRef: "CVE-2023-9012",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component4:4.0.0",
+							},
+						},
+					},
+				},
+			},
+			expectedDirectCves:   []string{"CVE-2023-1234", "CVE-2023-5678"},
+			expectedIndirectCves: []string{"CVE-2023-9012"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directCves, indirectCves := ExtractCdxDependenciesCves(test.bom)
+			assert.ElementsMatch(t, test.expectedDirectCves, directCves)
+			assert.ElementsMatch(t, test.expectedIndirectCves, indirectCves)
+		})
+	}
+}

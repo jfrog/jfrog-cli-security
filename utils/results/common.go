@@ -860,7 +860,19 @@ func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indire
 	directCvesSet := datastructures.MakeSet[string]()
 	indirectCvesSet := datastructures.MakeSet[string]()
 	for _, vulnerability := range *bom.Vulnerabilities {
-		directCvesSet.Add(vulnerability.BOMRef)
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			// No affected components, skip this vulnerability
+			continue
+		}
+		for _, affectedComponent := range *vulnerability.Affects {
+			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref)
+			if relation == cdxutils.TransitiveRelation {
+				indirectCvesSet.Add(vulnerability.BOMRef)
+			} else {
+				// All other relations are considered direct
+				directCvesSet.Add(vulnerability.BOMRef)
+			}
+		}
 	}
 	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
 }
