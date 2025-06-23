@@ -1,6 +1,7 @@
 package results
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"testing"
@@ -2629,9 +2630,17 @@ func TestScanResponseToSbom(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			destination := &cyclonedx.BOM{}
+			// Prepare expected
+			expected := cyclonedx.NewBOM()
+			expected.Components = test.expected.Components
+			expected.Dependencies = test.expected.Dependencies
+			expected.Vulnerabilities = test.expected.Vulnerabilities
+			// Run test
+			destination := cyclonedx.NewBOM()
 			assert.NoError(t, ScanResponseToSbom(destination, test.response))
-			assert.Equal(t, test.expected, destination)
+			// Validate
+			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
+			assert.Equal(t, expected, destination)
 		})
 	}
 }
