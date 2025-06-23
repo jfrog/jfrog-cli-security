@@ -8,6 +8,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -130,12 +131,12 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 	}
 	if violations {
 		// IAC violations are not supported in CycloneDX
+		log.Debug("IAC violations are not supported in CycloneDX. Skipping IAC violations parsing.")
 		return nil
 	}
 	// return
 	source := cdc.addJasService(iacs)
 	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
-		// Create or get the affected component
 		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
@@ -153,7 +154,30 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if violations {
+		// IAC violations are not supported in CycloneDX
+		log.Debug("SAST violations are not supported in CycloneDX. Skipping SAST violations parsing.")
+		return nil
+	}
+	source := cdc.addJasService(sast)
+	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
+		// Create a new JAS vulnerability, add it to the BOM and return it
+		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		// Add the location to the vulnerability
+		addFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+			Name: fmt.Sprintf(
+				jasIssueLocationPropertyTemplate, "sast", affectedComponent.BOMRef,
+				sarifutils.GetLocationStartLine(location), sarifutils.GetLocationStartColumn(location), sarifutils.GetLocationEndLine(location), sarifutils.GetLocationEndColumn(location),
+			),
+			Value: sarifutils.GetLocationSnippetText(location),
+		})
+		return
+	})
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
