@@ -478,19 +478,25 @@ func SearchRating(ratings *[]cyclonedx.VulnerabilityRating, method cyclonedx.Sco
 	if ratings == nil || len(*ratings) == 0 {
 		return nil
 	}
-	for _, rating := range *ratings {
-		if rating.Method != method {
+	actualSources := []*cyclonedx.Source{}
+	for _, source := range sources {
+		if source != nil && source.Name != "" {
+			actualSources = append(actualSources, source)
+		}
+	}
+	for i := range *ratings {
+		if (*ratings)[i].Method != method {
 			continue // Skip if the method does not match
 		}
 		// If no sources are provided, return the first matching rating with the method
-		if len(sources) == 0 {
-			return &rating
+		if len(actualSources) == 0 {
+			return &(*ratings)[i]
 		}
-		for _, source := range sources {
+		for _, source := range actualSources {
 			// If the rating's source matches the provided source, return the rating
-			if rating.Source != nil && source.Name == rating.Source.Name {
+			if (*ratings)[i].Source != nil && source.Name == (*ratings)[i].Source.Name {
 				// If the rating's source matches the provided source, return the rating
-				return &rating
+				return &(*ratings)[i]
 			}
 		}
 	}
