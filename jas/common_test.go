@@ -589,7 +589,7 @@ func TestGetResultsToCompare(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			scanner := &JasScanner{ResultsToCompare: testCase.ResultsToCompare}
-			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompare(testCase.target))
+			assert.Equal(t, testCase.expectedTarget, scanner.GetResultsToCompareByRelativePath(testCase.target))
 		})
 	}
 }
