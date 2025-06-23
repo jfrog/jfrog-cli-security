@@ -1299,7 +1299,7 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 				cycloneVulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
 				// Attach the affected impacted library component to the vulnerability
 				cdxutils.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[id])
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[compIndex])
 				})
 
 			}
