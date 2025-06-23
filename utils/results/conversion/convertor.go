@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
@@ -71,6 +72,11 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) error
 	// When done parsing the stream results, get the converted content
 	Get() (T, error)
+}
+
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cyclonedx.BOM, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter()
+	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
 func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.SecurityCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
