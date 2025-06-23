@@ -67,7 +67,7 @@ func getDiffSbom(sbom *cyclonedx.BOM, params SbomGeneratorParams) *cyclonedx.BOM
 		return sbom
 	}
 	log.Debug(fmt.Sprintf("Excluding %s components from %s SBOM", params.TargetResultToCompare.Target, params.Target.Target))
-	return cdxutils.Exclude(sbom, *params.TargetResultToCompare.ScaResults.Sbom.Components...)
+	return cdxutils.Exclude(*sbom, *params.TargetResultToCompare.ScaResults.Sbom.Components...)
 }
 
 func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
