@@ -34,6 +34,8 @@ type ResultsWriter struct {
 	subScansPerformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
+	// OutputDir - The output directory to save the raw results.
+	outputDir string
 }
 
 func NewResultsWriter(scanResults *results.SecurityCommandResults) *ResultsWriter {
@@ -42,6 +44,11 @@ func NewResultsWriter(scanResults *results.SecurityCommandResults) *ResultsWrite
 
 func (rw *ResultsWriter) SetOutputFormat(f format.OutputFormat) *ResultsWriter {
 	rw.format = f
+	return rw
+}
+
+func (rw *ResultsWriter) SetOutputDir(outputDir string) *ResultsWriter {
+	rw.outputDir = outputDir
 	return rw
 }
 
@@ -103,27 +110,22 @@ func (rw *ResultsWriter) PrintScanResults() error {
 	if err := rw.printRawResultsLog(); err != nil {
 		return err
 	}
+	if !rw.commandResults.HasInformation() {
+		log.Debug("No information to print")
+	}
 
 	switch rw.format {
 	case format.Table:
 		return rw.printTables()
 	case format.SimpleJson:
-		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printRawResultsLog(); err != nil {
-			return err
-		}
 		simpleJson, err := rw.createResultsConvertor(false).ConvertToSimpleJson(rw.commandResults)
 		if err != nil {
 			return err
 		}
-		return PrintJson(simpleJson)
+		return rw.printJson(simpleJson)
 	case format.Json:
-		return PrintJson(rw.commandResults.GetScaScansXrayResults())
+		return rw.printJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
-		// Helper for Debugging purposes, print the raw results to the log
-		if err := rw.printRawResultsLog(); err != nil {
-			return err
-		}
 		return rw.printSarif()
 	}
 	return nil
@@ -142,19 +144,34 @@ func (rw *ResultsWriter) createResultsConvertor(pretty bool) *conversion.Command
 	})
 }
 
-func (rw *ResultsWriter) printSarif() error {
+func (rw *ResultsWriter) printJson(output interface{}) (err error) {
+	outputBytes, err := utils.GetAsJsonBytes(output, true, true)
+	if err != nil {
+		return
+	}
+	log.Output(string(outputBytes))
+	if rw.outputDir == "" {
+		return
+	}
+	return utils.DumpJsonContentToFile(outputBytes, rw.outputDir, "results", 0)
+
+}
+func (rw *ResultsWriter) printSarif() (err error) {
 	sarifContent, err := rw.createResultsConvertor(false).ConvertToSarif(rw.commandResults)
 	if err != nil {
-		return err
+		return
 	}
-	sarifFile, err := WriteSarifResultsAsString(sarifContent, false)
+	outputBytes, err := utils.GetAsJsonBytes(sarifContent, false, true)
 	if err != nil {
-		return err
+		return
 	}
 	callback := log.SetAllowEmojiFlagWithCallback(true)
-	log.Output(sarifFile)
+	log.Output(string(outputBytes))
 	callback()
-	return nil
+	if rw.outputDir == "" {
+		return
+	}
+	return utils.DumpSarifContentToFile(outputBytes, rw.outputDir, "results", 0)
 }
 
 func PrintJson(output interface{}) (err error) {
@@ -168,16 +185,27 @@ func PrintJson(output interface{}) (err error) {
 
 // Log (Debug) the inner results.SecurityCommandResults object object as a JSON string.
 func (rw *ResultsWriter) printRawResultsLog() (err error) {
-	if !rw.commandResults.HasInformation() {
-		log.Debug("No information to print")
+	if rw.outputDir == "" && rw.commandResults.GetErrors() == nil {
+		// Don't print if not requested or there are no errors.
 		return
 	}
-	// Print the raw results to console.
-	var msg string
-	if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
+	if rw.outputDir == "" {
+		// Print the raw results to the log. (only in case we have errors)
+		var msg string
+		if msg, err = utils.GetAsJsonString(rw.commandResults, false, true); err != nil {
+			return
+		}
+		log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
 		return
 	}
-	log.Debug(fmt.Sprintf("Raw scan results:\n%s", msg))
+	// Save the raw results to a file.
+	var msg []byte
+	if msg, err = utils.GetAsJsonBytes(rw.commandResults, false, true); err != nil {
+		return
+	}
+	if err = utils.DumpJsonContentToFile(msg, rw.outputDir, "raw", 0); err != nil {
+		return
+	}
 	return
 }
 

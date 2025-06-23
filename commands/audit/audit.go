@@ -214,6 +214,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
+		SetOutputDir(auditCmd.scanResultsOutputDir).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(auditCmd.ScansToPerform())
