@@ -1,11 +1,13 @@
 package buildinfo
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	biUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
@@ -17,11 +19,13 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
@@ -35,32 +39,98 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/yarn"
 )
 
-type DependencyTreeResult struct {
-	FlatTree     *xrayUtils.GraphNode
-	FullDepTrees []*xrayUtils.GraphNode
-	DownloadUrls map[string]string
+type BuildInfoBomGenerator struct {
+	Params technologies.BuildInfoBomGeneratorParams
+}
+
+func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
+	return &BuildInfoBomGenerator{
+		Params: technologies.BuildInfoBomGeneratorParams{},
+	}
+}
+
+func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) error {
+		bi, ok := sg.(*BuildInfoBomGenerator)
+		if !ok {
+			return nil
+		}
+		bi.Params = params
+		return nil
+	}
+}
+
+func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) error {
+	for _, option := range options {
+		if err := option(b); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *BuildInfoBomGenerator) CleanUp() error {
+	// Nothing to do
+	return nil
+}
+
+func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
+	// Create the CycloneDX BOM
+	sbom = cyclonedx.NewBOM()
+	wdComponent := cdxutils.CreateFileOrDirComponent(target.Target)
+	sbom.Metadata = &cyclonedx.Metadata{Component: &wdComponent}
+
+	// Make sure to return to the original working directory, buildDependencyTree may change it
+	if currentWorkingDir, generalError := os.Getwd(); errorutils.CheckError(generalError) != nil {
+		err = fmt.Errorf("failed to get current working directory: %w", generalError)
+		return
+	} else {
+		defer func() {
+			generalError = errors.Join(generalError, errorutils.CheckError(os.Chdir(currentWorkingDir)))
+		}()
+	}
+	if target.Technology == techutils.NoTech {
+		log.Debug(fmt.Sprintf("No technology was detected for target '%s'. Skipping dependency tree generation.", target.Target))
+		return
+	}
+	log.Debug(fmt.Sprintf("Generating '%s' dependency tree...", target.Target))
+	treeResult, bdtErr := b.buildDependencyTree(target)
+	if bdtErr != nil {
+		var projectNotInstalledErr *biUtils.ErrProjectNotInstalled
+		if errors.As(bdtErr, &projectNotInstalledErr) {
+			log.Warn(bdtErr.Error())
+			return
+		}
+		err = fmt.Errorf("failed to build dependency tree: %s", bdtErr.Error())
+		return
+	}
+	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
+	return
 }
 
 // This method will change the working directory to the scan's working directory.
-func BuildDependencyTree(scan *results.TargetResults, params technologies.BuildInfoBomGeneratorParams) (*DependencyTreeResult, error) {
+func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*DependencyTreeResult, error) {
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoInParamsIfExists(&params, scan.Technology)
+	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.Params, scan.Technology)
 	if err != nil {
 		return nil, err
 	}
-	treeResult, techErr := GetTechDependencyTree(params, serverDetails, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(b.Params, serverDetails, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
 	}
 	if treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
 		return nil, errorutils.CheckErrorf("no dependencies were found. Please try to build your project and re-run the audit command")
 	}
-	sbom := cyclonedx.NewBOM()
-	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
-	scan.SetSbom(sbom)
 	return &treeResult, nil
+}
+
+type DependencyTreeResult struct {
+	FlatTree     *xrayUtils.GraphNode
+	FullDepTrees []*xrayUtils.GraphNode
+	DownloadUrls map[string]string
 }
 
 func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, artifactoryServerDetails *config.ServerDetails, tech techutils.Technology) (depTreeResult DependencyTreeResult, err error) {

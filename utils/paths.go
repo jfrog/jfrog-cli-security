@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -81,16 +80,20 @@ func GetCurationNugetCacheFolder() (string, error) {
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {
-	fullPathWd = strings.TrimSuffix(fullPathWd, string(os.PathSeparator))
-	if fullPathWd == baseWd {
-		return ""
+	relativePath, err := filepath.Rel(baseWd, fullPathWd)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to get relative path from %s to %s: %v", fullPathWd, baseWd, err))
+		return fullPathWd // Return the full path if an error occurs
 	}
-
-	return strings.TrimPrefix(fullPathWd, baseWd+string(os.PathSeparator))
+	if relativePath == "." {
+		return "" // If the paths are the same, return an empty string
+	}
+	return filepath.ToSlash(filepath.Clean(relativePath))
 }
 
 // Calculate the common parent directory of the given paths.
 // Examples:
+//  0. [dir] -> dir
 //  1. [dir/dir, dir/directory] -> dir
 //  2. [dir, directory] -> "."
 //  3. [dir/dir2, dir/dir2/dir3, dir/dir2/dir3/dir4] -> dir/dir2

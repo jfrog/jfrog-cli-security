@@ -15,6 +15,9 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -99,4 +102,8 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 		res[i] = strings.TrimSpace(arg)
 	}
 	return
+}
+
+func getScanDynamicLogic(_ *components.Context) bom.SbomGenerator {
+	return buildinfo.NewBuildInfoBomGenerator()
 }
