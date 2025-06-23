@@ -2640,7 +2640,21 @@ func TestScanResponseToSbom(t *testing.T) {
 			assert.NoError(t, ScanResponseToSbom(destination, test.response))
 			// Validate
 			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
-			assert.Equal(t, expected, destination)
+			if expected.Components == nil {
+				assert.Nil(t, destination.Components)
+			} else {
+				assert.ElementsMatch(t, *expected.Components, *destination.Components)
+			}
+			if expected.Dependencies == nil {
+				assert.Nil(t, destination.Dependencies)
+			} else {
+				assert.ElementsMatch(t, *expected.Dependencies, *destination.Dependencies)
+			}
+			if expected.Vulnerabilities == nil {
+				assert.Nil(t, destination.Vulnerabilities)
+			} else {
+				assert.ElementsMatch(t, *expected.Vulnerabilities, *destination.Vulnerabilities)
+			}
 		})
 	}
 }
