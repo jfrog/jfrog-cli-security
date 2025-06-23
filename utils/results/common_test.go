@@ -1564,10 +1564,34 @@ func TestIsMultiProject(t *testing.T) {
 }
 
 func TestBomToFlatTree(t *testing.T) {
+	bomWithComponents := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				BOMRef:     "component1",
+				Name:       "Component 1",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component1@1.0.0",
+			},
+			{
+				BOMRef: "3fac3b2",
+				Name:   path.Join("path", "to", "file.txt"),
+				Type:   "file",
+			},
+			{
+				BOMRef:     "component2",
+				Name:       "Component 2",
+				Version:    "2.0.0",
+				Type:       "library",
+				PackageURL: "pkg:golang/component2@2.0.0",
+			},
+		},
+	}
 	tests := []struct {
-		name     string
-		bom      *cyclonedx.BOM
-		expected *xrayUtils.GraphNode
+		name              string
+		bom               *cyclonedx.BOM
+		toXrayComponentId bool
+		expected          *xrayUtils.GraphNode
 	}{
 		{
 			name:     "No components",
@@ -1576,29 +1600,19 @@ func TestBomToFlatTree(t *testing.T) {
 		},
 		{
 			name: "BOM with components",
-			bom: &cyclonedx.BOM{
-				Components: &[]cyclonedx.Component{
-					{
-						BOMRef:     "component1",
-						Name:       "Component 1",
-						Version:    "1.0.0",
-						Type:       "library",
-						PackageURL: "pkg:npm/component1@1.0.0",
-					},
-					{
-						BOMRef: "3fac3b2",
-						Name:   path.Join("path", "to", "file.txt"),
-						Type:   "file",
-					},
-					{
-						BOMRef:     "component2",
-						Name:       "Component 2",
-						Version:    "2.0.0",
-						Type:       "library",
-						PackageURL: "pkg:golang/component2@2.0.0",
-					},
+			bom:  bomWithComponents,
+			expected: &xrayUtils.GraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "pkg:npm/component1@1.0.0"},
+					{Id: "pkg:golang/component2@2.0.0"},
 				},
 			},
+		},
+		{
+			name:              "BOM with Xray components",
+			bom:               bomWithComponents,
+			toXrayComponentId: true,
 			expected: &xrayUtils.GraphNode{
 				Id: "root",
 				Nodes: []*xrayUtils.GraphNode{
@@ -1611,7 +1625,8 @@ func TestBomToFlatTree(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, *test.expected, *BomToFlatTree(test.bom, true))
+			setParentsToTestNodes(nil, test.expected)
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom, test.toXrayComponentId), "Flat tree should match expected structure")
 		})
 	}
 }
