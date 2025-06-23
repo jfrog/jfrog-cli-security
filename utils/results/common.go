@@ -929,12 +929,12 @@ func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTre
 		return
 	}
 	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
-		// Create a new GraphNode with ref as the ID
+		// Create a new GraphNode with ref as the ID, when populating the tree we need to use the ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
-	// Translate refs to IDs
+	// Translate refs to Purl/Xray IDs
 	for _, node := range fullDependencyTrees {
 		convertRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
 	}
