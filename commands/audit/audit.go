@@ -449,8 +449,11 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	// TODO: old flow only if scan-graph implementation, else new
-	isNewFlow := false
+	// TODO: remove this once the new flow is fully implemented.
+	isNewFlow := true
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); !ok {
+		isNewFlow = false
+	}
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
