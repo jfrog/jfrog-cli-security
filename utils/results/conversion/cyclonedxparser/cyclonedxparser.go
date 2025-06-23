@@ -100,6 +100,15 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if sbom == nil {
+		return
+	}
+	// Append the components and dependencies from the sbom to the current BOM
+	cdc.appendComponents(sbom.Components)
+	cdc.appendDependencies(sbom.Dependencies)
 	return
 }
 
@@ -166,6 +175,42 @@ func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult
 		}
 	}
 	return
+}
+
+func (cdc *CmdResultsCycloneDxConverter) appendComponents(components *[]cyclonedx.Component) {
+	if cdc.bom == nil || components == nil || len(*components) == 0 {
+		// No components to append
+		return
+	}
+	if cdc.bom.Components == nil {
+		cdc.bom.Components = &[]cyclonedx.Component{}
+	}
+	for _, component := range *components {
+		if cdxutils.SearchComponentByRef(cdc.bom.Components, component.BOMRef) != nil {
+			// The component is already in the BOM
+			continue
+		}
+		// Append the component to the BOM
+		*cdc.bom.Components = append(*cdc.bom.Components, component)
+	}
+}
+
+func (cdc *CmdResultsCycloneDxConverter) appendDependencies(dependencies *[]cyclonedx.Dependency) {
+	if cdc.bom == nil || dependencies == nil || len(*dependencies) == 0 {
+		// No dependencies to append
+		return
+	}
+	if cdc.bom.Dependencies == nil {
+		cdc.bom.Dependencies = &[]cyclonedx.Dependency{}
+	}
+	for _, dependency := range *dependencies {
+		if cdxutils.SearchDependencyEntry(cdc.bom.Dependencies, dependency.Ref) != nil {
+			// The dependency is already in the BOM
+			continue
+		}
+		// Append the dependency to the BOM
+		*cdc.bom.Dependencies = append(*cdc.bom.Dependencies, dependency)
+	}
 }
 
 func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(filePathOrUri string) (component *cyclonedx.Component) {
