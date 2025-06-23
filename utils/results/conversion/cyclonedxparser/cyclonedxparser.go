@@ -1,12 +1,15 @@
 package cyclonedxparser
 
 import (
+	"time"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -26,6 +29,13 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (*cyclonedx.BOM, error) {
 }
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
+	// Reset the BOM
+	cdc.bom = cyclonedx.NewBOM()
+	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(multiScanId)
+	cdc.bom.Metadata = &cyclonedx.Metadata{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Authors:   &[]cyclonedx.OrganizationalContact{{Name: "JFrog"}},
+	}
 	return
 }
 

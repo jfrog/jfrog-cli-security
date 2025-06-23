@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/uuid"
 
 	"github.com/jfrog/gofrog/datastructures"
 
@@ -513,4 +514,11 @@ func SearchVulnerabilityByRef(destination *cyclonedx.BOM, ref string) *cyclonedx
 		}
 	}
 	return nil
+}
+
+func GetSerialNumber(id string) string {
+	if id == "" {
+		id = uuid.New().String()
+	}
+	return fmt.Sprintf("urn:uuid:%s", id)
 }
