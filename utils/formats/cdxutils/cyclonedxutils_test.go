@@ -460,27 +460,27 @@ func TestGetOrCreateScaIssue(t *testing.T) {
 
 func TestSearchVulnerabilityByRef(t *testing.T) {
 	tests := []struct {
-		name     string
-		params   []CdxVulnerabilityParams
-		searchID string
-		exists   bool
+		name      string
+		params    []CdxVulnerabilityParams
+		searchRef string
+		exists    bool
 	}{
 		{
 			name: "Find existing vuln",
 			params: []CdxVulnerabilityParams{
-				{Ref: "comp1", ID: "VULN-1"},
-				{Ref: "comp2", ID: "VULN-2"},
+				{Ref: "VULN-1", ID: "VULN-1-ID"},
+				{Ref: "VULN-2", ID: "VULN-2-ID"},
 			},
-			searchID: "VULN-2",
-			exists:   true,
+			searchRef: "VULN-2",
+			exists:    true,
 		},
 		{
 			name: "Not found vuln",
 			params: []CdxVulnerabilityParams{
-				{Ref: "comp1", ID: "VULN-1"},
+				{Ref: "VULN-1", ID: "VULN-1-ID"},
 			},
-			searchID: "VULN-3",
-			exists:   false,
+			searchRef: "VULN-3",
+			exists:    false,
 		},
 	}
 	for _, tt := range tests {
@@ -489,10 +489,11 @@ func TestSearchVulnerabilityByRef(t *testing.T) {
 			for _, p := range tt.params {
 				GetOrCreateScaIssue(bom, p)
 			}
-			found := SearchVulnerabilityByRef(bom, tt.searchID)
+			found := SearchVulnerabilityByRef(bom, tt.searchRef)
 			if tt.exists {
-				assert.NotNil(t, found)
-				assert.Equal(t, tt.searchID, found.ID)
+				if assert.NotNil(t, found) {
+					assert.Equal(t, tt.searchRef, found.BOMRef)
+				}
 			} else {
 				assert.Nil(t, found)
 			}
@@ -552,49 +553,45 @@ func TestCreateBaseVulnerability(t *testing.T) {
 }
 
 func TestUpdateOrAppendVulnerabilitiesRatingsAndSearchRating(t *testing.T) {
+	vulnerability := &cyclonedx.Vulnerability{
+		Ratings: &[]cyclonedx.VulnerabilityRating{
+			{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3},
+			{Severity: cyclonedx.SeverityMedium, Method: cyclonedx.ScoringMethodCVSSv2},
+		},
+	}
 	tests := []struct {
-		name      string
-		start     *[]cyclonedx.VulnerabilityRating
-		add       cyclonedx.VulnerabilityRating
-		searchM   cyclonedx.ScoringMethod
-		searchSrc *cyclonedx.Source
-		expSev    cyclonedx.Severity
-		expLen    int
+		name   string
+		rating cyclonedx.VulnerabilityRating
+		isNew  bool
 	}{
 		{
-			name:    "Update existing method",
-			start:   &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
-			add:     cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityCritical, Method: cyclonedx.ScoringMethodCVSSv3},
-			searchM: cyclonedx.ScoringMethodCVSSv3,
-			expSev:  cyclonedx.SeverityCritical,
-			expLen:  1,
+			name:   "Update existing",
+			rating: cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityLow, Method: cyclonedx.ScoringMethodCVSSv3},
 		},
 		{
-			name:      "Add new method",
-			start:     &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
-			add:       cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityLow, Method: cyclonedx.ScoringMethodOther, Source: &cyclonedx.Source{Name: "src"}},
-			searchM:   cyclonedx.ScoringMethodOther,
-			searchSrc: &cyclonedx.Source{Name: "src"},
-			expSev:    cyclonedx.SeverityLow,
-			expLen:    2,
+			name:   "Add new rating",
+			rating: cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityCritical, Method: cyclonedx.ScoringMethodCVSSv4, Source: &cyclonedx.Source{Name: "New Source"}},
+			isNew:  true,
 		},
 		{
-			name:    "SearchRating with no source",
-			start:   &[]cyclonedx.VulnerabilityRating{{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3}},
-			add:     cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityHigh, Method: cyclonedx.ScoringMethodCVSSv3},
-			searchM: cyclonedx.ScoringMethodCVSSv3,
-			expSev:  cyclonedx.SeverityHigh,
-			expLen:  1,
+			name:   "Add new source, same method",
+			rating: cyclonedx.VulnerabilityRating{Severity: cyclonedx.SeverityCritical, Method: cyclonedx.ScoringMethodCVSSv3, Source: &cyclonedx.Source{Name: "New Source"}},
+			isNew:  true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vuln := &cyclonedx.Vulnerability{Ratings: tt.start}
-			UpdateOrAppendVulnerabilitiesRatings(vuln, tt.add)
-			assert.Equal(t, tt.expLen, len(*vuln.Ratings))
-			found := SearchRating(vuln.Ratings, tt.searchM, tt.searchSrc)
-			assert.NotNil(t, found)
-			assert.Equal(t, tt.expSev, found.Severity)
+			if tt.isNew {
+				assert.Nil(t, SearchRating(vulnerability.Ratings, tt.rating.Method, tt.rating.Source), "Rating should not be found before update")
+			} else {
+				existing := SearchRating(vulnerability.Ratings, tt.rating.Method, tt.rating.Source)
+				assert.NotNil(t, existing, "Rating should be found before update")
+				assert.NotEqual(t, tt.rating, existing, "Rating should not match before update")
+			}
+			UpdateOrAppendVulnerabilitiesRatings(vulnerability, tt.rating)
+			actual := SearchRating(vulnerability.Ratings, tt.rating.Method, tt.rating.Source)
+			assert.NotNil(t, actual, "Rating should not be found before update")
+			assert.Equal(t, tt.rating, *actual, "Rating should match after update")
 		})
 	}
 }

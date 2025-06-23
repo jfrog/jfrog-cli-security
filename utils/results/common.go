@@ -1137,12 +1137,12 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 		return
 	}
 	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
-		// Create a new GraphNode with ref as the ID
+		// Create a new GraphNode with ref as the ID, when populating the tree we need to use the ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
 		fullDependencyTrees = append(fullDependencyTrees, currentTree)
 	}
-	// Translate refs to IDs
+	// Translate refs to Purl/Xray IDs
 	for _, node := range fullDependencyTrees {
 		convertRefsToPackageID(node, convertToXrayCompId, *sbom.Components...)
 	}
@@ -1299,7 +1299,7 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 				cycloneVulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
 				// Attach the affected impacted library component to the vulnerability
 				cdxutils.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[id])
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[compIndex])
 				})
 
 			}

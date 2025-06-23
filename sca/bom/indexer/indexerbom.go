@@ -75,7 +75,6 @@ func (ibg *IndexerBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOpt
 	if ibg.xrayManager == nil || ibg.xrayVersion == "" {
 		return fmt.Errorf("Xray manager and version must be set using WithXray option")
 	}
-	// Download the indexer
 	if ibg.indexerPath, err = DownloadIndexerIfNeeded(ibg.xrayManager, ibg.xrayVersion); err != nil {
 		return
 	}

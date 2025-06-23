@@ -1564,10 +1564,34 @@ func TestIsMultiProject(t *testing.T) {
 }
 
 func TestBomToFlatTree(t *testing.T) {
+	bomWithComponents := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				BOMRef:     "component1",
+				Name:       "Component 1",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component1@1.0.0",
+			},
+			{
+				BOMRef: "3fac3b2",
+				Name:   path.Join("path", "to", "file.txt"),
+				Type:   "file",
+			},
+			{
+				BOMRef:     "component2",
+				Name:       "Component 2",
+				Version:    "2.0.0",
+				Type:       "library",
+				PackageURL: "pkg:golang/component2@2.0.0",
+			},
+		},
+	}
 	tests := []struct {
-		name     string
-		bom      *cyclonedx.BOM
-		expected *xrayUtils.GraphNode
+		name              string
+		bom               *cyclonedx.BOM
+		toXrayComponentId bool
+		expected          *xrayUtils.GraphNode
 	}{
 		{
 			name:     "No components",
@@ -1576,29 +1600,19 @@ func TestBomToFlatTree(t *testing.T) {
 		},
 		{
 			name: "BOM with components",
-			bom: &cyclonedx.BOM{
-				Components: &[]cyclonedx.Component{
-					{
-						BOMRef:     "component1",
-						Name:       "Component 1",
-						Version:    "1.0.0",
-						Type:       "library",
-						PackageURL: "pkg:npm/component1@1.0.0",
-					},
-					{
-						BOMRef: "3fac3b2",
-						Name:   path.Join("path", "to", "file.txt"),
-						Type:   "file",
-					},
-					{
-						BOMRef:     "component2",
-						Name:       "Component 2",
-						Version:    "2.0.0",
-						Type:       "library",
-						PackageURL: "pkg:golang/component2@2.0.0",
-					},
+			bom:  bomWithComponents,
+			expected: &xrayUtils.GraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "pkg:npm/component1@1.0.0"},
+					{Id: "pkg:golang/component2@2.0.0"},
 				},
 			},
+		},
+		{
+			name:              "BOM with Xray components",
+			bom:               bomWithComponents,
+			toXrayComponentId: true,
 			expected: &xrayUtils.GraphNode{
 				Id: "root",
 				Nodes: []*xrayUtils.GraphNode{
@@ -1611,7 +1625,8 @@ func TestBomToFlatTree(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, *test.expected, *BomToFlatTree(test.bom, true))
+			setParentsToTestNodes(nil, test.expected)
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom, test.toXrayComponentId), "Flat tree should match expected structure")
 		})
 	}
 }
@@ -2342,9 +2357,273 @@ func TestScanResponseToSbom(t *testing.T) {
 			expected: &cyclonedx.BOM{},
 		},
 		{
-			name:     "Response with components and dependencies",
-			response: services.ScanResponse{},
-			expected: getTestBom(true),
+			name: "Response with content",
+			response: services.ScanResponse{
+				Vulnerabilities: []services.Vulnerability{
+					{
+						Summary:  "Test Vulnerability",
+						Severity: "High",
+						IssueId:  "XRAY-1234",
+						Cves: []services.Cve{
+							{
+								Id:           "CVE-2023-1234",
+								CvssV2Score:  "7.5",
+								CvssV2Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+								CvssV3Score:  "9.8",
+								CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+								Cwe:          []string{"CWE-79"},
+								CweDetails: map[string]services.Cwe{
+									"CWE-79": {
+										Name:        "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+										Description: "The application does not properly neutralize or incorrectly neutralizes user input before it is placed in a web page that is served to other users.",
+										Categories: []services.CweCategory{
+											{
+												Category: "Input Validation and Representation",
+												Rank:     "High",
+											},
+										},
+									},
+								},
+							},
+						},
+						Components: map[string]services.Component{
+							"npm://example-component:1.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+											FullPath:    "lib/example.js",
+										},
+									},
+								},
+								Cpes: []string{"cpe:2.3:a:example:example-component:1.0.0:*:*:*:*:*:*:*"},
+							},
+							"npm://another-component:2.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+										},
+										{
+											ComponentId: "npm://another-component:2.0.0",
+										},
+									},
+								},
+								FixedVersions: []string{"2.1.0", "2.2.0"},
+							},
+						},
+						References: []string{"https://example.com/vuln/XRAY-1234"},
+						ExtendedInformation: &services.ExtendedInformation{
+							ShortDescription:      "Test Vulnerability extended information short description",
+							FullDescription:       "Test Vulnerability extended information description",
+							Remediation:           "Test Vulnerability extended information recommendation",
+							JfrogResearchSeverity: "Low",
+							JfrogResearchSeverityReasons: []services.JfrogResearchSeverityReason{{
+								Name:        "Test Reason",
+								Description: "Test Reason Description",
+								IsPositive:  true,
+							}},
+						},
+						Technology: "npm",
+					},
+					{
+						Summary:  "Another Vulnerability No Cve",
+						Severity: "Medium",
+						IssueId:  "XRAY-5678",
+						Components: map[string]services.Component{
+							"npm://example-component:1.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+										},
+									},
+								},
+							},
+							"npm://other-component:3.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://other-component:3.0.0",
+										},
+									},
+								},
+							},
+						},
+						Technology: "npm",
+					},
+				},
+				Licenses: []services.License{{
+					Name: "Apache-2.0",
+					Key:  "Apache-2.0-Key",
+					Components: map[string]services.Component{
+						"npm://example-component:1.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{
+								{
+									{ComponentId: "root"},
+									{ComponentId: "npm://example-component:1.0.0"},
+								},
+							},
+						},
+					},
+				}},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "npm:example-component:1.0.0",
+						Name:       "example-component",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/example-component@1.0.0",
+						Licenses: &cyclonedx.Licenses{
+							{
+								License: &cyclonedx.License{
+									ID:   "Apache-2.0-Key",
+									Name: "Apache-2.0",
+								},
+							},
+						},
+					},
+					{
+						BOMRef:     "npm:another-component:2.0.0",
+						Name:       "another-component",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/another-component@2.0.0",
+					},
+					{
+						BOMRef:     "npm:other-component:3.0.0",
+						Name:       "other-component",
+						Version:    "3.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/other-component@3.0.0",
+					},
+				},
+				Vulnerabilities: &[]cyclonedx.Vulnerability{
+					{
+						BOMRef: "CVE-2023-1234",
+						ID:     "XRAY-1234",
+						Source: &cyclonedx.Source{
+							Name: utils.XrayToolName,
+						},
+						Description: "Test Vulnerability",
+						Detail:      "Test Vulnerability extended information description",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:example-component:1.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "1.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+							{
+								Ref: "npm:another-component:2.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "2.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+									{
+										Version: "2.1.0",
+										Status:  cyclonedx.VulnerabilityStatusNotAffected,
+									},
+									{
+										Version: "2.2.0",
+										Status:  cyclonedx.VulnerabilityStatusNotAffected,
+									},
+								},
+							},
+						},
+						References: &[]cyclonedx.VulnerabilityReference{
+							{
+								Source: &cyclonedx.Source{
+									URL: "https://example.com/vuln/XRAY-1234",
+								},
+							},
+						},
+						CWEs: &[]int{79},
+						Ratings: &[]cyclonedx.VulnerabilityRating{
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Method: cyclonedx.ScoringMethodCVSSv2,
+								Score:  utils.NewFloat64Ptr(7.5),
+								Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+							},
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Method: cyclonedx.ScoringMethodCVSSv3,
+								Score:  utils.NewFloat64Ptr(9.8),
+								Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+							},
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Severity: cyclonedx.SeverityHigh,
+								Score:    utils.NewFloat64Ptr(8.9),
+								Method:   cyclonedx.ScoringMethodOther,
+							},
+						},
+					},
+					{
+						BOMRef: "XRAY-5678",
+						ID:     "XRAY-5678",
+						Source: &cyclonedx.Source{
+							Name: utils.XrayToolName,
+						},
+						Description: "Another Vulnerability No Cve",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:example-component:1.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "1.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+							{
+								Ref: "npm:other-component:3.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "3.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+						},
+						Ratings: &[]cyclonedx.VulnerabilityRating{
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Severity: cyclonedx.SeverityMedium,
+								Score:    utils.NewFloat64Ptr(6.9),
+								Method:   cyclonedx.ScoringMethodOther,
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
