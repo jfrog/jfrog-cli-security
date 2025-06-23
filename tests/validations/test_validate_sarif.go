@@ -8,7 +8,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -154,7 +153,7 @@ func countSecretsResults(report *sarif.Report) (vulnerabilities, inactiveVulnera
 			} else {
 				vulnerabilities++
 			}
-			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.String() {
+			if tokenStatus := sarifutils.GetResultPropertyTokenValidation(result); tokenStatus == jasutils.Inactive.String() {
 				if isViolation {
 					inactiveViolations++
 				} else {

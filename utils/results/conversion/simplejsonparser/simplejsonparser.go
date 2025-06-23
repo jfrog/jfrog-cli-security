@@ -525,8 +525,8 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 }
 
 func getJasResultApplicability(result *sarif.Result) *formats.Applicability {
-	status := results.GetResultPropertyTokenValidation(result)
-	statusDescription := results.GetResultPropertyMetadata(result)
+	status := sarifutils.GetResultPropertyTokenValidation(result)
+	statusDescription := sarifutils.GetResultPropertyMetadata(result)
 	if status == "" && statusDescription == "" {
 		return nil
 	}

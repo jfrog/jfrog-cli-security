@@ -388,7 +388,7 @@ func (sc *CmdResultsSummaryConverter) getJasHandler(scanType jasutils.JasScanTyp
 		var count *formats.ResultSummary
 		switch scanType {
 		case jasutils.Secrets:
-			if tokenStatus := results.GetResultPropertyTokenValidation(result); tokenStatus != "" {
+			if tokenStatus := sarifutils.GetResultPropertyTokenValidation(result); tokenStatus != "" {
 				resultStatus = tokenStatus
 			}
 			if violations {

@@ -573,7 +573,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	for _, applicabilityRun := range applicabilityScanResults {
 		if rule := sarifutils.GetRuleById(applicabilityRun, jasutils.CveToApplicabilityRuleId(cveId)); rule != nil {
 			applicability.ScannerDescription = sarifutils.GetRuleFullDescription(rule)
-			applicability.UndeterminedReason = GetRuleUndeterminedReason(rule)
+			applicability.UndeterminedReason = sarifutils.GetRuleUndeterminedReason(rule)
 			status := getApplicabilityStatusFromRule(rule)
 			if status != "" {
 				applicabilityStatuses = append(applicabilityStatuses, status)
@@ -661,18 +661,6 @@ func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
 		return true
 	}
 	return false
-}
-
-func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
-	return sarifutils.GetRuleProperty("undetermined_reason", rule)
-}
-
-func GetResultPropertyTokenValidation(result *sarif.Result) string {
-	return sarifutils.GetResultProperty("tokenValidation", result)
-}
-
-func GetResultPropertyMetadata(result *sarif.Result) string {
-	return sarifutils.GetResultProperty("metadata", result)
 }
 
 func getApplicabilityStatusFromRule(rule *sarif.ReportingDescriptor) jasutils.ApplicabilityStatus {

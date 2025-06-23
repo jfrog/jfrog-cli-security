@@ -973,7 +973,7 @@ func getBinaryLocationMarkdownString(commandType utils.CommandType, subScanType 
 	if snippet := sarifutils.GetLocationSnippetText(location); snippet != "" {
 		content += fmt.Sprintf("\nEvidence: %s", snippet)
 	}
-	if tokenValidation := results.GetResultPropertyTokenValidation(result); tokenValidation != "" {
+	if tokenValidation := sarifutils.GetResultPropertyTokenValidation(result); tokenValidation != "" {
 		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
 	}
 	return

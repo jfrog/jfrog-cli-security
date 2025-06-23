@@ -11,28 +11,29 @@ import (
 )
 
 const (
-	WatchSarifPropertyKey           = "watch"
-	PoliciesSarifPropertyKey        = "policies"
-	JasIssueIdSarifPropertyKey      = "issueId"
-	CWEPropertyKey                  = "CWE"
-	SarifImpactPathsRulePropertyKey = "impactPaths"
+	WatchSarifPropertyKey                   = "watch"
+	PoliciesSarifPropertyKey                = "policies"
+	JasIssueIdSarifPropertyKey              = "issueId"
+	JasScannerIdSarifPropertyKey            = "scanner_id"
+	CWEPropertyKey                          = "CWE"
+	SarifImpactPathsRulePropertyKey         = "impactPaths"
+	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
+	TokenValidationMetadataSarifPropertyKey = "metadata"
+	CAUndeterminedReasonSarifPropertyKey    = "undetermined_reason"
 )
 
 // Specific JFrog Sarif Utils
 
+func GetResultPropertyTokenValidation(result *sarif.Result) string {
+	return GetResultProperty(TokenValidationStatusSarifPropertyKey, result)
+}
+
+func GetResultPropertyMetadata(result *sarif.Result) string {
+	return GetResultProperty(TokenValidationMetadataSarifPropertyKey, result)
+}
+
 func GetResultWatches(result *sarif.Result) (watches string) {
-	if result == nil || result.Properties == nil {
-		return
-	}
-	// Check if the property exists
-	watchesProperty, exists := result.Properties.Properties[WatchSarifPropertyKey]
-	if !exists {
-		return
-	}
-	if watchesValue, ok := watchesProperty.(string); ok {
-		return watchesValue
-	}
-	return
+	return GetResultProperty(WatchSarifPropertyKey, result)
 }
 
 func GetResultPolicies(result *sarif.Result) (policies []string) {
@@ -75,6 +76,14 @@ func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
 		return
 	}
 	return
+}
+
+func GetRuleScannerId(rule *sarif.ReportingDescriptor) (issueId string) {
+	return GetRuleProperty(JasScannerIdSarifPropertyKey, rule)
+}
+
+func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
+	return GetRuleProperty(CAUndeterminedReasonSarifPropertyKey, rule)
 }
 
 func GetRuleCWE(rule *sarif.ReportingDescriptor) (cwe []string) {
