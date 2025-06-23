@@ -3,6 +3,8 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -23,6 +25,8 @@ type AuditParams struct {
 	threads                     int
 	scanResultsOutputDir        string
 	startTime                   time.Time
+	// Dynamic logic params
+	bomGenerator bom.SbomGenerator
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -50,6 +54,15 @@ func (params *AuditParams) SetMultiScanId(msi string) *AuditParams {
 
 func (params *AuditParams) GetMultiScanId() string {
 	return params.multiScanId
+}
+
+func (params *AuditParams) SetBomGenerator(bomGenerator bom.SbomGenerator) *AuditParams {
+	params.bomGenerator = bomGenerator
+	return params
+}
+
+func (params *AuditParams) BomGenerator() bom.SbomGenerator {
+	return params.bomGenerator
 }
 
 func (params *AuditParams) SetStartTime(startTime time.Time) *AuditParams {
@@ -129,6 +142,39 @@ func (params *AuditParams) createXrayGraphScanParams() *services.XrayGraphScanPa
 		IncludeLicenses:        params.resultsContext.IncludeLicenses,
 		ScanType:               services.Dependency,
 	}
+}
+
+func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.BuildInfoBomGeneratorParams, err error) {
+	serverDetails, err := params.AuditBasicParams.ServerDetails()
+	if err != nil {
+		return
+	}
+	bomParams = technologies.BuildInfoBomGeneratorParams{
+		XrayVersion:         params.GetXrayVersion(),
+		Progress:            params.Progress(),
+		ExclusionPattern:    technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...),
+		AllowPartialResults: params.AllowPartialResults(),
+		// Artifactory repository info
+		ServerDetails:          serverDetails,
+		DependenciesRepository: params.DepsRepo(),
+		IgnoreConfigFile:       params.IgnoreConfigFile(),
+		InsecureTls:            params.InsecureTls(),
+		// Install params
+		SkipAutoInstall:    params.SkipAutoInstall(),
+		InstallCommandName: params.InstallCommandName(),
+		Args:               params.Args(),
+		InstallCommandArgs: params.InstallCommandArgs(),
+		// Curation params
+		IsCurationCmd: params.IsCurationCmd(),
+		// Java params
+		IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled(),
+		UseWrapper:              params.UseWrapper(),
+		// Python params
+		PipRequirementsFile: params.PipRequirementsFile(),
+		// Pnpm params
+		MaxTreeDepth: params.MaxTreeDepth(),
+	}
+	return
 }
 
 func (params *AuditParams) SetFilesToScan(filesToScan []string) *AuditParams {

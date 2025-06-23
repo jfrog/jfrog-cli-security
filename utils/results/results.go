@@ -9,9 +9,11 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -69,6 +71,7 @@ func (rc *ResultContext) HasViolationContext() bool {
 
 type TargetResults struct {
 	ScanTarget
+	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
 	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
 	JasResults *JasScansResults `json:"jas_scans,omitempty"`
@@ -438,6 +441,7 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
 		sr.ScaResults = &ScaScanResults{}
 	}
 	sr.ScaResults.Sbom = sbom
+	sr.ScaResults.IsMultipleRootProject = clientutils.Pointer(IsMultiProject(sbom))
 	return sr.ScaResults
 }
 

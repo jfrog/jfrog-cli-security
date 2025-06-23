@@ -29,7 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
-
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -272,6 +272,7 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	scanCmd := scan.NewScanCommand().
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -374,7 +375,7 @@ func AuditCmd(c *components.Context) error {
 
 	// Check if user used specific technologies flags
 	allTechnologies := techutils.GetAllTechnologiesList()
-	technologies := []string{}
+	technologiesToScan := []string{}
 	for _, tech := range allTechnologies {
 		var techExists bool
 		if tech == techutils.Maven {
@@ -384,10 +385,10 @@ func AuditCmd(c *components.Context) error {
 			techExists = c.GetBoolFlagValue(tech.String())
 		}
 		if techExists {
-			technologies = append(technologies, tech.String())
+			technologiesToScan = append(technologiesToScan, tech.String())
 		}
 	}
-	auditCmd.SetTechnologies(technologies)
+	auditCmd.SetTechnologies(technologiesToScan)
 
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error
@@ -398,6 +399,9 @@ func AuditCmd(c *components.Context) error {
 		// No secrets flag but secret validation is provided, error
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
+
+	// Set dynamic command logic based on flags
+	auditCmd.SetBomGenerator(getScanDynamicLogic(c))
 
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
@@ -701,6 +705,7 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand.SetImageTag(image).
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).

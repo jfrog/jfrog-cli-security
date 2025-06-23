@@ -751,51 +751,84 @@ func TestCdxPackageTypeToXrayPackageType(t *testing.T) {
 
 func TestSplitPackageUrlWithQualifiers(t *testing.T) {
 	tests := []struct {
-		name        string
-		purl        string
-		compName    string
-		compVersion string
-		packageType string
-		qualifiers  map[string]string
+		name          string
+		purl          string
+		compName      string
+		compNamespace string
+		compVersion   string
+		packageType   string
+		qualifiers    map[string]string
 	}{
 		{
-			"npm scope with version",
-			"pkg:npm/@scope/package@1.0.0",
-			"@scope/package", "1.0.0", "npm", map[string]string{},
+			name:          "npm scope with version",
+			purl:          "pkg:npm/@scope/package@1.0.0",
+			compName:      "package",
+			compNamespace: "@scope",
+			compVersion:   "1.0.0",
+			packageType:   "npm",
+			qualifiers:    map[string]string{},
 		},
 		{
-			"escaped npm scope with version",
-			"pkg:npm/%40scope/package@1.0.0",
-			"@scope/package", "1.0.0", "npm", map[string]string{},
+			name:          "escaped npm scope with version",
+			purl:          "pkg:npm/%40scope/package@1.0.0",
+			compName:      "package",
+			compNamespace: "@scope",
+			compVersion:   "1.0.0",
+			packageType:   "npm",
+			qualifiers:    map[string]string{},
 		},
 		{
-			"golang with version",
-			"pkg:golang/github.com/gophish/gophish@v0.1.2",
-			"github.com/gophish/gophish", "v0.1.2", "golang", map[string]string{},
+			name:          "golang with version",
+			purl:          "pkg:golang/github.com/gophish/gophish@v0.1.2",
+			compName:      "gophish",
+			compNamespace: "github.com/gophish",
+			compVersion:   "v0.1.2",
+			packageType:   "golang",
+			qualifiers:    map[string]string{},
 		},
 		{
-			"golang without version",
-			"pkg:golang/github.com/go-gitea/gitea",
-			"github.com/go-gitea/gitea", "", "golang", map[string]string{},
+			name:          "golang without version",
+			purl:          "pkg:golang/github.com/go-gitea/gitea",
+			compName:      "gitea",
+			compNamespace: "github.com/go-gitea",
+			packageType:   "golang",
+			qualifiers:    map[string]string{},
 		},
 		{
-			"maven with qualifier",
-			"pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f",
-			"org.apache.commons/commons-lang3", "3.12.0", "maven", map[string]string{"package-id": "d3f8d67af404667f"},
+			name:          "maven with qualifier",
+			purl:          "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f",
+			compName:      "commons-lang3",
+			compNamespace: "org.apache.commons",
+			compVersion:   "3.12.0",
+			packageType:   "maven",
+			qualifiers:    map[string]string{"package-id": "d3f8d67af404667f"},
 		},
 		{
-			"gav with version",
-			"pkg:gav/xpp3:xpp3_min@1.1.4c",
-			"xpp3:xpp3_min", "1.1.4c", "gav", map[string]string{},
+			name:        "gav with version",
+			purl:        "pkg:gav/xpp3:xpp3_min@1.1.4c",
+			compName:    "xpp3:xpp3_min",
+			compVersion: "1.1.4c",
+			packageType: "gav",
+			qualifiers:  map[string]string{},
+		},
+		{
+			name:          "docker with namespace",
+			purl:          "pkg:docker/docker.io/library/nginx@1.27-alpine",
+			compName:      "nginx",
+			compNamespace: "docker.io/library",
+			compVersion:   "1.27-alpine",
+			packageType:   "docker",
+			qualifiers:    map[string]string{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			name, version, compType, qualifiers := SplitPackageUrlWithQualifiers(tt.purl)
-			assert.Equalf(t, tt.compName, name, "compName")
-			assert.Equalf(t, tt.compVersion, version, "compVersion")
-			assert.Equalf(t, tt.packageType, compType, "packageType")
-			assert.Equalf(t, tt.qualifiers, qualifiers, "qualifiers")
+			compType, namespace, name, version, qualifiers := SplitPackageUrlWithQualifiers(tt.purl)
+			assert.Equalf(t, tt.packageType, compType, "SplitPackageUrlWithQualifiers(%v) compType == %v", tt.purl, tt.packageType)
+			assert.Equalf(t, tt.compName, name, "SplitPackageUrlWithQualifiers(%v) compName == %v", tt.purl, tt.compName)
+			assert.Equalf(t, tt.compNamespace, namespace, "SplitPackageUrlWithQualifiers(%v) compNamespace == %v", tt.purl, tt.compNamespace)
+			assert.Equalf(t, tt.compVersion, version, "SplitPackageUrlWithQualifiers(%v) compVersion == %v", tt.purl, tt.compVersion)
+			assert.Equalf(t, tt.qualifiers, qualifiers, "SplitPackageUrlWithQualifiers(%v) qualifiers == %v", tt.purl, tt.qualifiers)
 		})
 	}
 }
@@ -812,13 +845,17 @@ func TestSplitPackageURL(t *testing.T) {
 		{"escaped npm scope with version", "pkg:npm/%40scope/package@1.0.0", "@scope/package", "1.0.0", "npm"},
 		{"golang with version", "pkg:golang/github.com/gophish/gophish@v0.1.2", "github.com/gophish/gophish", "v0.1.2", "golang"},
 		{"gav with version", "pkg:gav/xpp3:xpp3_min@1.1.4c", "xpp3:xpp3_min", "1.1.4c", "gav"},
+		{"maven with qualifier", "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f", "org.apache.commons/commons-lang3", "3.12.0", "maven"},
+		{"docker with namespace", "pkg:docker/docker.io/library/nginx@1.27-alpine", "docker.io/library/nginx", "1.27-alpine", "docker"},
+		{"golang without version", "pkg:golang/github.com/go-gitea/gitea", "github.com/go-gitea/gitea", "", "golang"},
+		{"generic", "pkg:generic/sha256:534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "sha256:534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "", "generic"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			name, version, compType := SplitPackageURL(tt.purl)
-			assert.Equalf(t, tt.compName, name, "compName")
-			assert.Equalf(t, tt.compVersion, version, "compVersion")
-			assert.Equalf(t, tt.packageType, compType, "packageType")
+			assert.Equal(t, tt.compName, name, "compName")
+			assert.Equal(t, tt.compVersion, version, "compVersion")
+			assert.Equal(t, tt.packageType, compType, "packageType")
 		})
 	}
 }
@@ -854,6 +891,8 @@ func TestToPackageRef(t *testing.T) {
 		{"npm scope with version", "@scope/package", "1.0.0", "npm", "npm:@scope/package:1.0.0"},
 		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish:v0.1.2"},
 		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min:1.1.4c"},
+		{"no version", "github.com/gophish/gophish", "", "golang", "golang:github.com/gophish/gophish"},
+		{"root", "root", "", "", "generic:root"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -870,8 +909,12 @@ func TestPurlToXrayComponentId(t *testing.T) {
 		expected string
 	}{
 		{"golang", "pkg:golang/github.com/gophish/gophish@v0.1.2", "go://github.com/gophish/gophish:v0.1.2"},
+		{"no version golang", "pkg:golang/github.com/gophish/gophish", "go://github.com/gophish/gophish"},
 		{"maven", "pkg:maven/xpp3:xpp3_min@1.1.4c", "gav://xpp3:xpp3_min:1.1.4c"},
 		{"npm", "pkg:npm/@scope/package@1.0.0", "npm://@scope/package:1.0.0"},
+		{"docker", "pkg:docker/docker.io/library/nginx@1.27-alpine", "docker://docker.io/library/nginx:1.27-alpine"},
+		{"rpm", "pkg:rpm/openssl@0:1.1.0l-1.3.mga7", "rpm://openssl:0:1.1.0l-1.3.mga7"},
+		{"root", "pkg:generic/root", "generic://root"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
