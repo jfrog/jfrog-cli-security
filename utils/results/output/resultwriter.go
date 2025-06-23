@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -127,6 +128,8 @@ func (rw *ResultsWriter) PrintScanResults() error {
 		return rw.printJson(rw.commandResults.GetScaScansXrayResults())
 	case format.Sarif:
 		return rw.printSarif()
+	case format.CycloneDx:
+		return rw.printCycloneDx()
 	}
 	return nil
 }
@@ -153,7 +156,7 @@ func (rw *ResultsWriter) printJson(output interface{}) (err error) {
 	if rw.outputDir == "" {
 		return
 	}
-	return utils.DumpJsonContentToFile(outputBytes, rw.outputDir, "results", 0)
+	return utils.DumpJsonContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 
 }
 func (rw *ResultsWriter) printSarif() (err error) {
@@ -171,7 +174,22 @@ func (rw *ResultsWriter) printSarif() (err error) {
 	if rw.outputDir == "" {
 		return
 	}
-	return utils.DumpSarifContentToFile(outputBytes, rw.outputDir, "results", 0)
+	return utils.DumpSarifContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+}
+
+func (rw *ResultsWriter) printCycloneDx() error {
+	bom, err := rw.createResultsConvertor(true).ConvertToCycloneDx(rw.commandResults)
+	if err != nil {
+		return err
+	}
+	if err = cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom); err != nil || rw.outputDir == "" {
+		return err
+	}
+	return utils.DumpCdxContentToFile(bom, rw.outputDir, rw.getOutputFileName(), 0)
+}
+
+func (rw *ResultsWriter) getOutputFileName() string {
+	return fmt.Sprintf("%s_output", rw.commandResults.CmdType)
 }
 
 func PrintJson(output interface{}) (err error) {
