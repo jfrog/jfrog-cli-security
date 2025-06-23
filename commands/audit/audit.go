@@ -451,7 +451,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	}
 	// TODO: remove this once the new flow is fully implemented.
 	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); !ok {
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
 		isNewFlow = false
 	}
 	// Perform SCA scans
