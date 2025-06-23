@@ -1,16 +1,32 @@
 package cdxutils
 
 import (
+	"path/filepath"
+
 	"github.com/CycloneDX/cyclonedx-go"
 
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-security/utils"
 )
+
+const (
+	// Indicates that the component is a root component in the BOM
+	RootRelation ComponentRelation = "root"
+	// Indicates that the component is a direct dependency of another component
+	DirectRelation ComponentRelation = "direct_dependency"
+	// Indicates that the component is a transitive dependency of another component
+	TransitiveRelation ComponentRelation = "transitive_dependency"
+	// Undefined relation
+	UnknownRelation ComponentRelation = ""
+)
+
+type ComponentRelation string
 
 // AppendProperties appends new properties to the existing properties list and returns the updated list.
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
 	for _, property := range newProperties {
 		// Check if the property already exists
-		if existingProperty := SearchProperty(properties, property.Name); existingProperty != nil {
+		if existingProperty := searchProperty(properties, property.Name); existingProperty != nil {
 			// The property already exists
 			continue
 		}
@@ -24,7 +40,7 @@ func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclone
 }
 
 // SearchProperty searches for a property by name in the provided properties list.
-func SearchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
+func searchProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
 	if properties == nil || len(*properties) == 0 || name == "" {
 		return nil
 	}
@@ -49,16 +65,15 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
-// IsDirectDependency checks if a component is a direct dependency given a list of dependencies and the component's reference.
-func IsDirectDependency(dependencies *[]cyclonedx.Dependency, componentRef string) bool {
-	if dependencies == nil || len(*dependencies) == 0 {
-		return false
+func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRelation {
+	if bom == nil {
+		return UnknownRelation
 	}
 	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(dependencies) {
+	for _, root := range GetRootDependenciesEntries(bom) {
 		if root.Ref == componentRef {
-			// The component is a root, hence it is not a direct dependency
-			return false
+			// The component is a root, hence it is a direct dependency
+			return RootRelation
 		}
 		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
 			// No dependencies, continue to the next root
@@ -67,40 +82,96 @@ func IsDirectDependency(dependencies *[]cyclonedx.Dependency, componentRef strin
 		for _, directDependencyRef := range *root.Dependencies {
 			if directDependencyRef == componentRef {
 				// The component is a direct dependency of this root
-				return true
+				return DirectRelation
 			}
 		}
 	}
 	// No direct dependency found
-	return false
+	if SearchComponentByRef(bom.Components, componentRef) != nil {
+		return TransitiveRelation
+	}
+	// reference not found in the BOM components or dependencies
+	return UnknownRelation
 }
 
-func GetRootDependenciesEntries(dependencies *[]cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
+func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {
+	depEntry := SearchDependencyEntry(dependencies, ref)
+	if depEntry == nil || depEntry.Dependencies == nil || len(*depEntry.Dependencies) == 0 {
+		// No dependencies found for the given reference
+		return []string{}
+	}
+	return *depEntry.Dependencies
+}
+
+func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
-	if dependencies == nil || len(*dependencies) == 0 {
-		// If no dependencies are found, return an empty list
+	if bom == nil {
 		return
 	}
 	// Create a Set to track all references that are listed in `dependsOn`
 	refs := datastructures.MakeSet[string]()
 	dependedRefs := datastructures.MakeSet[string]()
 	// Populate the maps
-	for _, dep := range *dependencies {
-		if dep.Ref == "" || dep.Dependencies == nil {
-			// No dependencies, continue
-			continue
+	if bom.Dependencies != nil {
+		for _, dep := range *bom.Dependencies {
+			refs.Add(dep.Ref)
+			if dep.Ref == "" || dep.Dependencies == nil {
+				// No dependencies, continue
+				continue
+			}
+			for _, dependsOn := range *dep.Dependencies {
+				dependedRefs.Add(dependsOn)
+			}
 		}
-		refs.Add(dep.Ref)
-		for _, dependsOn := range *dep.Dependencies {
-			dependedRefs.Add(dependsOn)
+		// Identify root dependencies (those not listed in any `dependsOn`)
+		for _, id := range refs.ToSlice() {
+			if dep := SearchDependencyEntry(bom.Dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
+				// This is a root dependency, add it
+				roots = append(roots, *dep)
+			}
 		}
 	}
-	// Identify root dependencies (those not listed in any `dependsOn`)
-	for _, id := range refs.ToSlice() {
-		if dep := SearchDependencyEntry(dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
-			// This is a root dependency, add it
-			roots = append(roots, *dep)
+	if len(roots) == 0 && bom.Components != nil && len(*bom.Components) > 0 {
+		for _, comp := range *bom.Components {
+			if comp.BOMRef != "" && comp.Type == cyclonedx.ComponentTypeLibrary && !refs.Exists(comp.BOMRef) {
+				// If no root dependencies were found, add all library components as roots
+				roots = append(roots, cyclonedx.Dependency{Ref: comp.BOMRef})
+			}
 		}
 	}
 	return
+}
+
+func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (component *cyclonedx.Component) {
+	if components == nil || len(*components) == 0 {
+		return
+	}
+	for _, comp := range *components {
+		if comp.BOMRef == ref {
+			return &comp
+		}
+	}
+	return
+}
+
+func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
+	component = cyclonedx.Component{
+		BOMRef: getFileRef(filePathOrUri),
+		Type:   cyclonedx.ComponentTypeFile,
+		Name:   convertToFileUrlIfNeeded(filePathOrUri),
+	}
+	return
+}
+
+func getFileRef(filePathOrUri string) string {
+	uri := convertToFileUrlIfNeeded(filePathOrUri)
+	wdRef, err := utils.Md5Hash(uri)
+	if err != nil {
+		return uri
+	}
+	return wdRef
+}
+
+func convertToFileUrlIfNeeded(location string) string {
+	return filepath.ToSlash(location)
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
@@ -598,6 +599,7 @@ func getNoJasAuditMockCommand() components.Command {
 			}
 			// Disable Jas for this test
 			auditCmd.SetUseJas(false)
+			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}

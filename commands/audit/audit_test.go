@@ -11,6 +11,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -616,6 +617,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -672,7 +674,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-		SetScansResultsOutputDir(outputDirPath)
+		SetScansResultsOutputDir(outputDirPath).
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -680,13 +683,14 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 5)
+	assert.Len(t, filesList, 6)
 
-	searchForStrWithSubString(t, filesList, "sca_results")
-	searchForStrWithSubString(t, filesList, "iac_results")
-	searchForStrWithSubString(t, filesList, "sast_results")
-	searchForStrWithSubString(t, filesList, "secrets_results")
-	searchForStrWithSubString(t, filesList, "applicability_results")
+	searchForStrWithSubString(t, filesList, "bom")
+	searchForStrWithSubString(t, filesList, "sca")
+	searchForStrWithSubString(t, filesList, "iac")
+	searchForStrWithSubString(t, filesList, "sast")
+	searchForStrWithSubString(t, filesList, "secrets")
+	searchForStrWithSubString(t, filesList, "applicability")
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {
@@ -807,7 +811,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
-				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
+				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -1017,7 +1022,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetDiffMode(true).
-				SetResultsToCompare(tc.resultsToCompare)
+				SetResultsToCompare(tc.resultsToCompare).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
