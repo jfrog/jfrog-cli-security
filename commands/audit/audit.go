@@ -172,7 +172,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
