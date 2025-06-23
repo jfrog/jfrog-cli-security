@@ -701,5 +701,5 @@ func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileS
 	if err != nil {
 		return err
 	}
-	return NewScanCommand().SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
+	return NewScanCommand().SetServerDetails(serverDetails).SetBomGenerator(indexer.NewIndexerBomGenerator()).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
 }
