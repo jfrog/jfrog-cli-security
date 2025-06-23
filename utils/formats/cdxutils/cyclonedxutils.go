@@ -193,14 +193,14 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 
 func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
-		BOMRef: getFileRef(filePathOrUri),
+		BOMRef: GetFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
 		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
 	return
 }
 
-func getFileRef(filePathOrUri string) string {
+func GetFileRef(filePathOrUri string) string {
 	uri := convertToFileUrlIfNeeded(filePathOrUri)
 	wdRef, err := utils.Md5Hash(uri)
 	if err != nil {
@@ -521,4 +521,33 @@ func GetSerialNumber(id string) string {
 		id = uuid.New().String()
 	}
 	return fmt.Sprintf("urn:uuid:%s", id)
+}
+
+func AddServiceToBomIfNotExists(bom *cyclonedx.BOM, service cyclonedx.Service) {
+	if SearchForServiceByName(bom, service.Name) != nil || bom == nil {
+		return // Service already exists
+	}
+	// Add the service to the BOM
+	if bom.Metadata == nil {
+		bom.Metadata = &cyclonedx.Metadata{}
+	}
+	if bom.Metadata.Tools == nil {
+		bom.Metadata.Tools = &cyclonedx.ToolsChoice{}
+	}
+	if bom.Metadata.Tools.Services == nil {
+		bom.Metadata.Tools.Services = &[]cyclonedx.Service{}
+	}
+	*bom.Metadata.Tools.Services = append(*bom.Metadata.Tools.Services, service)
+}
+
+func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.Service {
+	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil || bom.Metadata.Tools.Services == nil {
+		return nil
+	}
+	for _, service := range *bom.Metadata.Tools.Services {
+		if service.Name == serviceName {
+			return &service
+		}
+	}
+	return nil
 }
