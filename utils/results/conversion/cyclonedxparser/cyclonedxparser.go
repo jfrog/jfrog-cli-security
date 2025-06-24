@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
@@ -27,10 +28,15 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + locationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + locationIdTemplate
+	// Properties for applicability
+	applicabilityStatusPropertyName             = "jfrog:contextual-analysis:status"
+	applicabilityEvidenceReasonPropertyTemplate = "jfrog:contextual-analysis:evidence:reason:" + locationIdTemplate
+	applicabilityEvidencePropertyTemplate       = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
 )
 
 type CmdResultsCycloneDxConverter struct {
 	entitledForJas bool
+	xrayVersion    string
 
 	targetsComponent map[string]cyclonedx.Component
 	bom              *cyclonedx.BOM
@@ -51,6 +57,7 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
 	cdc.entitledForJas = entitledForJas
+	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
 	cdc.bom = cyclonedx.NewBOM()
 	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(multiScanId)
@@ -97,7 +104,25 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(target results.ScanTa
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if enrichedSbom.Scan == nil || enrichedSbom.Scan.Vulnerabilities == nil || len(*enrichedSbom.Scan.Vulnerabilities) == 0 {
+		// No vulnerabilities to parse
+		return
+	}
+	cdc.addJasService(applicableScan)
+	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
+		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			// Add the vulnerability to the BOM if it is not already existing
+			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
+			// Add the component to the vulnerability if it is not already attached
+			cdc.getOrCreateScaComponent(compToParse)
+			// Attach JAS information to the vulnerability
+			cdc.attachApplicabilityToVulnerability(vulnerability, applicability)
+			return
+		},
+	)
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -116,7 +141,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 		endLine := sarifutils.GetLocationEndLine(location)
 		endColumn := sarifutils.GetLocationEndColumn(location)
 		// Create or get the affected component
-		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, target))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		properties := []cyclonedx.Property{}
 		applicabilityStatus := jasutils.NotScanned
@@ -158,7 +183,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 	// return
 	source := cdc.addJasService(iacs)
 	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
-		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, target))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
@@ -185,7 +210,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	}
 	source := cdc.addJasService(sast)
 	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
-		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
+		affectedComponent := cdc.getOrCreateFileComponent(getRelativePath(location, target))
 		// Create a new JAS vulnerability, add it to the BOM and return it
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
@@ -311,7 +336,7 @@ func (cdc *CmdResultsCycloneDxConverter) appendDependencies(dependencies *[]cycl
 	}
 }
 
-func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasComponent(filePathOrUri string) (component *cyclonedx.Component) {
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateFileComponent(filePathOrUri string) (component *cyclonedx.Component) {
 	if component = cdxutils.SearchComponentByRef(cdc.bom.Components, cdxutils.GetFileRef(filePathOrUri)); component != nil {
 		return
 	}
@@ -343,6 +368,82 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateJasIssue(ref, id, msg, descr
 	return &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
 }
 
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaComponent(compToParse cyclonedx.Component) (component *cyclonedx.Component) {
+	if component = cdxutils.SearchComponentByRef(cdc.bom.Components, compToParse.BOMRef); component != nil {
+		// The component is already in the BOM
+		return
+	}
+	// The component is not in the BOM, add it
+	if cdc.bom.Components == nil {
+		cdc.bom.Components = &[]cyclonedx.Component{}
+	}
+	*cdc.bom.Components = append(*cdc.bom.Components, compToParse)
+	return &(*cdc.bom.Components)[len(*cdc.bom.Components)-1]
+}
+
+func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclonedx.Vulnerability) (vulnerability *cyclonedx.Vulnerability) {
+	if vulnerability = cdxutils.SearchVulnerabilityByRef(cdc.bom, vulnToParse.BOMRef); vulnerability != nil {
+		return
+	}
+	// Add the vulnerability to the BOM
+	if cdc.bom.Vulnerabilities == nil {
+		cdc.bom.Vulnerabilities = &[]cyclonedx.Vulnerability{}
+	}
+	*cdc.bom.Vulnerabilities = append(*cdc.bom.Vulnerabilities, vulnToParse)
+	vulnerability = &(*cdc.bom.Vulnerabilities)[len(*cdc.bom.Vulnerabilities)-1]
+	// Ensure the source is set for the vulnerability
+	if vulnerability.Source == nil {
+		vulnerability.Source = &cyclonedx.Source{Name: cdc.addXrayToolIfMissing().Name}
+	} else if source := cdxutils.SearchForServiceByName(cdc.bom, vulnerability.Source.Name); source == nil {
+		cdxutils.AddServiceToBomIfNotExists(cdc.bom, cyclonedx.Service{Name: vulnerability.Source.Name})
+	}
+	return
+}
+
+func (cdc *CmdResultsCycloneDxConverter) attachApplicabilityToVulnerability(vulnerability *cyclonedx.Vulnerability, applicability *formats.Applicability) {
+	if applicability == nil || applicability.Status == "" || vulnerability == nil {
+		// No applicability to attach
+		return
+	}
+	// Add standard cyclonedx vulnerability analysis attribute if it does not exist
+	if vulnerability.Analysis == nil {
+		vulnerability.Analysis = getVulnerabilityAnalysis(applicability)
+	}
+	// Add JFrog specific CA properties to the vulnerability
+	vulnerability.Properties = cdxutils.AppendProperties(vulnerability.Properties, cyclonedx.Property{
+		Name:  applicabilityStatusPropertyName,
+		Value: applicability.Status,
+	})
+	for _, evidence := range applicability.Evidence {
+		// Get or create the file component from the BOM
+		fileComponent := cdc.getOrCreateFileComponent(evidence.File)
+		// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
+		addFileIssueAffects(vulnerability, *fileComponent,
+			cyclonedx.Property{
+				Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+				Value: evidence.Snippet,
+			},
+			cyclonedx.Property{
+				Name:  fmt.Sprintf(applicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+				Value: evidence.Reason,
+			},
+		)
+	}
+}
+
+func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclonedx.Service) {
+	if service = cdxutils.SearchForServiceByName(cdc.bom, utils.XrayToolName); service != nil || cdc.bom == nil {
+		// The service is already in the BOM
+		return
+	}
+	service = &cyclonedx.Service{
+		Name:    utils.XrayToolName,
+		Version: cdc.xrayVersion,
+	}
+	cdxutils.AddServiceToBomIfNotExists(cdc.bom, *service)
+	return
+}
+
 func addFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx.Component, properties ...cyclonedx.Property) {
 	cdxutils.AttachComponentAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
 		return cyclonedx.Affects{Ref: affectedComponent.BOMRef}
@@ -351,4 +452,24 @@ func addFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx
 
 func getRelativePath(location *sarif.Location, target results.ScanTarget) (relativePath string) {
 	return sarifutils.ExtractRelativePath(sarifutils.GetLocationFileName(location), target.Target)
+}
+
+func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
+	status := jasutils.ConvertToApplicabilityStatus(applicability.Status)
+	state := jasutils.ApplicabilityStatusToImpactAnalysisState(status)
+	if state == nil {
+		// No specific impact analysis state, return nil
+		return nil
+	}
+	// Add justification if the status is NotApplicable
+	var justification cyclonedx.ImpactAnalysisJustification
+	if status == jasutils.NotApplicable {
+		justification = cyclonedx.IAJCodeNotReachable
+	}
+	// Create a new vulnerability analysis with the applicability status
+	return &cyclonedx.VulnerabilityAnalysis{
+		State:         *state,
+		Detail:        applicability.ScannerDescription,
+		Justification: justification,
+	}
 }

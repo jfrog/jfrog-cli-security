@@ -545,11 +545,12 @@ func SearchVulnerabilityByRef(destination *cyclonedx.BOM, ref string) *cyclonedx
 	if destination == nil || destination.Vulnerabilities == nil {
 		return nil
 	}
-	for _, vulnerability := range *destination.Vulnerabilities {
-		if vulnerability.BOMRef == ref {
-			return &vulnerability
+	for i := range *destination.Vulnerabilities {
+		if (*destination.Vulnerabilities)[i].BOMRef == ref {
+			return &(*destination.Vulnerabilities)[i]
 		}
 	}
+
 	return nil
 }
 
@@ -581,9 +582,9 @@ func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.S
 	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil || bom.Metadata.Tools.Services == nil {
 		return nil
 	}
-	for _, service := range *bom.Metadata.Tools.Services {
-		if service.Name == serviceName {
-			return &service
+	for i := range *bom.Metadata.Tools.Services {
+		if (*bom.Metadata.Tools.Services)[i].Name == serviceName {
+			return &(*bom.Metadata.Tools.Services)[i]
 		}
 	}
 	return nil
