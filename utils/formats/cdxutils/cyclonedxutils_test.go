@@ -595,3 +595,116 @@ func TestUpdateOrAppendVulnerabilitiesRatingsAndSearchRating(t *testing.T) {
 		})
 	}
 }
+
+func TestExclude(t *testing.T) {
+	bom := cyclonedx.NewBOM()
+	bom.Components = &[]cyclonedx.Component{
+		{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
+		{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+	}
+	bom.Dependencies = &[]cyclonedx.Dependency{
+		{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
+		{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
+	}
+	tests := []struct {
+		name     string
+		bom      cyclonedx.BOM
+		exclude  []cyclonedx.Component
+		expected *cyclonedx.BOM
+	}{
+		{
+			name:    "Exclude from empty BOM",
+			exclude: []cyclonedx.Component{{BOMRef: "exclude-me"}},
+			bom: cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{},
+			},
+		},
+		{
+			name:    "Do not exclude different string",
+			exclude: []cyclonedx.Component{{BOMRef: "exclude-me"}},
+			bom:     *bom,
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp3"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2", "comp3"}},
+				},
+			},
+		},
+		{
+			name:    "Exclude single component with transitive dependencies",
+			exclude: []cyclonedx.Component{{BOMRef: "comp1"}},
+			bom:     *bom,
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"comp3"}}},
+			},
+		},
+		{
+			name:    "Exclude single component existing both directly and transitively",
+			exclude: []cyclonedx.Component{{BOMRef: "comp3"}},
+			bom:     *bom,
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+				},
+			},
+		},
+		{
+			name:    "Exclude multiple components",
+			exclude: []cyclonedx.Component{{BOMRef: "comp2"}, {BOMRef: "comp3"}, {BOMRef: "exclude-me"}},
+			bom:     *bom,
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Exclude(tt.bom, tt.exclude...)
+			if tt.expected.Components == nil {
+				assert.Nil(t, result.Components, "Expected components to be nil after exclusion")
+				assert.Nil(t, result.Dependencies, "Expected dependencies to be nil after exclusion")
+				return
+			} else if len(*tt.expected.Components) == 0 {
+				assert.NotNil(t, result.Components, "Expected components to not be nil after exclusion")
+				assert.Len(t, *result.Components, 0, "Expected components to be empty after exclusion")
+				assert.Nil(t, result.Dependencies, "Expected dependencies to be nil after exclusion")
+				return
+			}
+			assert.ElementsMatch(t, *tt.expected.Components, *result.Components, "Expected exclude result does not match")
+
+			if tt.bom.Dependencies == nil {
+				assert.Nil(t, result.Dependencies, "Expected dependencies to be nil after exclusion")
+			} else {
+				assert.ElementsMatch(t, *tt.expected.Dependencies, *result.Dependencies, "Expected exclude dependencies do not match")
+			}
+		})
+	}
+}

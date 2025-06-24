@@ -22,7 +22,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
-	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/exp/slices"
@@ -172,7 +171,6 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
@@ -452,8 +450,11 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	// TODO: old flow only if scan-graph implementation, else new
-	isNewFlow := false
+	// TODO: remove this once the new flow is fully implemented.
+	isNewFlow := true
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
+		isNewFlow = false
+	}
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{

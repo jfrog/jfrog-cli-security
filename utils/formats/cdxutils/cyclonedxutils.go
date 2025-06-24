@@ -213,23 +213,59 @@ func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
 }
 
-func Exclude(bom *cyclonedx.BOM, components ...cyclonedx.Component) *cyclonedx.BOM {
-	if bom == nil {
-		return bom
+func Exclude(bom cyclonedx.BOM, components ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
+	if bom.Components == nil || len(*bom.Components) == 0 || bom.Dependencies == nil || len(*bom.Dependencies) == 0 {
+		// No components or dependencies to filter, return the original BOM
+		return &bom
 	}
-	filteredSbom := cyclonedx.NewBOM()
-	filteredSbom.Components = excludeFromComponents(bom.Components, components...)
-	filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, components...)
+	filteredSbom = &bom
+	for _, comp := range components {
+		if exists := SearchComponentByRef(bom.Components, comp.BOMRef); exists == nil {
+			continue
+		}
+		// Exclude the component from the dependencies
+		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, comp.BOMRef)
+	}
+	toExclude := datastructures.MakeSet[string]()
+	for _, comp := range *filteredSbom.Components {
+		if comp.Type != cyclonedx.ComponentTypeLibrary {
+			// Only exclude library components
+			continue
+		}
+		// Count the number of references to this component in the dependencies
+		dependencyRefCount := 0
+		for _, dependency := range *filteredSbom.Dependencies {
+			if dependency.Ref == comp.BOMRef {
+				// This dependency references the component, increment the count
+				dependencyRefCount++
+			}
+			if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+				// No dependencies, continue to the next dependency
+				continue
+			}
+			for _, depRef := range *dependency.Dependencies {
+				if depRef == comp.BOMRef {
+					// This dependency references the component, increment the count
+					dependencyRefCount++
+				}
+			}
+		}
+		if dependencyRefCount == 0 {
+			// This component is not referenced by any dependencies, mark it for exclusion
+			toExclude.Add(comp.BOMRef)
+		}
+	}
+	filteredSbom.Components = excludeFromComponents(bom.Components, toExclude.ToSlice()...)
 	return filteredSbom
 }
 
-func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Component {
+func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents ...string) *[]cyclonedx.Component {
 	if components == nil || len(*components) == 0 || len(excludeComponents) == 0 {
 		return components
 	}
 	excludeRefs := datastructures.MakeSet[string]()
-	for _, comp := range excludeComponents {
-		excludeRefs.Add(comp.BOMRef)
+	for _, compRef := range excludeComponents {
+		excludeRefs.Add(compRef)
 	}
 	filteredComponents := []cyclonedx.Component{}
 	for _, comp := range *components {
@@ -240,13 +276,13 @@ func excludeFromComponents(components *[]cyclonedx.Component, excludeComponents 
 	return &filteredComponents
 }
 
-func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeComponents ...cyclonedx.Component) *[]cyclonedx.Dependency {
+func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeComponents ...string) *[]cyclonedx.Dependency {
 	if dependencies == nil || len(*dependencies) == 0 || len(excludeComponents) == 0 {
 		return dependencies
 	}
 	excludeRefs := datastructures.MakeSet[string]()
-	for _, comp := range excludeComponents {
-		excludeRefs.Add(comp.BOMRef)
+	for _, compRef := range excludeComponents {
+		excludeRefs.Add(compRef)
 	}
 	filteredDependencies := []cyclonedx.Dependency{}
 	for _, dep := range *dependencies {
@@ -255,19 +291,20 @@ func excludeFromDependencies(dependencies *[]cyclonedx.Dependency, excludeCompon
 			continue
 		}
 		filteredDep := cyclonedx.Dependency{Ref: dep.Ref}
-		depDirectDependencies := []string{}
 		if dep.Dependencies != nil {
 			// Also filter the components from the dependencies of this dependency
 			for _, depRef := range *dep.Dependencies {
 				if !excludeRefs.Exists(depRef) {
-					depDirectDependencies = append(depDirectDependencies, depRef)
+					if filteredDep.Dependencies == nil {
+						filteredDep.Dependencies = &[]string{}
+					}
+					*filteredDep.Dependencies = append(*filteredDep.Dependencies, depRef)
 				}
 			}
 		}
-		if len(depDirectDependencies) > 0 {
-			filteredDep.Dependencies = &depDirectDependencies
+		if filteredDep.Dependencies != nil && len(*filteredDep.Dependencies) > 0 {
+			filteredDependencies = append(filteredDependencies, filteredDep)
 		}
-		filteredDependencies = append(filteredDependencies, filteredDep)
 	}
 	return &filteredDependencies
 }
