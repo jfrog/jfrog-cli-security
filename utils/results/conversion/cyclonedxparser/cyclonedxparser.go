@@ -86,7 +86,11 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results
 }
 
 func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
-	return
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	cdc.addXrayToolIfMissing()
+	return results.ForEachLicense(target, scaResponse.Scan.Licenses, results.ParseScanGraphLicenseToSbom(cdc.bom))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {

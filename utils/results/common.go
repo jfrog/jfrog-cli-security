@@ -1280,30 +1280,29 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 }
 
 func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
-	if err = ForEachScanGraphVulnerability(ScanTarget{}, scanResponse.Vulnerabilities, false, []*sarif.Run{}, ParseScanGraphVulnerabilityToSbom(destination)); err != nil {
+	target := ScanTarget{}
+	if err = ForEachScanGraphVulnerability(target, scanResponse.Vulnerabilities, false, []*sarif.Run{}, ParseScanGraphVulnerabilityToSbom(destination)); err != nil {
 		return
 	}
-	for _, license := range scanResponse.Licenses {
-		// Prepare the information needed to create the SCA license
-		impactedPackagesIds, _, _, _, err := SplitComponents("", license.Components)
-		if err != nil {
-			return err
-		}
-		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-			// Attach the license to the component
-			component := GetOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
-			cdxutils.AttachLicenseToComponent(component, cyclonedx.LicenseChoice{
-				License: &cyclonedx.License{
-					ID:   license.Key,
-					Name: license.Name,
-				},
-			})
-		}
-	}
-	return
+	return ForEachLicense(target, scanResponse.Licenses, ParseScanGraphLicenseToSbom(destination))
 }
 
-func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+func ParseScanGraphLicenseToSbom(destination *cyclonedx.BOM) ParseLicenseFunc {
+	return func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		// Add the license related component if it is not already existing
+		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
+		// Attach the license to the component
+		cdxutils.AttachLicenseToComponent(affectedComponent, cyclonedx.LicenseChoice{
+			License: &cyclonedx.License{
+				ID:   license.Key,
+				Name: license.Name,
+			},
+		})
+		return nil
+	}
+}
+
+func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGraphVulnerabilityFunc {
 	// Prepare the information needed to create the SCA vulnerability
 	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
