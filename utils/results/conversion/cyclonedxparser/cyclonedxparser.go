@@ -30,7 +30,7 @@ type CmdResultsCycloneDxConverter struct {
 	entitledForJas bool
 
 	targetsComponent map[string]cyclonedx.Component
-	bom            *cyclonedx.BOM
+	bom              *cyclonedx.BOM
 }
 
 func NewCmdResultsCycloneDxConverter() *CmdResultsCycloneDxConverter {
