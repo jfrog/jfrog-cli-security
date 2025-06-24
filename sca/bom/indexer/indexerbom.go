@@ -38,8 +38,14 @@ type IndexerBomGenerator struct {
 	indexerTempDir string
 }
 
-func NewIndexerBomGenerator() *IndexerBomGenerator {
-	return &IndexerBomGenerator{}
+func NewIndexerBomGenerator(options ...bom.SbomGeneratorOption) *IndexerBomGenerator {
+	ibg := &IndexerBomGenerator{}
+	for _, option := range options {
+		if err := option(ibg); err != nil {
+			return nil
+		}
+	}
+	return ibg
 }
 
 func WithXray(manager *xray.XrayServicesManager, xrayVersion string) bom.SbomGeneratorOption {

@@ -43,10 +43,16 @@ type BuildInfoBomGenerator struct {
 	Params technologies.BuildInfoBomGeneratorParams
 }
 
-func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
-	return &BuildInfoBomGenerator{
+func NewBuildInfoBomGenerator(options ...bom.SbomGeneratorOption) *BuildInfoBomGenerator {
+	bi := &BuildInfoBomGenerator{
 		Params: technologies.BuildInfoBomGeneratorParams{},
 	}
+	for _, option := range options {
+		if err := option(bi); err != nil {
+			return nil
+		}
+	}
+	return bi
 }
 
 func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
