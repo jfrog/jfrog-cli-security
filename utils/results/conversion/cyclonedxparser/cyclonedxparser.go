@@ -27,19 +27,23 @@ const (
 )
 
 type CmdResultsCycloneDxConverter struct {
-	bom            *cyclonedx.BOM
 	entitledForJas bool
+
+	targetsComponent map[string]cyclonedx.Component
+	bom            *cyclonedx.BOM
 }
 
 func NewCmdResultsCycloneDxConverter() *CmdResultsCycloneDxConverter {
 	return &CmdResultsCycloneDxConverter{}
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Get() (*cyclonedx.BOM, error) {
+func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 	if cdc.bom == nil {
 		return cyclonedx.NewBOM(), nil
 	}
-	return cdc.bom, nil
+	bom = cdc.bom
+	bom.Metadata.Component, err = cdc.getMetadataComponent()
+	return
 }
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
@@ -51,6 +55,7 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 		Timestamp: time.Now().Format(time.RFC3339),
 		Authors:   &[]cyclonedx.OrganizationalContact{{Name: "JFrog"}},
 	}
+	cdc.targetsComponent = make(map[string]cyclonedx.Component)
 	return
 }
 
@@ -58,37 +63,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
-	component := cdxutils.CreateFileOrDirComponent(target.Target)
-	if cdc.bom.Metadata.Component == nil {
-		// Single target
-		cdc.bom.Metadata.Component = &component
-		return
-	}
-	// Multiple targets
-	if cdc.bom.Metadata.Component.Components == nil || len(*cdc.bom.Metadata.Component.Components) == 0 {
-		if cdc.bom.Metadata.Component.BOMRef == component.BOMRef {
-			// The component is already in the BOM
-			return
-		}
-		// The component is not in the BOM, Convert from single target to multiple targets
-		if currentWd, e := os.Getwd(); e != nil {
-			return e
-		} else {
-			wdComponent := cdxutils.CreateFileOrDirComponent(currentWd)
-			// Add the old main component as a sub-component
-			wdComponent.Components = &[]cyclonedx.Component{*cdc.bom.Metadata.Component}
-			// Set the current working directory as the main component
-			cdc.bom.Metadata.Component = &wdComponent
-		}
-	}
-	for _, existingComponent := range *cdc.bom.Metadata.Component.Components {
-		if existingComponent.BOMRef == component.BOMRef {
-			// The component is already in the BOM
-			return
-		}
-	}
-	// The component is not in the BOM, Add the new sub-component
-	*cdc.bom.Metadata.Component.Components = append(*cdc.bom.Metadata.Component.Components, component)
+	cdc.setTargetComponent(target.Target, cdxutils.CreateFileOrDirComponent(target.Target))
 	return
 }
 
@@ -100,14 +75,15 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseSbom(target results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
 	if sbom == nil {
 		return
 	}
-	// Append the components and dependencies from the sbom to the current BOM
+	// Append the information from the sbom to the current BOM
+	cdc.appendMetadata(sbom.Metadata)
 	cdc.appendComponents(sbom.Components)
 	cdc.appendDependencies(sbom.Dependencies)
 	return
@@ -182,6 +158,57 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	return
+}
+
+func (cdc *CmdResultsCycloneDxConverter) getMetadataComponent() (component *cyclonedx.Component, err error) {
+	if len(cdc.targetsComponent) == 0 {
+		// No targets
+		return
+	}
+	if len(cdc.targetsComponent) == 1 {
+		for _, target := range cdc.targetsComponent {
+			// Single target - return the only component
+			return &target, nil
+		}
+	}
+	// Multiple targets, main component is the current working directory
+	currentWd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	wdComponent := cdxutils.CreateFileOrDirComponent(currentWd)
+	for _, target := range cdc.targetsComponent {
+		if target.BOMRef == wdComponent.BOMRef {
+			// The current working directory is already the main component
+			continue
+		}
+		if wdComponent.Components == nil {
+			wdComponent.Components = &[]cyclonedx.Component{}
+		}
+		// Add the target component as a sub-component of the current working directory
+		*wdComponent.Components = append(*wdComponent.Components, target)
+	}
+	component = &wdComponent
+	return
+}
+
+func (cdc *CmdResultsCycloneDxConverter) appendMetadata(metadata *cyclonedx.Metadata) {
+	if metadata == nil {
+		return
+	}
+	if metadata.Tools != nil && metadata.Tools.Services != nil && len(*metadata.Tools.Services) > 0 {
+		for _, service := range *metadata.Tools.Services {
+			cdxutils.AddServiceToBomIfNotExists(cdc.bom, service)
+		}
+	}
+	// Resolve the target path from the SBOM metadata component if it exists and set it as the target component.
+	if metadata.Component != nil && metadata.Component.Type == cyclonedx.ComponentTypeFile {
+		cdc.setTargetComponent(metadata.Component.Name, *metadata.Component)
+	}
+}
+
+func (cdc *CmdResultsCycloneDxConverter) setTargetComponent(target string, component cyclonedx.Component) {
+	cdc.targetsComponent[target] = component
 }
 
 func (cdc *CmdResultsCycloneDxConverter) addJasService(runs []results.ScanResult[[]*sarif.Run]) (service *cyclonedx.Service) {
