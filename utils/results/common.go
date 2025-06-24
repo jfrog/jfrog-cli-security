@@ -34,6 +34,13 @@ const (
 	DirectDependencyIndex      = 1
 	DirectDependencyPathLength = 2
 	nodeModules                = "node_modules"
+
+	// <FILE_REF>#L<START_LINE>C<START_COLUMN>-L<END_LINE>C<END_COLUMN>
+	LocationIdTemplate = "%s#L%dC%d-L%dC%d"
+	// Applicability properties for cdx
+	ApplicabilityStatusPropertyName             = "jfrog:contextual-analysis:status"
+	ApplicabilityEvidenceReasonPropertyTemplate = "jfrog:contextual-analysis:evidence:reason:" + LocationIdTemplate
+	ApplicabilityEvidencePropertyTemplate       = "jfrog:contextual-analysis:evidence:" + LocationIdTemplate
 )
 
 var (
@@ -1273,46 +1280,8 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 }
 
 func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
-	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
-	for _, vulnerability := range scanResponse.Vulnerabilities {
-		// Prepare the information needed to create the SCA vulnerability
-		impactedPackagesIds, fixedVersions, _, _, err := SplitComponents("", vulnerability.Components)
-		if err != nil {
-			return err
-		}
-		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
-		if err != nil {
-			return err
-		}
-		extendedDescription := ""
-		if vulnerability.ExtendedInformation != nil {
-			extendedDescription = vulnerability.ExtendedInformation.FullDescription
-		}
-		cves, _, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, convertCves(vulnerability.Cves), severity, jasutils.NotScanned, xrayService)
-		// Create vulnerability for each issueId
-		for id := 0; id < len(cves); id++ {
-			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-				// Create or get the affected component
-				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
-				// Create or Get the SCA vulnerability
-				params := cdxutils.CdxVulnerabilityParams{
-					Ref:         cves[id],
-					Ratings:     ratings[id],
-					CWE:         cwes[id],
-					ID:          vulnerability.IssueId,
-					Description: vulnerability.Summary,
-					Details:     extendedDescription,
-					References:  vulnerability.References,
-					Service:     xrayService,
-				}
-				cycloneVulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
-				// Attach the affected impacted library component to the vulnerability
-				cdxutils.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[compIndex])
-				})
-
-			}
-		}
+	if err = ForEachScanGraphVulnerability(ScanTarget{}, scanResponse.Vulnerabilities, false, []*sarif.Run{}, ParseScanGraphVulnerabilityToSbom(destination)); err != nil {
+		return
 	}
 	for _, license := range scanResponse.Licenses {
 		// Prepare the information needed to create the SCA license
@@ -1322,7 +1291,7 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 		}
 		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
 			// Attach the license to the component
-			component := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+			component := GetOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
 			cdxutils.AttachLicenseToComponent(component, cyclonedx.LicenseChoice{
 				License: &cyclonedx.License{
 					ID:   license.Key,
@@ -1332,6 +1301,105 @@ func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanRe
 		}
 	}
 	return
+}
+
+func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	// Prepare the information needed to create the SCA vulnerability
+	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
+	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		// Add the vulnerability related component if it is not already existing
+		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
+		// Extract the vulnerability CVE's information and create the SCA vulnerability for each
+		cveIds, applicability, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, cves, severity, applicabilityStatus, xrayService)
+		for i := 0; i < len(cveIds); i++ {
+			params := cdxutils.CdxVulnerabilityParams{
+				Ref:         cveIds[i],
+				Ratings:     ratings[i],
+				CWE:         cwes[i],
+				ID:          vulnerability.IssueId,
+				Description: vulnerability.Summary,
+				Details:     vulnerability.ExtendedInformation.FullDescription,
+				References:  vulnerability.References,
+				Service:     xrayService,
+			}
+			vulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
+			// Attach the affected impacted library component to the vulnerability
+			cdxutils.AttachComponentAffects(vulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+				return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersion)
+			})
+			// Attach JAS information to the vulnerability
+			AttachApplicabilityToVulnerability(destination, vulnerability, applicability[i])
+		}
+		return nil
+	}
+}
+
+func AttachApplicabilityToVulnerability(destination *cyclonedx.BOM, vulnerability *cyclonedx.Vulnerability, applicability *formats.Applicability) {
+	if applicability == nil || applicability.Status == jasutils.NotScanned.String() || vulnerability == nil {
+		// No applicability to attach
+		return
+	}
+	// Add standard cyclonedx vulnerability analysis attribute if it does not exist
+	if vulnerability.Analysis == nil {
+		vulnerability.Analysis = getVulnerabilityAnalysis(applicability)
+	}
+	// Add JFrog specific CA properties to the vulnerability
+	vulnerability.Properties = cdxutils.AppendProperties(vulnerability.Properties, cyclonedx.Property{
+		Name:  ApplicabilityStatusPropertyName,
+		Value: applicability.Status,
+	})
+	for _, evidence := range applicability.Evidence {
+		// Get or create the file component from the BOM
+		fileComponent := GetOrCreateFileComponent(destination, evidence.File)
+		// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
+		AddFileIssueAffects(vulnerability, *fileComponent,
+			cyclonedx.Property{
+				Name:  fmt.Sprintf(ApplicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+				Value: evidence.Snippet,
+			},
+			cyclonedx.Property{
+				Name:  fmt.Sprintf(ApplicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
+				Value: evidence.Reason,
+			},
+		)
+	}
+}
+
+func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
+	status := jasutils.ConvertToApplicabilityStatus(applicability.Status)
+	state := jasutils.ApplicabilityStatusToImpactAnalysisState(status)
+	if state == nil {
+		// No specific impact analysis state, return nil
+		return nil
+	}
+	// Add justification if the status is NotApplicable
+	var justification cyclonedx.ImpactAnalysisJustification
+	if status == jasutils.NotApplicable {
+		justification = cyclonedx.IAJCodeNotReachable
+	}
+	// Create a new vulnerability analysis with the applicability status
+	return &cyclonedx.VulnerabilityAnalysis{
+		State:         *state,
+		Detail:        applicability.ScannerDescription,
+		Justification: justification,
+	}
+}
+
+func GetOrCreateFileComponent(destination *cyclonedx.BOM, filePathOrUri string) (component *cyclonedx.Component) {
+	if component = cdxutils.SearchComponentByRef(destination.Components, cdxutils.GetFileRef(filePathOrUri)); component != nil {
+		return
+	}
+	if destination.Components == nil {
+		destination.Components = &[]cyclonedx.Component{}
+	}
+	*destination.Components = append(*destination.Components, cdxutils.CreateFileOrDirComponent(filePathOrUri))
+	return &(*destination.Components)[len(*destination.Components)-1]
+}
+
+func AddFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx.Component, properties ...cyclonedx.Property) {
+	cdxutils.AttachComponentAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+		return cyclonedx.Affects{Ref: affectedComponent.BOMRef}
+	}, properties...)
 }
 
 func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
@@ -1385,7 +1453,7 @@ func CreateCveRatings(cve formats.CveRow) (ratings []cyclonedx.VulnerabilityRati
 	return
 }
 
-func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
+func GetOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
 	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
 	// Check if the component already exists in the BOM
 	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {

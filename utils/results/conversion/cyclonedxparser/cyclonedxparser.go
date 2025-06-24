@@ -21,17 +21,11 @@ import (
 )
 
 const (
-	// <FILE_REF>#L<START_LINE>C<START_COLUMN>-L<END_LINE>C<END_COLUMN>
-	locationIdTemplate = "%s#L%dC%d-L%dC%d"
 	// <SCAN_TYPE> + locationIdTemplate
-	jasIssueLocationPropertyTemplate = "jfrog:%s:location:" + locationIdTemplate
+	jasIssueLocationPropertyTemplate = "jfrog:%s:location:" + results.LocationIdTemplate
 	// Properties for secret validation
-	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + locationIdTemplate
-	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + locationIdTemplate
-	// Properties for applicability
-	applicabilityStatusPropertyName             = "jfrog:contextual-analysis:status"
-	applicabilityEvidenceReasonPropertyTemplate = "jfrog:contextual-analysis:evidence:reason:" + locationIdTemplate
-	applicabilityEvidencePropertyTemplate       = "jfrog:contextual-analysis:evidence:" + locationIdTemplate
+	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
+	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -78,7 +72,17 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 }
 
 func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if violations {
+		// SCA violations are not supported in CycloneDX
+		log.Debug("SCA violations are not supported in CycloneDX. Skipping SCA violations parsing.")
+		return nil
+	}
+	cdc.addXrayToolIfMissing()
+	cdc.addJasService(applicableScan)
+	return results.ForEachScanGraphVulnerability(target, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(cdc.bom))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
@@ -114,12 +118,12 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 	cdc.addJasService(applicableScan)
 	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan),
 		func(vulnToParse cyclonedx.Vulnerability, compToParse cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			// Add the vulnerability related component if it is not already existing
+			cdc.getOrCreateScaComponent(compToParse)
 			// Add the vulnerability to the BOM if it is not already existing
 			vulnerability := cdc.getOrCreateScaIssue(vulnToParse)
-			// Add the component to the vulnerability if it is not already attached
-			cdc.getOrCreateScaComponent(compToParse)
 			// Attach JAS information to the vulnerability
-			cdc.attachApplicabilityToVulnerability(vulnerability, applicability)
+			results.AttachApplicabilityToVulnerability(cdc.bom, vulnerability, applicability)
 			return
 		},
 	)
@@ -166,7 +170,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
 			Value: sarifutils.GetLocationSnippetText(location),
 		})
-		addFileIssueAffects(jasIssue, *affectedComponent, properties...)
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, properties...)
 		return
 	})
 }
@@ -188,7 +192,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
-		addFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
 			Name: fmt.Sprintf(
 				jasIssueLocationPropertyTemplate, "iac", affectedComponent.BOMRef,
 				sarifutils.GetLocationStartLine(location), sarifutils.GetLocationStartColumn(location), sarifutils.GetLocationEndLine(location), sarifutils.GetLocationEndColumn(location),
@@ -215,7 +219,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, jasutils.Applicable, source)}
 		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
 		// Add the location to the vulnerability
-		addFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
+		results.AddFileIssueAffects(jasIssue, *affectedComponent, cyclonedx.Property{
 			Name: fmt.Sprintf(
 				jasIssueLocationPropertyTemplate, "sast", affectedComponent.BOMRef,
 				sarifutils.GetLocationStartLine(location), sarifutils.GetLocationStartColumn(location), sarifutils.GetLocationEndLine(location), sarifutils.GetLocationEndColumn(location),
@@ -400,37 +404,6 @@ func (cdc *CmdResultsCycloneDxConverter) getOrCreateScaIssue(vulnToParse cyclone
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) attachApplicabilityToVulnerability(vulnerability *cyclonedx.Vulnerability, applicability *formats.Applicability) {
-	if applicability == nil || applicability.Status == "" || vulnerability == nil {
-		// No applicability to attach
-		return
-	}
-	// Add standard cyclonedx vulnerability analysis attribute if it does not exist
-	if vulnerability.Analysis == nil {
-		vulnerability.Analysis = getVulnerabilityAnalysis(applicability)
-	}
-	// Add JFrog specific CA properties to the vulnerability
-	vulnerability.Properties = cdxutils.AppendProperties(vulnerability.Properties, cyclonedx.Property{
-		Name:  applicabilityStatusPropertyName,
-		Value: applicability.Status,
-	})
-	for _, evidence := range applicability.Evidence {
-		// Get or create the file component from the BOM
-		fileComponent := cdc.getOrCreateFileComponent(evidence.File)
-		// Attach the fileComponent evidence affects to the vulnerability and add the evidence snippet
-		addFileIssueAffects(vulnerability, *fileComponent,
-			cyclonedx.Property{
-				Name:  fmt.Sprintf(applicabilityEvidencePropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
-				Value: evidence.Snippet,
-			},
-			cyclonedx.Property{
-				Name:  fmt.Sprintf(applicabilityEvidenceReasonPropertyTemplate, fileComponent.BOMRef, evidence.StartLine, evidence.StartColumn, evidence.EndLine, evidence.EndColumn),
-				Value: evidence.Reason,
-			},
-		)
-	}
-}
-
 func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclonedx.Service) {
 	if service = cdxutils.SearchForServiceByName(cdc.bom, utils.XrayToolName); service != nil || cdc.bom == nil {
 		// The service is already in the BOM
@@ -444,32 +417,6 @@ func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclon
 	return
 }
 
-func addFileIssueAffects(issue *cyclonedx.Vulnerability, fileComponent cyclonedx.Component, properties ...cyclonedx.Property) {
-	cdxutils.AttachComponentAffects(issue, fileComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
-		return cyclonedx.Affects{Ref: affectedComponent.BOMRef}
-	}, properties...)
-}
-
 func getRelativePath(location *sarif.Location, target results.ScanTarget) (relativePath string) {
 	return sarifutils.ExtractRelativePath(sarifutils.GetLocationFileName(location), target.Target)
-}
-
-func getVulnerabilityAnalysis(applicability *formats.Applicability) *cyclonedx.VulnerabilityAnalysis {
-	status := jasutils.ConvertToApplicabilityStatus(applicability.Status)
-	state := jasutils.ApplicabilityStatusToImpactAnalysisState(status)
-	if state == nil {
-		// No specific impact analysis state, return nil
-		return nil
-	}
-	// Add justification if the status is NotApplicable
-	var justification cyclonedx.ImpactAnalysisJustification
-	if status == jasutils.NotApplicable {
-		justification = cyclonedx.IAJCodeNotReachable
-	}
-	// Create a new vulnerability analysis with the applicability status
-	return &cyclonedx.VulnerabilityAnalysis{
-		State:         *state,
-		Detail:        applicability.ScannerDescription,
-		Justification: justification,
-	}
 }
