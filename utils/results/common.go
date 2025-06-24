@@ -293,24 +293,6 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 	return
 }
 
-// func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
-// 	if len(impactedPackages) == 0 {
-// 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
-// 		return
-// 	}
-// 	for currCompId, currComp := range impactedPackages {
-// 		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
-// 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
-// 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
-// 		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
-// 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
-// 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
-// 		directComponents = append(directComponents, currDirectComponents)
-// 		impactPaths = append(impactPaths, currImpactPaths)
-// 	}
-// 	return
-// }
-
 func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
@@ -1035,17 +1017,7 @@ func CreateScaComponentFromBinaryNode(node *xrayUtils.BinaryGraphNode) (componen
 
 	// Add the path property if it exists
 	if node.Path != "" {
-		if component.Evidence == nil {
-			component.Evidence = &cyclonedx.Evidence{}
-		}
-		if component.Evidence.Occurrences == nil {
-			component.Evidence.Occurrences = &[]cyclonedx.EvidenceOccurrence{}
-		}
-		// Add the path as an occurrence
-		*component.Evidence.Occurrences = append(*component.Evidence.Occurrences, cyclonedx.EvidenceOccurrence{
-			// The path is the location of the binary
-			Location: node.Path,
-		})
+		cdxutils.AttachEvidenceOccurrenceToComponent(&component, cyclonedx.EvidenceOccurrence{Location: node.Path})
 	}
 
 	if node.Sha1 == "" && node.Sha256 == "" {
