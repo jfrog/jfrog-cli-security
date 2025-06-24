@@ -422,5 +422,5 @@ func (cdc *CmdResultsCycloneDxConverter) addXrayToolIfMissing() (service *cyclon
 }
 
 func getRelativePath(location *sarif.Location, target results.ScanTarget) (relativePath string) {
-	return sarifutils.ExtractRelativePath(sarifutils.GetLocationFileName(location), target.Target)
+	return sarifutils.ExtractRelativePath(sarifutils.GetLocationFileName(location), utils.ToURI(target.Target))
 }

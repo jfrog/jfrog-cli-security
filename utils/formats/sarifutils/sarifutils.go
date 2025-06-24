@@ -336,29 +336,39 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 		return nil
 	}
 	copied := sarif.NewLocation()
+	copied.ID = 0
 	if location.PhysicalLocation != nil {
 		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
-			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)))
-		}
-		if location.PhysicalLocation.Region != nil {
-			copied.PhysicalLocation.Region = sarif.NewRegion().WithStartLine(GetLocationStartLine(location)).WithStartColumn(GetLocationStartColumn(location)).WithEndLine(GetLocationEndLine(location)).WithEndColumn(GetLocationEndColumn(location))
-			if location.PhysicalLocation.Region.Snippet != nil {
-				copied.PhysicalLocation.Region.Snippet = &sarif.ArtifactContent{
-					Text: copyStrAttribute(location.PhysicalLocation.Region.Snippet.Text),
-				}
+			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithIndex(0).WithURI(GetLocationFileName(location)))
+			copied.PhysicalLocation.WithRegion(sarif.NewRegion().
+				WithCharOffset(0).
+				WithByteOffset(0).
+				WithStartLine(GetLocationStartLine(location)).
+				WithStartColumn(GetLocationStartColumn(location)).
+				WithEndLine(GetLocationEndLine(location)).
+				WithEndColumn(GetLocationEndColumn(location)))
+			if snippet := GetLocationSnippetText(location); len(snippet) > 0 {
+				copied.PhysicalLocation.Region.WithSnippet(sarif.NewArtifactContent().WithText(snippet))
 			}
 		}
 	}
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
-		copied.LogicalLocations = append(copied.LogicalLocations, &sarif.LogicalLocation{
-			Name:               copyStrAttribute(logicalLocation.Name),
-			FullyQualifiedName: copyStrAttribute(logicalLocation.FullyQualifiedName),
-			DecoratedName:      copyStrAttribute(logicalLocation.DecoratedName),
-			Kind:               logicalLocation.Kind,
-			Properties:         logicalLocation.Properties,
-		})
+		logicalCopy := sarif.NewLogicalLocation().WithProperties(logicalLocation.Properties)
+		if logicalLocation.Name != nil {
+			logicalCopy.WithName(*logicalLocation.Name)
+		}
+		if logicalLocation.FullyQualifiedName != nil {
+			logicalCopy.WithFullyQualifiedName(*logicalLocation.FullyQualifiedName)
+		}
+		if logicalLocation.DecoratedName != nil {
+			logicalCopy.WithDecoratedName(*logicalLocation.DecoratedName)
+		}
+		if logicalLocation.Kind != nil {
+			logicalCopy.WithKind(*logicalLocation.Kind)
+		}
+		copied.LogicalLocations = append(copied.LogicalLocations, logicalCopy)
 	}
 	return copied
 }
@@ -655,7 +665,8 @@ func GetLocationStartLine(location *sarif.Location) int {
 	if region != nil && region.StartLine != nil {
 		return *region.StartLine
 	}
-	return 0
+	// Default start line is 1
+	return 1
 }
 
 func GetLocationStartColumn(location *sarif.Location) int {
@@ -663,7 +674,8 @@ func GetLocationStartColumn(location *sarif.Location) int {
 	if region != nil && region.StartColumn != nil {
 		return *region.StartColumn
 	}
-	return 0
+	// Default start column is 1
+	return 1
 }
 
 func GetLocationEndLine(location *sarif.Location) int {
@@ -671,7 +683,8 @@ func GetLocationEndLine(location *sarif.Location) int {
 	if region != nil && region.EndLine != nil {
 		return *region.EndLine
 	}
-	return 0
+	// Default end line is 1
+	return 1
 }
 
 func GetLocationEndColumn(location *sarif.Location) int {
@@ -679,18 +692,16 @@ func GetLocationEndColumn(location *sarif.Location) int {
 	if region != nil && region.EndColumn != nil {
 		return *region.EndColumn
 	}
-	return 0
+	// Default end column is 1
+	return 1
 }
 
 func ExtractRelativePath(resultPath string, projectRoot string) string {
-	// Remove OS-specific file prefix
-	resultPath = strings.TrimPrefix(resultPath, "file:///private")
-	resultPath = strings.TrimPrefix(resultPath, "file://")
-
-	// Get relative path
-	relativePath := strings.ReplaceAll(resultPath, projectRoot, "")
-	trimSlash := strings.TrimPrefix(relativePath, string(filepath.Separator))
-	return strings.TrimPrefix(trimSlash, "/")
+	relPath, err := filepath.Rel(projectRoot, resultPath)
+	if err != nil {
+		return resultPath
+	}
+	return relPath
 }
 
 func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {

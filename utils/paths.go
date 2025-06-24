@@ -130,14 +130,13 @@ func ToURI(path string) string {
 	// Convert Windows path to URI format
 	// Use filepath.ToSlash to make sure the path uses forward slashes
 	path = filepath.ToSlash(path)
-
 	// If it's a Windows path, prepend "file:///" and replace the drive letter
 	if len(path) > 2 && path[1] == ':' {
 		// Convert "C:\\path\\to\\file" to "file:///C:/path/to/file"
 		path = "file:///" + path[:2] + path[2:]
 	} else {
 		// For Linux/Unix or other paths, just add "file://"
-		path = "file:///" + path
+		path = "file://" + path
 	}
 	// Parse the URL to ensure it's valid (this step is optional for simple paths)
 	u, err := url.Parse(path)

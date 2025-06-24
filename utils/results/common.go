@@ -107,12 +107,12 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		cves, applicabilityStatus := ConvertCvesWithApplicability(vulnerability.Cves, entitledForJas, applicabilityRuns, vulnerability.Components)
+		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
 		if err != nil {
 			return err
 		}
-		cves, applicabilityStatus := ConvertCvesWithApplicability(vulnerability.Cves, entitledForJas, applicabilityRuns, vulnerability.Components)
-		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
 		if err != nil {
 			return err
 		}

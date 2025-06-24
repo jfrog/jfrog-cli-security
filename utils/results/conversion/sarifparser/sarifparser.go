@@ -166,7 +166,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 		wd = filepath.Dir(wd)
 	}
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)).
+		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(wd))).
 		WithExecutionSuccessful(errorCount == 0),
 	)
 	return run

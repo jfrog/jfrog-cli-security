@@ -138,7 +138,6 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// Prepare attributes for parsing SCA results
-	actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 	var applicableRuns []results.ScanResult[[]*sarif.Run]
 	if jasEntitled && targetScansResults.JasResults != nil {
 		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
@@ -157,13 +156,13 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			Scan:       targetScansResults.ScaResults.Sbom,
 			StatusCode: targetScansResults.ScaResults.ScanStatusCode,
 		}
-		if err = parser.ParseCVEs(actualTarget, vulnerabilityScan, applicableRuns...); err != nil {
+		if err = parser.ParseCVEs(targetScansResults.ScanTarget, vulnerabilityScan, applicableRuns...); err != nil {
 			return
 		}
 	}
 	// Parse SCA violations
 	if params.HasViolationContext && len(targetScansResults.ScaResults.Violations) > 0 {
-		if err = parser.ParseViolations(actualTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+		if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
 			return
 		}
 	}
@@ -173,7 +172,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		if targetScansResults.ScaResults.Sbom.Dependencies != nil {
 			dependencies = append(dependencies, *targetScansResults.ScaResults.Sbom.Dependencies...)
 		}
-		if err = parser.ParseSbomLicenses(actualTarget, *targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
+		if err = parser.ParseSbomLicenses(targetScansResults.ScanTarget, *targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
 			return
 		}
 	}
