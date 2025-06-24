@@ -157,6 +157,8 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	// Violations are not supported in CycloneDX
+	log.Debug("Violations are not supported in CycloneDX. Skipping violations parsing.")
 	return
 }
 
