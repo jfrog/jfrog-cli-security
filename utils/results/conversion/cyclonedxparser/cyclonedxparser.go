@@ -24,6 +24,9 @@ const (
 	locationIdTemplate = "%s#L%dC%d-L%dC%d"
 	// <SCAN_TYPE> + locationIdTemplate
 	jasIssueLocationPropertyTemplate = "jfrog:%s:location:" + locationIdTemplate
+	// Properties for secret validation
+	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + locationIdTemplate
+	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + locationIdTemplate
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -98,7 +101,49 @@ func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, en
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
-	return
+	if cdc.bom == nil {
+		return results.ErrResetConvertor
+	}
+	if violations {
+		// Secrets violations are not supported in CycloneDX
+		log.Debug("Secrets violations are not supported in CycloneDX. Skipping Secrets violations parsing.")
+		return nil
+	}
+	source := cdc.addJasService(secrets)
+	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), cdc.entitledForJas, func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) (e error) {
+		startLine := sarifutils.GetLocationStartLine(location)
+		startColumn := sarifutils.GetLocationStartColumn(location)
+		endLine := sarifutils.GetLocationEndLine(location)
+		endColumn := sarifutils.GetLocationEndColumn(location)
+		// Create or get the affected component
+		affectedComponent := cdc.getOrCreateJasComponent(getRelativePath(location, target))
+		// Create a new JAS vulnerability, add it to the BOM and return it
+		properties := []cyclonedx.Property{}
+		applicabilityStatus := jasutils.NotScanned
+		if secretValidation := results.GetJasResultApplicability(result); secretValidation != nil {
+			// Secret validation results exist
+			applicabilityStatus = jasutils.ConvertToApplicabilityStatus(secretValidation.Status)
+			properties = append(properties, cyclonedx.Property{
+				Name:  fmt.Sprintf(secretValidationPropertyTemplate, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+				Value: secretValidation.Status,
+			})
+			if secretValidation.ScannerDescription != "" {
+				properties = append(properties, cyclonedx.Property{
+					Name:  fmt.Sprintf(secretValidationMetadataPropertyTemplate, affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+					Value: secretValidation.ScannerDescription,
+				})
+			}
+		}
+		ratings := []cyclonedx.VulnerabilityRating{severityutils.CreateSeverityRating(severity, applicabilityStatus, source)}
+		jasIssue := cdc.getOrCreateJasIssue(sarifutils.GetResultRuleId(result), sarifutils.GetRuleScannerId(rule), sarifutils.GetResultMsgText(result), sarifutils.GetRuleShortDescriptionText(rule), source, sarifutils.GetRuleCWE(rule), ratings)
+		// Add the location to the vulnerability
+		properties = append(properties, cyclonedx.Property{
+			Name:  fmt.Sprintf(jasIssueLocationPropertyTemplate, "secret", affectedComponent.BOMRef, startLine, startColumn, endLine, endColumn),
+			Value: sarifutils.GetLocationSnippetText(location),
+		})
+		addFileIssueAffects(jasIssue, *affectedComponent, properties...)
+		return
+	})
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
@@ -134,7 +179,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		return results.ErrResetConvertor
 	}
 	if violations {
-		// IAC violations are not supported in CycloneDX
+		// SAST violations are not supported in CycloneDX
 		log.Debug("SAST violations are not supported in CycloneDX. Skipping SAST violations parsing.")
 		return nil
 	}

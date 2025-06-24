@@ -773,6 +773,15 @@ func getFinalApplicabilityStatus(applicabilityStatuses []jasutils.ApplicabilityS
 	return jasutils.NotApplicable
 }
 
+func GetJasResultApplicability(result *sarif.Result) *formats.Applicability {
+	status := sarifutils.GetResultPropertyTokenValidation(result)
+	statusDescription := sarifutils.GetResultPropertyMetadata(result)
+	if status == "" && statusDescription == "" {
+		return nil
+	}
+	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
+}
+
 func ConvertPolicesToString(policies []services.Policy) []string {
 	var policiesStr []string
 	for _, policy := range policies {
