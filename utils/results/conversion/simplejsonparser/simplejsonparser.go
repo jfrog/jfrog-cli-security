@@ -387,6 +387,7 @@ func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolation
 				ViolationContext: formats.ViolationContext{
 					Watch:    violation.WatchName,
 					Policies: results.ConvertPolicesToString(violation.Policies),
+					FailPr:   violation.FailPr,
 				},
 				IssueId:                  violation.IssueId,
 				References:               violation.References,
@@ -408,6 +409,7 @@ func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViola
 				ViolationContext: formats.ViolationContext{
 					Watch:    violation.WatchName,
 					Policies: results.ConvertPolicesToString(violation.Policies),
+					FailPr:   violation.FailPr,
 				},
 				LicenseRow: formats.LicenseRow{
 					LicenseKey:  getLicenseKey(violation.LicenseKey, violation.IssueId),
@@ -503,6 +505,7 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 					Watch:    sarifutils.GetResultWatches(result),
 					IssueId:  sarifutils.GetResultIssueId(result),
 					Policies: sarifutils.GetResultPolicies(result),
+					FailPr:   sarifutils.GetResultFailPrValue(result),
 				},
 				SeverityDetails: severityutils.GetAsDetails(severity, jasutils.Applicable, pretty),
 				Finding:         sarifutils.GetResultMsgText(result),

@@ -20,8 +20,10 @@ import (
 
 // SbomScanStrategy is an interface for scanning SBOMs using different strategies.
 type SbomScanStrategy interface {
+	// WithOptions allows to set options for the SBOM scan strategy.
+	WithOptions(options ...SbomScanOption) SbomScanStrategy
 	// PrepareStrategy prepares the strategy for SBOM scanning, should be called once before scanning SBOMs.
-	PrepareStrategy(options ...SbomScanOption) error
+	PrepareStrategy() error
 	// DeprecatedScanTask scans the given SBOM using the specified technology returning the scan response.
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
 	// Missing attributes:
@@ -31,7 +33,7 @@ type SbomScanStrategy interface {
 	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
 }
 
-type SbomScanOption func(ss SbomScanStrategy) error
+type SbomScanOption func(ss SbomScanStrategy)
 
 type ScaScanParams struct {
 	// The TargetResults contains the Sbom target for scan.

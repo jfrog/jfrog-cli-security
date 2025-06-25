@@ -137,7 +137,6 @@ func attachDescriptorsToComponents(components *[]cyclonedx.Component, target res
 			cdxutils.AttachEvidenceOccurrenceToComponent(&(*components)[i], cyclonedx.EvidenceOccurrence{Location: descriptor})
 		}
 	}
-	return
 }
 
 // This method will change the working directory to the scan's working directory.

@@ -43,6 +43,8 @@ type ViolationContext struct {
 	IssueId string `json:"issueId,omitempty"`
 	// The related policy names
 	Policies []string `json:"policies,omitempty"`
+	// Value of fail_pr rule that can be applied to a policy. Indicates if the violation should fail the PR
+	FailPr bool `json:"fail_pull_request,omitempty"`
 }
 
 type SeverityDetails struct {

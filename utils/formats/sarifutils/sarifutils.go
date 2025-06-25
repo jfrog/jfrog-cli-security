@@ -17,6 +17,7 @@ const (
 	PoliciesSarifPropertyKey                = "policies"
 	JasIssueIdSarifPropertyKey              = "issueId"
 	JasScannerIdSarifPropertyKey            = "scanner_id"
+	FailPrSarifPropertyKey                  = "failPullRequest"
 	CWEPropertyKey                          = "CWE"
 	SarifImpactPathsRulePropertyKey         = "impactPaths"
 	TokenValidationStatusSarifPropertyKey   = "tokenValidation"
@@ -66,6 +67,18 @@ func GetResultIssueId(result *sarif.Result) (issueId string) {
 		}
 	}
 	return
+}
+
+func GetResultFailPrValue(result *sarif.Result) (failPr bool) {
+	if result == nil || result.Properties == nil {
+		return
+	}
+	if failPrProperty, ok := result.Properties.Properties[FailPrSarifPropertyKey]; ok {
+		if failPrValue, ok := failPrProperty.(bool); ok {
+			return failPrValue
+		}
+	}
+	return false
 }
 
 func GetDockerLayer(location *sarif.Location) (layer, algorithm string) {
