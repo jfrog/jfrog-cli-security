@@ -39,8 +39,8 @@ func AddScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 	// Perform SCA scans
 	for _, targetResult := range cmdResults.Targets {
 		treeResult := getTargetCompTree(targetResult, auditParams, cmdResults)
-		if treeResult == nil {
-			// No tree, no scan
+		if treeResult == nil || treeResult.FlatTree == nil || len(treeResult.FlatTree.Nodes) == 0 {
+			// If there is no tree, or a tree without any non-root dependencies - we don't need to scan it
 			continue
 		}
 		// Create sca scan task
