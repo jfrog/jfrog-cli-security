@@ -39,10 +39,45 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
+type binaryScanParams struct {
+	// The argument to scan, e.g., a binary file or a directory containing binaries
+	BinaryPattern string
+	// --format flag value if provided
+	Format format.OutputFormat
+	// --licenses flag value if provided
+	WithLicense bool
+	// --sbom flag value if provided
+	WithSbom bool
+	// Will combined with "," if provided and be used as --watches flag value
+	Watches []string
+	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
+	WithVuln bool
+}
+
+func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
+	if params.WithLicense {
+		args = append(args, "--licenses")
+	}
+	if params.WithSbom {
+		args = append(args, "--sbom")
+	}
+	if params.Format != "" {
+		args = append(args, "--format="+string(params.Format))
+	}
+	if params.WithVuln {
+		args = append(args, "--vuln")
+	}
+	if len(params.Watches) > 0 {
+		args = append(args, "--watches="+strings.Join(params.Watches, ","))
+	}
+	args = append(args, params.BinaryPattern)
+	return args
+}
+
 // Binary scan tests
 func TestXrayBinaryScanJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScan(t, string(format.Json), "", "", false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true}, false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -50,15 +85,27 @@ func TestXrayBinaryScanJson(t *testing.T) {
 
 func TestXrayBinaryScanSimpleJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-policy", "scan-binary-watch", true)
+	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-policy", "scan-binary-watch", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
 }
 
+func TestXrayBinaryScanCycloneDx(t *testing.T) {
+	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "xmas.tar", false)
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 6},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 4, Secrets: 2},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 1, NotCovered: 1},
+		},
+	})
+}
+
 func TestXrayBinaryScanJsonDocker(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "xmas.tar", false)
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "xmas.tar", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 6},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -70,7 +117,7 @@ func TestXrayBinaryScanJsonDocker(t *testing.T) {
 
 func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "backupfriend-client.tar.gz", false)
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "backupfriend-client.tar.gz", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -82,7 +129,7 @@ func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJAS(t, string(format.SimpleJson), "student-services-security-0.0.1.jar", false)
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "student-services-security-0.0.1.jar", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -96,7 +143,7 @@ func TestXrayBinaryScanJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.Json), "", "", false)
+	output := testXrayMultipleBinariesScan(t, binaryScanParams{Format: format.Json, WithLicense: true}, false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1},
 	})
@@ -106,22 +153,34 @@ func TestXrayBinaryScanSimpleJsonWithProgress(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
 	callback := commonTests.MockProgressInitialization()
 	defer callback()
-	output := testXrayBinaryScan(t, string(format.SimpleJson), "xray-scan-binary-progress-policy", "scan-binary-progress-watch", true)
+	output := testXrayBinaryScanWithWatch(t, format.SimpleJson, "xray-scan-binary-progress-policy", "scan-binary-progress-watch", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 	})
 }
 
-func testXrayBinaryScan(t *testing.T, format, policyName, watchName string, errorExpected bool) string {
-	binariesPath := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
-	args := []string{"scan", binariesPath, "--licenses", "--format=" + format}
+func testXrayBinaryScanWithWatch(t *testing.T, format format.OutputFormat, policyName, watchName string, errorExpected bool) string {
+	params := binaryScanParams{
+		WithLicense: true,
+		Format:      format,
+	}
 	if policyName != "" && watchName != "" {
 		watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "xray-scan-binary-policy", "scan-binary-watch", xrayUtils.High)
 		defer deleteWatch()
 		// Include violations and vulnerabilities
-		args = append(args, "--watches="+watchName, "--vuln")
+		params.Watches = []string{watchName}
+		params.WithVuln = true
 	}
-	output, err := securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
+	return testXrayMultipleBinariesScan(t, params, errorExpected)
+}
+
+func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
+	params.BinaryPattern = filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
+	return testXrayBinaryScan(t, params, errorExpected)
+}
+
+func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
+	output, err := runXrayBinaryScan(t, params)
 	if errorExpected {
 		assert.Error(t, err)
 	} else {
@@ -130,19 +189,18 @@ func testXrayBinaryScan(t *testing.T, format, policyName, watchName string, erro
 	return output
 }
 
-func testXrayBinaryScanJAS(t *testing.T, format, artifact string, errorExpected bool) string {
-	tempDirPath, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan"))
-	defer cleanUp()
+func runXrayBinaryScan(t *testing.T, params binaryScanParams) (string, error) {
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"scan"}, getBinaryScanCmdArgs(params)...)...)
+}
 
-	binariesPathTemp := filepath.Join(tempDirPath, artifact)
-	args := []string{"scan", binariesPathTemp, "--format=" + format}
-	output, err := securityTests.PlatformCli.RunCliCmdWithOutputs(t, args...)
-	if errorExpected {
-		assert.Error(t, err)
-	} else {
-		assert.NoError(t, err)
-	}
-	return output
+func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string, errorExpected bool) string {
+	return testXrayBinaryScan(t,
+		binaryScanParams{
+			BinaryPattern: filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan", artifact),
+			Format:        format,
+		},
+		errorExpected,
+	)
 }
 
 func TestXrayBinaryScanWithBypassArchiveLimits(t *testing.T) {

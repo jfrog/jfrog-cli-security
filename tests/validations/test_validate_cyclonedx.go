@@ -14,7 +14,7 @@ import (
 )
 
 func VerifyCycloneDxResults(t *testing.T, content string, params ValidationParams) {
-	var results *cyclonedx.BOM
+	results := cyclonedx.NewBOM()
 	assert.NoError(t, cyclonedx.NewBOMDecoder(bytes.NewReader([]byte(content)), cyclonedx.BOMFileFormatJSON).Decode(results), "Failed to decode CycloneDX BOM")
 	params.Actual = results
 	ValidateCommandCycloneDxOutput(t, params)
@@ -50,14 +50,18 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, directComponen
 	if content == nil || content.Components == nil {
 		return
 	}
-	directComponentsSet := datastructures.MakeSet[string]()
-	for _, root := range cdxutils.GetRootDependenciesEntries(content) {
-		directComponentsSet.AddElements(cdxutils.GetDirectDependencies(content.Dependencies, root.Ref)...)
-	}
 	parsedLicenses := datastructures.MakeSet[string]()
 	for _, component := range *content.Components {
-		if component.Type == cyclonedx.ComponentTypeApplication || component.Type == cyclonedx.ComponentTypeLibrary {
-			sbomComponents++
+		relation := cdxutils.GetComponentRelation(content, component.BOMRef)
+		if relation == cdxutils.UnknownRelation || relation == cdxutils.RootRelation {
+			continue
+		}
+		sbomComponents++
+		if relation == cdxutils.DirectRelation {
+			directComponents++
+		}
+		if relation == cdxutils.TransitiveRelation {
+			transitiveComponents++
 		}
 		if component.Licenses != nil {
 			for _, license := range *component.Licenses {
@@ -67,8 +71,6 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, directComponen
 			}
 		}
 	}
-	directComponents = directComponentsSet.Size()
-	transitiveComponents = sbomComponents - directComponents
 	licenses = parsedLicenses.Size()
 	return
 }
@@ -121,7 +123,7 @@ func countJasVulnerabilities(content *cyclonedx.BOM) (sastVulnerabilities, secre
 			if strings.HasPrefix(property.Name, "jfrog:iac:location:") {
 				iacVulnerabilities++
 			}
-			if strings.HasPrefix(property.Name, "jfrog:secrets:location:") {
+			if strings.HasPrefix(property.Name, "jfrog:secret:location:") {
 				secretsVulnerabilities++
 			}
 			if strings.HasPrefix(property.Name, "jfrog:secret-validation:status:") {

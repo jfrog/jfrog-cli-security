@@ -1282,6 +1282,10 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 		affectedComponent := GetOrCreateScaComponent(destination, impactedPackagesId)
 		// Extract the vulnerability CVE's information and create the SCA vulnerability for each
 		cveIds, applicability, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, cves, severity, applicabilityStatus, xrayService)
+		extendedInformation := ""
+		if vulnerability.ExtendedInformation != nil {
+			extendedInformation = vulnerability.ExtendedInformation.FullDescription
+		}
 		for i := 0; i < len(cveIds); i++ {
 			params := cdxutils.CdxVulnerabilityParams{
 				Ref:         cveIds[i],
@@ -1289,7 +1293,7 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 				CWE:         cwes[i],
 				ID:          vulnerability.IssueId,
 				Description: vulnerability.Summary,
-				Details:     vulnerability.ExtendedInformation.FullDescription,
+				Details:     extendedInformation,
 				References:  vulnerability.References,
 				Service:     xrayService,
 			}
