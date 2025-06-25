@@ -66,6 +66,10 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 	}
 	// Transform the target BOM to the information needed for the scan graph.
 	flatTree, fullTree := results.BomToTree(target)
+	if flatTree == nil || len(flatTree.Nodes) == 0 {
+		// If there is no tree, or a tree without any non-root dependencies - we don't need to scan it
+		return services.ScanResponse{}, nil
+	}
 	sg.ScanGraphParams.XrayGraphScanParams().DependenciesGraph = flatTree
 	if targetTechnology := resolveTechnologyFromBOM(target); targetTechnology != techutils.NoTech {
 		// Report the technology to Xray.
