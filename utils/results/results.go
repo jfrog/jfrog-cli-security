@@ -481,6 +481,13 @@ func (ssr *ScaScanResults) HasInformation() bool {
 			return true
 		}
 	}
+	if ssr.Sbom != nil && ssr.Sbom.Components != nil && len(*ssr.Sbom.Components) > 0 {
+		for _, component := range *ssr.Sbom.Components {
+			if component.Licenses != nil && len(*component.Licenses) > 0 {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -490,7 +497,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 			return true
 		}
 	}
-	return false
+	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
 }
 
 func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
