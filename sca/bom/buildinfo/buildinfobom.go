@@ -100,7 +100,7 @@ func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		}()
 	}
 	if target.Technology == techutils.NoTech {
-		log.Debug(fmt.Sprintf("Couldn't determine a package manager or build tool used by '%s'. Skipping SCA.", target.Target))
+		log.Debug(fmt.Sprintf("Couldn't determine a package manager or build tool used by '%s'.", target.Target))
 		return
 	}
 	log.Debug(fmt.Sprintf("Generating '%s' dependency tree...", target.Target))
