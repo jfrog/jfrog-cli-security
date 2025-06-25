@@ -15,6 +15,7 @@ import (
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -117,13 +118,22 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	if params.ScanResults == nil {
 		return false, errors.New("scan results are nil for target")
 	}
-	// If nothing to scan, skip it.
-	if params.ScanResults.ScaResults == nil || params.ScanResults.ScaResults.Sbom == nil || params.ScanResults.ScaResults.Sbom.Components == nil || len(*params.ScanResults.ScaResults.Sbom.Components) == 0 {
-		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no dependencies were found in the target", params.ScanResults.Target))
-		return false, nil
+	return hasDependenciesToScan(params.ScanResults, logPrefix), nil
+}
+
+func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix string) bool {
+	if targetResults == nil || targetResults.ScaResults == nil || targetResults.ScaResults.Sbom == nil || targetResults.ScaResults.Sbom.Components == nil {
+		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no components were found in the target", targetResults.Target))
+		return false
 	}
-	// Run the scan.
-	return true, nil
+	for _, root := range cdxutils.GetRootDependenciesEntries(targetResults.ScaResults.Sbom) {
+		if root.Dependencies != nil && len(*root.Dependencies) > 0 {
+			// Found at least one dependency, we can run the scan.
+			return true
+		}
+	}
+	log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no dependencies were found in the target", targetResults.Target))
+	return false
 }
 
 func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
