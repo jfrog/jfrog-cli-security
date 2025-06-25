@@ -123,7 +123,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 
 func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix string) bool {
 	if targetResults == nil || targetResults.ScaResults == nil || targetResults.ScaResults.Sbom == nil || targetResults.ScaResults.Sbom.Components == nil {
-		log.Debug(fmt.Sprintf(logPrefix+ "Skipping SCA for %s as no components were found in the target", targetResults.Target))
+		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no components were found in the target", targetResults.Target))
 		return false
 	}
 	for _, root := range cdxutils.GetRootDependenciesEntries(targetResults.ScaResults.Sbom) {
@@ -132,7 +132,7 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 			return true
 		}
 	}
-	log.Debug(fmt.Sprintf(logPrefix+ "Skipping SCA for %s as no dependencies were found in the target", targetResults.Target))
+	log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no dependencies were found in the target", targetResults.Target))
 	return false
 }
 
