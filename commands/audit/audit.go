@@ -265,7 +265,7 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if err != nil {
 		return results.NewCommandResults(utils.SourceCode).AddGeneralError(fmt.Errorf("failed to create build info params: %s", err.Error()), false)
 	}
-	if err = params.bomGenerator.PrepareGenerator(buildinfo.WithParams(buildParams)); err != nil {
+	if err = params.bomGenerator.WithOptions(buildinfo.WithParams(buildParams)).PrepareGenerator(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
 	}
 	// Initialize the SCA scan strategy
@@ -273,7 +273,7 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to create scan graph params: %s", err.Error()), false)
 	}
-	if err = params.scaScanStrategy.PrepareStrategy(scanGraphStrategy.WithParams(scanGraphParams)); err != nil {
+	if err = params.scaScanStrategy.WithOptions(scanGraphStrategy.WithParams(scanGraphParams)).PrepareStrategy(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
 	}
 	populateScanTargets(cmdResults, params)

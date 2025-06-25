@@ -15,15 +15,16 @@ import (
 
 // SbomGenerator is an interface for generating SBOMs from different sources.
 type SbomGenerator interface {
+	WithOptions(options ...SbomGeneratorOption) SbomGenerator
 	// PrepareGenerator prepares the generator for SBOM generation, should be called once before generating SBOMs.
-	PrepareGenerator(options ...SbomGeneratorOption) error
+	PrepareGenerator() error
 	// GenerateSbom generates a CycloneDX SBOM for the given target.
 	GenerateSbom(target results.ScanTarget) (*cyclonedx.BOM, error)
 	// CleanUp cleans up any resources used by the generator, should be called after all SBOMs are generated.
 	CleanUp() error
 }
 
-type SbomGeneratorOption func(sg SbomGenerator) error
+type SbomGeneratorOption func(sg SbomGenerator)
 
 type SbomGeneratorParams struct {
 	Target               *results.TargetResults

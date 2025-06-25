@@ -40,32 +40,33 @@ import (
 )
 
 type BuildInfoBomGenerator struct {
-	Params technologies.BuildInfoBomGeneratorParams
+	params technologies.BuildInfoBomGeneratorParams
 }
 
 func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
 	return &BuildInfoBomGenerator{
-		Params: technologies.BuildInfoBomGeneratorParams{},
+		params: technologies.BuildInfoBomGeneratorParams{},
 	}
 }
 
 func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) error {
-		bi, ok := sg.(*BuildInfoBomGenerator)
-		if !ok {
-			return nil
+	return func(sg bom.SbomGenerator) {
+		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
+			bi.params = params
 		}
-		bi.Params = params
-		return nil
 	}
 }
 
-func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) error {
+func (b *BuildInfoBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) bom.SbomGenerator {
 	for _, option := range options {
-		if err := option(b); err != nil {
-			return err
-		}
+		option(b)
 	}
+	return b
+}
+
+func (b *BuildInfoBomGenerator) PrepareGenerator() error {
+	// Nothing to do here, the generator is ready to use.
+	// Validations can be added here in the future if needed.
 	return nil
 }
 
@@ -113,11 +114,11 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.Params, scan.Technology)
+	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, scan.Technology)
 	if err != nil {
 		return nil, err
 	}
-	treeResult, techErr := GetTechDependencyTree(b.Params, serverDetails, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(b.params, serverDetails, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
 	}

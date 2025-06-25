@@ -29,22 +29,21 @@ func NewScanGraphStrategy() *ScanGraphStrategy {
 }
 
 func WithParams(params scangraph.ScanGraphParams) scan.SbomScanOption {
-	return func(ss scan.SbomScanStrategy) error {
-		sg, ok := ss.(*ScanGraphStrategy)
-		if !ok {
-			return nil
+	return func(ss scan.SbomScanStrategy) {
+		if sg, ok := ss.(*ScanGraphStrategy); ok {
+			sg.ScanGraphParams = params
 		}
-		sg.ScanGraphParams = params
-		return nil
 	}
 }
 
-func (sg *ScanGraphStrategy) PrepareStrategy(options ...scan.SbomScanOption) error {
+func (sg *ScanGraphStrategy) WithOptions(options ...scan.SbomScanOption) scan.SbomScanStrategy {
 	for _, option := range options {
-		if err := option(sg); err != nil {
-			return err
-		}
+		option(sg)
 	}
+	return sg
+}
+
+func (sg *ScanGraphStrategy) PrepareStrategy() error {
 	return clientutils.ValidateMinimumVersion(clientutils.Xray, sg.XrayGraphScanParams().XrayVersion, scangraph.GraphScanMinXrayVersion)
 }
 
