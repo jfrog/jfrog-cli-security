@@ -5,10 +5,17 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/artifactory/services"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
+	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/generic"
 )
 
 type ArtifactoryDetails struct {
@@ -75,4 +82,31 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 		log.Debug("Using resolver config from", configFilePath)
 	}
 	return
+}
+
+func UploadArtifactsByPatternWithProgress(pattern string, serverDetails *config.ServerDetails, repo string) (err error) {
+	uploadCmd := generic.NewUploadCommand()
+	uploadCmd.SetQuiet(false)
+	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Target(repo).Flat(true).BuildSpec())
+	return progressbar.ExecWithProgress(uploadCmd)
+}
+
+func CreateRepository(repoKey string, serverDetails *config.ServerDetails, xrayIndex bool) (err error) {
+	if repoKey == "" || serverDetails == nil {
+		return errors.New("repository key and server details must be provided")
+	}
+	servicesManager, err := artifactoryUtils.CreateServiceManager(serverDetails, -1, 0, false)
+	if err != nil {
+		return
+	}
+	// Check if the repository already exists.
+	exists, err := servicesManager.IsRepoExists(repoKey)
+	if err != nil || exists {
+		return
+	}
+	log.Debug(fmt.Sprintf("Creating generic local repository %s (xrayIndex: %t)", repoKey, xrayIndex))
+	params := services.NewGenericLocalRepositoryParams()
+	params.Key = repoKey
+	params.XrayIndex = clientUtils.Pointer(xrayIndex)
+	return servicesManager.CreateLocalRepository().Generic(params)
 }
