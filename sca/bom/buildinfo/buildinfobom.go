@@ -40,7 +40,8 @@ import (
 )
 
 type BuildInfoBomGenerator struct {
-	params technologies.BuildInfoBomGeneratorParams
+	params      technologies.BuildInfoBomGeneratorParams
+	descriptors []string
 }
 
 func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
@@ -53,6 +54,14 @@ func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGenerat
 	return func(sg bom.SbomGenerator) {
 		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
 			bi.params = params
+		}
+	}
+}
+
+func WithDescriptors(descriptors ...string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
+			bi.descriptors = descriptors
 		}
 	}
 }
@@ -106,6 +115,26 @@ func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		return
 	}
 	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
+	if sbom.Components != nil && len(*sbom.Components) > 0 {
+		attachDescriptorsToComponents(sbom.Components, target, b.descriptors)
+	}
+	return
+}
+
+func attachDescriptorsToComponents(components *[]cyclonedx.Component, target results.ScanTarget, descriptors []string) {
+	if len(descriptors) == 0 {
+		log.Debug(fmt.Sprintf("No descriptors found for target '%s', skipping attaching descriptors to components.", target.Target))
+		return
+	}
+	if components == nil || len(*components) == 0 {
+		log.Debug("No components found in the SBOM, skipping attaching descriptors.")
+		return
+	}
+	for i := range *components {
+		for _, descriptor := range descriptors {
+			cdxutils.AttachEvidenceOccurrenceToComponent(&(*components)[i], cyclonedx.EvidenceOccurrence{Location: descriptor})
+		}
+	}
 	return
 }
 

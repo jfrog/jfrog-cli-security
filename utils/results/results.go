@@ -329,6 +329,13 @@ func (sr *TargetResults) GetErrors() (err error) {
 	return
 }
 
+func (sr *TargetResults) GetDescriptors() []string {
+	if sr.ScaResults == nil {
+		return nil
+	}
+	return sr.ScaResults.Descriptors
+}
+
 func (sr *TargetResults) GetWatches() []string {
 	watches := datastructures.MakeSet[string]()
 	for _, xrayResults := range sr.GetScaScansXrayResults() {

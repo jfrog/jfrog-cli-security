@@ -333,6 +333,17 @@ func hasLicense(component cyclonedx.Component, licenseName string) bool {
 	return false
 }
 
+func AttachEvidenceOccurrenceToComponent(component *cyclonedx.Component, evidenceOccurrence cyclonedx.EvidenceOccurrence) {
+	if component.Evidence == nil {
+		component.Evidence = &cyclonedx.Evidence{}
+	}
+	if component.Evidence.Occurrences == nil {
+		component.Evidence.Occurrences = &[]cyclonedx.EvidenceOccurrence{}
+	}
+	// Add the path as an occurrence
+	*component.Evidence.Occurrences = append(*component.Evidence.Occurrences, evidenceOccurrence)
+}
+
 func AttachComponentAffects(issue *cyclonedx.Vulnerability, affectedComponent cyclonedx.Component, affectsGenerator func(affectedComponent cyclonedx.Component) cyclonedx.Affects, relatedProperties ...cyclonedx.Property) {
 	if !HasImpactedAffects(*issue, affectedComponent) {
 		// The affected component is not in the vulnerability, Add the affected component to the vulnerability
