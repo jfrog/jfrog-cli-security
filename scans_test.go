@@ -74,6 +74,20 @@ func getBinaryScanCmdArgs(params binaryScanParams) (args []string) {
 	return args
 }
 
+func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
+	output, err := runXrayBinaryScan(t, params)
+	if errorExpected {
+		assert.Error(t, err)
+	} else {
+		assert.NoError(t, err)
+	}
+	return output
+}
+
+func runXrayBinaryScan(t *testing.T, params binaryScanParams) (string, error) {
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"scan"}, getBinaryScanCmdArgs(params)...)...)
+}
+
 // Binary scan tests
 func TestXrayBinaryScanJson(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
@@ -177,20 +191,6 @@ func testXrayBinaryScanWithWatch(t *testing.T, format format.OutputFormat, polic
 func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
 	params.BinaryPattern = filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "binaries", "*")
 	return testXrayBinaryScan(t, params, errorExpected)
-}
-
-func testXrayBinaryScan(t *testing.T, params binaryScanParams, errorExpected bool) string {
-	output, err := runXrayBinaryScan(t, params)
-	if errorExpected {
-		assert.Error(t, err)
-	} else {
-		assert.NoError(t, err)
-	}
-	return output
-}
-
-func runXrayBinaryScan(t *testing.T, params binaryScanParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"scan"}, getBinaryScanCmdArgs(params)...)...)
 }
 
 func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string, errorExpected bool) string {
