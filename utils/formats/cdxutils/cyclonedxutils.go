@@ -33,6 +33,18 @@ const (
 
 type ComponentRelation string
 
+func GetProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
+	if properties == nil || len(*properties) == 0 || name == "" {
+		return nil
+	}
+	for _, property := range *properties {
+		if property.Name == name {
+			return &property
+		}
+	}
+	return nil
+}
+
 // AppendProperties appends new properties to the existing properties list and returns the updated list.
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
 	for _, property := range newProperties {
