@@ -329,6 +329,17 @@ func (sr *TargetResults) GetErrors() (err error) {
 	return
 }
 
+func (sr *TargetResults) GetDescriptors() []string {
+	if sr.ScaResults == nil {
+		return nil
+	}
+	descriptors := datastructures.MakeSet[string]()
+	for _, descriptor := range sr.ScaResults.Descriptors {
+		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(sr.Target)))
+	}
+	return descriptors.ToSlice()
+}
+
 func (sr *TargetResults) GetWatches() []string {
 	watches := datastructures.MakeSet[string]()
 	for _, xrayResults := range sr.GetScaScansXrayResults() {
@@ -474,6 +485,13 @@ func (ssr *ScaScanResults) HasInformation() bool {
 			return true
 		}
 	}
+	if ssr.Sbom != nil && ssr.Sbom.Components != nil && len(*ssr.Sbom.Components) > 0 {
+		for _, component := range *ssr.Sbom.Components {
+			if component.Licenses != nil && len(*component.Licenses) > 0 {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -483,7 +501,7 @@ func (ssr *ScaScanResults) HasFindings() bool {
 			return true
 		}
 	}
-	return false
+	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
 }
 
 func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {

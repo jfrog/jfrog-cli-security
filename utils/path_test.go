@@ -41,6 +41,30 @@ func TestGetRelativePath(t *testing.T) {
 		})
 	}
 }
+func TestExtractRelativePath(t *testing.T) {
+	tests := []struct {
+		fullPath       string
+		projectPath    string
+		expectedResult string
+	}{
+		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
+		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
+		{fullPath: "invalidFullPath",
+			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "invalidFullPath"},
+		{fullPath: "",
+			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: ""},
+		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
+		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expectedResult, GetRelativePath(test.fullPath, test.projectPath))
+	}
+}
 
 func TestGetCommonParentDir(t *testing.T) {
 	tests := []struct {

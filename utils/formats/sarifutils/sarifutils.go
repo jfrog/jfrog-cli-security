@@ -2,9 +2,11 @@ package sarifutils
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"strings"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -635,7 +637,7 @@ func GetRelativeLocationFileName(location *sarif.Location, invocations []*sarif.
 	}
 	filePath := GetLocationFileName(location)
 	if filePath != "" {
-		return ExtractRelativePath(filePath, wd)
+		return utils.GetRelativePath(filePath, wd)
 	}
 	return ""
 }
@@ -694,14 +696,6 @@ func GetLocationEndColumn(location *sarif.Location) int {
 	}
 	// Default end column is 1
 	return 1
-}
-
-func ExtractRelativePath(resultPath string, projectRoot string) string {
-	relPath, err := filepath.Rel(projectRoot, resultPath)
-	if err != nil {
-		return resultPath
-	}
-	return relPath
 }
 
 func GetRuleById(run *sarif.Run, ruleId string) *sarif.ReportingDescriptor {

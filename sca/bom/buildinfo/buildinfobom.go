@@ -40,38 +40,44 @@ import (
 )
 
 type BuildInfoBomGenerator struct {
-	Params technologies.BuildInfoBomGeneratorParams
+	params      technologies.BuildInfoBomGeneratorParams
+	descriptors []string
 }
 
-func NewBuildInfoBomGenerator(options ...bom.SbomGeneratorOption) *BuildInfoBomGenerator {
+func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
 	bi := &BuildInfoBomGenerator{
-		Params: technologies.BuildInfoBomGeneratorParams{},
-	}
-	for _, option := range options {
-		if err := option(bi); err != nil {
-			return nil
-		}
+		params:      technologies.BuildInfoBomGeneratorParams{},
+		descriptors: []string{},
 	}
 	return bi
 }
 
 func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) error {
-		bi, ok := sg.(*BuildInfoBomGenerator)
-		if !ok {
-			return nil
+	return func(sg bom.SbomGenerator) {
+		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
+			bi.params = params
 		}
-		bi.Params = params
-		return nil
 	}
 }
 
-func (b *BuildInfoBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) error {
-	for _, option := range options {
-		if err := option(b); err != nil {
-			return err
+func WithDescriptors(descriptors []string) bom.SbomGeneratorOption {
+	return func(sg bom.SbomGenerator) {
+		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
+			bi.descriptors = descriptors
 		}
 	}
+}
+
+func (b *BuildInfoBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) bom.SbomGenerator {
+	for _, option := range options {
+		option(b)
+	}
+	return b
+}
+
+func (b *BuildInfoBomGenerator) PrepareGenerator() error {
+	// Nothing to do here, the generator is already prepared with the provided parameters.
+	// Future validations can be added here if needed.
 	return nil
 }
 
@@ -111,6 +117,26 @@ func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 		return
 	}
 	sbom.Components, sbom.Dependencies = results.DepsTreeToSbom(treeResult.FullDepTrees...)
+	if sbom.Components != nil && len(*sbom.Components) > 0 {
+		attachDescriptorsToComponents(sbom.Components, target, b.descriptors)
+	}
+	return
+}
+
+func attachDescriptorsToComponents(components *[]cyclonedx.Component, target results.ScanTarget, descriptors []string) {
+	if len(descriptors) == 0 {
+		log.Debug(fmt.Sprintf("No descriptors found for target '%s', skipping attaching descriptors to components.", target.Target))
+		return
+	}
+	if components == nil || len(*components) == 0 {
+		log.Debug("No components found in the SBOM, skipping attaching descriptors.")
+		return
+	}
+	for i := range *components {
+		for _, descriptor := range descriptors {
+			cdxutils.AttachEvidenceOccurrenceToComponent(&(*components)[i], cyclonedx.EvidenceOccurrence{Location: descriptor})
+		}
+	}
 	return
 }
 
@@ -119,11 +145,11 @@ func (b *BuildInfoBomGenerator) buildDependencyTree(scan results.ScanTarget) (*D
 	if err := os.Chdir(scan.Target); err != nil {
 		return nil, errorutils.CheckError(err)
 	}
-	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.Params, scan.Technology)
+	serverDetails, err := SetResolutionRepoInParamsIfExists(&b.params, scan.Technology)
 	if err != nil {
 		return nil, err
 	}
-	treeResult, techErr := GetTechDependencyTree(b.Params, serverDetails, scan.Technology)
+	treeResult, techErr := GetTechDependencyTree(b.params, serverDetails, scan.Technology)
 	if techErr != nil {
 		return nil, fmt.Errorf("failed while building '%s' dependency tree: %w", scan.Technology, techErr)
 	}

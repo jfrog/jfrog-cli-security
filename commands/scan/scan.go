@@ -272,7 +272,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	}
 	// Initialize the BOM generator
 	if scanCmd.bomGenerator != nil {
-		if err := scanCmd.bomGenerator.PrepareGenerator(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)); err != nil {
+		if err := scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator(); err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare indexer generator: %w", err), false)
 		}
 		defer func() {
