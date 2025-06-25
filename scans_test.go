@@ -107,12 +107,12 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 
 func TestXrayBinaryScanCycloneDx(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "xmas.tar", false)
+	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "backupfriend-client.tar.gz", false)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 6},
+		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
-			ValidateScan:                &validations.ScanCount{Sca: 4, Secrets: 2},
-			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, NotApplicable: 1, NotCovered: 1},
+			ValidateScan:                &validations.ScanCount{Sca: 3, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 2, Undetermined: 1},
 		},
 	})
 }
