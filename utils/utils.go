@@ -218,6 +218,10 @@ func Sha1Hash(values ...string) (string, error) {
 	return toHash(crypto.SHA1, values...)
 }
 
+func Sha256Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA256, values...)
+}
+
 func toHash(hash crypto.Hash, values ...string) (string, error) {
 	h := hash.New()
 	for _, ob := range values {
@@ -267,9 +271,22 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
+func ReadSbomFromFile(cdxFilePath string) (*cyclonedx.BOM, error) {
+	bom := cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	}
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	return bom, nil
+}
+
 func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string) (err error) {
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTime()))
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	file, err := os.Create(pathToSave)
+	defer file.Close()
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
@@ -277,7 +294,7 @@ func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix s
 }
 
 func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), getCurrentTime()))
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
@@ -285,7 +302,7 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 	return
 }
 
-func getCurrentTime() string {
+func GetCurrentTimeUnix() string {
 	return fmt.Sprintf("%d", time.Now().UnixMilli())
 }
 
