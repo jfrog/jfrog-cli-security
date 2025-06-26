@@ -2,13 +2,11 @@ package upload
 
 import (
 	"fmt"
-	"os"
+	"path/filepath"
 
-	"github.com/CycloneDX/cyclonedx-go"
-	"github.com/jfrog/gofrog/log"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 
@@ -60,8 +58,17 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	if err = validateInputFile(ucc.fileToUpload); err != nil {
 		return
 	}
-	// Upload the file to the JFrog repository
-	return createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository)
+	// Upload the CycloneDx file to the JFrog repository
+	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository); err != nil {
+		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
+	}
+	// Report the URL for the scan results
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
+	if err != nil {
+		return fmt.Errorf("failed to generate scan results URL: %w", err)
+	}
+	log.Output(fmt.Sprintf("CycloneDx content uploaded successfully. You can view the results at:\n%s", scanResultsUrl))
+	return
 }
 
 func validateInputFile(cdxFilePath string) (err error) {
@@ -72,39 +79,48 @@ func validateInputFile(cdxFilePath string) (err error) {
 		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
-	bom, err := readSbomFile(cdxFilePath)
+	bom, err := utils.ReadSbomFromFile(cdxFilePath)
 	if err != nil || bom == nil {
 		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
 	metadata, err := utils.GetAsJsonString(bom.Metadata, true, true)
 	if err == nil {
-		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file:\n%s", metadata))
+		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata:\n%s", metadata))
 	}
 	// No error means the file is valid
 	return nil
 }
 
-func readSbomFile(cdxFilePath string) (*cyclonedx.BOM, error) {
-	bom := cyclonedx.NewBOM()
-	file, err := os.Open(cdxFilePath)
-	if errorutils.CheckError(err) != nil {
-		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
-	}
-	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
-		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
-	}
-	return bom, nil
-}
-
 func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository string) (err error) {
-	if scanResultsRepository == "" {
-		// No need to upload the scan results
-		return
+	repoExists, err := artifactory.IsRepoExists(scanResultsRepository, serverDetails)
+	if err != nil {
+		return fmt.Errorf("failed to check if repository %s exists: %s", scanResultsRepository, err.Error())
 	}
 	// If the repository doesn't exist, create it
-	if err = artifactory.CreateRepository(scanResultsRepository, serverDetails, true); err != nil {
-		return fmt.Errorf("failed to create repository %s: %s", scanResultsRepository, err.Error())
+	if !repoExists {
+		if err = artifactory.CreateGenericLocalRepository(scanResultsRepository, serverDetails, true); err != nil {
+			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", scanResultsRepository, err.Error())
+		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
-	return artifactory.UploadArtifactsByPatternWithProgress(filePath, serverDetails, scanResultsRepository)
+	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository)
+}
+
+func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
+	artifactName := filepath.Base(filePath)
+	// Calculate SHA256
+	sha256, err := calculateFileSHA256(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate sha256: %w", err)
+	}
+	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, artifactName, sha256), nil
+}
+
+func calculateFileSHA256(filePath string) (string, error) {
+	// Read the file content
+	content, err := fileutils.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return utils.Sha256Hash(string(content))
 }
