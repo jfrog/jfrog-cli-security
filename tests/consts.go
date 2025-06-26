@@ -155,11 +155,7 @@ func getNeededRepositories(reposMap map[*bool][]*string) map[*string]string {
 	return reposToCreate
 }
 
-func AddTimestampToGlobalVars() {
-	// Make sure the global timestamp is added only once even in case of multiple tests flags
-	if timestampAdded {
-		return
-	}
+func GetUniqueSuffixForRepo() string {
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	uniqueSuffix := "-" + timestamp
 
@@ -168,7 +164,15 @@ func AddTimestampToGlobalVars() {
 	}
 	// Artifactory accepts only lowercase repository names
 	uniqueSuffix = strings.ToLower(uniqueSuffix)
+	return uniqueSuffix
+}
 
+func AddTimestampToGlobalVars() {
+	// Make sure the global timestamp is added only once even in case of multiple tests flags
+	if timestampAdded {
+		return
+	}
+	uniqueSuffix := GetUniqueSuffixForRepo()
 	// Repositories
 	GoRepo += uniqueSuffix
 	GoRemoteRepo += uniqueSuffix
