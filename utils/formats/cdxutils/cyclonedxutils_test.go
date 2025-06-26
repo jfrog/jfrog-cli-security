@@ -602,7 +602,7 @@ func TestCreateBaseVulnerability(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vuln := createBaseVulnerability(tt.params)
+			vuln := CreateBaseVulnerability(tt.params)
 			assert.Equal(t, tt.expID, vuln.ID)
 			if vuln.Source != nil {
 				assert.Equal(t, tt.expSvc, vuln.Source.Name)

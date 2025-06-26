@@ -429,12 +429,12 @@ func GetOrCreateScaIssue(destination *cyclonedx.BOM, params CdxVulnerabilityPara
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := createBaseVulnerability(params, properties...)
+	vulnerability := CreateBaseVulnerability(params, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
 
-func createBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
 	var source *cyclonedx.Source
 	if params.Service != nil {
 		source = &cyclonedx.Source{
