@@ -361,7 +361,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 
 func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults, err error) {
 	if resultsToCompare == nil {
-		// No results to compare, return nil.
 		return
 	}
 	targetResultsToCompare = results.SearchTargetResultsByRelativePath(
@@ -451,7 +450,7 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	// TODO: remove this once the new flow is fully implemented.
+	// TODO: remove "isNewFlow" once the new flow is fully implemented.
 	isNewFlow := true
 	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
 		isNewFlow = false

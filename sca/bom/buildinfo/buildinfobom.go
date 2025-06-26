@@ -175,13 +175,16 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 		params.Progress.SetHeadlineMsg(logMessage)
 	}
 
-	var uniqueDeps []string
-	var uniqDepsWithTypes map[string]*xray.DepTreeNode
+	// For some technologies, the dependency tree is built with unique dependencies IDs.
+	// For others, the dependency tree is built with unique dependencies nodes (IDs with types and classifiers - used for curation).
+	// The unique dependencies IDs are used to create the flat tree.
+	var uniqueDepsIds []string
+	var uniqDepsNodes map[string]*xray.DepTreeNode
 	startTime := time.Now()
 
 	switch tech {
 	case techutils.Maven, techutils.Gradle:
-		depTreeResult.FullDepTrees, uniqDepsWithTypes, err = java.BuildDependencyTree(java.DepTreeParams{
+		depTreeResult.FullDepTrees, uniqDepsNodes, err = java.BuildDependencyTree(java.DepTreeParams{
 			Server:                  artifactoryServerDetails,
 			DepsRepo:                params.DependenciesRepository,
 			IsMavenDepTreeInstalled: params.IsMavenDepTreeInstalled,
@@ -190,52 +193,52 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 			CurationCacheFolder:     curationCacheFolder,
 		}, tech)
 	case techutils.Npm:
-		depTreeResult.FullDepTrees, uniqueDeps, err = npm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = npm.BuildDependencyTree(params)
 	case techutils.Pnpm:
-		depTreeResult.FullDepTrees, uniqueDeps, err = pnpm.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = pnpm.BuildDependencyTree(params)
 	case techutils.Conan:
-		depTreeResult.FullDepTrees, uniqueDeps, err = conan.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = conan.BuildDependencyTree(params)
 	case techutils.Yarn:
-		depTreeResult.FullDepTrees, uniqueDeps, err = yarn.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:
-		depTreeResult.FullDepTrees, uniqueDeps, err = _go.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = _go.BuildDependencyTree(params)
 	case techutils.Pipenv, techutils.Pip, techutils.Poetry:
-		depTreeResult.FullDepTrees, uniqueDeps,
+		depTreeResult.FullDepTrees, uniqueDepsIds,
 			depTreeResult.DownloadUrls, err = python.BuildDependencyTree(params, tech)
 	case techutils.Nuget:
-		depTreeResult.FullDepTrees, uniqueDeps, err = nuget.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = nuget.BuildDependencyTree(params)
 	case techutils.Cocoapods:
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, scangraph.CocoapodsScanMinXrayVersion)
 		if err != nil {
 			return depTreeResult, fmt.Errorf("your xray version %s does not allow cocoapods scanning", params.XrayVersion)
 		}
-		depTreeResult.FullDepTrees, uniqueDeps, err = cocoapods.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = cocoapods.BuildDependencyTree(params)
 	case techutils.Swift:
 		err = clientutils.ValidateMinimumVersion(clientutils.Xray, params.XrayVersion, scangraph.SwiftScanMinXrayVersion)
 		if err != nil {
 			return depTreeResult, fmt.Errorf("your xray version %s does not allow swift scanning", params.XrayVersion)
 		}
-		depTreeResult.FullDepTrees, uniqueDeps, err = swift.BuildDependencyTree(params)
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = swift.BuildDependencyTree(params)
 	default:
 		err = errorutils.CheckErrorf("%s is currently not supported", string(tech))
 	}
-	if err != nil || (len(uniqueDeps) == 0 && len(uniqDepsWithTypes) == 0) {
+	if err != nil || (len(uniqueDepsIds) == 0 && len(uniqDepsNodes) == 0) {
 		return
 	}
-	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), getUniqueDepsCount(uniqueDeps, uniqDepsWithTypes), time.Since(startTime).Seconds()))
-	if len(uniqDepsWithTypes) > 0 {
-		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsWithTypes)
+	log.Debug(fmt.Sprintf("Created '%s' dependency tree with %d nodes. Elapsed time: %.1f seconds.", tech.ToFormal(), getUniqueDependencyCount(uniqueDepsIds, uniqDepsNodes), time.Since(startTime).Seconds()))
+	if len(uniqDepsNodes) > 0 {
+		depTreeResult.FlatTree = createFlatTreeWithTypes(uniqDepsNodes)
 		return
 	}
-	depTreeResult.FlatTree = createFlatTree(uniqueDeps)
+	depTreeResult.FlatTree = createFlatTree(uniqueDepsIds)
 	return
 }
 
-func getUniqueDepsCount(uniqueDeps []string, uniqDepsWithTypes map[string]*xray.DepTreeNode) int {
-	if len(uniqDepsWithTypes) > 0 {
-		return len(uniqDepsWithTypes)
+func getUniqueDependencyCount(uniqueDepsIds []string, uniqDepsNodes map[string]*xray.DepTreeNode) int {
+	if len(uniqDepsNodes) > 0 {
+		return len(uniqDepsNodes)
 	}
-	return len(uniqueDeps)
+	return len(uniqueDepsIds)
 }
 
 func getCurationCacheFolderAndLogMsg(params technologies.BuildInfoBomGeneratorParams, tech techutils.Technology) (logMessage string, curationCacheFolder string, err error) {

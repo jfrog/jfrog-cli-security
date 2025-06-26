@@ -152,7 +152,7 @@ func ForEachScaBomVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledF
 				}
 			}
 			// Pass the vulnerability to the handler with its related information
-			if err := handler(vulnerability, *relatedComponent, fixedVersion, applicability, ratingsToSeverity(vulnerability.Ratings)); err != nil {
+			if err := handler(vulnerability, *relatedComponent, fixedVersion, applicability, cdxRatingToSeverity(vulnerability.Ratings)); err != nil {
 				return err
 			}
 		}
@@ -160,7 +160,7 @@ func ForEachScaBomVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledF
 	return nil
 }
 
-func ratingsToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {
+func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {
 	if ratings == nil || len(*ratings) == 0 {
 		return severityutils.Unknown
 	}
