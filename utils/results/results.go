@@ -7,10 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
+	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -68,11 +71,10 @@ func (rc *ResultContext) HasViolationContext() bool {
 
 type TargetResults struct {
 	ScanTarget
+	AppsConfigModule *jfrogappsconfig.Module `json:"apps_config_module,omitempty"`
 	// All scan results for the target
-	ScaResults         *ScaScanResults             `json:"sca_scans,omitempty"`
-	Sbom               Sbom                        `json:"sbom,omitempty"`
-	JasResults         *JasScansResults            `json:"jas_scans,omitempty"`
-	JasPackageScanType jasutils.JasPackageScanType `json:"jas_package_scan_type,omitempty"`
+	ScaResults *ScaScanResults  `json:"sca_scans,omitempty"`
+	JasResults *JasScansResults `json:"jas_scans,omitempty"`
 	// Errors that occurred during the scans
 	Errors      []error    `json:"errors,omitempty"`
 	errorsMutex sync.Mutex `json:"-"`
@@ -88,28 +90,13 @@ func (sr *ScanResult[T]) IsScanFailed() bool {
 }
 
 type ScaScanResults struct {
-	IsMultipleRootProject *bool `json:"is_multiple_root_project,omitempty"`
-	// Target of the scan
-	Descriptors []string `json:"descriptors,omitempty"`
+	// Metadata about the scan
+	Descriptors           []string `json:"descriptors,omitempty"`
+	IsMultipleRootProject *bool    `json:"is_multiple_root_project,omitempty"`
 	// Sca scan results
 	XrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
-}
-
-// Software Bill of Materials (SBOM) is a structured list of components in a piece of software.
-type Sbom struct {
-	Components []SbomEntry `json:"components,omitempty"`
-}
-type SbomEntry struct {
-	Component string `json:"component"`
-	Version   string `json:"version"`
-	Type      string `json:"type"`
-	XrayType  string `json:"xray_type"`
-	// Direct dependency or transitive dependency
-	Direct bool `json:"direct"`
-}
-
-func (se SbomEntry) String() string {
-	return fmt.Sprintf("%s:%s (%s)", se.Component, se.Version, se.Type)
+	// Sbom of the target
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
 }
 
 type JasScansResults struct {
@@ -449,9 +436,13 @@ func (sr *TargetResults) SetDescriptors(descriptors ...string) *TargetResults {
 	return sr
 }
 
-func (sr *TargetResults) SetSbom(sbom Sbom) *TargetResults {
-	sr.Sbom = sbom
-	return sr
+func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
+	if sr.ScaResults == nil {
+		sr.ScaResults = &ScaScanResults{}
+	}
+	sr.ScaResults.Sbom = sbom
+	sr.ScaResults.IsMultipleRootProject = clientutils.Pointer(IsMultiProject(sbom))
+	return sr.ScaResults
 }
 
 func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {

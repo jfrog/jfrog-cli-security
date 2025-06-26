@@ -1,18 +1,22 @@
 package results
 
 import (
+	"path"
 	"path/filepath"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xrayCmdUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
 func TestViolationFailBuild(t *testing.T) {
@@ -809,46 +813,142 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 	}
 }
 
-func TestDepTreeToSbom(t *testing.T) {
-	tests := []struct {
-		name         string
-		depTrees     []*xrayCmdUtils.GraphNode
-		expectedSbom Sbom
+func TestSearchTargetResultsByRelativePath(t *testing.T) {
+	oneTargetCmdResults := NewCommandResults(utils.SourceCode)
+	oneTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "path", "to", "dir")})
+
+	multiTargetCmdResults := NewCommandResults(utils.SourceCode)
+	multiTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "dir")})
+	multiTargetCmdResults.NewScanResults(ScanTarget{Target: path.Join("root", "another", "dir")})
+
+	testCases := []struct {
+		name          string
+		target        string
+		cmdResults    *SecurityCommandResults
+		expectedFound bool
 	}{
 		{
-			name:         "no deps",
-			depTrees:     []*xrayCmdUtils.GraphNode{},
-			expectedSbom: Sbom{},
+			name:          "One target in results - same path",
+			target:        path.Join("root", "path", "to", "dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "One target in results - same relative",
+			target:        path.Join("path", "to", "dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: false,
+		},
+		{
+			name:          "One target in results - not found",
+			target:        path.Join("some", "scan-dir"),
+			cmdResults:    oneTargetCmdResults,
+			expectedFound: false,
+		},
+		{
+			name:          "Multiple targets in results - same path",
+			target:        path.Join("root", "dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "Multiple targets in results - same relative",
+			target:        path.Join("another", "dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: true,
+		},
+		{
+			name:          "Multiple targets in results - not found",
+			target:        path.Join("a", "scan-dir"),
+			cmdResults:    multiTargetCmdResults,
+			expectedFound: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			foundTarget := SearchTargetResultsByRelativePath(tc.target, tc.cmdResults)
+			assert.Equal(t, tc.expectedFound, foundTarget != nil)
+		})
+	}
+}
+
+func TestDepTreeToSbom(t *testing.T) {
+	tests := []struct {
+		name                 string
+		depTrees             []*xrayUtils.GraphNode
+		expectedComponents   *[]cyclonedx.Component
+		expectedDependencies *[]cyclonedx.Dependency
+	}{
+		{
+			name:     "empty dep trees",
+			depTrees: []*xrayUtils.GraphNode{},
+		},
+		{
+			name: "no deps",
+			depTrees: []*xrayUtils.GraphNode{
+				{
+					Id:    "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{},
+				},
+			},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Root
+					PackageURL: "pkg:npm/root@1.0.0",
+					BOMRef:     "npm:root:1.0.0",
+					Name:       "root",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+			},
 		},
 		{
 			name: "one tree with one node",
-			depTrees: []*xrayCmdUtils.GraphNode{
+			depTrees: []*xrayUtils.GraphNode{
 				{
-					Id:    "root",
-					Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://A:1.0.1"}},
+					Id:    "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{{Id: "npm://A:1.0.1"}},
 				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Root
+					PackageURL: "pkg:npm/root@1.0.0",
+					BOMRef:     "npm:root:1.0.0",
+					Name:       "root",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/A@1.0.1",
+					BOMRef:     "npm:A:1.0.1",
+					Name:       "A",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "npm:root:1.0.0",
+					Dependencies: &[]string{"npm:A:1.0.1"},
 				},
 			},
 		},
 		{
 			name: "one tree with multiple nodes",
-			depTrees: []*xrayCmdUtils.GraphNode{
+			depTrees: []*xrayUtils.GraphNode{
 				{
-					Id: "root",
-					Nodes: []*xrayCmdUtils.GraphNode{
+					Id: "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
 						{
 							Id:    "npm://A:1.0.1",
-							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
 						},
 						{
 							Id:    "npm://D:2.0.0",
-							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://C:1.0.1"}},
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://C:1.0.1"}},
 						},
 						{
 							Id: "npm://B:1.0.0",
@@ -856,32 +956,72 @@ func TestDepTreeToSbom(t *testing.T) {
 					},
 				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "D", Version: "2.0.0", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: false,
-					},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Root
+					PackageURL: "pkg:npm/root@1.0.0",
+					BOMRef:     "npm:root:1.0.0",
+					Name:       "root",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/A@1.0.1",
+					BOMRef:     "npm:A:1.0.1",
+					Name:       "A",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/B@1.0.0",
+					BOMRef:     "npm:B:1.0.0",
+					Name:       "B",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Indirect
+					PackageURL: "pkg:npm/C@1.0.1",
+					BOMRef:     "npm:C:1.0.1",
+					Name:       "C",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/D@2.0.0",
+					BOMRef:     "npm:D:2.0.0",
+					Name:       "D",
+					Version:    "2.0.0",
+					Type:       "library",
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "npm:root:1.0.0",
+					Dependencies: &[]string{"npm:A:1.0.1", "npm:D:2.0.0", "npm:B:1.0.0"},
+				},
+				{
+					Ref:          "npm:A:1.0.1",
+					Dependencies: &[]string{"npm:B:1.0.0", "npm:C:1.0.1"},
+				},
+				{
+					Ref:          "npm:D:2.0.0",
+					Dependencies: &[]string{"npm:C:1.0.1"},
 				},
 			},
 		},
 		{
 			name: "multiple trees",
-			depTrees: []*xrayCmdUtils.GraphNode{
+			depTrees: []*xrayUtils.GraphNode{
 				{
-					Id: "root",
-					Nodes: []*xrayCmdUtils.GraphNode{
+					Id: "npm://npm-app-root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
 						{
 							Id:    "npm://A:1.0.1",
-							Nodes: []*xrayCmdUtils.GraphNode{{Id: "go://B:1.0.0"}},
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://B:1.0.0"}},
 						},
 						{
 							Id: "npm://C:1.0.1",
@@ -892,38 +1032,113 @@ func TestDepTreeToSbom(t *testing.T) {
 					},
 				},
 				{
-					Id: "root",
-					Nodes: []*xrayCmdUtils.GraphNode{
+					Id: "go://go-app-root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
 						{
-							Id:    "npm://A:2.0.1",
-							Nodes: []*xrayCmdUtils.GraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}, {Id: "npm://D:1.2.3"}},
+							Id:    "go://A:2.0.1",
+							Nodes: []*xrayUtils.GraphNode{{Id: "go://B:1.0.0"}, {Id: "go://C:1.0.1"}, {Id: "go://D:1.2.3"}},
 						},
 					},
 				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "D", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
-					},
-					{
-						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
-					},
-					{
-						Component: "D", Version: "1.2.3", Type: "npm", XrayType: "npm", Direct: false,
-					},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Root
+					PackageURL: "pkg:npm/npm-app-root@1.0.0",
+					BOMRef:     "npm:npm-app-root:1.0.0",
+					Name:       "npm-app-root",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/A@1.0.1",
+					BOMRef:     "npm:A:1.0.1",
+					Name:       "A",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+				{
+					// Indirect
+					PackageURL: "pkg:npm/B@1.0.0",
+					BOMRef:     "npm:B:1.0.0",
+					Name:       "B",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/C@1.0.1",
+					BOMRef:     "npm:C:1.0.1",
+					Name:       "C",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:npm/D@1.0.0",
+					BOMRef:     "npm:D:1.0.0",
+					Name:       "D",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Root
+					PackageURL: "pkg:golang/go-app-root@1.0.0",
+					BOMRef:     "golang:go-app-root:1.0.0",
+					Name:       "go-app-root",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Direct
+					PackageURL: "pkg:golang/A@2.0.1",
+					BOMRef:     "golang:A:2.0.1",
+					Name:       "A",
+					Version:    "2.0.1",
+					Type:       "library",
+				},
+				{
+					// Indirect
+					PackageURL: "pkg:golang/B@1.0.0",
+					BOMRef:     "golang:B:1.0.0",
+					Name:       "B",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Indirect
+					PackageURL: "pkg:golang/C@1.0.1",
+					BOMRef:     "golang:C:1.0.1",
+					Name:       "C",
+					Version:    "1.0.1",
+					Type:       "library",
+				},
+				{
+					// Indirect
+					PackageURL: "pkg:golang/D@1.2.3",
+					BOMRef:     "golang:D:1.2.3",
+					Name:       "D",
+					Version:    "1.2.3",
+					Type:       "library",
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "npm:npm-app-root:1.0.0",
+					Dependencies: &[]string{"npm:A:1.0.1", "npm:C:1.0.1", "npm:D:1.0.0"},
+				},
+				{
+					Ref:          "npm:A:1.0.1",
+					Dependencies: &[]string{"npm:B:1.0.0"},
+				},
+				{
+					Ref:          "golang:go-app-root:1.0.0",
+					Dependencies: &[]string{"golang:A:2.0.1"},
+				},
+				{
+					Ref:          "golang:A:2.0.1",
+					Dependencies: &[]string{"golang:B:1.0.0", "golang:C:1.0.1", "golang:D:1.2.3"},
 				},
 			},
 		},
@@ -931,128 +1146,552 @@ func TestDepTreeToSbom(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sbom := DepTreeToSbom(test.depTrees)
-			SortSbom(sbom.Components)
-			assert.Equal(t, test.expectedSbom, sbom)
+			components, dependencies := DepsTreeToSbom(test.depTrees...)
+			assert.Equal(t, test.expectedComponents, components)
+			assert.Equal(t, test.expectedDependencies, dependencies)
 		})
 	}
 }
 
 func TestCompTreeToSbom(t *testing.T) {
 	tests := []struct {
-		name         string
-		compTrees    *xrayCmdUtils.BinaryGraphNode
-		expectedSbom Sbom
+		name                 string
+		compTrees            []*xrayUtils.BinaryGraphNode
+		expectedComponents   *[]cyclonedx.Component
+		expectedDependencies *[]cyclonedx.Dependency
 	}{
 		{
-			name:         "no deps",
-			compTrees:    &xrayCmdUtils.BinaryGraphNode{},
-			expectedSbom: Sbom{Components: []SbomEntry{}},
+			name:      "empty component trees",
+			compTrees: []*xrayUtils.BinaryGraphNode{},
 		},
 		{
-			name: "one tree with one node",
-			compTrees: &xrayCmdUtils.BinaryGraphNode{
-				Id:    "root",
-				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://A:1.0.1"}},
+			name: "no deps",
+			compTrees: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "gav://jar-app:3.12",
+					Path:     "jar-app-3.12.jar",
+					Sha1:     "1234567890abcdef1234567890abcdef12345678",
+					Sha256:   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+					Licenses: []string{"Apache-2.0"},
+				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					PackageURL: "pkg:maven/jar-app@3.12",
+					BOMRef:     "maven:jar-app:3.12",
+					Name:       "jar-app",
+					Version:    "3.12",
+					Type:       "library",
+					Evidence: &cyclonedx.Evidence{
+						Occurrences: &[]cyclonedx.EvidenceOccurrence{
+							{
+								Location: "jar-app-3.12.jar",
+							},
+						},
+					},
+					Licenses: &cyclonedx.Licenses{
+						{
+							License: &cyclonedx.License{ID: "Apache-2.0"},
+						},
+					},
+					Hashes: &[]cyclonedx.Hash{
+						{
+							Algorithm: "SHA-1",
+							Value:     "1234567890abcdef1234567890abcdef12345678",
+						},
+						{
+							Algorithm: "SHA-256",
+							Value:     "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+						},
 					},
 				},
 			},
 		},
 		{
-			name: "one tree rpm",
-			compTrees: &xrayCmdUtils.BinaryGraphNode{
-				Id:    "npm://root:1.0.0",
-				Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "rpm://OS-1:A:1111:1.0.1"}},
-				Path:  "file.rpm",
+			name: "one binary with one dependency",
+			compTrees: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "docker://my-docker-image:1.0.0",
+					Path:     "my-docker-image-1.0.0.tar",
+					Sha1:     "abcdef1234567890abcdef1234567890abcdef12",
+					Sha256:   "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					Licenses: []string{"MIT"},
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "docker://my-dependency:2.0.0",
+							Path:   "my-docker-image-1.0.0.tar",
+							Sha256: "456abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+						},
+					},
+				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "root", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Root
+					PackageURL: "pkg:docker/my-docker-image@1.0.0",
+					BOMRef:     "docker:my-docker-image:1.0.0",
+					Name:       "my-docker-image",
+					Version:    "1.0.0",
+					Type:       "library",
+					Evidence: &cyclonedx.Evidence{
+						Occurrences: &[]cyclonedx.EvidenceOccurrence{
+							{
+								Location: "my-docker-image-1.0.0.tar",
+							},
+						},
 					},
-					{
-						Component: "A", Version: "1111:1.0.1", Type: "RPM", XrayType: "rpm", Direct: false,
+					Licenses: &cyclonedx.Licenses{
+						{
+							License: &cyclonedx.License{ID: "MIT"},
+						},
 					},
+					Hashes: &[]cyclonedx.Hash{
+						{
+							Algorithm: "SHA-1",
+							Value:     "abcdef1234567890abcdef1234567890abcdef12",
+						},
+						{
+							Algorithm: "SHA-256",
+							Value:     "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+						},
+					},
+				},
+				{
+					// Dependency
+					PackageURL: "pkg:docker/my-dependency@2.0.0",
+					BOMRef:     "docker:my-dependency:2.0.0",
+					Name:       "my-dependency",
+					Version:    "2.0.0",
+					Type:       "library",
+					Evidence: &cyclonedx.Evidence{
+						Occurrences: &[]cyclonedx.EvidenceOccurrence{
+							{
+								Location: "my-docker-image-1.0.0.tar",
+							},
+						},
+					},
+					Hashes: &[]cyclonedx.Hash{
+						{
+							Algorithm: "SHA-256",
+							Value:     "456abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+						},
+					},
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "docker:my-docker-image:1.0.0",
+					Dependencies: &[]string{"docker:my-dependency:2.0.0"},
 				},
 			},
 		},
 		{
-			name: "one tree with multiple nodes",
-			compTrees: &xrayCmdUtils.BinaryGraphNode{
+			name: "multiple binaries with multiple dependencies",
+			compTrees: []*xrayUtils.BinaryGraphNode{
+				{
+					Id: "docker://my-docker-image:1.0.0",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id: "docker://my-dependency:2.0.0",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{Id: "docker://my-sub-dependency:3.0.0"},
+								{Id: "docker://my-other-dependency:4.0.0"},
+							},
+						},
+					},
+				},
+				{
+					Id:   "gav://my-java-app:1.0.0",
+					Path: "my-java-app.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id: "gav://my-java-dependency:2.0.0",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{Id: "gav://my-java-sub-dependency:3.0.0"},
+								{Id: "gav://dependency:4.0.0"},
+							},
+						},
+						{
+							Id: "gav://my-java-other-dependency:4.0.0",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{Id: "gav://my-java-sub-dependency:3.0.0"},
+							},
+						},
+						{
+							Id: "gav://my-java-sub-dependency:3.0.0",
+						},
+					},
+				},
+			},
+			expectedComponents: &[]cyclonedx.Component{
+				{
+					// Docker Root
+					PackageURL: "pkg:docker/my-docker-image@1.0.0",
+					BOMRef:     "docker:my-docker-image:1.0.0",
+					Name:       "my-docker-image",
+					Version:    "1.0.0",
+					Type:       "library",
+				},
+				{
+					// Docker Dependency
+					PackageURL: "pkg:docker/my-dependency@2.0.0",
+					BOMRef:     "docker:my-dependency:2.0.0",
+					Name:       "my-dependency",
+					Version:    "2.0.0",
+					Type:       "library",
+				},
+				{
+					// Docker Sub-dependency
+					PackageURL: "pkg:docker/my-sub-dependency@3.0.0",
+					BOMRef:     "docker:my-sub-dependency:3.0.0",
+					Name:       "my-sub-dependency",
+					Version:    "3.0.0",
+					Type:       "library",
+				},
+				{
+					// Docker Other Dependency
+					PackageURL: "pkg:docker/my-other-dependency@4.0.0",
+					BOMRef:     "docker:my-other-dependency:4.0.0",
+					Name:       "my-other-dependency",
+					Version:    "4.0.0",
+					Type:       "library",
+				},
+				{
+					// Jar Root
+					PackageURL: "pkg:maven/my-java-app@1.0.0",
+					BOMRef:     "maven:my-java-app:1.0.0",
+					Name:       "my-java-app",
+					Version:    "1.0.0",
+					Type:       "library",
+					Evidence: &cyclonedx.Evidence{
+						Occurrences: &[]cyclonedx.EvidenceOccurrence{
+							{
+								Location: "my-java-app.jar",
+							},
+						},
+					},
+				},
+				{
+					// Jar Dependency
+					PackageURL: "pkg:maven/my-java-dependency@2.0.0",
+					BOMRef:     "maven:my-java-dependency:2.0.0",
+					Name:       "my-java-dependency",
+					Version:    "2.0.0",
+					Type:       "library",
+				},
+				{
+					// Jar Sub-dependency
+					PackageURL: "pkg:maven/my-java-sub-dependency@3.0.0",
+					BOMRef:     "maven:my-java-sub-dependency:3.0.0",
+					Name:       "my-java-sub-dependency",
+					Version:    "3.0.0",
+					Type:       "library",
+				},
+				{
+					// Jar Other Dependency
+					PackageURL: "pkg:maven/dependency@4.0.0",
+					BOMRef:     "maven:dependency:4.0.0",
+					Name:       "dependency",
+					Version:    "4.0.0",
+					Type:       "library",
+				},
+				{
+					// Jar Other Java Dependency
+					PackageURL: "pkg:maven/my-java-other-dependency@4.0.0",
+					BOMRef:     "maven:my-java-other-dependency:4.0.0",
+					Name:       "my-java-other-dependency",
+					Version:    "4.0.0",
+					Type:       "library",
+				},
+			},
+			expectedDependencies: &[]cyclonedx.Dependency{
+				{
+					Ref:          "docker:my-docker-image:1.0.0",
+					Dependencies: &[]string{"docker:my-dependency:2.0.0"},
+				},
+				{
+					Ref:          "docker:my-dependency:2.0.0",
+					Dependencies: &[]string{"docker:my-sub-dependency:3.0.0", "docker:my-other-dependency:4.0.0"},
+				},
+				{
+					Ref:          "maven:my-java-app:1.0.0",
+					Dependencies: &[]string{"maven:my-java-dependency:2.0.0", "maven:my-java-other-dependency:4.0.0", "maven:my-java-sub-dependency:3.0.0"},
+				},
+				{
+					Ref:          "maven:my-java-dependency:2.0.0",
+					Dependencies: &[]string{"maven:my-java-sub-dependency:3.0.0", "maven:dependency:4.0.0"},
+				},
+				{
+					Ref:          "maven:my-java-other-dependency:4.0.0",
+					Dependencies: &[]string{"maven:my-java-sub-dependency:3.0.0"},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			components, dependencies := CompTreeToSbom(test.compTrees...)
+			assert.Equal(t, test.expectedComponents, components)
+			assert.Equal(t, test.expectedDependencies, dependencies)
+		})
+	}
+}
+
+func TestIsMultiProject(t *testing.T) {
+	tests := []struct {
+		name     string
+		bom      *cyclonedx.BOM
+		expected bool
+	}{
+		{
+			name: "no root",
+		},
+		{
+			name: "single root",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple roots",
+			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"dep1", "dep2"}},
+					{Ref: "root2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep5"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep6"}},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, IsMultiProject(test.bom))
+		})
+	}
+}
+
+func TestBomToFlatTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		bom      *cyclonedx.BOM
+		expected *xrayUtils.GraphNode
+	}{
+		{
+			name:     "No components",
+			bom:      cyclonedx.NewBOM(),
+			expected: &xrayUtils.GraphNode{Id: "root"},
+		},
+		{
+			name: "BOM with components",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "component1",
+						Name:       "Component 1",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component1@1.0.0",
+					},
+					{
+						BOMRef: "3fac3b2",
+						Name:   path.Join("path", "to", "file.txt"),
+						Type:   "file",
+					},
+					{
+						BOMRef:     "component2",
+						Name:       "Component 2",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:golang/component2@2.0.0",
+					},
+				},
+			},
+			expected: &xrayUtils.GraphNode{
 				Id: "root",
-				Nodes: []*xrayCmdUtils.BinaryGraphNode{
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "npm://component1:1.0.0"},
+					{Id: "go://component2:2.0.0"},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom))
+		})
+	}
+}
+
+func TestBomToFullTree(t *testing.T) {
+	tests := []struct {
+		name            string
+		bom             *cyclonedx.BOM
+		isBuildInfoXray bool
+		expected        []*xrayUtils.GraphNode
+	}{
+		{
+			name: "BOM with no libraries",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
 					{
-						Id:    "npm://A:1.0.1",
-						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
-					},
-					{
-						Id:    "npm://D:2.0.0",
-						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://C:1.0.1"}},
-					},
-					{
-						Id: "npm://B:1.0.0",
-					},
-					{
-						Id: "npm://No-Version",
+						BOMRef: "3fac3b2",
+						Name:   path.Join("path", "to", "file.txt"),
+						Type:   "file",
 					},
 				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "D", Version: "2.0.0", Type: "npm", XrayType: "npm", Direct: true,
-					},
-					{
-						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: false,
+			expected: []*xrayUtils.GraphNode{},
+		},
+		{
+			name: "BOM with one tree",
+			bom:  getTestBom(true),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "pkg:npm/root@1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "pkg:npm/component1@1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component2@2.1.2"}},
+						},
+						{
+							Id:    "pkg:npm/component2@2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+						},
+						{
+							Id: "pkg:npm/component3@3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "pkg:npm/component2@2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+								},
+							},
+						},
 					},
 				},
 			},
 		},
 		{
-			name: "multiple trees",
-			compTrees: &xrayCmdUtils.BinaryGraphNode{
-				Id: "root",
-				Nodes: []*xrayCmdUtils.BinaryGraphNode{
-					{
-						Id:    "npm://A:1.0.1",
-						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "go://B:1.0.0"}},
-					},
-					{
-						Id: "npm://C:1.0.1",
-					},
-					{
-						Id:    "npm://A:2.0.1",
-						Nodes: []*xrayCmdUtils.BinaryGraphNode{{Id: "npm://B:1.0.0"}, {Id: "npm://C:1.0.1"}},
+			name:            "BOM with one tree (converted to xray-component-id)",
+			isBuildInfoXray: true,
+			bom:             getTestBom(true),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://component1:1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component2:2.1.2"}},
+						},
+						{
+							Id:    "npm://component2:2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+						},
+						{
+							Id: "npm://component3:3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "npm://component2:2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+								},
+							},
+						},
 					},
 				},
 			},
-			expectedSbom: Sbom{
-				Components: []SbomEntry{
-					{
-						Component: "A", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
+		},
+		{
+			name: "BOM with multiple trees",
+			bom:  getTestBom(false),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "pkg:npm/root@1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "pkg:npm/component1@1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component2@2.1.2"}},
+						},
+						{
+							Id:    "pkg:npm/component2@2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+						},
+						{
+							Id: "pkg:npm/component3@3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "pkg:npm/component2@2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "pkg:npm/component4@4.0.0"}},
+								},
+							},
+						},
 					},
-					{
-						Component: "A", Version: "2.0.1", Type: "npm", XrayType: "npm", Direct: true,
+				},
+				{
+					Id: "pkg:golang/root@v1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id: "pkg:golang/component1@v1.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{Id: "pkg:golang/component2@v2.0.0"},
+								{Id: "pkg:golang/component3@v3.0.0"},
+							},
+						},
+						{
+							Id: "pkg:golang/component2@v2.0.0",
+						},
 					},
-					{
-						Component: "C", Version: "1.0.1", Type: "npm", XrayType: "npm", Direct: true,
+				},
+			},
+		},
+		{
+			name:            "BOM with multiple trees (converted to xray-component-id)",
+			isBuildInfoXray: true,
+			bom:             getTestBom(false),
+			expected: []*xrayUtils.GraphNode{
+				{
+					Id: "npm://root:1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id:    "npm://component1:1.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component2:2.1.2"}},
+						},
+						{
+							Id:    "npm://component2:2.0.0",
+							Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+						},
+						{
+							Id: "npm://component3:3.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{
+									Id:    "npm://component2:2.0.0",
+									Nodes: []*xrayUtils.GraphNode{{Id: "npm://component4:4.0.0"}},
+								},
+							},
+						},
 					},
-					{
-						Component: "B", Version: "1.0.0", Type: "Go", XrayType: "go", Direct: false,
-					},
-					{
-						Component: "B", Version: "1.0.0", Type: "npm", XrayType: "npm", Direct: false,
+				},
+				{
+					Id: "go://root:v1.0.0",
+					Nodes: []*xrayUtils.GraphNode{
+						{
+							Id: "go://component1:v1.0.0",
+							Nodes: []*xrayUtils.GraphNode{
+								{Id: "go://component2:v2.0.0"},
+								{Id: "go://component3:v3.0.0"},
+							},
+						},
+						{
+							Id: "go://component2:v2.0.0",
+						},
 					},
 				},
 			},
@@ -1061,9 +1700,548 @@ func TestCompTreeToSbom(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sbom := CompTreeToSbom(test.compTrees)
-			SortSbom(sbom.Components)
-			assert.Equal(t, test.expectedSbom, sbom)
+			for _, root := range test.expected {
+				setParentsToTestNodes(nil, root)
+			}
+			result := BomToFullTree(test.bom, test.isBuildInfoXray)
+			assert.ElementsMatch(t, test.expected, result)
 		})
 	}
+}
+
+func getTestBom(oneRoot bool) *cyclonedx.BOM {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				// Root component
+				BOMRef:     "npm:root:1.0.0",
+				Name:       "root",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/root@1.0.0",
+			},
+			{
+
+				BOMRef:     "npm:component1:1.0.0",
+				Name:       "Component 1",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component1@1.0.0",
+			},
+			{
+				BOMRef: "3fac3b2",
+				Name:   path.Join("path", "to", "file.txt"),
+				Type:   "file",
+			},
+			{
+				BOMRef:     "npm:component2:2.0.0",
+				Name:       "Component 2",
+				Version:    "2.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component2@2.0.0",
+			},
+			{
+				BOMRef:     "npm:component2:2.1.2",
+				Name:       "Component 2",
+				Version:    "2.1.2",
+				Type:       "library",
+				PackageURL: "pkg:npm/component2@2.1.2",
+			},
+			{
+				BOMRef:     "npm:component3:3.0.0",
+				Name:       "Component 3",
+				Version:    "3.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component3@3.0.0",
+			},
+			{
+				BOMRef:     "npm:component4:4.0.0",
+				Name:       "Component 4",
+				Version:    "4.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component4@4.0.0",
+			},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{
+				Ref:          "npm:root:1.0.0",
+				Dependencies: &[]string{"npm:component1:1.0.0", "npm:component2:2.0.0", "npm:component3:3.0.0"},
+			},
+			{
+				Ref:          "npm:component2:2.0.0",
+				Dependencies: &[]string{"npm:component4:4.0.0"},
+			},
+			{
+				Ref:          "npm:component1:1.0.0",
+				Dependencies: &[]string{"npm:component2:2.1.2"},
+			},
+			{
+				Ref:          "npm:component3:3.0.0",
+				Dependencies: &[]string{"npm:component2:2.0.0"},
+			},
+		},
+	}
+	if oneRoot {
+		return bom
+	}
+	// Multiple roots case
+	*bom.Components = append(*bom.Components,
+		// Root 2
+		cyclonedx.Component{
+			BOMRef:     "golang:root:v1.0.0",
+			Name:       "root",
+			Version:    "v1.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/root@v1.0.0",
+		},
+		// Component 1
+		cyclonedx.Component{
+			BOMRef:     "golang:component1:v1.0.0",
+			Name:       "Component 1",
+			Version:    "v1.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component1@v1.0.0",
+		},
+		// Component 2
+		cyclonedx.Component{
+			BOMRef:     "golang:component2:v2.0.0",
+			Name:       "Component 2",
+			Version:    "v2.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component2@v2.0.0",
+		},
+		// Component 3
+		cyclonedx.Component{
+			BOMRef:     "golang:component3:v3.0.0",
+			Name:       "Component 3",
+			Version:    "v3.0.0",
+			Type:       "library",
+			PackageURL: "pkg:golang/component3@v3.0.0",
+		},
+	)
+	*bom.Dependencies = append(*bom.Dependencies,
+		cyclonedx.Dependency{
+			Ref:          "golang:root:v1.0.0",
+			Dependencies: &[]string{"golang:component1:v1.0.0", "golang:component2:v2.0.0"},
+		},
+		cyclonedx.Dependency{
+			Ref:          "golang:component1:v1.0.0",
+			Dependencies: &[]string{"golang:component2:v2.0.0", "golang:component3:v3.0.0"},
+		},
+	)
+	return bom
+}
+
+func setParentsToTestNodes(parent *xrayUtils.GraphNode, nodes ...*xrayUtils.GraphNode) {
+	for _, node := range nodes {
+		node.Parent = parent
+		setParentsToTestNodes(node, node.Nodes...)
+	}
+}
+
+func TestBomToFullCompTree(t *testing.T) {
+	tests := []struct {
+		name         string
+		bom          *cyclonedx.BOM
+		isXrayCompId bool
+		expected     []*xrayUtils.BinaryGraphNode
+	}{
+		{
+			name: "BOM with no libraries",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef: "8624ef95f4305969d180d3b1eab81bef",
+						Name:   path.Join("path", "to", "binary.jar"),
+						Type:   "file",
+					},
+				},
+			},
+			expected: []*xrayUtils.BinaryGraphNode{},
+		},
+		{
+			name: "BOM with component no dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "generic://log4j-core-2.17.1.jar",
+						Name:       "log4j-core-2.17.1.jar",
+						Type:       "library",
+						PackageURL: "pkg:generic/log4j-core-2.17.1.jar",
+					},
+				},
+			},
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id: "pkg:generic/log4j-core-2.17.1.jar",
+				},
+			},
+		},
+		{
+			name: "Binary file BOM",
+			bom:  getBinaryTestBom(true),
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "pkg:generic/binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "pkg:maven/commons-lang:commons-lang@2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:         "Binary file BOM (converted to xray-component-id)",
+			bom:          getBinaryTestBom(true),
+			isXrayCompId: true,
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "generic://binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "gav://com.google.code.findbugs:jsr305:3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "gav://commons-lang:commons-lang:2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Multiple binaries BOM",
+			bom:  getBinaryTestBom(false),
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "pkg:generic/binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "pkg:maven/commons-lang:commons-lang@2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+				{
+					Id:     "pkg:docker/docker.io/library/nginx@1.27-alpine",
+					Sha1:   "b79749300dc03448c42b7005a11afff9cc40eba5",
+					Sha256: "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+					Path:   "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "pkg:generic/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Sha256: "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+							Path:   "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{
+									Id:       "pkg:alpine/alpine-baselayout@3.6.5-r0",
+									Licenses: []string{"GPL-2.0-only"},
+									Path:     "3.20:alpine-baselayout:3.6.5-r0",
+								},
+							},
+						},
+						{
+							Id:     "pkg:generic/scripts.tar",
+							Sha1:   "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+							Sha256: "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+							Path:   "lib/apk/db/scripts.tar",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:         "Multiple binaries BOM (converted to xray-component-id)",
+			bom:          getBinaryTestBom(false),
+			isXrayCompId: true,
+			expected: []*xrayUtils.BinaryGraphNode{
+				{
+					Id:       "generic://binary-2.jar",
+					Sha1:     "c8637440d377d5af307b8e4689148a12cf078807",
+					Sha256:   "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					Licenses: []string{"Apache-2.0"},
+					Path:     "binary-2.jar",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "gav://com.google.code.findbugs:jsr305:3.0.2",
+							Sha1:   "fbc25c55a6f50643a13473b762dd67857de459d5",
+							Sha256: "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+							Path:   "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+						{
+							Id:       "gav://commons-lang:commons-lang:2.4",
+							Sha1:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+							Licenses: []string{"Apache-2.0"},
+							Path:     "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+				{
+					Id:     "docker://docker.io/library/nginx:1.27-alpine",
+					Sha1:   "b79749300dc03448c42b7005a11afff9cc40eba5",
+					Sha256: "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+					Path:   "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					Nodes: []*xrayUtils.BinaryGraphNode{
+						{
+							Id:     "generic://sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Sha256: "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+							Path:   "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+							Nodes: []*xrayUtils.BinaryGraphNode{
+								{
+									Id:       "alpine://alpine-baselayout:3.6.5-r0",
+									Licenses: []string{"GPL-2.0-only"},
+									Path:     "3.20:alpine-baselayout:3.6.5-r0",
+								},
+							},
+						},
+						{
+							Id:     "generic://scripts.tar",
+							Sha1:   "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+							Sha256: "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+							Path:   "lib/apk/db/scripts.tar",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := BomToFullCompTree(test.bom, test.isXrayCompId)
+			assert.ElementsMatch(t, test.expected, result)
+		})
+	}
+}
+
+func getBinaryTestBom(oneBinary bool) *cyclonedx.BOM {
+	bom := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				// Root component
+				BOMRef:     "generic://binary-2.jar",
+				Name:       "binary-2.jar",
+				Type:       "library",
+				PackageURL: "pkg:generic/binary-2.jar",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "c8637440d377d5af307b8e4689148a12cf078807",
+					},
+					{
+						Algorithm: "SHA-256",
+						Value:     "a3ddf66ccb764afcc56cc0d0c054dea842ee6b9db44bd2e0e9a7f421fbbb088e",
+					},
+				},
+				Licenses: &cyclonedx.Licenses{
+					{
+						License: &cyclonedx.License{ID: "Apache-2.0"},
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "binary-2.jar",
+						},
+					},
+				},
+			},
+			{
+				// Direct dependency
+				BOMRef:     "maven:com.google.code.findbugs:jsr305:3.0.2",
+				Name:       "com.google.code.findbugs:jsr305",
+				Version:    "3.0.2",
+				Type:       "library",
+				PackageURL: "pkg:maven/com.google.code.findbugs:jsr305@3.0.2",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "fbc25c55a6f50643a13473b762dd67857de459d5",
+					},
+					{
+						Algorithm: "SHA-256",
+						Value:     "000000000000000000000000fbc25c55a6f50643a13473b762dd67857de459d5",
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "META-INF/maven/com.google.code.findbugs/jsr305/pom.xml",
+						},
+					},
+				},
+			},
+			{
+				// Direct dependency
+				BOMRef:     "maven:commons-lang:commons-lang:2.4",
+				Name:       "commons-lang:commons-lang",
+				Version:    "2.4",
+				Type:       "library",
+				PackageURL: "pkg:maven/commons-lang:commons-lang@2.4",
+				Hashes: &[]cyclonedx.Hash{
+					{
+						Algorithm: "SHA-1",
+						Value:     "c0bf256037c9b26d203c4b1fca4e3a1d4d8caf63",
+					},
+				},
+				Licenses: &cyclonedx.Licenses{
+					{
+						License: &cyclonedx.License{ID: "Apache-2.0"},
+					},
+				},
+				Evidence: &cyclonedx.Evidence{
+					Occurrences: &[]cyclonedx.EvidenceOccurrence{
+						{
+							Location: "META-INF/maven/commons-lang/commons-lang/pom.xml",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: &[]cyclonedx.Dependency{
+			{
+				Ref:          "generic://binary-2.jar",
+				Dependencies: &[]string{"maven:com.google.code.findbugs:jsr305:3.0.2", "maven:commons-lang:commons-lang:2.4"},
+			},
+		},
+	}
+	if oneBinary {
+		return bom
+	}
+	*bom.Components = append(*bom.Components,
+		cyclonedx.Component{
+			// Root Docker component
+			BOMRef:     "docker:docker.io/library/nginx:1.27-alpine",
+			Name:       "docker.io/library/nginx",
+			Version:    "1.27-alpine",
+			Type:       "library",
+			PackageURL: "pkg:docker/docker.io/library/nginx@1.27-alpine",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-1",
+					Value:     "b79749300dc03448c42b7005a11afff9cc40eba5",
+				},
+				{
+					Algorithm: "SHA-256",
+					Value:     "336c419faa875b96017a062e4b94b0e2840ab032d67935042acec36ec24f6d63",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "/docker.io/library/nginx/1.27-alpine/manifest.json",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			// Direct dependency
+			BOMRef:     "generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Name:       "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Type:       "library",
+			PackageURL: "pkg:generic/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-256",
+					Value:     "534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			// Transitive dependency
+			BOMRef:     "alpine:3.20:alpine-baselayout:3.6.5-r0",
+			Name:       "alpine:3.20:alpine-baselayout",
+			Version:    "3.6.5-r0",
+			Type:       "library",
+			PackageURL: "pkg:alpine/alpine-baselayout@3.6.5-r0",
+			Licenses: &cyclonedx.Licenses{
+				{
+					License: &cyclonedx.License{ID: "GPL-2.0-only"},
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "3.20:alpine-baselayout:3.6.5-r0",
+					},
+				},
+			},
+		},
+		cyclonedx.Component{
+			BOMRef:     "generic:scripts.tar",
+			Name:       "scripts.tar",
+			Type:       "library",
+			PackageURL: "pkg:generic/scripts.tar",
+			Hashes: &[]cyclonedx.Hash{
+				{
+					Algorithm: "SHA-1",
+					Value:     "8c9c1d3b4ef3c8e95ee08625198453b8868a916f",
+				},
+				{
+					Algorithm: "SHA-256",
+					Value:     "6955e7ad2d1222ef20a2de04bfa6a94d33d64e529cfc99217a7123b9fe2222b2",
+				},
+			},
+			Evidence: &cyclonedx.Evidence{
+				Occurrences: &[]cyclonedx.EvidenceOccurrence{
+					{
+						Location: "lib/apk/db/scripts.tar",
+					},
+				},
+			},
+		},
+	)
+	*bom.Dependencies = append(*bom.Dependencies,
+		cyclonedx.Dependency{
+			Ref:          "docker:docker.io/library/nginx:1.27-alpine",
+			Dependencies: &[]string{"generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "generic:scripts.tar"},
+		},
+		cyclonedx.Dependency{
+			Ref:          "generic:sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar",
+			Dependencies: &[]string{"alpine:3.20:alpine-baselayout:3.6.5-r0"},
+		},
+	)
+	return bom
 }

@@ -2,16 +2,19 @@ package audit
 
 import (
 	"fmt"
-	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	configTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/CycloneDX/cyclonedx-go"
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	configTests "github.com/jfrog/jfrog-cli-security/tests"
+	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 
 	"github.com/stretchr/testify/assert"
 
@@ -614,6 +617,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 				SetConfigProfile(&configProfile)
 
 			auditParams := NewAuditParams().
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -670,7 +674,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetMultiScanId(validations.TestScaScanId).
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-		SetScansResultsOutputDir(outputDirPath)
+		SetScansResultsOutputDir(outputDirPath).
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -678,13 +683,14 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 
 	filesList, err := fileutils.ListFiles(outputDirPath, false)
 	assert.NoError(t, err)
-	assert.Len(t, filesList, 5)
+	assert.Len(t, filesList, 6)
 
-	searchForStrWithSubString(t, filesList, "sca_results")
-	searchForStrWithSubString(t, filesList, "iac_results")
-	searchForStrWithSubString(t, filesList, "sast_results")
-	searchForStrWithSubString(t, filesList, "secrets_results")
-	searchForStrWithSubString(t, filesList, "applicability_results")
+	searchForStrWithSubString(t, filesList, "bom")
+	searchForStrWithSubString(t, filesList, "sca")
+	searchForStrWithSubString(t, filesList, "iac")
+	searchForStrWithSubString(t, filesList, "sast")
+	searchForStrWithSubString(t, filesList, "secrets")
+	searchForStrWithSubString(t, filesList, "applicability")
 }
 
 func searchForStrWithSubString(t *testing.T, filesList []string, subString string) {
@@ -805,7 +811,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
-				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true})
+				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -957,25 +964,30 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 							Target:     tempDirPath,
 							Technology: techutils.Pip,
 						},
-						Sbom: results.Sbom{
-							Components: []results.SbomEntry{
-								{
-									Component: "werkzeug",
-									Version:   "1.0.2",
-									Type:      "Python",
-									XrayType:  "pypi",
-								},
-								{
-									Component: "pyyaml",
-									Version:   "5.2",
-									Type:      "Python",
-									XrayType:  "pypi",
-								},
-								{
-									Component: "wasabi",
-									Version:   "1.1.3",
-									Type:      "Python",
-									XrayType:  "pypi",
+						ScaResults: &results.ScaScanResults{
+							Sbom: &cyclonedx.BOM{
+								Components: &[]cyclonedx.Component{
+									{
+										PackageURL: "pkg:pypi/werkzeug@1.0.2",
+										BOMRef:     "pypi:werkzeug@1.0.2",
+										Name:       "werkzeug",
+										Version:    "1.0.2",
+										Type:       "Python",
+									},
+									{
+										PackageURL: "pkg:pypi/pyyaml@5.2",
+										BOMRef:     "pypi:pyyaml@5.2",
+										Name:       "pyyaml",
+										Version:    "5.2",
+										Type:       "Python",
+									},
+									{
+										PackageURL: "pkg:pypi/wasabi@1.1.3",
+										BOMRef:     "pypi:wasabi@1.1.3",
+										Name:       "wasabi",
+										Version:    "1.1.3",
+										Type:       "Python",
+									},
 								},
 							},
 						},
@@ -1010,7 +1022,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetDiffMode(true).
-				SetResultsToCompare(tc.resultsToCompare)
+				SetResultsToCompare(tc.resultsToCompare).
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
