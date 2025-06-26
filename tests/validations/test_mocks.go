@@ -238,7 +238,7 @@ func NewMockJasRuns(runs ...*sarif.Run) []results.ScanResult[[]*sarif.Run] {
 func NewMockScaResults(responses ...services.ScanResponse) (converted []results.ScanResult[services.ScanResponse]) {
 	for _, response := range responses {
 		status := 0
-		if response.ScannedStatus == "Failed" {
+		if response.ScannedStatus == "failed" {
 			status = 1
 		}
 		converted = append(converted, results.ScanResult[services.ScanResponse]{Scan: response, StatusCode: status})

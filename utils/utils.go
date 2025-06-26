@@ -271,7 +271,7 @@ func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix s
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
 	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTime()))
-	log.Debug(fmt.Sprintf(logPrefix+"Scans output directory was provided, saving CycloneDX SBOM to file '%s'...", pathToSave))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
 	file, err := os.Create(pathToSave)
 	if err != nil {
 		return errorutils.CheckError(err)
@@ -293,7 +293,7 @@ func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
 	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), getCurrentTime(), suffix))
-	log.Debug(fmt.Sprintf(logPrefix+"Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}

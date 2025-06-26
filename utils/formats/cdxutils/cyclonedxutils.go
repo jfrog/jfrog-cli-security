@@ -421,7 +421,7 @@ type CdxVulnerabilityParams struct {
 func GetOrCreateScaIssue(destination *cyclonedx.BOM, params CdxVulnerabilityParams, properties ...cyclonedx.Property) (scaVulnerability *cyclonedx.Vulnerability) {
 	if scaVulnerability = SearchVulnerabilityByRef(destination, params.Ref); scaVulnerability != nil {
 		// The vulnerability already exists, update the ratings with the applicable status and attach properties if needed
-		UpdateOrAppendVulnerabilitiesRatings(scaVulnerability, params.Ratings...)
+		updateOrAppendVulnerabilitiesRatings(scaVulnerability, params.Ratings...)
 		scaVulnerability.Properties = AppendProperties(scaVulnerability.Properties, properties...)
 		return scaVulnerability
 	}
@@ -429,12 +429,12 @@ func GetOrCreateScaIssue(destination *cyclonedx.BOM, params CdxVulnerabilityPara
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := CreateBaseVulnerability(params, properties...)
+	vulnerability := createBaseVulnerability(params, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
 
-func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+func createBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
 	var source *cyclonedx.Source
 	if params.Service != nil {
 		source = &cyclonedx.Source{
@@ -507,7 +507,7 @@ func extractCWENumber(cweId string) (cweInt int, isSupportedCwe bool) {
 	return cweID, err == nil
 }
 
-func UpdateOrAppendVulnerabilitiesRatings(vulnerability *cyclonedx.Vulnerability, ratings ...cyclonedx.VulnerabilityRating) {
+func updateOrAppendVulnerabilitiesRatings(vulnerability *cyclonedx.Vulnerability, ratings ...cyclonedx.VulnerabilityRating) {
 	if vulnerability == nil {
 		return
 	}

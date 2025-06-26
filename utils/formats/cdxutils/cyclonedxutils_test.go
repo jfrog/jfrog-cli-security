@@ -255,6 +255,77 @@ func TestGetDirectDependencies(t *testing.T) {
 	}
 }
 
+func TestSearchParents(t *testing.T) {
+	tests := []struct {
+		name         string
+		ref          string
+		dependencies []cyclonedx.Dependency
+		components   []cyclonedx.Component
+		expected     []cyclonedx.Component
+	}{
+		{
+			name: "Search No parent match",
+			ref:  "compX",
+			components: []cyclonedx.Component{
+				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			},
+			dependencies: []cyclonedx.Dependency{
+				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+			},
+			expected: []cyclonedx.Component{},
+		},
+		{
+			name: "Search No dependencies",
+			ref:  "comp2",
+			components: []cyclonedx.Component{
+				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			},
+			expected: []cyclonedx.Component{},
+		},
+		{
+			name:       "Search Root no parent",
+			ref:        "root",
+			components: []cyclonedx.Component{{BOMRef: "root"}},
+			dependencies: []cyclonedx.Dependency{
+				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+			},
+			expected: []cyclonedx.Component{},
+		},
+		{
+			name: "Single parent match",
+			ref:  "comp3",
+			components: []cyclonedx.Component{
+				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			},
+			dependencies: []cyclonedx.Dependency{
+				{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+			},
+			expected: []cyclonedx.Component{{BOMRef: "comp1"}},
+		},
+		{
+			name: "Multiple parent matches",
+			ref:  "comp1",
+			components: []cyclonedx.Component{
+				{BOMRef: "root"}, {BOMRef: "comp1"}, {BOMRef: "comp2"}, {BOMRef: "comp3"},
+			},
+			dependencies: []cyclonedx.Dependency{
+				{Ref: "root", Dependencies: &[]string{"comp1", "comp2", "comp3"}},
+				{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+				{Ref: "comp2", Dependencies: &[]string{"comp1"}},
+			},
+			expected: []cyclonedx.Component{{BOMRef: "root"}, {BOMRef: "comp2"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SearchParents(tt.ref, tt.components, tt.dependencies...)
+			assert.ElementsMatch(t, tt.expected, result, "Expected parent components do not match")
+		})
+	}
+}
+
 func TestGetRootDependenciesEntries(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -531,7 +602,7 @@ func TestCreateBaseVulnerability(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vuln := CreateBaseVulnerability(tt.params)
+			vuln := createBaseVulnerability(tt.params)
 			assert.Equal(t, tt.expID, vuln.ID)
 			if vuln.Source != nil {
 				assert.Equal(t, tt.expSvc, vuln.Source.Name)
@@ -588,7 +659,7 @@ func TestUpdateOrAppendVulnerabilitiesRatingsAndSearchRating(t *testing.T) {
 				assert.NotNil(t, existing, "Rating should be found before update")
 				assert.NotEqual(t, tt.rating, existing, "Rating should not match before update")
 			}
-			UpdateOrAppendVulnerabilitiesRatings(vulnerability, tt.rating)
+			updateOrAppendVulnerabilitiesRatings(vulnerability, tt.rating)
 			actual := SearchRating(vulnerability.Ratings, tt.rating.Method, tt.rating.Source)
 			assert.NotNil(t, actual, "Rating should not be found before update")
 			assert.Equal(t, tt.rating, *actual, "Rating should match after update")

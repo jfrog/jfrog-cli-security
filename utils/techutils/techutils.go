@@ -774,7 +774,7 @@ func SplitComponentId(componentId string) (string, string, string) {
 }
 
 func ConvertXrayPackageType(xrayPackageType string) string {
-	if xrayPackageType != "" {
+	if xrayPackageType != "" && packageTypes[xrayPackageType] != "" {
 		return packageTypes[xrayPackageType]
 	}
 	return xrayPackageType

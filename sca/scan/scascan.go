@@ -34,7 +34,7 @@ type SbomScanStrategy interface {
 	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
 }
 
-type SbomScanOption func(ss SbomScanStrategy)
+type SbomScanOption func(sss SbomScanStrategy)
 
 type ScaScanParams struct {
 	// The TargetResults contains the Sbom target for scan.
@@ -101,7 +101,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 	}
 	// If the scan is not requested, skip it.
 	if len(params.ScansToPerform) > 0 && !slices.Contains(params.ScansToPerform, utils.ScaScan) {
-		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as requested by input...", params.ScanResults.Target))
+		log.Debug(fmt.Sprintf("%sSkipping SCA for %s as requested by input...", logPrefix, params.ScanResults.Target))
 		return false, nil
 	}
 	// If the scan is turned off in the config profile, skip it.
@@ -111,7 +111,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 			return false, fmt.Errorf("config profile %s has no modules. A config profile must contain at least one modules", params.ConfigProfile.ProfileName)
 		}
 		if !params.ConfigProfile.Modules[0].ScanConfig.ScaScannerConfig.EnableScaScan {
-			log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA as requested by '%s' config profile...", params.ConfigProfile.ProfileName))
+			log.Debug(fmt.Sprintf("%sSkipping SCA as requested by '%s' config profile...", logPrefix, params.ConfigProfile.ProfileName))
 			return false, nil
 		}
 	}
@@ -123,7 +123,7 @@ func shouldRunScan(params ScaScanParams) (bool, error) {
 
 func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix string) bool {
 	if targetResults == nil || targetResults.ScaResults == nil || targetResults.ScaResults.Sbom == nil || targetResults.ScaResults.Sbom.Components == nil {
-		log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no components were found in the target", targetResults.Target))
+		log.Debug(fmt.Sprintf("%sSkipping SCA for %s as no components were found in the target", logPrefix, targetResults.Target))
 		return false
 	}
 	for _, root := range cdxutils.GetRootDependenciesEntries(targetResults.ScaResults.Sbom) {
@@ -132,7 +132,7 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 			return true
 		}
 	}
-	log.Debug(fmt.Sprintf(logPrefix+"Skipping SCA for %s as no dependencies were found in the target", targetResults.Target))
+	log.Debug(fmt.Sprintf("%sSkipping SCA for %s as no dependencies were found in the target", logPrefix, targetResults.Target))
 	return false
 }
 
@@ -145,7 +145,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		params.ScanResults.NewScaScanResults(getScaScansStatusCode(err, scanResults), scanResults)
+		params.ScanResults.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
 	bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.NewEnrichedSbomScanResults(getScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	params.ScanResults.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}
@@ -166,12 +166,12 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 }
 
 // Infer the status code of SCA Xray scan, if err occurred or any of the results is `failed` return 1, otherwise return 0.
-func getScaScansStatusCode(err error, results ...services.ScanResponse) int {
+func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
 	if err != nil {
 		return 1
 	}
 	for _, result := range results {
-		if result.ScannedStatus == "Failed" {
+		if result.ScannedStatus == "failed" {
 			return 1
 		}
 	}
