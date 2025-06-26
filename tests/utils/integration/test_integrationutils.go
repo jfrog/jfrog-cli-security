@@ -387,27 +387,34 @@ func execCreateRepoRest(repoConfig, repoName string) {
 	log.Info("Repository", repoName, "created.")
 }
 
-func isRepoExist(repoName string) bool {
+func IsRepoExist(repoName string) (bool, error) {
 	client, err := httpclient.ClientBuilder().Build()
 	if err != nil {
-		log.Error(err)
-		os.Exit(1)
+		return false, err
 	}
 	resp, _, _, err := client.SendGet(configTests.RtDetails.ArtifactoryUrl+configTests.RepoDetailsEndpoint+repoName, true, configTests.RtHttpDetails, "")
 	if err != nil {
-		log.Error(err)
-		os.Exit(1)
+		return false, err
 	}
 
 	if resp.StatusCode != http.StatusBadRequest {
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
+}
+
+func isRepoExistExitOnError(repoName string) bool {
+	exist, err := IsRepoExist(repoName)
+	if err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
+	return exist
 }
 
 func DeleteRepos(repos map[*string]string) {
 	for repoName := range repos {
-		if isRepoExist(*repoName) {
+		if isRepoExistExitOnError(*repoName) {
 			ExecDeleteRepo(*repoName)
 		}
 	}
@@ -415,7 +422,7 @@ func DeleteRepos(repos map[*string]string) {
 
 func CreateRepos(repos map[*string]string) {
 	for repoName, configFile := range repos {
-		if !isRepoExist(*repoName) {
+		if !isRepoExistExitOnError(*repoName) {
 			repoConfig := configTests.GetTestResourcesPath() + "/artifactory-repo-configs/" + configFile
 			repoConfig, err := commonTests.ReplaceTemplateVariables(repoConfig, "", configTests.GetSubstitutionMap())
 			if err != nil {
