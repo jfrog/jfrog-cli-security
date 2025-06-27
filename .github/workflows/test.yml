@@ -136,7 +136,6 @@ jobs:
       - name: Run tests
         run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.artifactory --ci.runId=${{ runner.os }}-sec-test
     
-
   Xray_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Xray Commands Integration Tests"
     needs: Pretest
@@ -179,14 +178,10 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc
-        if: ${{ matrix.os != 'ubuntu' }}
-      - name: Run security tests (with Docker Scan)
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
-        if: ${{ matrix.os == 'ubuntu' }}
-
-  Other_Scan_Commands_Integration_Tests:
-    name: "[${{ matrix.os }}] Other Scan Commands Integration Tests"
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.xsc --ci.runId=${{ runner.os }}-sec-test
+  
+  Binary_Scan_Command_Integration_Tests:
+    name: "[${{ matrix.os }}] Binary Scan Command Integration Tests"
     needs: Pretest
     runs-on: ${{ matrix.os }}-latest
     strategy:
@@ -205,11 +200,29 @@ jobs:
 
       # Test
       - name: Run tests
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan
-        if: ${{ matrix.os != 'ubuntu' }}
-      - name: Run security tests (with Docker Scan)
-        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
-        if: ${{ matrix.os == 'ubuntu' }}
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.scan --ci.runId=${{ runner.os }}-sec-test
+
+  Docker_Scan_Commands_Integration_Tests:
+    name: "[${{ matrix.os }}] Docker Scan Commands Integration Tests"
+    needs: Pretest
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu ]
+    steps:
+      # Prepare the environment
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install and Setup Dependencies
+        uses: ./.github/actions/install-and-setup
+
+      # Test
+      - name: Run tests
+        run: go test ${{ env.GO_COMMON_TEST_ARGS }} --test.dockerScan --ci.runId=${{ runner.os }}-sec-test
 
   Other_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Other Commands Integration Tests"
@@ -233,7 +246,6 @@ jobs:
       - name: Run tests
         run:  go test ${{ env.GO_COMMON_TEST_ARGS }} --test.curation --test.enrich --ci.runId=${{ runner.os }}-sec-test
  
-
   Git_Commands_Integration_Tests:
     name: "[${{ matrix.os }}] Git Commands Integration Tests"
     needs: Pretest
