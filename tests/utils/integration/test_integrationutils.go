@@ -213,12 +213,17 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = GetTestCli(testApplication, false)
+		configTests.PlatformCli = GetXrayTestCli(testApplication, false)
 	}
 }
 
-func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
+func GetXrayTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
 	creds := authenticateXray(xrayUrlOnly)
+	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
+}
+
+func GetArtifactoryCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
+	creds := AuthenticateArtifactory()
 	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
@@ -443,7 +448,7 @@ func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands
 	for _, mockCommand := range mockCommands {
 		commands = append(commands, mockCommand())
 	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
+	return GetXrayTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
 		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
 	}
 }

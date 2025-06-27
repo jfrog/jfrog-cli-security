@@ -19,9 +19,11 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
@@ -283,7 +285,7 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	defer securityIntegrationTestUtils.ExecDeleteRepo(repoPath)
 
 	// Run the upload command
-	assert.NoError(t, securityTests.PlatformCli.WithoutCredentials().Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
+	assert.NoError(t, integration.GetArtifactoryCli(cli.GetJfrogCliSecurityApp()).Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
 
 	// Validate the file was uploaded successfully
 	searchResults, err := artifactory.SearchArtifactsInRepo(securityTests.RtDetails, filepath.Base(cdxFileToUpload), repoPath)

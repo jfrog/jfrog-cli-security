@@ -743,7 +743,7 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
+	cliToRun := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},
