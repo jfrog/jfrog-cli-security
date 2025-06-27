@@ -285,7 +285,10 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
 	}
 	bomGenOptions = []bom.SbomGeneratorOption{
+		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
+		// SCANG Bom Generator Options
+		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
 		scang.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options

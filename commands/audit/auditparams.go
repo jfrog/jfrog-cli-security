@@ -30,8 +30,9 @@ type AuditParams struct {
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Dynamic logic params
-	bomGenerator    bom.SbomGenerator
-	scaScanStrategy scan.SbomScanStrategy
+	bomGenerator           bom.SbomGenerator
+	customBomGenBinaryPath string
+	scaScanStrategy        scan.SbomScanStrategy
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -68,6 +69,15 @@ func (params *AuditParams) SetBomGenerator(bomGenerator bom.SbomGenerator) *Audi
 
 func (params *AuditParams) BomGenerator() bom.SbomGenerator {
 	return params.bomGenerator
+}
+
+func (params *AuditParams) SetCustomBomGenBinaryPath(customBomGenBinaryPath string) *AuditParams {
+	params.customBomGenBinaryPath = customBomGenBinaryPath
+	return params
+}
+
+func (params *AuditParams) CustomBomGenBinaryPath() string {
+	return params.customBomGenBinaryPath
 }
 
 func (params *AuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *AuditParams {

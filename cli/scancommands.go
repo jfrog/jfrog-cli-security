@@ -399,10 +399,6 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
-	// Set dynamic command logic based on flags
-	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
-	auditCmd.SetBomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
-
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
 	} else if len(subScans) > 0 {
@@ -443,6 +439,12 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+
+	// Set dynamic command logic based on flags
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	auditCmd.SetBomGenerator(sbomGenerator).
+		SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.ScangBinaryCustomPath))
+	auditCmd.SetScaScanStrategy(scaScanStrategy)
 
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
