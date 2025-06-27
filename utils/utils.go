@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -286,7 +287,9 @@ func ReadSbomFromFile(cdxFilePath string) (*cyclonedx.BOM, error) {
 func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string) (err error) {
 	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	file, err := os.Create(pathToSave)
-	defer file.Close()
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
