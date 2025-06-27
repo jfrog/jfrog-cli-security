@@ -60,6 +60,8 @@ type auditCommandTestParams struct {
 	WithSbom bool
 	// adds "--secrets", "--validate-secrets" flags if true
 	ValidateSecrets bool
+	// adds "--new-sca" flag value if provided
+	WithNewSca bool
 	// --threads flag value if provided
 	Threads int
 }
@@ -95,6 +97,9 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 	}
 	if params.WithSbom {
 		args = append(args, "--sbom")
+	}
+	if params.WithNewSca {
+		args = append(args, "--new-sca")
 	}
 	if params.Threads > 0 {
 		args = append(args, "--threads="+strconv.Itoa(params.Threads))
@@ -875,6 +880,183 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 7, Sast: 2, Iac: 9, Secrets: 6},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
+		},
+	})
+}
+
+// New Sca
+
+func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTestParams) string {
+	// Must have one target, in new SCA mode the flow should not 'dirty' the local environment
+	// No need to copy or change directories just point to the project directory
+	params.WorkingDirsToScan = []string{filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", project)}
+	params.WithNewSca = true
+	// No **/tests/** exclusion, we are scanning projects in the test resources path
+	params.CustomExclusion = []string{"**/node_modules/**", "**/vendor/**", "**/target/**", "**/build/**", "**/out/**"}
+	// Configure a new server named "default"
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+	return securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, append([]string{"audit"}, getAuditCmdArgs(params)...)...)
+}
+
+func TestAuditNewScaCycloneDxNpm(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 6, SbomComponents: 6},
+		SbomComponents: &validations.SbomCount{Direct: 2, Transitive: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxMaven(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 1, SbomComponents: 1},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 0},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxGradle(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 3, SbomComponents: 3},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 3},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxGo(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "go", "simple-project"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 4, SbomComponents: 4},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 3},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 4},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxNuget(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "multi"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 1, SbomComponents: 1},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 0},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxPip(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("jas", "jas"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 3, SbomComponents: 3},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-project"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 3, SbomComponents: 3},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "poetry", "poetry-project"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 3, SbomComponents: 3},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 2},
+		},
+	})
+}
+
+func TestAuditNewScaCycloneDxYarn(t *testing.T) {
+	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "yarn", "yarn-v3"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		ExactResultsMatch: true,
+		Total:          &validations.TotalCount{Vulnerabilities: 1, SbomComponents: 1},
+		SbomComponents: &validations.SbomCount{Direct: 1, Transitive: 0},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
 		},
 	})
 }
