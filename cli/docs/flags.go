@@ -112,6 +112,7 @@ const (
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
+	NewSca              = "new-sca"
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -279,6 +280,7 @@ var flagsMap = map[string]components.Flag{
 		components.SetHiddenBoolFlag(),
 	),
 	RequirementsFile: components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
+	NewSca:           components.NewBoolFlag(NewSca, "Set to true to use the new SCA scan logic.", components.SetHiddenBoolFlag()),
 	CurationOutput:   components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	Sca:              components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
 	Iac:              components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),

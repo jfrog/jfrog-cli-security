@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -261,24 +262,41 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
-	// Initialize the BOM generator
-	buildParams, err := params.ToBuildInfoBomGenParams()
+	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return results.NewCommandResults(utils.SourceCode).AddGeneralError(fmt.Errorf("failed to create build info params: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), false)
 	}
-	if err = params.bomGenerator.WithOptions(buildinfo.WithParams(buildParams)).PrepareGenerator(); err != nil {
+	// Initialize the BOM generator
+	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
 	}
 	// Initialize the SCA scan strategy
-	scanGraphParams, err := params.ToXrayScanGraphParams()
-	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to create scan graph params: %s", err.Error()), false)
-	}
-	if err = params.scaScanStrategy.WithOptions(scanGraphStrategy.WithParams(scanGraphParams)).PrepareStrategy(); err != nil {
+	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
 	}
 	populateScanTargets(cmdResults, params)
 	return
+}
+
+func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
+	// Bom Generators Options
+	buildParams, err := params.ToBuildInfoBomGenParams()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
+	}
+	bomGenOptions = []bom.SbomGeneratorOption{
+		buildinfo.WithParams(buildParams),
+		scang.WithIgnorePatterns(params.Exclusions()),
+	}
+	// Scan Strategies Options
+	scanGraphParams, err := params.ToXrayScanGraphParams()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create scan graph params: %w", err)
+	}
+	scanOptions = []scan.SbomScanOption{
+		scanGraphStrategy.WithParams(scanGraphParams),
+	}
+	return bomGenOptions, scanOptions, nil
 }
 
 func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityCommandResults) {

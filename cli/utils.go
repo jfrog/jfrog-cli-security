@@ -17,6 +17,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 
@@ -106,6 +107,11 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 	return
 }
 
-func getScanDynamicLogic(_ *components.Context) (bom.SbomGenerator, scan.SbomScanStrategy) {
-	return buildinfo.NewBuildInfoBomGenerator(), scangraph.NewScanGraphStrategy()
+func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomScanStrategy) {
+	var bomGenerator bom.SbomGenerator = buildinfo.NewBuildInfoBomGenerator()
+	var scanStrategy scan.SbomScanStrategy = scangraph.NewScanGraphStrategy()
+	if c.GetBoolFlagValue("new-sca") {
+		bomGenerator = scang.NewScangBomGenerator()
+	}
+	return bomGenerator, scanStrategy
 }
