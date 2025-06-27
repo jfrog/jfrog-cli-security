@@ -14,6 +14,7 @@ import (
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	orderedJson "github.com/virtuald/go-ordered-json"
 
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
 
@@ -214,6 +215,19 @@ func Md5Hash(values ...string) (string, error) {
 
 func Sha1Hash(values ...string) (string, error) {
 	return toHash(crypto.SHA1, values...)
+}
+
+func Sha256Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA256, values...)
+}
+
+func FileSha256(filePath string) (string, error) {
+	// Read the file content
+	content, err := fileutils.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return Sha256Hash(string(content))
 }
 
 func toHash(hash crypto.Hash, values ...string) (string, error) {

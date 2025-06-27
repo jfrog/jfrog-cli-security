@@ -2,27 +2,15 @@ package scang
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/CycloneDX/cyclonedx-go"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-)
-
-const (
-	defaultScangPluginVersion             = "1.0.0"
-	jfrogCliScangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
-
-	scangPluginDirName        = "scang"
-	scangPluginExecutableName = "scangplugin"
 )
 
 type ScangBomGenerator struct {
@@ -57,13 +45,6 @@ func (sbg *ScangBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) bo
 	return sbg
 }
 
-func getScangPluginVersion() string {
-	if versionEnv := os.Getenv(jfrogCliScangPluginVersionEnvVariable); versionEnv != "" {
-		return versionEnv
-	}
-	return defaultScangPluginVersion
-}
-
 func (sbg *ScangBomGenerator) PrepareGenerator() (err error) {
 	// Validate the binary path if provided
 	if sbg.binaryPath != "" {
@@ -71,16 +52,21 @@ func (sbg *ScangBomGenerator) PrepareGenerator() (err error) {
 		if err == nil && !exists {
 			err = fmt.Errorf("unable to locate the scang executable at %s", sbg.binaryPath)
 		}
+		// No need to download the plugin if the binary path is set and valid
 		return err
 	}
+	if envPath, err := exec.LookPath(scangPluginExecutableName); err != nil && envPath != "" {
+		// No need to download the plugin if it's found in the system PATH
+		return nil
+	}
 	// Download the scang plugin if needed
-	return
+	return DownloadScangPluginIfNeeded()
 }
 
 func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
 	log.Info(fmt.Sprintf("Generating SBOM for target: %s", target.Target))
-	binaryPath, err := sbg.getLocalScangExecutablePath()
-	if err != nil {
+	binaryPath, err := sbg.getScangExecutablePath()
+	if err != nil || binaryPath == "" {
 		return nil, fmt.Errorf("failed to get local Scang executable path: %w", err)
 	}
 	log.Debug(fmt.Sprintf("Using Scang executable at: %s", binaryPath))
@@ -92,31 +78,13 @@ func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyc
 	return
 }
 
-func getScangExecutableName() string {
-	if coreutils.IsWindows() {
-		return scangPluginExecutableName + ".exe"
-	}
-	return scangPluginExecutableName
-}
-
-func (sbg *ScangBomGenerator) getLocalScangExecutablePath() (scangPath string, err error) {
+func (sbg *ScangBomGenerator) getScangExecutablePath() (scangPath string, err error) {
 	// If binaryPath is set, use it directly
 	if sbg.binaryPath != "" {
 		scangPath = sbg.binaryPath
 		return
 	}
-	// Check if exists in JFrog CLI directory
-	jfrogDir, err := config.GetJfrogDependenciesPath()
-	if err != nil {
-		return
-	}
-	scangPath = filepath.Join(jfrogDir, scangPluginDirName, getScangExecutableName())
-	exists, err := fileutils.IsFileExists(scangPath, false)
-	if err != nil || exists {
-		return
-	}
-	// If not found, check in $PATH
-	return exec.LookPath(scangPluginExecutableName)
+	return getLocalScangExecutablePath()
 }
 
 func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
