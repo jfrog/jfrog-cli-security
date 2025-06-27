@@ -112,7 +112,11 @@ func (sbg *ScangBomGenerator) logScannerOutput(output *cyclonedx.BOM, target str
 			}
 		}
 	}
-	log.Debug(utils.GetAsJsonString(libComponents, false, true))
+	if pUrls, err := utils.GetAsJsonString(libComponents, false, true); err == nil {
+		log.Debug(pUrls)
+	} else {
+		log.Debug(fmt.Sprintf("Failed to log SBOM components: %v", err))
+	}
 	log.Info(fmt.Sprintf("SBOM generated for target '%s': (%d lib Components)", target, len(libComponents)))
 }
 
