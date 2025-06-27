@@ -457,6 +457,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
 		SetScansResultsOutputDir(scansOutputDir).
+		SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath)).
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
 		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 

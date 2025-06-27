@@ -173,6 +173,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
+		SetCustomAnalyzerManagerBinaryPath(auditCmd.customAnalyzerManagerBinaryPath).
+		SetCustomBomGenBinaryPath(auditCmd.customBomGenBinaryPath).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
@@ -552,8 +554,12 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}()
 		logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 		// First download the analyzer manager if needed
-		if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-			return fmt.Errorf("%s failed to download analyzer manager: %s", logPrefix, err.Error())
+		if auditParams.customAnalyzerManagerBinaryPath == "" {
+			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+				return fmt.Errorf("%s failed to download analyzer manager: %s", logPrefix, err.Error())
+			}
+		} else {
+			log.Debug(fmt.Sprintf("%s using custom analyzer manager binary path: %s", logPrefix, auditParams.customAnalyzerManagerBinaryPath))
 		}
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
@@ -563,14 +569,15 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                 auditParallelRunner,
-				ServerDetails:          serverDetails,
-				Scanner:                scanner,
-				Module:                 appsConfigModule,
-				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:        secrets.SecretsScannerType,
+				Runner:                          auditParallelRunner,
+				ServerDetails:                   serverDetails,
+				Scanner:                         scanner,
+				CustomAnalyzerManagerBinaryPath: auditParams.customAnalyzerManagerBinaryPath,
+				Module:                          appsConfigModule,
+				ConfigProfile:                   auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:                  auditParams.ScansToPerform(),
+				SourceResultsToCompare:          scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:                 secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.

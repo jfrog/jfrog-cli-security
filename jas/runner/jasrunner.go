@@ -23,9 +23,10 @@ import (
 )
 
 type JasRunnerParams struct {
-	Runner        *utils.SecurityParallelRunner
-	ServerDetails *config.ServerDetails
-	Scanner       *jas.JasScanner
+	Runner                          *utils.SecurityParallelRunner
+	ServerDetails                   *config.ServerDetails
+	Scanner                         *jas.JasScanner
+	CustomAnalyzerManagerBinaryPath string
 	// Module flags
 	Module        jfrogappsconfig.Module
 	ConfigProfile *services.ConfigProfile
@@ -53,9 +54,12 @@ type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
-	if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+	if params.CustomAnalyzerManagerBinaryPath != "" {
+		params.Scanner.AnalyzerManager.AnalyzerManagerFullPath = params.CustomAnalyzerManagerBinaryPath
+	} else if params.Scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
 		return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 	}
+	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", params.Scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	// For docker scan we support only secrets and contextual scans.
 	runAllScanners := false
 	if params.ApplicableScanType == applicability.ApplicabilityScannerType || params.SecretsScanType == secrets.SecretsScannerType {
