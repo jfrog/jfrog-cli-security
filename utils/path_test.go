@@ -30,7 +30,7 @@ func TestGetRelativePath(t *testing.T) {
 			name:     "no common base path",
 			basePath: filepath.Join("dir1", "dir2"),
 			target:   filepath.Join("dir3", "dir4"),
-			expected: filepath.Join("..", "..", "dir3", "dir4"),
+			expected: filepath.Join("dir3", "dir4"),
 		},
 	}
 

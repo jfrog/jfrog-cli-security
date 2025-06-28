@@ -1,9 +1,10 @@
 package sarifutils
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -271,29 +272,35 @@ func TestGetLocationFileName(t *testing.T) {
 
 func TestGetRelativeLocationFileName(t *testing.T) {
 	tests := []struct {
+		name           string
 		location       *sarif.Location
 		invocations    []*sarif.Invocation
 		expectedOutput string
 	}{
 		{
+			name:           "No invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
 			invocations:    []*sarif.Invocation{},
-			expectedOutput: "root/someDir/another/file",
+			expectedOutput: "file:///root/someDir/another/file",
 		},
 		{
+			name:           "With not relevant invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
-			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("/not/relevant")}},
-			expectedOutput: "root/someDir/another/file",
+			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("file:///not/relevant")}},
+			expectedOutput: "file:///root/someDir/another/file",
 		},
 		{
+			name:           "With invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
-			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("/root/someDir/")}},
+			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("file:///root/someDir/")}},
 			expectedOutput: "another/file",
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetRelativeLocationFileName(test.location, test.invocations))
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetRelativeLocationFileName(test.location, test.invocations))
+		})
 	}
 }
 
@@ -372,21 +379,31 @@ func TestGetLocationRegion(t *testing.T) {
 
 func TestGetLocationStartLine(t *testing.T) {
 	tests := []struct {
+		name           string
 		location       *sarif.Location
 		expectedOutput int
 	}{
 		{
+			name:           "Nil location",
 			location:       nil,
 			expectedOutput: 0,
 		},
 		{
-			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
+			name:           "Location with valid start line",
+			location:       CreateLocation("filename", 2, 2, 2, 2, "snippet"),
+			expectedOutput: 2,
+		},
+		{
+			name:           "Location with not valid start line",
+			location:       CreateLocation("filename", -1, 2, 3, 4, "snippet"),
 			expectedOutput: 1,
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetLocationStartLine(test.location))
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetLocationStartLine(test.location))
+		})
 	}
 }
 

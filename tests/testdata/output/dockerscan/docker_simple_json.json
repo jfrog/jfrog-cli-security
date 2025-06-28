@@ -141,7 +141,7 @@
             "scannerDescription": "The Scanner checks for CVE-2024-6119",
             "evidence": [
               {
-                "file": "usr/local/bin/node",
+                "file": "file://usr/local/bin/node",
                 "reason": "ca msg"
               }
             ]
@@ -209,7 +209,7 @@
             "scannerDescription": "The Scanner checks for CVE-2024-6119",
             "evidence": [
               {
-                "file": "usr/local/bin/node",
+                "file": "file://usr/local/bin/node",
                 "reason": "ca msg"
               }
             ]
