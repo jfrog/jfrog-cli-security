@@ -425,10 +425,10 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cmdType: utils.Build,
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd, sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd, sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file"))),
 			},
 		},
 		{
@@ -552,12 +552,12 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cmdType: utils.Binary,
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "binary"))),
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResultWithFingerprint("result-msg", "result-msg", jfrogFingerprintAlgorithmName, "e72a936dc73acbc4283a93230ff9b6e8", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "binary"))),
 				),
 			},
@@ -586,14 +586,14 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cmdType: utils.SourceCode,
 			subScan: utils.SecretsScan,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", wd,
+				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResultInPath(filepath.Join("dir", "file")),
 				),
 			},
@@ -605,12 +605,12 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan:         utils.SecretsScan,
 			isJasViolations: true,
 			input: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsInWd(wd,
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
 				),
 			},
 			expectedResults: []*sarif.Run{
-				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "[Security Violation] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
+				sarifutils.CreateRunWithDummyResultsWithRuleInformation("", "[Security Violation] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
 					sarifutils.CreateDummyResult("Security Violation result-markdown", "result-msg", "rule", "level", sarifutils.CreateDummyLocationInPath(filepath.Join("dir", "file"))),
 				),
 			},

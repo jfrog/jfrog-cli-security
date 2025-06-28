@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -408,9 +409,12 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedCves: []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{
 				Reason: "result-msg",
 				Location: formats.Location{
-					File:      "fileName2",
-					StartLine: 1,
-					Snippet:   "snippet2",
+					File:        "fileName2",
+					StartLine:   1,
+					StartColumn: 1,
+					EndLine:     1,
+					EndColumn:   1,
+					Snippet:     "snippet2",
 				},
 			}}}}},
 		},
@@ -464,7 +468,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
-					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"}}},
 				}},
 			},
 		},
@@ -566,7 +570,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"}}}}},
 			},
 		},
 	}
@@ -2635,9 +2639,29 @@ func TestScanResponseToSbom(t *testing.T) {
 			expected.Components = test.expected.Components
 			expected.Dependencies = test.expected.Dependencies
 			expected.Vulnerabilities = test.expected.Vulnerabilities
+			// Sort affects in vulnerabilities for consistent comparison
+			if expected.Vulnerabilities != nil {
+				for _, vuln := range *expected.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
 			// Run test
 			destination := cyclonedx.NewBOM()
 			assert.NoError(t, ScanResponseToSbom(destination, test.response))
+			// Sort affects in vulnerabilities for consistent comparison
+			if destination.Vulnerabilities != nil {
+				for _, vuln := range *destination.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
 			// Validate
 			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
 			if expected.Components == nil {
