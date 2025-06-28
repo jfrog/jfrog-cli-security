@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -2638,9 +2639,29 @@ func TestScanResponseToSbom(t *testing.T) {
 			expected.Components = test.expected.Components
 			expected.Dependencies = test.expected.Dependencies
 			expected.Vulnerabilities = test.expected.Vulnerabilities
+			// Sort affects in vulnerabilities for consistent comparison
+			if expected.Vulnerabilities != nil {
+				for _, vuln := range *expected.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
 			// Run test
 			destination := cyclonedx.NewBOM()
 			assert.NoError(t, ScanResponseToSbom(destination, test.response))
+			// Sort affects in vulnerabilities for consistent comparison
+			if destination.Vulnerabilities != nil {
+				for _, vuln := range *destination.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
 			// Validate
 			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
 			if expected.Components == nil {
