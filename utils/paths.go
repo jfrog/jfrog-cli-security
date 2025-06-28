@@ -84,6 +84,13 @@ func GetCurationNugetCacheFolder() (string, error) {
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {
+	// Remove OS-specific file prefix
+	if strings.HasPrefix(fullPathWd, "file:///private") {
+		fullPathWd = strings.Replace(fullPathWd, "file:///private", "file://", 1)
+	}
+	if strings.HasPrefix(baseWd, "file:///private") {
+		baseWd = strings.Replace(baseWd, "file:///private", "file://", 1)
+	}
 	relativePath, err := filepath.Rel(baseWd, fullPathWd)
 	if err != nil {
 		log.Debug(fmt.Sprintf("Failed to get relative path from %s to %s: %v", fullPathWd, baseWd, err))

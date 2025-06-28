@@ -45,7 +45,7 @@ var (
 	TestGit         *bool
 
 	TestAuditGeneral    *bool
-	TestAuditNewSca    *bool
+	TestAuditNewSca     *bool
 	TestAuditJas        *bool
 	TestAuditJavaScript *bool
 	TestAuditJava       *bool

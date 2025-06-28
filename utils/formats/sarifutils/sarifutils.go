@@ -370,7 +370,7 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	}
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
-		logicalCopy := sarif.NewLogicalLocation().WithProperties(logicalLocation.Properties)
+		logicalCopy := sarif.NewLogicalLocation().WithIndex(0).WithParentIndex(0).WithProperties(logicalLocation.Properties)
 		if logicalLocation.Name != nil {
 			logicalCopy.WithName(*logicalLocation.Name)
 		}
@@ -644,10 +644,10 @@ func ConvertRunsPathsToRelative(runs ...*sarif.Run) {
 }
 
 func GetRelativeLocationFileName(location *sarif.Location, invocations []*sarif.Invocation) string {
-	wd := ""
-	if len(invocations) > 0 {
-		wd = GetInvocationWorkingDirectory(invocations[0])
+	if len(invocations) == 0 {
+		return GetLocationFileName(location)
 	}
+	wd := GetInvocationWorkingDirectory(invocations[0])
 	filePath := GetLocationFileName(location)
 	if filePath != "" {
 		return utils.GetRelativePath(filePath, wd)

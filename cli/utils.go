@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
+	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
@@ -112,6 +113,7 @@ func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomSca
 	var scanStrategy scan.SbomScanStrategy = scangraph.NewScanGraphStrategy()
 	if c.GetBoolFlagValue("new-sca") {
 		bomGenerator = scang.NewScangBomGenerator()
+		scanStrategy = enrich.NewEnrichScanStrategy()
 	}
 	return bomGenerator, scanStrategy
 }

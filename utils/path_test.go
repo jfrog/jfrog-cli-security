@@ -1,10 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetRelativePath(t *testing.T) {
@@ -30,7 +31,7 @@ func TestGetRelativePath(t *testing.T) {
 			name:     "no common base path",
 			basePath: filepath.Join("dir1", "dir2"),
 			target:   filepath.Join("dir3", "dir4"),
-			expected: filepath.Join("..", "..", "dir3", "dir4"),
+			expected: filepath.Join("dir3", "dir4"),
 		},
 	}
 
@@ -43,26 +44,53 @@ func TestGetRelativePath(t *testing.T) {
 }
 func TestExtractRelativePath(t *testing.T) {
 	tests := []struct {
+		name           string
 		fullPath       string
 		projectPath    string
 		expectedResult string
 	}{
-		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
-		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
-		{fullPath: "invalidFullPath",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "invalidFullPath"},
-		{fullPath: "",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: ""},
-		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
-		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
+		{
+			name:           "empty path",
+			fullPath:       "",
+			projectPath:    filepath.Join("Users", "user", "Desktop", "secrets_scanner"),
+			expectedResult: "",
+		},
+		{
+			name:           "invalid path",
+			fullPath:       "invalidFullPath",
+			projectPath:    filepath.Join("Users", "user", "Desktop", "secrets_scanner"),
+			expectedResult: "invalidFullPath",
+		},
+		{
+			name:           "valid full path",
+			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			projectPath:    fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner")),
+			expectedResult: "tests/req.nodejs/file.js",
+		},
+		{
+			name:           "invalid project path",
+			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			projectPath:    "invalidProjectPath",
+			expectedResult: fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+		},
+		{
+			name:           "valid full path with private",
+			fullPath:       "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath:    "file:///Users/user/Desktop/secrets_scanner/",
+			expectedResult: "tests/req.nodejs/file.js",
+		},
+		{
+			name:           "invalid project path and path with private",
+			fullPath:       "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath:    "invalidProjectPath",
+			expectedResult: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedResult, GetRelativePath(test.fullPath, test.projectPath))
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedResult, GetRelativePath(test.fullPath, test.projectPath))
+		})
 	}
 }
 

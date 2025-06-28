@@ -23,6 +23,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
+	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/exp/slices"
@@ -305,8 +306,15 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create scan graph params: %w", err)
 	}
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get server details: %w", err)
+	}
 	scanOptions = []scan.SbomScanOption{
+		// Xray Scan Graph Strategy Options
 		scanGraphStrategy.WithParams(scanGraphParams),
+		// Catalog Enrich Strategy Options
+		enrich.WithParams(serverDetails, params.resultsContext.ProjectKey),
 	}
 	return bomGenOptions, scanOptions, nil
 }

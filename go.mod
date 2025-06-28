@@ -9,6 +9,7 @@ require (
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.5.4
+	github.com/hashicorp/go-plugin v1.6.3
 	github.com/jfrog/build-info-go v1.10.14
 	github.com/jfrog/froggit-go v1.17.0
 	github.com/jfrog/gofrog v1.7.6
@@ -60,7 +61,6 @@ require (
 	github.com/grokify/mogo v0.64.12 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
-	github.com/hashicorp/go-plugin v1.6.3 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
@@ -124,12 +124,13 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250619121353-6ff3439c999d
+// attiasas:add_catalog
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250626144927-4f720f081e8c
 
-// attiasas:cyclonedx
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250624075209-50ed155b81c1
+// attiasas:add_catalog
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250627203817-112fe8e7e1e2
 
-replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250619124342-b7fdc5494ce6
+replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250623095509-b3fe2c4681ad
 
 // replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
 
