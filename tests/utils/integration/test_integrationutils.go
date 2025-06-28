@@ -194,10 +194,13 @@ func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	}
 }
 
-func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
-	wd, err := os.Getwd()
-	assert.NoError(t, err, "Failed to get current dir")
-	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(wd, configTests.Out, "jfroghome"))
+func CreateJfrogHomeConfig(t *testing.T, home string, encryptPassword bool) {
+	if home == "" {
+		wd, err := os.Getwd()
+		assert.NoError(t, err, "Failed to get current dir")
+		home = wd
+	}
+	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(home, configTests.Out, "jfroghome"))
 
 	// Delete the default server if exist
 	config, err := commonCommands.GetConfig("default", false)
@@ -442,7 +445,7 @@ func CreateRepos(repos map[*string]string) {
 func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
 	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, true)
+	CreateJfrogHomeConfig(t, "", true)
 	// Create mock cli with the mock commands.
 	commands := []components.Command{}
 	for _, mockCommand := range mockCommands {

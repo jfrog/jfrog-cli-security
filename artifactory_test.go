@@ -111,7 +111,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	for _, testCase := range testCases {
@@ -266,6 +266,8 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	// Create a temporary cdx file with suffix .cdx.json to upload
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
 	cdxFileToUpload := getTestCdxFile(t, tempDirPath)
 	// Configure the repository to upload the cdx file to
 	repoPath := generateTestRepoName()
