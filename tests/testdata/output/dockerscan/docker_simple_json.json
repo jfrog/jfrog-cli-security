@@ -142,7 +142,11 @@
             "evidence": [
               {
                 "file": "file://usr/local/bin/node",
-                "reason": "ca msg"
+                "reason": "ca msg",
+                "startLine": 1,
+                "startColumn": 1,
+                "endLine": 1,
+                "endColumn": 1
               }
             ]
           }
@@ -210,7 +214,11 @@
             "evidence": [
               {
                 "file": "file://usr/local/bin/node",
-                "reason": "ca msg"
+                "reason": "ca msg",
+                "startLine": 1,
+                "startColumn": 1,
+                "endLine": 1,
+                "endColumn": 1
               }
             ]
           }

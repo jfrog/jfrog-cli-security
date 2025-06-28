@@ -366,7 +366,7 @@ func TestGetLocationRegion(t *testing.T) {
 		},
 		{
 			location: CreateLocation("filename", 1, 2, 3, 4, "snippet"),
-			expectedOutput: sarif.NewRegion().WithStartLine(1).WithStartColumn(2).WithEndLine(3).WithEndColumn(4).
+			expectedOutput: sarif.NewRegion().WithByteOffset(0).WithCharOffset(0).WithStartLine(1).WithStartColumn(2).WithEndLine(3).WithEndColumn(4).
 				WithSnippet(sarif.NewArtifactContent().WithText("snippet")),
 		},
 	}
@@ -386,7 +386,7 @@ func TestGetLocationStartLine(t *testing.T) {
 		{
 			name:           "Nil location",
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			name:           "Location with valid start line",
@@ -414,7 +414,7 @@ func TestGetLocationStartColumn(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
@@ -434,7 +434,7 @@ func TestGetLocationEndLine(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
@@ -454,7 +454,7 @@ func TestGetLocationEndColumn(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
