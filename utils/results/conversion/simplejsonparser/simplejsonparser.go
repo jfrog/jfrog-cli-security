@@ -497,6 +497,7 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 			formats.SourceCodeRow{
 				ScannerInfo: formats.ScannerInfo{
 					RuleId:                  sarifutils.GetResultRuleId(result),
+					Origin:                  sarifutils.GetRuleOrigin(rule),
 					Cwe:                     sarifutils.GetRuleCWE(rule),
 					ScannerDescription:      sarifutils.GetRuleFullDescription(rule),
 					ScannerShortDescription: sarifutils.GetRuleShortDescription(rule),

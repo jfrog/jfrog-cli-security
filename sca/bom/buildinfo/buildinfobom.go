@@ -123,6 +123,8 @@ func (b *BuildInfoBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *c
 	return
 }
 
+// CycloneDx expect to report the location that the component exists as evidence occurrence.
+// We need to attach this attribute as the given descriptors locations to the components.
 func attachDescriptorsToComponents(components *[]cyclonedx.Component, target results.ScanTarget, descriptors []string) {
 	if len(descriptors) == 0 {
 		log.Debug(fmt.Sprintf("No descriptors found for target '%s', skipping attaching descriptors to components.", target.Target))

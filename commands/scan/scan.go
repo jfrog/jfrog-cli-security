@@ -280,8 +280,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 			}
 		}()
 	}
-	// TODO: Use the following code when implementing SCA scan with interface
-	// Initialize the scan strategy
+	// TODO: Use the following code when implementing SCA scan with interface when binary will also support scan strategy and not only scan graph.
 	// if scanCmd.scanStrategy != nil {
 	// 	if err := scanCmd.scanStrategy.PrepareStrategy(scangraphstrategy.WithParams(*scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId))); err != nil {
 	// 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare scan strategy: %w", err), false)
@@ -449,7 +448,7 @@ func (scanCmd *ScanCommand) GenerateBinaryBom(cmdType utils.CommandType, targetR
 }
 
 func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, deprecatedGraph *xrayClientUtils.BinaryGraphNode, scanThreadId int) (targetCompId string, graphScanResults *services.ScanResponse, err error) {
-	// TODO: Use the following code when implementing SCA scan with interface
+	// TODO: Use the following code when binary will also support scan strategy (interface) and not only scan graph.
 	// if scanGraphStrategy, ok := scanCmd.scanStrategy.(*scangraphstrategy.ScanGraphStrategy); ok {
 	// 	scanGraphStrategy.ScanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
 	// }
@@ -487,7 +486,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		err = targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"sca scanning '%s' failed with error: %s", targetCompId, err.Error()), false)
 		return
 	}
-	targetResults.NewScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
+	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 	targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 	return
 }
