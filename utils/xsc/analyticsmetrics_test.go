@@ -217,7 +217,7 @@ func getDummyContentForGeneralEvent(withJas, withErr, withResultContext bool) *r
 	cmdResults.StartTime = time.Now()
 	cmdResults.MultiScanId = "msi"
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Target: "target"})
-	scanResults.NewScaScanResults(0, services.ScanResponse{Vulnerabilities: vulnerabilities})
+	scanResults.ScaScanResults(0, services.ScanResponse{Vulnerabilities: vulnerabilities})
 
 	if withJas {
 		scanResults.JasResults.ApplicabilityScanResults = validations.NewMockJasRuns(sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyPassingResult("applic_CVE-123")))

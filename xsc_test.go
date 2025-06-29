@@ -97,9 +97,9 @@ func validateAnalyticsBasicEvent(t *testing.T, xrayVersion, xscVersion, output s
 }
 
 func TestAdvancedSecurityDockerScanWithXsc(t *testing.T) {
-	_, _, cleanUpXsc := integration.InitXscTest(t)
-	defer cleanUpXsc()
 	testCli, cleanupDocker := integration.InitNativeDockerTest(t)
 	defer cleanupDocker()
+	cleanUpXsc := integration.PrepareXscForTest(t)
+	defer cleanUpXsc()
 	runAdvancedSecurityDockerScan(t, testCli, "jfrog/demo-security:latest")
 }

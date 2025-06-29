@@ -458,7 +458,7 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
+func (sr *TargetResults) ScaScanResults(errorCode int, responses ...services.ScanResponse) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
@@ -468,7 +468,7 @@ func (sr *TargetResults) NewScaScanResults(errorCode int, responses ...services.
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) NewEnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
+func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
 	// Update the existing BOM with the enriched BOM
 	sr.SetSbom(enrichedSbom)
 	sr.ScaResults.AddViolations(violations...)

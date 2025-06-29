@@ -257,8 +257,8 @@ func GetSeverityScore(severity Severity, applicabilityStatus jasutils.Applicabil
 
 func GetSeverityScoreFloat64(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) *float64 {
 	score := GetSeverityScore(severity, applicabilityStatus)
-	// convert score to have up to 4 digits after the decimal point
-	convertedScore := float64(int(score*10000)) / 10000
+	// convert score to have up to 1 digits after the decimal point
+	convertedScore := float64(int(score*10)) / 10
 	return &convertedScore
 }
 
