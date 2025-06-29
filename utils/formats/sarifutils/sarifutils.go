@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	OriginSarifPropertyKey                  = "origin"
 	WatchSarifPropertyKey                   = "watch"
 	PoliciesSarifPropertyKey                = "policies"
 	JasIssueIdSarifPropertyKey              = "issueId"
@@ -26,6 +27,21 @@ const (
 )
 
 // Specific JFrog Sarif Utils
+
+func GetRuleOrigin(rule *sarif.ReportingDescriptor) (origin string) {
+	if rule == nil || rule.Properties == nil {
+		return
+	}
+	// Check if the property exists
+	originProperty, exists := rule.Properties.Properties[OriginSarifPropertyKey]
+	if !exists {
+		return
+	}
+	if originValue, ok := originProperty.(string); ok {
+		return originValue
+	}
+	return
+}
 
 func GetResultPropertyTokenValidation(result *sarif.Result) string {
 	return GetResultProperty(TokenValidationStatusSarifPropertyKey, result)

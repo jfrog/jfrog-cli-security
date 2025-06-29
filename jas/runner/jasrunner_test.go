@@ -46,7 +46,7 @@ func TestJasRunner(t *testing.T) {
 	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}, targetResults.GetTechnologies()...)))
 	assert.NoError(t, err)
 
-	targetResults.NewScaScanResults(0, jas.FakeBasicXrayResults[0])
+	targetResults.ScaScanResults(0, jas.FakeBasicXrayResults[0])
 	directComponents := []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}
 	testParams := JasRunnerParams{
 		Runner:             securityParallelRunnerForTest,

@@ -145,7 +145,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	if !params.IsNewFlow {
 		scanResults, err := strategy.DeprecatedScanTask(params.ScanResults.ScaResults.Sbom)
 		// We add the results before checking for errors, so we can display the results even if an error occurred.
-		params.ScanResults.NewScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
+		params.ScanResults.ScaScanResults(GetScaScansStatusCode(err, scanResults), scanResults)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
 	bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.NewEnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}
