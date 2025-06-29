@@ -212,18 +212,19 @@ func convertToFileUrlIfNeeded(location string) string {
 	return filepath.ToSlash(location)
 }
 
-func Exclude(bom cyclonedx.BOM, components ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
+func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (filteredSbom *cyclonedx.BOM) {
 	if bom.Components == nil || len(*bom.Components) == 0 || bom.Dependencies == nil || len(*bom.Dependencies) == 0 {
 		// No components or dependencies to filter, return the original BOM
 		return &bom
 	}
 	filteredSbom = &bom
-	for _, comp := range components {
-		if exists := SearchComponentByRef(bom.Components, comp.BOMRef); exists == nil {
+	for _, compToExclude := range componentsToExclude {
+		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef) == RootRelation {
+			// If not a match or Root component, skip it
 			continue
 		}
 		// Exclude the component from the dependencies
-		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, comp.BOMRef)
+		filteredSbom.Dependencies = excludeFromDependencies(bom.Dependencies, compToExclude.BOMRef)
 	}
 	toExclude := datastructures.MakeSet[string]()
 	for _, comp := range *filteredSbom.Components {
