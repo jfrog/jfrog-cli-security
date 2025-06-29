@@ -307,7 +307,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 			return xrayManager, cmdResults.AddGeneralError(err, false)
 		}
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(scanCmd.serverDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(scanCmd.serverDetails, xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
 	if err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	}
