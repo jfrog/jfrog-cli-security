@@ -3,7 +3,7 @@ description: "Install needed dependencies for this repository like Go, Node, Jav
 
 inputs:
   install-swift:
-    description: "Set to 'true' to skip installing Swift. the actions are flaky and may fail on some platforms."
+    description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
     required: false
     default: 'false'
 
