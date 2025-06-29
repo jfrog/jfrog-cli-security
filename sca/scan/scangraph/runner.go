@@ -82,13 +82,23 @@ func (sg *ScanGraphStrategy) DeprecatedScanTask(target *cyclonedx.BOM) (techResu
 func resolveTechnologyFromBOM(target *cyclonedx.BOM) (tech techutils.Technology) {
 	// Try to resolve the technology from the root dependencies of the BOM.
 	for _, root := range cdxutils.GetRootDependenciesEntries(target) {
-		rootComponent := cdxutils.SearchComponentByRef(target.Components, root.Ref)
-		if rootComponent == nil {
-			continue
+		rootTech := getDependencyTechnology(target, root)
+		if rootTech != techutils.NoTech {
+			return rootTech
 		}
-		// Found the root component, extract the technology from its package URL.
-		_, _, comType := techutils.SplitPackageURL(rootComponent.PackageURL)
-		return techutils.Technology(comType)
+	}
+	return techutils.NoTech
+}
+
+func getDependencyTechnology(target *cyclonedx.BOM, dependency cyclonedx.Dependency) (tech techutils.Technology) {
+	component := cdxutils.SearchComponentByRef(target.Components, dependency.Ref)
+	if component == nil {
+		return techutils.NoTech
+	}
+	// If the component is set, we can extract the technology from its package URL.
+	_, _, comType := techutils.SplitPackageURL(component.PackageURL)
+	if comType != "" && comType != "generic" {
+		return techutils.CdxPackageTypeToTechnology(comType)
 	}
 	return techutils.NoTech
 }
