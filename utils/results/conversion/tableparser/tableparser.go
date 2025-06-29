@@ -97,6 +97,9 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 			relationStr = "Transitive"
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+		if compType == techutils.Cocoapods.GetPackageType() {
+			compName = component.Name
+		}
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
 			Component:   compName,
 			Version:     compVersion,
