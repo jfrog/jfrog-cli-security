@@ -113,6 +113,7 @@ type SourceCodeRow struct {
 
 type ScannerInfo struct {
 	RuleId                  string   `json:"ruleId"`
+	Origin                  string   `json:"origin,omitempty"`
 	Cwe                     []string `json:"cwe,omitempty"`
 	ScannerShortDescription string   `json:"scannerShortDescription,omitempty"`
 	ScannerDescription      string   `json:"scannerDescription,omitempty"`
