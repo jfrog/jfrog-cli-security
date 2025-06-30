@@ -636,28 +636,3 @@ func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.S
 	}
 	return nil
 }
-
-func createBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
-	var source *cyclonedx.Source
-	if params.Service != nil {
-		source = &cyclonedx.Source{
-			Name: params.Service.Name,
-		}
-	}
-	var ratings *[]cyclonedx.VulnerabilityRating
-	if len(params.Ratings) > 0 {
-		ratings = &params.Ratings
-	}
-	vuln := cyclonedx.Vulnerability{
-		BOMRef:      params.Ref,
-		ID:          params.ID,
-		Source:      source,
-		CWEs:        convertCweToCycloneDx(params.CWE),
-		Description: params.Description,
-		Detail:      params.Details,
-		Ratings:     ratings,
-		References:  getReferences(params.References),
-	}
-	vuln.Properties = AppendProperties(vuln.Properties, properties...)
-	return vuln
-}
