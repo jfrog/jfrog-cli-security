@@ -117,7 +117,11 @@ func (sbg *ScangBomGenerator) logScannerOutput(output *cyclonedx.BOM, target str
 	} else {
 		log.Debug(fmt.Sprintf("Failed to log SBOM components: %v", err))
 	}
-	log.Info(fmt.Sprintf("SBOM generated for target '%s': (%d lib Components)", target, len(libComponents)))
+	if len(libComponents) == 0 {
+		log.Info(fmt.Sprintf("No library components found in SBOM for target '%s'.", target))
+	} else {
+		log.Info(fmt.Sprintf("SBOM generated for target '%s': (%d lib Components)", target, len(libComponents)))
+	}
 }
 
 func (sbg *ScangBomGenerator) CleanUp() (err error) {

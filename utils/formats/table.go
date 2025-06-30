@@ -27,32 +27,32 @@ type ResultsTables struct {
 
 // Used for vulnerabilities and security violations
 type scaVulnerabilityOrViolationTableRow struct {
-	severity   string `col-name:"Severity"`
-	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
+	cves       []cveTableRow `embed-table:"true"`
+	severity   string        `col-name:"Severity"`
+	applicable string        `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting
 	severityNumValue          int
 	directDependencies        []directDependenciesTableRow `embed-table:"true"`
-	impactedDependencyName    string                       `col-name:"Impacted\nDependency\nName"`
-	impactedDependencyVersion string                       `col-name:"Impacted\nDependency\nVersion"`
+	impactedDependencyName    string                       `col-name:"Affected\nComponent\nName"`
+	impactedDependencyVersion string                       `col-name:"Affected\nComponent\nVersion"`
 	fixedVersions             string                       `col-name:"Fixed\nVersions"`
 	impactedDependencyType    string                       `col-name:"Type"`
-	cves                      []cveTableRow                `embed-table:"true"`
 	watch                     string                       `col-name:"Watch Name" omitempty:"true"`
 	issueId                   string                       `col-name:"Issue ID" extended:"true"`
 }
 
 // For Binary scans
 type vulnerabilityScanTableRow struct {
-	severity   string `col-name:"Severity"`
-	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
+	cves       []cveTableRow `embed-table:"true"`
+	severity   string        `col-name:"Severity"`
+	applicable string        `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting
 	severityNumValue       int
 	directPackages         []directPackagesTableRow `embed-table:"true"`
-	impactedPackageName    string                   `col-name:"Impacted\nPackage\nName"`
-	impactedPackageVersion string                   `col-name:"Impacted\nPackage\nVersion"`
+	impactedPackageName    string                   `col-name:"Affected\nComponent\nName"`
+	impactedPackageVersion string                   `col-name:"Affected\nComponent\nVersion"`
 	fixedVersions          string                   `col-name:"Fixed\nVersions"`
 	ImpactedPackageType    string                   `col-name:"Type"`
-	cves                   []cveTableRow            `embed-table:"true"`
 	issueId                string                   `col-name:"Issue ID" extended:"true"`
 }
 

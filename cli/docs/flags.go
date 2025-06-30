@@ -287,7 +287,7 @@ var flagsMap = map[string]components.Flag{
 	RequirementsFile:          components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
 	AnalyzerManagerCustomPath: components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
 	ScangBinaryCustomPath:     components.NewStringFlag(ScangBinaryCustomPath, "Defines the custom path to the scang binary.", components.SetHiddenStrFlag()),
-	NewSca:                    components.NewBoolFlag(NewSca, "Set to true to use the new SCA scan logic.", components.SetHiddenBoolFlag()),
+	NewSca:                    components.NewBoolFlag(NewSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	CurationOutput:            components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	Sca:                       components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
 	Iac:                       components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),

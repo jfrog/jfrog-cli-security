@@ -61,6 +61,21 @@ const (
 	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
 
+var subScanTypeToText = map[SubScanType]string{
+	ContextualAnalysisScan: "Contextual Analysis",
+	ScaScan:                "SCA",
+	IacScan:                "IaC",
+	SastScan:               "SAST",
+	SecretsScan:            "Secrets",
+}
+
+func (subScan SubScanType) ToTextString() string {
+	if text, ok := subScanTypeToText[subScan]; ok {
+		return text
+	}
+	return string(subScan)
+}
+
 type ViolationIssueType string
 
 func (v ViolationIssueType) String() string {
@@ -108,19 +123,24 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 }
 
 func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+
 	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("No %s findings", scanType.String())
+		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
 	}
 	msg := "Found"
 	hasVulnerabilities := vulnerabilitiesCount > 0
 	if hasVulnerabilities {
-		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+		if scanType == SecretsScan {
+			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
+		} else {
+			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
+		}
 	}
 	if violationsCount > 0 {
 		if hasVulnerabilities {
 			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
 		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
 		}
 	}
 	return msg

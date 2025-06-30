@@ -1,6 +1,7 @@
 package applicability
 
 import (
+	"fmt"
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -59,7 +60,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "Running applicability scan...")
+	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + fmt.Sprintf("Running %s scan on target...", utils.ContextualAnalysisScan.ToTextString()))
 	// Applicability scan does not produce violations.
 	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Module); err != nil {
 		return
