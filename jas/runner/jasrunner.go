@@ -38,8 +38,8 @@ type JasRunnerParams struct {
 	// Secret scan flags
 	SecretsScanType secrets.SecretsScanType
 	// Contextual Analysis scan flags
+	CvesProvider                CveProvider
 	ApplicableScanType          applicability.ApplicabilityScanType
-	DirectDependencies          *[]string
 	ThirdPartyApplicabilityScan bool
 	// SAST scan flags
 	SignedDescriptions bool
@@ -47,6 +47,9 @@ type JasRunnerParams struct {
 	ScanResults     *results.TargetResults
 	TargetOutputDir string
 }
+
+// Cves are only available after the SCA scan is performed, so we need a provider to dynamically pass the discovered cves.
+type CveProvider func() (directCves []string, indirectCves []string)
 
 func AddJasScannersTasks(params JasRunnerParams) (generalError error) {
 	// Set the analyzer manager executable path.
@@ -139,7 +142,7 @@ func runSecretsScan(params *JasRunnerParams) parallel.TaskFunc {
 		if err = jas.ParseAnalyzerManagerError(jasutils.Secrets, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Secrets, vulnerabilitiesResults, violationsResults)
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Secrets, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -156,7 +159,7 @@ func runIacScan(params *JasRunnerParams) parallel.TaskFunc {
 		if err = jas.ParseAnalyzerManagerError(jasutils.IaC, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.IaC, vulnerabilitiesResults, violationsResults)
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.IaC, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -173,7 +176,7 @@ func runSastScan(params *JasRunnerParams) parallel.TaskFunc {
 		if err = jas.ParseAnalyzerManagerError(jasutils.Sast, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Sast, vulnerabilitiesResults, violationsResults)
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Sast, threadId, vulnerabilitiesResults, violationsResults)
 	}
 }
 
@@ -184,14 +187,19 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		}()
 		// Wait for sca scans to complete before running contextual scan
 		params.Runner.ScaScansWg.Wait()
+		// Get the direct and indirect cves from the sca scan.
+		directCves, indirectCves := params.CvesProvider()
+		// Run the applicability scan only if we have cves to scan.
 		caScanResults, err := applicability.RunApplicabilityScan(
-			params.ScanResults.GetScaScansXrayResults(),
-			*params.DirectDependencies,
+			applicability.ContextualAnalysisScanParams{
+				DirectDependenciesCves:       directCves,
+				IndirectDependenciesCves:     indirectCves,
+				ScanType:                     params.ApplicableScanType,
+				ThirdPartyContextualAnalysis: params.ThirdPartyApplicabilityScan,
+				ThreadId:                     threadId,
+				Module:                       params.Module,
+			},
 			params.Scanner,
-			params.ThirdPartyApplicabilityScan,
-			params.ApplicableScanType,
-			params.Module,
-			threadId,
 		)
 		params.Runner.ResultsMu.Lock()
 		defer params.Runner.ResultsMu.Unlock()
@@ -200,7 +208,7 @@ func runContextualScan(params *JasRunnerParams) parallel.TaskFunc {
 		if err = jas.ParseAnalyzerManagerError(jasutils.Applicability, err); err != nil {
 			return fmt.Errorf("%s%s", clientutils.GetLogMsgPrefix(threadId, false), err.Error())
 		}
-		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Applicability, caScanResults)
+		return dumpSarifRunToFileIfNeeded(params.TargetOutputDir, jasutils.Applicability, threadId, caScanResults)
 	}
 }
 
@@ -212,7 +220,7 @@ func getSourceRunsToCompare(params *JasRunnerParams, scanType jasutils.JasScanTy
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
-func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.JasScanType, scanResults ...[]*sarif.Run) (err error) {
+func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.JasScanType, threadId int, scanResults ...[]*sarif.Run) (err error) {
 	if scanResultsOutputDir == "" || len(scanResults) == 0 {
 		return
 	}
@@ -224,7 +232,7 @@ func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.J
 		if fileContent, err = utils.GetAsJsonBytes(resultsToDump, true, true); err != nil {
 			err = errors.Join(err, fmt.Errorf("failed to write %s scan results to file", scanType))
 		} else {
-			err = errors.Join(err, utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String()))
+			err = errors.Join(err, utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId))
 		}
 	}
 	return

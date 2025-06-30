@@ -42,6 +42,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
 	"github.com/jfrog/jfrog-cli-security/commands/upload"
 
+	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -284,6 +285,7 @@ func ScanCmd(c *components.Context) error {
 	}
 	scanCmd := scan.NewScanCommand().
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -412,7 +414,8 @@ func AuditCmd(c *components.Context) error {
 	}
 
 	// Set dynamic command logic based on flags
-	auditCmd.SetBomGenerator(getScanDynamicLogic(c))
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	auditCmd.SetBomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
@@ -717,6 +720,7 @@ func DockerScan(c *components.Context, image string) error {
 	}
 	containerScanCommand.SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
