@@ -80,7 +80,7 @@ func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 		// Target name is already set, no need to update.
 		return
 	}
-	roots := cdxutils.GetRootDependenciesEntries(sbom)
+	roots := cdxutils.GetRootDependenciesEntries(sbom, true)
 	if len(roots) == 0 {
 		// No root dependencies found, nothing to update.
 		return

@@ -788,7 +788,7 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 
 // Resolve the actual technology from multiple sources:
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
-	if responseTechnology != "" {
+	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
 		// technology returned in the vulnerability/violation obj is the most specific technology
 		return techutils.Technology(responseTechnology)
 	}
@@ -899,7 +899,7 @@ func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertT
 	}
 	// Translate refs to IDs
 	directIdsSet := datastructures.MakeSet[string]()
-	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom) {
+	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom, true) {
 		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
 			continue
 		}
@@ -1086,7 +1086,7 @@ func IsMultiProject(sbom *cyclonedx.BOM) bool {
 		// No dependencies or components in the SBOM, return false
 		return false
 	}
-	return len(cdxutils.GetRootDependenciesEntries(sbom)) > 1
+	return len(cdxutils.GetRootDependenciesEntries(sbom, false)) > 1
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
@@ -1124,7 +1124,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependenc
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom, false) {
 		// Create a new GraphNode with ref as the ID, when populating the tree we need to use the ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
@@ -1171,7 +1171,7 @@ func BomToFullCompTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependenc
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom, true) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := toBinaryNode(sbom, rootEntry.Ref)
 		// Populate application tree
@@ -1429,6 +1429,22 @@ func CreateCveRatings(cve formats.CveRow) (ratings []cyclonedx.VulnerabilityRati
 }
 
 func GetOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
+	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
+	// Check if the component already exists in the BOM
+	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {
+		// The component already exists, return it
+		return component
+	}
+	// Create a new component, add it to the BOM and return it
+	if destination.Components == nil {
+		destination.Components = &[]cyclonedx.Component{}
+	}
+	component := CreateScaComponentFromXrayCompId(xrayCompId)
+	*destination.Components = append(*destination.Components, component)
+	return &(*destination.Components)[len(*destination.Components)-1]
+}
+
+func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
 	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
 	// Check if the component already exists in the BOM
 	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {

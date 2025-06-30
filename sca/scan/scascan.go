@@ -15,7 +15,6 @@ import (
 	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 )
 
@@ -126,10 +125,13 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 		log.Debug(fmt.Sprintf("%sSkipping SCA for %s as no components were found in the target", logPrefix, targetResults.Target))
 		return false
 	}
-	for _, root := range cdxutils.GetRootDependenciesEntries(targetResults.ScaResults.Sbom) {
-		if root.Dependencies != nil && len(*root.Dependencies) > 0 {
-			// Found at least one dependency, we can run the scan.
-			return true
+	if targetResults.ScaResults.Sbom.Dependencies != nil && len(*targetResults.ScaResults.Sbom.Dependencies) > 0 {
+		for _, dependencyEntry := range *targetResults.ScaResults.Sbom.Dependencies {
+			if dependencyEntry.Dependencies != nil && len(*dependencyEntry.Dependencies) > 0 {
+				log.Debug(fmt.Sprintf("%sFound %d dependencies in %s target, SCA scan will be performed", logPrefix, len(*dependencyEntry.Dependencies), targetResults.Target))
+				return true
+			}
+
 		}
 	}
 	log.Debug(fmt.Sprintf("%sSkipping SCA for %s as no dependencies were found in the target", logPrefix, targetResults.Target))

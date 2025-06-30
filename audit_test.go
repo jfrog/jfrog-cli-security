@@ -29,6 +29,8 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	scangraphstrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
@@ -697,6 +699,7 @@ func getNoJasAuditMockCommand() components.Command {
 			}
 			// Disable Jas for this test
 			auditCmd.SetUseJas(false)
+			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}
