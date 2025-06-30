@@ -6,6 +6,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
@@ -33,6 +34,7 @@ type GitAuditParams struct {
 	multiScanId         string
 	startTime           time.Time
 	bomGenerator        bom.SbomGenerator
+	scaScanStrategy     scan.SbomScanStrategy
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -116,5 +118,10 @@ func (gap *GitAuditParams) SetExclusions(exclusions []string) *GitAuditParams {
 
 func (gap *GitAuditParams) SetSbomGenerator(generator bom.SbomGenerator) *GitAuditParams {
 	gap.bomGenerator = generator
+	return gap
+}
+
+func (gap *GitAuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *GitAuditParams {
+	gap.scaScanStrategy = scaScanStrategy
 	return gap
 }

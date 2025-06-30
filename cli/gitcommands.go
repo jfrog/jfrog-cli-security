@@ -78,7 +78,9 @@ func GitAuditCmd(c *components.Context) error {
 		return err
 	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
-	gitAuditCmd.SetSbomGenerator(getScanDynamicLogic(c))
+	// Set the dynamic logic for SBOM generation and SCA scan strategy
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
 }

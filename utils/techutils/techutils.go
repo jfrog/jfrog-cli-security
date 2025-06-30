@@ -782,7 +782,10 @@ func SplitComponentId(componentId string) (string, string, string) {
 }
 
 func ConvertXrayPackageType(xrayPackageType string) string {
-	return packageTypes[xrayPackageType]
+	if xrayPackageType != "" && packageTypes[xrayPackageType] != "" {
+		return packageTypes[xrayPackageType]
+	}
+	return xrayPackageType
 }
 
 func ToXrayComponentId(packageType, componentName, componentVersion string) string {
@@ -791,6 +794,19 @@ func ToXrayComponentId(packageType, componentName, componentVersion string) stri
 		return fmt.Sprintf("%s://%s", packageType, componentName)
 	}
 	return fmt.Sprintf("%s://%s:%s", packageType, componentName, componentVersion)
+}
+
+func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
+	for tech, cdxType := range cdxPurlPackageTypes {
+		if cdxType == cdxPackageType {
+			if tech == "gav" {
+				return Technology(cdxType)
+			}
+			return Technology(tech)
+		}
+	}
+	// If the package type is not found in the map, return NoTech
+	return NoTech
 }
 
 func ToCdxPackageType(packageType string) string {

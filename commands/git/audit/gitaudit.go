@@ -95,7 +95,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Output params
 	auditParams.SetOutputFormat(params.outputFormat)
 	// Cmd information
-	auditParams.SetBomGenerator(params.bomGenerator).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
+	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
 	auditParams.SetUseJas(true).SetIsRecursiveScan(true)
 	return auditParams
