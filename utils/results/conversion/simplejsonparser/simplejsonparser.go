@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
@@ -65,23 +66,15 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
-func shouldUpdateStatus(currentStatus, newStatus *int) bool {
-	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
-		return true
-	}
-	return false
-}
-
-func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	if shouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &scaResponse.StatusCode) {
+	if results.ShouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &scaResponse.StatusCode) {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
 	for i := range applicableScan {
-		if shouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
@@ -91,6 +84,116 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseScaIssues(target results.ScanTarg
 		err = sjc.parseScaVulnerabilities(target, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
 	}
 	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	if len(components) == 0 {
+		return
+	}
+	// Iterate through the components and collect licenses
+	for _, component := range components {
+		if component.Licenses == nil || len(*component.Licenses) == 0 {
+			// No licenses found for this component, continue to the next one
+			continue
+		}
+		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+		for _, license := range *component.Licenses {
+			if license.License == nil && license.License.Name == "" {
+				// No license name found, continue to the next one
+				continue
+			}
+			sjc.current.Licenses = append(sjc.current.Licenses, formats.LicenseRow{
+				LicenseKey:  license.License.ID,
+				LicenseName: license.License.Name,
+				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+					ImpactedDependencyName:    compName,
+					ImpactedDependencyVersion: compVersion,
+					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
+					Components:                results.GetDirectDependenciesAsComponentRows(component, components, dependencies),
+				},
+				ImpactPaths: results.BuildImpactPath(component, components, dependencies...),
+			})
+		}
+	}
+	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	if results.ShouldUpdateStatus(sjc.current.Statuses.ScaStatusCode, &enrichedSbom.StatusCode) {
+		sjc.current.Statuses.ScaStatusCode = &enrichedSbom.StatusCode
+	}
+	for i := range applicableScan {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
+		}
+	}
+	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sjc.entitledForJas, results.ScanResultsToRuns(applicableScan),
+		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersions *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
+			// Prepare the required fields for the vulnerability row
+			applicabilityStatus := jasutils.NotScanned
+			if applicability != nil {
+				applicabilityStatus = jasutils.ConvertToApplicabilityStatus(applicability.Status)
+			}
+			compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
+			dependencies := []cyclonedx.Dependency{}
+			if enrichedSbom.Scan.Dependencies != nil {
+				dependencies = append(dependencies, *enrichedSbom.Scan.Dependencies...)
+			}
+			// Convert the CycloneDX vulnerability to a simple JSON vulnerability row
+			sjc.current.Vulnerabilities = append(sjc.current.Vulnerabilities, formats.VulnerabilityOrViolationRow{
+				Summary: vulnerability.Description,
+				ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+					SeverityDetails:           severityutils.GetAsDetails(severity, applicabilityStatus, sjc.pretty),
+					ImpactedDependencyName:    compName,
+					ImpactedDependencyVersion: compVersion,
+					ImpactedDependencyType:    techutils.ConvertXrayPackageType(techutils.CdxPackageTypeToXrayPackageType(compType)),
+					Components:                results.GetDirectDependenciesAsComponentRows(component, *enrichedSbom.Scan.Components, dependencies),
+				},
+				FixedVersions: results.CdxToFixedVersions(fixedVersions),
+				Cves:          results.CdxVulnToCveRows(vulnerability, applicability),
+				IssueId:       vulnerability.ID,
+				Technology:    results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), target.Technology),
+				Applicable:    applicabilityStatus.ToString(sjc.pretty),
+				References:    toReferences(vulnerability),
+				// TODO: implement JfrogResearchInformation conversion
+				// JfrogResearchInformation: nil,
+				ImpactPaths: results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
+			})
+			return
+		},
+	)
+}
+
+func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
+	references = []string{}
+	// If vulnerability has references, we convert them to a string slice.
+	if vulnerability.References == nil {
+		return
+	}
+	for _, ref := range *vulnerability.References {
+		if ref.Source != nil && ref.Source.URL != "" {
+			references = append(references, ref.Source.URL)
+		}
+	}
+	return
+}
+
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if sjc.current == nil {
+		return results.ErrResetConvertor
+	}
+	for i := range applicableScan {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
+		}
+	}
+	return sjc.parseScaViolations(target, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
@@ -119,7 +222,7 @@ func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -147,7 +250,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isV
 		return results.ErrResetConvertor
 	}
 	for i := range secrets {
-		if shouldUpdateStatus(sjc.current.Statuses.SecretsStatusCode, &secrets[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.SecretsStatusCode, &secrets[i].StatusCode) {
 			sjc.current.Statuses.SecretsStatusCode = &secrets[i].StatusCode
 		}
 	}
@@ -171,7 +274,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for i := range iacs {
-		if shouldUpdateStatus(sjc.current.Statuses.IacStatusCode, &iacs[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.IacStatusCode, &iacs[i].StatusCode) {
 			sjc.current.Statuses.IacStatusCode = &iacs[i].StatusCode
 		}
 	}
@@ -195,7 +298,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViol
 		return results.ErrResetConvertor
 	}
 	for i := range sast {
-		if shouldUpdateStatus(sjc.current.Statuses.SastStatusCode, &sast[i].StatusCode) {
+		if results.ShouldUpdateStatus(sjc.current.Statuses.SastStatusCode, &sast[i].StatusCode) {
 			sjc.current.Statuses.SastStatusCode = &sast[i].StatusCode
 		}
 	}
@@ -240,7 +343,8 @@ func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, scaResponse ser
 }
 
 func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScanGraphVulnerabilityFunc {
-	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		*vulnerabilitiesRows = append(*vulnerabilitiesRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: vulnerability.Summary,
@@ -266,7 +370,8 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 }
 
 func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolationsRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		*securityViolationsRows = append(*securityViolationsRows,
 			formats.VulnerabilityOrViolationRow{
 				Summary: violation.Summary,
@@ -297,7 +402,8 @@ func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolation
 }
 
 func addSimpleJsonLicenseViolation(licenseViolationsRows *[]formats.LicenseViolationRow, pretty bool) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		*licenseViolationsRows = append(*licenseViolationsRows,
 			formats.LicenseViolationRow{
 				ViolationContext: formats.ViolationContext{
@@ -330,7 +436,8 @@ func getLicenseKey(licenseKey, issueId string) string {
 }
 
 func addSimpleJsonOperationalRiskViolation(operationalRiskViolationsRows *[]formats.OperationalRiskViolationRow, pretty bool) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		violationOpRiskData := getOperationalRiskViolationReadableData(violation)
 		operationalRiskViolationsRow := &formats.OperationalRiskViolationRow{
 			ViolationContext: formats.ViolationContext{
@@ -365,7 +472,8 @@ func PrepareSimpleJsonLicenses(target results.ScanTarget, licenses []services.Li
 }
 
 func addSimpleJsonLicense(licenseViolationsRows *[]formats.LicenseRow) results.ParseLicenseFunc {
-	return func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+	return func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
+		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
 		*licenseViolationsRows = append(*licenseViolationsRows,
 			formats.LicenseRow{
 				LicenseKey:  license.Key,

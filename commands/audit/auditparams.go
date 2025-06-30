@@ -4,10 +4,14 @@ import (
 	"time"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -26,7 +30,8 @@ type AuditParams struct {
 	scanResultsOutputDir        string
 	startTime                   time.Time
 	// Dynamic logic params
-	bomGenerator bom.SbomGenerator
+	bomGenerator    bom.SbomGenerator
+	scaScanStrategy scan.SbomScanStrategy
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -63,6 +68,15 @@ func (params *AuditParams) SetBomGenerator(bomGenerator bom.SbomGenerator) *Audi
 
 func (params *AuditParams) BomGenerator() bom.SbomGenerator {
 	return params.bomGenerator
+}
+
+func (params *AuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *AuditParams {
+	params.scaScanStrategy = scaScanStrategy
+	return params
+}
+
+func (params *AuditParams) ScaScanStrategy() scan.SbomScanStrategy {
+	return params.scaScanStrategy
 }
 
 func (params *AuditParams) SetStartTime(startTime time.Time) *AuditParams {
@@ -177,6 +191,26 @@ func (params *AuditParams) ToBuildInfoBomGenParams() (bomParams technologies.Bui
 	return
 }
 
+func (params *AuditParams) ToXrayScanGraphParams() (scanGraphParams scangraph.ScanGraphParams, err error) {
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return
+	}
+	// Create the scan graph parameters.
+	xrayScanGraphParams := params.createXrayGraphScanParams()
+	xrayScanGraphParams.MultiScanId = params.GetMultiScanId()
+	xrayScanGraphParams.XrayVersion = params.GetXrayVersion()
+	xrayScanGraphParams.XscVersion = params.GetXscVersion()
+	xrayScanGraphParams.IncludeLicenses = params.resultsContext.IncludeLicenses
+
+	scanGraphParams = *scangraph.NewScanGraphParams().
+		SetServerDetails(serverDetails).
+		SetXrayGraphScanParams(xrayScanGraphParams).
+		SetFixableOnly(params.fixableOnly).
+		SetSeverityLevel(params.minSeverityFilter.String())
+	return
+}
+
 func (params *AuditParams) SetFilesToScan(filesToScan []string) *AuditParams {
 	params.filesToScan = filesToScan
 	return params
@@ -202,4 +236,19 @@ func (params *AuditParams) SetDiffMode(diffMode bool) *AuditParams {
 
 func (params *AuditParams) DiffMode() bool {
 	return params.diffMode
+}
+
+// When building pip dependency tree using pipdeptree, some of the direct dependencies are recognized as transitive and missed by the CA scanner.
+// Our solution for this case is to send all dependencies to the CA scanner.
+// When thirdPartyApplicabilityScan is true, use flatten graph to include all the dependencies in applicability scanning.
+// Only npm is supported for this flag.
+func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Technology) bool {
+	if params.bomGenerator == nil {
+		return false
+	}
+	// Check if bomGenerator is BuildInfo type, if not, return false
+	if _, success := params.bomGenerator.(*buildinfo.BuildInfoBomGenerator); !success {
+		return false
+	}
+	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
 }

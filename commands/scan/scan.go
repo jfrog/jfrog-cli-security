@@ -18,8 +18,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -79,10 +79,16 @@ type ScanCommand struct {
 
 	// Dynamic logic params
 	bomGenerator bom.SbomGenerator
+	scanStrategy scan.SbomScanStrategy
 }
 
 func (scanCmd *ScanCommand) SetBomGenerator(bomGenerator bom.SbomGenerator) *ScanCommand {
 	scanCmd.bomGenerator = bomGenerator
+	return scanCmd
+}
+
+func (scanCmd *ScanCommand) SetScaScanStrategy(scanStrategy scan.SbomScanStrategy) *ScanCommand {
+	scanCmd.scanStrategy = scanStrategy
 	return scanCmd
 }
 
@@ -265,7 +271,7 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 	}
 	// Initialize the BOM generator
 	if scanCmd.bomGenerator != nil {
-		if err := scanCmd.bomGenerator.PrepareGenerator(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)); err != nil {
+		if err := scanCmd.bomGenerator.WithOptions(indexer.WithXray(xrayManager, scanCmd.xrayVersion), indexer.WithBypassArchiveLimits(scanCmd.bypassArchiveLimits)).PrepareGenerator(); err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare indexer generator: %w", err), false)
 		}
 		defer func() {
@@ -274,6 +280,12 @@ func (scanCmd *ScanCommand) RunScan(cmdType utils.CommandType) (cmdResults *resu
 			}
 		}()
 	}
+	// TODO: Use the following code when implementing SCA scan with interface when binary will also support scan strategy and not only scan graph.
+	// if scanCmd.scanStrategy != nil {
+	// 	if err := scanCmd.scanStrategy.PrepareStrategy(scangraphstrategy.WithParams(*scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId))); err != nil {
+	// 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare scan strategy: %w", err), false)
+	// 	}
+	// }
 
 	threads := 1
 	if scanCmd.threads > 1 {
@@ -436,6 +448,15 @@ func (scanCmd *ScanCommand) GenerateBinaryBom(cmdType utils.CommandType, targetR
 }
 
 func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *results.SecurityCommandResults, targetResults *results.TargetResults, deprecatedGraph *xrayClientUtils.BinaryGraphNode, scanThreadId int) (targetCompId string, graphScanResults *services.ScanResponse, err error) {
+	// TODO: Use the following code when binary will also support scan strategy (interface) and not only scan graph.
+	// if scanGraphStrategy, ok := scanCmd.scanStrategy.(*scangraphstrategy.ScanGraphStrategy); ok {
+	// 	scanGraphStrategy.ScanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
+	// }
+	// err = scan.RunScaScan(scanCmd.scanStrategy, scan.ScaScanParams{
+	// 	ScanResults:        targetResults,
+	// 	ThreadId:           scanThreadId,
+	// })
+	// return
 	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
 	binaryTree := deprecatedGraph
 	if deprecatedGraph == nil {
@@ -451,23 +472,9 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 	}
 	targetCompId = binaryTree.Id
 	// Prepare parameters for the SCA scan
-	params := &services.XrayGraphScanParams{
-		BinaryGraph:            binaryTree,
-		RepoPath:               getXrayRepoPathFromTarget(fileTarget),
-		Watches:                scanCmd.resultsContext.Watches,
-		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
-		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
-		ProjectKey:             scanCmd.resultsContext.ProjectKey,
-		ScanType:               services.Binary,
-		MultiScanId:            cmdResults.MultiScanId,
-		XscVersion:             cmdResults.XscVersion,
-		XrayVersion:            cmdResults.XrayVersion,
-	}
-	scanGraphParams := scangraph.NewScanGraphParams().
-		SetServerDetails(scanCmd.serverDetails).
-		SetXrayGraphScanParams(params).
-		SetFixableOnly(scanCmd.fixableOnly).
-		SetSeverityLevel(scanCmd.minSeverityFilter.String())
+	scanGraphParams := scanCmd.getXrayScanGraphParams(cmdResults.MultiScanId)
+	scanGraphParams.XrayGraphScanParams().RepoPath = getXrayRepoPathFromTarget(fileTarget)
+	scanGraphParams.XrayGraphScanParams().BinaryGraph = binaryTree
 	xrayManager, err := xray.CreateXrayServiceManager(scanGraphParams.ServerDetails(), xray.WithScopedProjectKey(scanCmd.resultsContext.ProjectKey))
 	if err != nil {
 		err = targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to create Xray service manager: %s", err.Error()), false)
@@ -479,9 +486,27 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		err = targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"sca scanning '%s' failed with error: %s", targetCompId, err.Error()), false)
 		return
 	}
-	targetResults.NewScaScanResults(technologies.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
+	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
 	targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
 	return
+}
+
+func (scanCmd *ScanCommand) getXrayScanGraphParams(msi string) *scangraph.ScanGraphParams {
+	params := &services.XrayGraphScanParams{
+		Watches:                scanCmd.resultsContext.Watches,
+		IncludeLicenses:        scanCmd.resultsContext.IncludeLicenses,
+		IncludeVulnerabilities: scanCmd.resultsContext.IncludeVulnerabilities,
+		ProjectKey:             scanCmd.resultsContext.ProjectKey,
+		ScanType:               services.Binary,
+		MultiScanId:            msi,
+		XscVersion:             scanCmd.xscVersion,
+		XrayVersion:            scanCmd.xrayVersion,
+	}
+	return scangraph.NewScanGraphParams().
+		SetServerDetails(scanCmd.serverDetails).
+		SetXrayGraphScanParams(params).
+		SetFixableOnly(scanCmd.fixableOnly).
+		SetSeverityLevel(scanCmd.minSeverityFilter.String())
 }
 
 func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi string, secretValidation bool, targetResults *results.TargetResults, targetCompId string, graphScanResults *services.ScanResponse, jasFileProducerConsumer *utils.SecurityParallelRunner, scanThreadId int) (err error) {
@@ -490,7 +515,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 	if err != nil {
 		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"jas scanning failed with error: %s", err.Error()), false)
 	}
-	// Run Jas scans
+	// Prepare Jas scans
 	scannerOptions := []jas.JasScannerOption{
 		jas.WithEnvVars(
 			secretValidation,
@@ -513,8 +538,32 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		log.Debug("Jas scanner was not created, skipping advance security scans...")
 		return
 	}
+	jasParams := runner.JasRunnerParams{
+		Runner:         jasFileProducerConsumer,
+		ServerDetails:  scanCmd.serverDetails,
+		Scanner:        scanner,
+		Module:         module,
+		ScansToPerform: utils.GetAllSupportedScans(),
+		CvesProvider: func() (directCves []string, indirectCves []string) {
+			return results.ExtractCvesFromScanResponse([]services.ScanResponse{*graphScanResults}, *directDepsListFromVulnerabilities(graphScanResults))
+		},
+		ScanResults: targetResults,
+	}
+	// Determine the scan types based on the command type and target results.
+	jasParams.ApplicableScanType, jasParams.SecretsScanType = getJasScanTypes(cmdType, targetResults, targetCompId, scanThreadId)
+	// Run Jas scans
+	if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
+		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to add Jas scan tasks: %s", generalError.Error()), false)
+	}
+	return
+}
+
+func getJasScanTypes(cmdType utils.CommandType, targetResults *results.TargetResults, targetCompId string, scanThreadId int) (applicability.ApplicabilityScanType, secrets.SecretsScanType) {
+	scanLogPrefix := clientutils.GetLogMsgPrefix(scanThreadId, false)
+	// Default scan types for generic scans
 	secretsScanType := secrets.SecretsScannerGenericScanType
 	applicabilityScanType := applicability.ApplicabilityGenericScanScanType
+	// If the root component is a docker container, we need to use the docker scan types.
 	if isDockerBinary(cmdType, targetResults) {
 		log.Debug(scanLogPrefix + "Found root component is a docker container")
 		secretsScanType = secrets.SecretsScannerDockerScanType
@@ -523,21 +572,7 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		_, _, componentType := techutils.SplitComponentIdRaw(targetCompId)
 		log.Debug(scanLogPrefix+"Found root component is not a docker container, type is: ", componentType)
 	}
-	jasParams := runner.JasRunnerParams{
-		Runner:             jasFileProducerConsumer,
-		ServerDetails:      scanCmd.serverDetails,
-		Scanner:            scanner,
-		Module:             module,
-		ScansToPerform:     utils.GetAllSupportedScans(),
-		SecretsScanType:    secretsScanType,
-		DirectDependencies: directDepsListFromVulnerabilities(graphScanResults),
-		ApplicableScanType: applicabilityScanType,
-		ScanResults:        targetResults,
-	}
-	if generalError := runner.AddJasScannersTasks(jasParams); generalError != nil {
-		return targetResults.AddTargetError(fmt.Errorf(scanLogPrefix+"failed to add Jas scan tasks: %s", generalError.Error()), false)
-	}
-	return
+	return applicabilityScanType, secretsScanType
 }
 
 func isDockerBinary(cmdType utils.CommandType, targetResults *results.TargetResults) bool {
@@ -664,5 +699,5 @@ func ConditionalUploadDefaultScanFunc(serverDetails *config.ServerDetails, fileS
 	if err != nil {
 		return err
 	}
-	return NewScanCommand().SetServerDetails(serverDetails).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
+	return NewScanCommand().SetServerDetails(serverDetails).SetBomGenerator(indexer.NewIndexerBomGenerator()).SetXrayVersion(xrayVersion).SetXscVersion(xscVersion).SetSpec(fileSpec).SetThreads(threads).SetOutputFormat(scanOutputFormat).SetFail(true).SetPrintExtendedTable(false).Run()
 }
