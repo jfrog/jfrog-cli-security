@@ -497,9 +497,11 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 			jas.NotDiffScanEnvValue,
 			jas.GetAnalyzerManagerXscEnvVars(
 				msi,
-				// Passing but empty since not supported for binary scans
-				scanCmd.resultsContext.GitRepoHttpsCloneUrl,
+				// GitRepoHttpsCloneUrl is not relevant for binary scans, therefore we pass an empty value
+				"",
 				scanCmd.resultsContext.ProjectKey,
+				// AppTrust is not supported for binary scans, therefore we pass an empty applicationKey
+				"",
 				scanCmd.resultsContext.Watches,
 				targetResults.GetTechnologies()...,
 			),
