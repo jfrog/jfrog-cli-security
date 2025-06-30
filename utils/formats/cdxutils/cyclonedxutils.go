@@ -81,7 +81,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 		return UnknownRelation
 	}
 	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(bom) {
+	for _, root := range GetRootDependenciesEntries(bom, true) {
 		if root.Ref == componentRef {
 			// The component is a root, hence it is a direct dependency
 			return RootRelation
@@ -140,7 +140,7 @@ func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []s
 	return *depEntry.Dependencies
 }
 
-func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
+func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
 	if bom == nil {
 		return
@@ -164,7 +164,11 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependenc
 		for _, id := range refs.ToSlice() {
 			if dep := SearchDependencyEntry(bom.Dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
 				// This is a root dependency, add it
-				roots = append(roots, potentialRootDependencyToRoots(bom, *dep)...)
+				if skipDefaultRoot {
+					roots = append(roots, potentialRootDependencyToRoots(bom, *dep)...)
+				} else {
+					roots = append(roots, *dep)
+				}
 			}
 		}
 	}
