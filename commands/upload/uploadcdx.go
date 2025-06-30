@@ -67,7 +67,7 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
-	log.Output(fmt.Sprintf("CycloneDx content uploaded successfully. You can view the results at:\n%s", scanResultsUrl))
+	log.Output(fmt.Sprintf("Your CycloneDx file was successfully uploaded. You may view the file content in the JFrog platform, under Xray -> Scans List -> Repositories :\n%s", scanResultsUrl))
 	return
 }
 
