@@ -6,7 +6,6 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -111,11 +110,6 @@ func (sbg *ScangBomGenerator) logScannerOutput(output *cyclonedx.BOM, target str
 				libComponents = append(libComponents, component.PackageURL)
 			}
 		}
-	}
-	if pUrls, err := utils.GetAsJsonString(libComponents, false, true); err == nil {
-		log.Debug(pUrls)
-	} else {
-		log.Debug(fmt.Sprintf("Failed to log SBOM components: %v", err))
 	}
 	if len(libComponents) == 0 {
 		log.Info(fmt.Sprintf("No library components found in SBOM for target '%s'.", target))
