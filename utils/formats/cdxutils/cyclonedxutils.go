@@ -124,24 +124,28 @@ func SearchParents(componentRef string, components []cyclonedx.Component, depend
 	}
 	parents := []cyclonedx.Component{}
 	for _, dependency := range dependencies {
-		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-			// No dependencies, continue to the next dependency
-			continue
-		}
-		// Check if the component is a direct dependency
-		for _, dep := range *dependency.Dependencies {
-			if dep == componentRef {
-				parentComponent := SearchComponentByRef(&components, dependency.Ref)
-				if parentComponent == nil {
-					log.Debug(fmt.Sprintf("Failed to find parent component for dependency '%s' in components", dependency.Ref))
-					continue
-				}
-				// The component is a direct dependency, return it
-				parents = append(parents, *parentComponent)
-			}
-		}
+		parents = append(parents, searchDependencyParents(componentRef, dependency, components)...)
 	}
 	return parents
+}
+
+func searchDependencyParents(componentRef string, dependency cyclonedx.Dependency, components []cyclonedx.Component) (parents []cyclonedx.Component) {
+	parents = []cyclonedx.Component{}
+	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+		// No dependencies, continue to the next dependency
+		return
+	}
+	for _, dep := range *dependency.Dependencies {
+		if dep == componentRef {
+			parentComponent := SearchComponentByRef(&components, dependency.Ref)
+			if parentComponent == nil {
+				continue
+			}
+			// The component is a direct dependency, return it
+			parents = append(parents, *parentComponent)
+		}
+	}
+	return
 }
 
 func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {
@@ -155,7 +159,7 @@ func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []s
 
 func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
-	if bom == nil {
+	if bom == nil || bom.Components == nil || len(*bom.Components) == 0 {
 		return
 	}
 	// Create a Set to track all references that are listed in `dependsOn`
@@ -177,11 +181,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 		for _, id := range refs.ToSlice() {
 			if dep := SearchDependencyEntry(bom.Dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
 				// This is a root dependency, add it
-				if skipDefaultRoot {
-					roots = append(roots, potentialRootDependencyToRoots(bom, *dep)...)
-				} else {
-					roots = append(roots, *dep)
-				}
+				roots = append(roots, potentialRootDependencyToRoots(bom, *dep, skipDefaultRoot)...)
 			}
 		}
 	}
@@ -197,18 +197,33 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 }
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
-func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
-	if !strings.Contains(dependency.Ref, "generic:root") {
-		return []cyclonedx.Dependency{dependency}
+func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
+	if strings.Contains(dependency.Ref, "generic:root") && skipDefaultRoot {
+		// dummy root, the actual roots are the dependencies of this component.
+		roots = []cyclonedx.Dependency{}
+		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+			return
+		}
+		for _, dep := range *dependency.Dependencies {
+			if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
+				roots = append(roots, *found)
+			}
+		}
 	}
-	// dummy root, the actual roots are the dependencies of this component.
-	roots = []cyclonedx.Dependency{}
-	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-		return
+	// This is a potential root dependency
+	depComponent := SearchComponentByRef(bom.Components, dependency.Ref)
+	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
+		// The component is the root
+		return append(roots, dependency)
 	}
-	for _, dep := range *dependency.Dependencies {
-		if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
-			roots = append(roots, *found)
+	// In SCANG the root can be a file or directory component (the Metadata component) and the actual roots are the component children
+	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
+		roots = append(roots, dependency)
+	} else if bom.Metadata != nil && bom.Metadata.Component != nil && bom.Metadata.Component.BOMRef == dependency.Ref {
+		for _, root := range *dependency.Dependencies {
+			if rootDepEntry := SearchDependencyEntry(bom.Dependencies, root); rootDepEntry != nil {
+				roots = append(roots, *rootDepEntry)
+			}
 		}
 	}
 	return
