@@ -3,6 +3,7 @@ package audit
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
+	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
@@ -618,6 +620,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 
 			auditParams := NewAuditParams().
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -675,7 +678,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetGraphBasicParams(auditBasicParams).
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
-		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -812,7 +816,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetMultiScanId(validations.TestScaScanId).
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -1035,11 +1040,78 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetDiffMode(true).
 				SetResultsToCompare(tc.resultsToCompare).
-				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())
 			assert.Equal(t, tc.expectedApiCallsCount, *apiCallsCount)
 		})
 	}
+}
+
+func createTestDir(t *testing.T) (directory string, cleanUp func()) {
+	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+
+	// Temp dir structure:
+	// tempDir
+	// ├── dir
+	// │   ├── maven
+	// │   │   ├── maven-sub
+	// │   │   └── maven-sub
+	// │   ├── npm
+	// │   └── go
+	// ├── yarn
+	// │   ├── Pip
+	// │   └── Pipenv
+	// └── Nuget
+	//	   ├── Nuget-sub
+
+	dir := createEmptyDir(t, filepath.Join(tmpDir, "dir"))
+	// Maven
+	maven := createEmptyDir(t, filepath.Join(dir, "maven"))
+	createEmptyFile(t, filepath.Join(maven, "pom.xml"))
+	mavenSub := createEmptyDir(t, filepath.Join(maven, "maven-sub"))
+	createEmptyFile(t, filepath.Join(mavenSub, "pom.xml"))
+	mavenSub2 := createEmptyDir(t, filepath.Join(maven, "maven-sub2"))
+	createEmptyFile(t, filepath.Join(mavenSub2, "pom.xml"))
+	// Npm
+	npm := createEmptyDir(t, filepath.Join(dir, "npm"))
+	createEmptyFile(t, filepath.Join(npm, "package.json"))
+	createEmptyFile(t, filepath.Join(npm, "package-lock.json"))
+	// Go
+	goDir := createEmptyDir(t, filepath.Join(dir, "go"))
+	createEmptyFile(t, filepath.Join(goDir, "go.mod"))
+	// Yarn
+	yarn := createEmptyDir(t, filepath.Join(tmpDir, "yarn"))
+	createEmptyFile(t, filepath.Join(yarn, "package.json"))
+	createEmptyFile(t, filepath.Join(yarn, "yarn.lock"))
+	// Pip
+	pip := createEmptyDir(t, filepath.Join(yarn, "Pip"))
+	createEmptyFile(t, filepath.Join(pip, "requirements.txt"))
+	// Pipenv
+	pipenv := createEmptyDir(t, filepath.Join(yarn, "Pipenv"))
+	createEmptyFile(t, filepath.Join(pipenv, "Pipfile"))
+	createEmptyFile(t, filepath.Join(pipenv, "Pipfile.lock"))
+	// Nuget
+	nuget := createEmptyDir(t, filepath.Join(tmpDir, "Nuget"))
+	createEmptyFile(t, filepath.Join(nuget, "project.sln"))
+	nugetSub := createEmptyDir(t, filepath.Join(nuget, "Nuget-sub"))
+	createEmptyFile(t, filepath.Join(nugetSub, "project.csproj"))
+
+	return tmpDir, func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't removeAll: "+tmpDir)
+	}
+}
+
+func createEmptyDir(t *testing.T, path string) string {
+	assert.NoError(t, fileutils.CreateDirIfNotExist(path))
+	return path
+}
+
+func createEmptyFile(t *testing.T, path string) {
+	file, err := os.Create(path)
+	assert.NoError(t, err)
+	assert.NoError(t, file.Close())
 }

@@ -46,7 +46,8 @@ func TestJasRunner(t *testing.T) {
 	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", "", []string{}, targetResults.GetTechnologies()...)))
 	assert.NoError(t, err)
 
-	targetResults.NewScaScanResults(0, jas.FakeBasicXrayResults[0])
+	targetResults.ScaScanResults(0, jas.FakeBasicXrayResults[0])
+	directComponents := []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"}
 	testParams := JasRunnerParams{
 		Runner:             securityParallelRunnerForTest,
 		Scanner:            jasScanner,
@@ -54,7 +55,9 @@ func TestJasRunner(t *testing.T) {
 		ScansToPerform:     utils.GetAllSupportedScans(),
 		ApplicableScanType: applicability.ApplicabilityScannerType,
 		SecretsScanType:    secrets.SecretsScannerType,
-		DirectDependencies: &[]string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"},
+		CvesProvider: func() (directCves []string, indirectCves []string) {
+			return results.ExtractCvesFromScanResponse(targetResults.GetScaScansXrayResults(), directComponents)
+		},
 	}
 	assert.NoError(t, AddJasScannersTasks(testParams))
 }
@@ -64,7 +67,16 @@ func TestJasRunner_AnalyzerManagerReturnsError(t *testing.T) {
 
 	jfrogAppsConfigForTest, _ := jas.CreateJFrogAppsConfig(nil)
 	scanner, _ := jas.NewJasScanner(&jas.FakeServerDetails)
-	_, err := applicability.RunApplicabilityScan(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"}, scanner, false, applicability.ApplicabilityScannerType, jfrogAppsConfigForTest.Modules[0], 0)
+	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"})
+	_, err := applicability.RunApplicabilityScan(
+		applicability.ContextualAnalysisScanParams{
+			DirectDependenciesCves:   directCves,
+			IndirectDependenciesCves: indirectCves,
+			ScanType:                 applicability.ApplicabilityScannerType,
+			Module:                   jfrogAppsConfigForTest.Modules[0],
+		},
+		scanner,
+	)
 	// Expect error:
 	assert.ErrorContains(t, jas.ParseAnalyzerManagerError(jasutils.Applicability, err), "failed to run Applicability scan")
 }

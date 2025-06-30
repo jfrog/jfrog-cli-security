@@ -72,9 +72,14 @@ func InitXscTest(t *testing.T, validations ...func()) (string, string, func()) {
 	for _, validation := range validations {
 		validation()
 	}
-	// Make sure the audit request will work with xsc and not xray
+	cleanUp := PrepareXscForTest(t)
+	return xrayVersion, xscVersion, cleanUp
+}
+
+func PrepareXscForTest(t *testing.T) func() {
+	// Make sure the request will work with xsc and not xray
 	assert.NoError(t, os.Setenv(coreutils.ReportUsage, "true"))
-	return xrayVersion, xscVersion, func() {
+	return func() {
 		assert.NoError(t, os.Setenv(coreutils.ReportUsage, "false"))
 	}
 }
