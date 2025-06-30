@@ -55,6 +55,8 @@ type ResultContext struct {
 	ProjectKey string `json:"project_key,omitempty"`
 	// (Resource) If gitRepository is provided we will fetch the watches defined on the git repository.
 	GitRepoHttpsCloneUrl string `json:"git_repo_key,omitempty"`
+	// (Resource) If applicationKey is provided we will fetch the watches defined on the application, and the scans will be performed and presented in the Application context only.
+	ApplicationKey string `json:"application_key,omitempty"`
 	// If non of the above is provided or requested, the results will include vulnerabilities
 	IncludeVulnerabilities bool `json:"include_vulnerabilities"`
 	// If requested, the results will include licenses
