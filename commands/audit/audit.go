@@ -341,14 +341,16 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			cmdResults.AddGeneralError(fmt.Errorf("failed to get target results to compare: %s", err.Error()), false)
 			continue
 		}
-		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())), bom.SbomGeneratorParams{
-			Target:               targetResult,
-			AllowPartialResults:  params.AllowPartialResults(),
-			ScanResultsOutputDir: params.scanResultsOutputDir,
-			// Diff mode - SCA
-			DiffMode:              params.DiffMode(),
-			TargetResultToCompare: targetResultsToCompare,
-		})
+		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
+			bom.SbomGeneratorParams{
+				Target:               targetResult,
+				AllowPartialResults:  params.AllowPartialResults(),
+				ScanResultsOutputDir: params.scanResultsOutputDir,
+				// Diff mode - SCA
+				DiffMode:              params.DiffMode(),
+				TargetResultToCompare: targetResultsToCompare,
+			},
+		)
 	}
 	// Print the scan targets
 	scanInfo, err := coreutils.GetJsonIndent(cmdResults.GetTargets())
