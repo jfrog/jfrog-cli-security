@@ -1452,22 +1452,6 @@ func GetOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (lib
 	return &(*destination.Components)[len(*destination.Components)-1]
 }
 
-func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
-	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
-	// Check if the component already exists in the BOM
-	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {
-		// The component already exists, return it
-		return component
-	}
-	// Create a new component, add it to the BOM and return it
-	if destination.Components == nil {
-		destination.Components = &[]cyclonedx.Component{}
-	}
-	component := CreateScaComponentFromXrayCompId(xrayCompId)
-	*destination.Components = append(*destination.Components, component)
-	return &(*destination.Components)[len(*destination.Components)-1]
-}
-
 func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVersion []string) {
 	fixedVersion = []string{}
 	if affectedVersions == nil || len(*affectedVersions) == 0 {
