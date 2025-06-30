@@ -103,11 +103,12 @@ func (auditCmd *AuditCommand) SetThreads(threads int) *AuditCommand {
 }
 
 // Create a results context based on the provided parameters. resolves conflicts between the parameters based on the retrieved platform watches.
-func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
+func CreateAuditResultsContext(serverDetails *config.ServerDetails, xrayVersion string, watches []string, artifactoryRepoPath, projectKey, gitRepoHttpsCloneUrl, applicationKey string, includeVulnerabilities, includeLicenses, includeSbom bool) (context results.ResultContext) {
 	context = results.ResultContext{
 		RepoPath:               artifactoryRepoPath,
 		Watches:                watches,
 		ProjectKey:             projectKey,
+		ApplicationKey:         applicationKey,
 		IncludeVulnerabilities: shouldIncludeVulnerabilities(includeVulnerabilities, watches, artifactoryRepoPath, projectKey, ""),
 		IncludeLicenses:        includeLicenses,
 		IncludeSbom:            includeSbom,
@@ -180,6 +181,8 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.targetRepoPath,
 			auditCmd.projectKey,
 			auditCmd.gitRepoHttpsCloneUrl,
+			// AppTrust is currently not supported in Audit command, therefore we pass an empty applicationKey
+			"",
 			auditCmd.IncludeVulnerabilities,
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
@@ -435,6 +438,7 @@ func AddJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 				auditParams.GetMultiScanId(),
 				utils.GetGitRepoUrlKey(auditParams.resultsContext.GitRepoHttpsCloneUrl),
 				auditParams.resultsContext.ProjectKey,
+				auditParams.resultsContext.ApplicationKey,
 				auditParams.resultsContext.Watches,
 				scanResults.GetTechnologies()...,
 			),
