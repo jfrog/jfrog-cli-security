@@ -29,7 +29,7 @@ const (
 // IndexerBomGenerator is a BomGenerator that uses the Xray Indexer to generate a CycloneDX SBOM.
 // It indexes a file and converts the resulting component graph to a CycloneDX SBOM.
 type IndexerBomGenerator struct {
-	BypassArchiveLimits bool
+	bypassArchiveLimits bool
 
 	xrayManager *xray.XrayServicesManager
 	xrayVersion string
@@ -43,35 +43,31 @@ func NewIndexerBomGenerator() *IndexerBomGenerator {
 }
 
 func WithXray(manager *xray.XrayServicesManager, xrayVersion string) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) error {
-		generator, ok := sg.(*IndexerBomGenerator)
-		if !ok {
-			return nil
+	return func(sg bom.SbomGenerator) {
+		if generator, ok := sg.(*IndexerBomGenerator); ok {
+			generator.xrayManager = manager
+			generator.xrayVersion = xrayVersion
 		}
-		generator.xrayManager = manager
-		generator.xrayVersion = xrayVersion
-		return nil
 	}
 }
 
 func WithBypassArchiveLimits(bypass bool) bom.SbomGeneratorOption {
-	return func(sg bom.SbomGenerator) error {
-		generator, ok := sg.(*IndexerBomGenerator)
-		if !ok {
-			return nil
+	return func(sg bom.SbomGenerator) {
+		if generator, ok := sg.(*IndexerBomGenerator); ok {
+			generator.bypassArchiveLimits = bypass
 		}
-		generator.BypassArchiveLimits = bypass
-		return nil
 	}
 }
 
-func (ibg *IndexerBomGenerator) PrepareGenerator(options ...bom.SbomGeneratorOption) (err error) {
-	// Parse the generator options to prepare it for use.
+func (ibg *IndexerBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) bom.SbomGenerator {
+	// Apply the options to the generator.
 	for _, option := range options {
-		if err = option(ibg); err != nil {
-			return err
-		}
+		option(ibg)
 	}
+	return ibg
+}
+
+func (ibg *IndexerBomGenerator) PrepareGenerator() (err error) {
 	if ibg.xrayManager == nil || ibg.xrayVersion == "" {
 		return fmt.Errorf("Xray manager and version must be set using WithXray option")
 	}
@@ -124,7 +120,7 @@ func CreateTargetEmptySbom(target results.ScanTarget) *cyclonedx.BOM {
 func (ibg *IndexerBomGenerator) IndexFile(filePath string) (*xrayClientUtils.BinaryGraphNode, error) {
 	var indexerResults xrayClientUtils.BinaryGraphNode
 	indexerCmd := exec.Command(ibg.indexerPath, indexingCommand, filePath, "--temp-dir", ibg.indexerTempDir)
-	if ibg.BypassArchiveLimits {
+	if ibg.bypassArchiveLimits {
 		indexerCmd.Args = append(indexerCmd.Args, "--bypass-archive-limits")
 	}
 	var stderr bytes.Buffer

@@ -1,8 +1,10 @@
 package results
 
 import (
+	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/CycloneDX/cyclonedx-go"
@@ -14,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
+	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -364,7 +367,7 @@ func TestAppendUniqueImpactPaths(t *testing.T) {
 	}
 }
 
-func TestGetApplicableCveValue(t *testing.T) {
+func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		entitledForJas           bool
@@ -573,7 +576,7 @@ func TestGetApplicableCveValue(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			cves := convertCves(testCase.cves)
 			for i := range cves {
-				cves[i].Applicability = GetCveApplicabilityField(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
+				cves[i].Applicability = GetCveApplicabilityFieldAndFilterDisqualify(cves[i].Id, testCase.applicabilityScanResults, testCase.components)
 			}
 			applicableValue := GetApplicableCveStatus(testCase.entitledForJas, testCase.applicabilityScanResults, cves)
 			assert.Equal(t, testCase.expectedResult, applicableValue)
@@ -810,6 +813,89 @@ func TestShouldSkipNotApplicable(t *testing.T) {
 				assert.False(t, shouldSkip)
 			}
 		})
+	}
+}
+
+func TestExtractXrayDirectViolations(t *testing.T) {
+	var xrayResponseForDirectViolationsTest = []services.ScanResponse{
+		{
+			Violations: []services.Violation{
+				{IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
+					Components: map[string]services.Component{"issueId_2_direct_dependency": {}}},
+			},
+		},
+	}
+	tests := []struct {
+		directDependencies []string
+		directCvesCount    int
+		indirectCvesCount  int
+	}{
+		{directDependencies: []string{"issueId_2_direct_dependency", "issueId_1_direct_dependency"},
+			directCvesCount:   2,
+			indirectCvesCount: 0,
+		},
+		// Vulnerability dependency, should be ignored by function
+		{directDependencies: []string{"issueId_1_direct_dependency"},
+			directCvesCount:   0,
+			indirectCvesCount: 2,
+		},
+		{directDependencies: []string{},
+			directCvesCount:   0,
+			indirectCvesCount: 2,
+		},
+	}
+
+	for _, test := range tests {
+		directCves, indirectCves := ExtractCvesFromScanResponse(xrayResponseForDirectViolationsTest, test.directDependencies)
+		assert.Len(t, directCves, test.directCvesCount)
+		assert.Len(t, indirectCves, test.indirectCvesCount)
+	}
+}
+
+func TestExtractXrayDirectVulnerabilities(t *testing.T) {
+	var xrayResponseForDirectVulnerabilitiesTest = []services.ScanResponse{
+		{
+			ScanId: "scanId_1",
+			Vulnerabilities: []services.Vulnerability{
+				{
+					IssueId: "issueId_1", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve1"}, {Id: "testCve2"}, {Id: "testCve3"}},
+					Components: map[string]services.Component{"issueId_1_direct_dependency": {}},
+				},
+				{
+					IssueId: "issueId_2", Technology: techutils.Pipenv.String(),
+					Cves:       []services.Cve{{Id: "testCve4"}, {Id: "testCve5"}},
+					Components: map[string]services.Component{"issueId_2_direct_dependency": {}},
+				},
+			},
+		},
+	}
+	tests := []struct {
+		directDependencies []string
+		directCvesCount    int
+		indirectCvesCount  int
+	}{
+		{
+			directDependencies: []string{"issueId_1_direct_dependency"},
+			directCvesCount:    3,
+			indirectCvesCount:  2,
+		},
+		{
+			directDependencies: []string{"issueId_2_direct_dependency"},
+			directCvesCount:    2,
+			indirectCvesCount:  3,
+		},
+		{directDependencies: []string{},
+			directCvesCount:   0,
+			indirectCvesCount: 5,
+		},
+	}
+
+	for _, test := range tests {
+		directCves, indirectCves := ExtractCvesFromScanResponse(xrayResponseForDirectVulnerabilitiesTest, test.directDependencies)
+		assert.Len(t, directCves, test.directCvesCount)
+		assert.Len(t, indirectCves, test.indirectCvesCount)
 	}
 }
 
@@ -1480,10 +1566,34 @@ func TestIsMultiProject(t *testing.T) {
 }
 
 func TestBomToFlatTree(t *testing.T) {
+	bomWithComponents := &cyclonedx.BOM{
+		Components: &[]cyclonedx.Component{
+			{
+				BOMRef:     "component1",
+				Name:       "Component 1",
+				Version:    "1.0.0",
+				Type:       "library",
+				PackageURL: "pkg:npm/component1@1.0.0",
+			},
+			{
+				BOMRef: "3fac3b2",
+				Name:   path.Join("path", "to", "file.txt"),
+				Type:   "file",
+			},
+			{
+				BOMRef:     "component2",
+				Name:       "Component 2",
+				Version:    "2.0.0",
+				Type:       "library",
+				PackageURL: "pkg:golang/component2@2.0.0",
+			},
+		},
+	}
 	tests := []struct {
-		name     string
-		bom      *cyclonedx.BOM
-		expected *xrayUtils.GraphNode
+		name              string
+		bom               *cyclonedx.BOM
+		toXrayComponentId bool
+		expected          *xrayUtils.GraphNode
 	}{
 		{
 			name:     "No components",
@@ -1492,29 +1602,19 @@ func TestBomToFlatTree(t *testing.T) {
 		},
 		{
 			name: "BOM with components",
-			bom: &cyclonedx.BOM{
-				Components: &[]cyclonedx.Component{
-					{
-						BOMRef:     "component1",
-						Name:       "Component 1",
-						Version:    "1.0.0",
-						Type:       "library",
-						PackageURL: "pkg:npm/component1@1.0.0",
-					},
-					{
-						BOMRef: "3fac3b2",
-						Name:   path.Join("path", "to", "file.txt"),
-						Type:   "file",
-					},
-					{
-						BOMRef:     "component2",
-						Name:       "Component 2",
-						Version:    "2.0.0",
-						Type:       "library",
-						PackageURL: "pkg:golang/component2@2.0.0",
-					},
+			bom:  bomWithComponents,
+			expected: &xrayUtils.GraphNode{
+				Id: "root",
+				Nodes: []*xrayUtils.GraphNode{
+					{Id: "pkg:npm/component1@1.0.0"},
+					{Id: "pkg:golang/component2@2.0.0"},
 				},
 			},
+		},
+		{
+			name:              "BOM with Xray components",
+			bom:               bomWithComponents,
+			toXrayComponentId: true,
 			expected: &xrayUtils.GraphNode{
 				Id: "root",
 				Nodes: []*xrayUtils.GraphNode{
@@ -1527,7 +1627,8 @@ func TestBomToFlatTree(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expected, BomToFlatTree(test.bom))
+			setParentsToTestNodes(nil, test.expected)
+			assert.Equal(t, test.expected, BomToFlatTree(test.bom, test.toXrayComponentId), "Flat tree should match expected structure")
 		})
 	}
 }
@@ -2244,4 +2345,444 @@ func getBinaryTestBom(oneBinary bool) *cyclonedx.BOM {
 		},
 	)
 	return bom
+}
+
+func TestScanResponseToSbom(t *testing.T) {
+	tests := []struct {
+		name     string
+		response services.ScanResponse
+		expected *cyclonedx.BOM
+	}{
+		{
+			name:     "Empty response",
+			response: services.ScanResponse{},
+			expected: &cyclonedx.BOM{},
+		},
+		{
+			name: "Response with content",
+			response: services.ScanResponse{
+				Vulnerabilities: []services.Vulnerability{
+					{
+						Summary:  "Test Vulnerability",
+						Severity: "High",
+						IssueId:  "XRAY-1234",
+						Cves: []services.Cve{
+							{
+								Id:           "CVE-2023-1234",
+								CvssV2Score:  "7.5",
+								CvssV2Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+								CvssV3Score:  "9.8",
+								CvssV3Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+								Cwe:          []string{"CWE-79"},
+								CweDetails: map[string]services.Cwe{
+									"CWE-79": {
+										Name:        "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+										Description: "The application does not properly neutralize or incorrectly neutralizes user input before it is placed in a web page that is served to other users.",
+										Categories: []services.CweCategory{
+											{
+												Category: "Input Validation and Representation",
+												Rank:     "High",
+											},
+										},
+									},
+								},
+							},
+						},
+						Components: map[string]services.Component{
+							"npm://example-component:1.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+											FullPath:    "lib/example.js",
+										},
+									},
+								},
+								Cpes: []string{"cpe:2.3:a:example:example-component:1.0.0:*:*:*:*:*:*:*"},
+							},
+							"npm://another-component:2.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+										},
+										{
+											ComponentId: "npm://another-component:2.0.0",
+										},
+									},
+								},
+								FixedVersions: []string{"2.1.0", "2.2.0"},
+							},
+						},
+						References: []string{"https://example.com/vuln/XRAY-1234"},
+						ExtendedInformation: &services.ExtendedInformation{
+							ShortDescription:      "Test Vulnerability extended information short description",
+							FullDescription:       "Test Vulnerability extended information description",
+							Remediation:           "Test Vulnerability extended information recommendation",
+							JfrogResearchSeverity: "Low",
+							JfrogResearchSeverityReasons: []services.JfrogResearchSeverityReason{{
+								Name:        "Test Reason",
+								Description: "Test Reason Description",
+								IsPositive:  true,
+							}},
+						},
+						Technology: "npm",
+					},
+					{
+						Summary:  "Another Vulnerability No Cve",
+						Severity: "Medium",
+						IssueId:  "XRAY-5678",
+						Components: map[string]services.Component{
+							"npm://example-component:1.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://example-component:1.0.0",
+										},
+									},
+								},
+							},
+							"npm://other-component:3.0.0": {
+								ImpactPaths: [][]services.ImpactPathNode{
+									{
+										{
+											ComponentId: "root",
+										},
+										{
+											ComponentId: "npm://other-component:3.0.0",
+										},
+									},
+								},
+							},
+						},
+						Technology: "npm",
+					},
+				},
+				Licenses: []services.License{{
+					Name: "Apache-2.0",
+					Key:  "Apache-2.0-Key",
+					Components: map[string]services.Component{
+						"npm://example-component:1.0.0": {
+							ImpactPaths: [][]services.ImpactPathNode{
+								{
+									{ComponentId: "root"},
+									{ComponentId: "npm://example-component:1.0.0"},
+								},
+							},
+						},
+					},
+				}},
+			},
+			expected: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "npm:example-component:1.0.0",
+						Name:       "example-component",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/example-component@1.0.0",
+						Licenses: &cyclonedx.Licenses{
+							{
+								License: &cyclonedx.License{
+									ID:   "Apache-2.0-Key",
+									Name: "Apache-2.0",
+								},
+							},
+						},
+					},
+					{
+						BOMRef:     "npm:another-component:2.0.0",
+						Name:       "another-component",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/another-component@2.0.0",
+					},
+					{
+						BOMRef:     "npm:other-component:3.0.0",
+						Name:       "other-component",
+						Version:    "3.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/other-component@3.0.0",
+					},
+				},
+				Vulnerabilities: &[]cyclonedx.Vulnerability{
+					{
+						BOMRef: "CVE-2023-1234",
+						ID:     "XRAY-1234",
+						Source: &cyclonedx.Source{
+							Name: utils.XrayToolName,
+						},
+						Description: "Test Vulnerability",
+						Detail:      "Test Vulnerability extended information description",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:example-component:1.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "1.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+							{
+								Ref: "npm:another-component:2.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "2.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+									{
+										Version: "2.1.0",
+										Status:  cyclonedx.VulnerabilityStatusNotAffected,
+									},
+									{
+										Version: "2.2.0",
+										Status:  cyclonedx.VulnerabilityStatusNotAffected,
+									},
+								},
+							},
+						},
+						References: &[]cyclonedx.VulnerabilityReference{
+							{
+								Source: &cyclonedx.Source{
+									URL: "https://example.com/vuln/XRAY-1234",
+								},
+							},
+						},
+						CWEs: &[]int{79},
+						Ratings: &[]cyclonedx.VulnerabilityRating{
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Method: cyclonedx.ScoringMethodCVSSv2,
+								Score:  utils.NewFloat64Ptr(7.5),
+								Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P",
+							},
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Method: cyclonedx.ScoringMethodCVSSv3,
+								Score:  utils.NewFloat64Ptr(9.8),
+								Vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+							},
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Severity: cyclonedx.SeverityHigh,
+								Score:    utils.NewFloat64Ptr(8.9),
+								Method:   cyclonedx.ScoringMethodOther,
+							},
+						},
+					},
+					{
+						BOMRef: "XRAY-5678",
+						ID:     "XRAY-5678",
+						Source: &cyclonedx.Source{
+							Name: utils.XrayToolName,
+						},
+						Description: "Another Vulnerability No Cve",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:example-component:1.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "1.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+							{
+								Ref: "npm:other-component:3.0.0",
+								Range: &[]cyclonedx.AffectedVersions{
+									{
+										Version: "3.0.0",
+										Status:  cyclonedx.VulnerabilityStatusAffected,
+									},
+								},
+							},
+						},
+						Ratings: &[]cyclonedx.VulnerabilityRating{
+							{
+								Source: &cyclonedx.Source{
+									Name: utils.XrayToolName,
+								},
+								Severity: cyclonedx.SeverityMedium,
+								Score:    utils.NewFloat64Ptr(6.9),
+								Method:   cyclonedx.ScoringMethodOther,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Prepare expected
+			expected := cyclonedx.NewBOM()
+			expected.Components = test.expected.Components
+			expected.Dependencies = test.expected.Dependencies
+			expected.Vulnerabilities = test.expected.Vulnerabilities
+			// Sort affects in vulnerabilities for consistent comparison
+			if expected.Vulnerabilities != nil {
+				for _, vuln := range *expected.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
+			// Run test
+			destination := cyclonedx.NewBOM()
+			assert.NoError(t, ScanResponseToSbom(destination, test.response))
+			// Sort affects in vulnerabilities for consistent comparison
+			if destination.Vulnerabilities != nil {
+				for _, vuln := range *destination.Vulnerabilities {
+					if vuln.Affects != nil {
+						sort.Slice(*vuln.Affects, func(i, j int) bool {
+							return (*vuln.Affects)[i].Ref < (*vuln.Affects)[j].Ref
+						})
+					}
+				}
+			}
+			// Validate
+			assert.NoError(t, cyclonedx.NewBOMEncoder(os.Stdout, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(destination))
+			if expected.Components == nil {
+				assert.Nil(t, destination.Components)
+			} else {
+				assert.ElementsMatch(t, *expected.Components, *destination.Components)
+			}
+			if expected.Dependencies == nil {
+				assert.Nil(t, destination.Dependencies)
+			} else {
+				assert.ElementsMatch(t, *expected.Dependencies, *destination.Dependencies)
+			}
+			if expected.Vulnerabilities == nil {
+				assert.Nil(t, destination.Vulnerabilities)
+			} else {
+				assert.ElementsMatch(t, *expected.Vulnerabilities, *destination.Vulnerabilities)
+			}
+		})
+	}
+}
+
+func TestExtractCdxDependenciesCves(t *testing.T) {
+	tests := []struct {
+		name                 string
+		bom                  *cyclonedx.BOM
+		expectedDirectCves   []string
+		expectedIndirectCves []string
+	}{
+		{
+			name:                 "Empty response",
+			bom:                  &cyclonedx.BOM{},
+			expectedDirectCves:   []string{},
+			expectedIndirectCves: []string{},
+		},
+		{
+			name: "Response with vulnerabilities",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{
+						BOMRef:     "npm:root:1.0.0",
+						Name:       "root",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/root@1.0.0",
+					},
+					{
+						BOMRef:     "npm:component1:1.0.0",
+						Name:       "component1",
+						Version:    "1.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component1@1.0.0",
+					},
+					{
+						BOMRef:     "npm:component2:2.0.0",
+						Name:       "component2",
+						Version:    "2.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component2@2.0.0",
+					},
+					{
+						BOMRef:     "npm:component3:3.0.0",
+						Name:       "component3",
+						Version:    "3.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component3@3.0.0",
+					},
+					{
+						BOMRef:     "npm:component4:4.0.0",
+						Name:       "component4",
+						Version:    "4.0.0",
+						Type:       "library",
+						PackageURL: "pkg:npm/component4@4.0.0",
+					},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{
+						Ref:          "npm:root:1.0.0",
+						Dependencies: &[]string{"npm:component1:1.0.0", "npm:component2:2.0.0", "npm:component3:3.0.0"},
+					},
+					{
+						Ref:          "npm:component1:1.0.0",
+						Dependencies: &[]string{"npm:component3:3.0.0", "npm:component4:4.0.0"},
+					},
+				},
+				Vulnerabilities: &[]cyclonedx.Vulnerability{
+					{
+						BOMRef: "CVE-2023-1234",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component1:1.0.0",
+							},
+							{
+								Ref: "npm:component2:2.0.0",
+							},
+						},
+					},
+					{
+						BOMRef: "CVE-2023-5678",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component3:3.0.0",
+							},
+						},
+					},
+					{
+						BOMRef: "CVE-2023-9012",
+						Affects: &[]cyclonedx.Affects{
+							{
+								Ref: "npm:component4:4.0.0",
+							},
+						},
+					},
+				},
+			},
+			expectedDirectCves:   []string{"CVE-2023-1234", "CVE-2023-5678"},
+			expectedIndirectCves: []string{"CVE-2023-9012"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directCves, indirectCves := ExtractCdxDependenciesCves(test.bom)
+			assert.ElementsMatch(t, test.expectedDirectCves, directCves)
+			assert.ElementsMatch(t, test.expectedIndirectCves, indirectCves)
+		})
+	}
 }

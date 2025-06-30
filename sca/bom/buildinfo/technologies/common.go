@@ -112,19 +112,6 @@ func RunXrayDependenciesTreeScanGraph(scanGraphParams *scangraph.ScanGraphParams
 	return
 }
 
-// Infer the status code of SCA Xray scan, must have at least one result, if err occurred or any of the results is `failed` return 1, otherwise return 0.
-func GetScaScansStatusCode(err error, results ...services.ScanResponse) int {
-	if err != nil || len(results) == 0 {
-		return 1
-	}
-	for _, result := range results {
-		if result.ScannedStatus == "Failed" {
-			return 1
-		}
-	}
-	return 0
-}
-
 func CreateTestWorkspace(t *testing.T, sourceDir string) (string, func()) {
 	return tests.CreateTestWorkspace(t, filepath.Join("..", "..", "..", "..", "..", "tests", "testdata", sourceDir))
 }

@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -23,7 +26,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -55,11 +57,13 @@ func CheckIfFailBuild(results []services.ScanResponse) bool {
 	return false
 }
 
-type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseLicenseFunc func(license services.License, impactedPackagesName, impactedPackagesVersion, impactedPackagesType string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
+type ParseLicenseFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
+
+type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
 func ForEachJasIssue(runs []*sarif.Run, entitledForJas bool, handler ParseJasIssueFunc) error {
@@ -96,7 +100,7 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		return nil
 	}
 	for _, vulnerability := range vulnerabilities {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(target.Target, vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -105,17 +109,71 @@ func ForEachScanGraphVulnerability(target ScanTarget, vulnerabilities []services
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				vulnerability, cves, applicabilityStatus, severity,
-				impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-				fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(vulnerability, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func ForEachScaBomVulnerability(target ScanTarget, bom *cyclonedx.BOM, entitledForJas bool, applicabilityRuns []*sarif.Run, handler ParseBomScaVulnerabilityFunc) error {
+	if handler == nil || bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
+		return nil
+	}
+	for _, vulnerability := range *bom.Vulnerabilities {
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			// If there are no affected components, we skip the vulnerability.
+			log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no affected components", vulnerability.BOMRef))
+			continue
+		}
+		// Check the CA status of the vulnerability
+		var applicability *formats.Applicability
+		if entitledForJas && len(applicabilityRuns) > 0 {
+			applicability = GetCveApplicabilityField(vulnerability.BOMRef, applicabilityRuns)
+		}
+		// Get the related components for the vulnerability
+		for _, affectedComponent := range *vulnerability.Affects {
+			relatedComponent := cdxutils.SearchComponentByRef(bom.Components, affectedComponent.Ref)
+			if relatedComponent == nil {
+				log.Debug(fmt.Sprintf("Skipping vulnerability %s as it has no related component with BOMRef %s", vulnerability.BOMRef, affectedComponent.Ref))
+				continue
+			}
+			var fixedVersion *[]cyclonedx.AffectedVersions
+			if affectedComponent.Range != nil {
+				for _, affectedVersion := range *affectedComponent.Range {
+					if affectedVersion.Status == cyclonedx.VulnerabilityStatusNotAffected {
+						if fixedVersion == nil {
+							fixedVersion = &[]cyclonedx.AffectedVersions{}
+						}
+						*fixedVersion = append(*fixedVersion, affectedVersion)
+					}
+				}
+			}
+			// Pass the vulnerability to the handler with its related information
+			if err := handler(vulnerability, *relatedComponent, fixedVersion, applicability, cdxRatingToSeverity(vulnerability.Ratings)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity severityutils.Severity) {
+	if ratings == nil || len(*ratings) == 0 {
+		return severityutils.Unknown
+	}
+	// If Xray provided ratings, we use them to determine the severity.
+	if xraySeverity := cdxutils.SearchRating(ratings, cyclonedx.ScoringMethodOther, &cyclonedx.Source{Name: utils.XrayToolName}); xraySeverity != nil {
+		return severityutils.CycloneDxSeverityToSeverity(xraySeverity.Severity)
+	}
+	// Xray didn't provide severity, Get the highest severity rating
+	severities := []severityutils.Severity{}
+	for _, rating := range *ratings {
+		severities = append(severities, severityutils.CycloneDxSeverityToSeverity(rating.Severity))
+	}
+	return severityutils.MostSevereSeverity(severities...)
 }
 
 // Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
@@ -129,7 +187,7 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 		watchesSet.Add(violation.WatchName)
 		failBuild = failBuild || violation.FailBuild
 		// Prepare violation information
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(target.Target, violation.Components)
 		if e != nil {
 			err = errors.Join(err, e)
 			continue
@@ -154,12 +212,8 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				continue
 			}
 
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := securityHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := securityHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -169,16 +223,12 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				// No handler was provided for license violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if impactedPackagesNames[compIndex] == "root" {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if impactedPackagesName, _, _ := techutils.SplitComponentId(impactedPackagesIds[compIndex]); impactedPackagesName == "root" {
 					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
 					continue
 				}
-				if e := licenseHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+				if e := licenseHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -188,12 +238,8 @@ func ForEachScanGraphViolation(target ScanTarget, violations []services.Violatio
 				// No handler was provided for operational risk violations
 				continue
 			}
-			for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-				if e := operationalRiskHandler(
-					violation, cves, applicabilityStatus, severity,
-					impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex],
-					fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex],
-				); e != nil {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
 					err = errors.Join(err, e)
 					continue
 				}
@@ -210,14 +256,12 @@ func ForEachLicense(target ScanTarget, licenses []services.License, handler Pars
 		return nil
 	}
 	for _, license := range licenses {
-		impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
+		impactedPackagesIds, _, directComponents, impactPaths, err := SplitComponents(target.Target, license.Components)
 		if err != nil {
 			return err
 		}
-		for compIndex := 0; compIndex < len(impactedPackagesNames); compIndex++ {
-			if err := handler(
-				license, impactedPackagesNames[compIndex], impactedPackagesVersions[compIndex], impactedPackagesTypes[compIndex], directComponents[compIndex], impactPaths[compIndex],
-			); err != nil {
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			if err := handler(license, impactedPackagesIds[compIndex], directComponents[compIndex], impactPaths[compIndex]); err != nil {
 				return err
 			}
 		}
@@ -242,16 +286,31 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 	return
 }
 
-func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+// func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesNames, impactedPackagesVersions, impactedPackagesTypes []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
+// 	if len(impactedPackages) == 0 {
+// 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
+// 		return
+// 	}
+// 	for currCompId, currComp := range impactedPackages {
+// 		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
+// 		impactedPackagesNames = append(impactedPackagesNames, currCompName)
+// 		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
+// 		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
+// 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
+// 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
+// 		directComponents = append(directComponents, currDirectComponents)
+// 		impactPaths = append(impactPaths, currImpactPaths)
+// 	}
+// 	return
+// }
+
+func SplitComponents(target string, impactedPackages map[string]services.Component) (impactedPackagesIds []string, fixedVersions [][]string, directComponents [][]formats.ComponentRow, impactPaths [][][]formats.ComponentRow, err error) {
 	if len(impactedPackages) == 0 {
 		err = errorutils.CheckErrorf("failed while parsing the response from Xray: violation doesn't have any components")
 		return
 	}
 	for currCompId, currComp := range impactedPackages {
-		currCompName, currCompVersion, currPackageType := techutils.SplitComponentIdRaw(currCompId)
-		impactedPackagesNames = append(impactedPackagesNames, currCompName)
-		impactedPackagesVersions = append(impactedPackagesVersions, currCompVersion)
-		impactedPackagesTypes = append(impactedPackagesTypes, techutils.ConvertXrayPackageType(currPackageType))
+		impactedPackagesIds = append(impactedPackagesIds, currCompId)
 		fixedVersions = append(fixedVersions, currComp.FixedVersions)
 		currDirectComponents, currImpactPaths := getDirectComponentsAndImpactPaths(target, currComp.ImpactPaths)
 		directComponents = append(directComponents, currDirectComponents)
@@ -296,6 +355,39 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 	return
 }
 
+func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
+	impactPathsRows = [][]formats.ComponentRow{}
+	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
+		impactedPath := buildImpactPathForComponent(parent, components, dependencies...)
+		// Add the affected component at the end of the impact path
+		impactedPath = append(impactedPath, formats.ComponentRow{
+			Name:    affectedComponent.Name,
+			Version: affectedComponent.Version,
+		})
+		// Add the impact path to the list of impact paths
+		impactPathsRows = append(impactPathsRows, impactedPath)
+	}
+	return
+}
+
+func buildImpactPathForComponent(component cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	// Build the impact path for the component
+	impactPath = []formats.ComponentRow{
+		{
+			Name:    component.Name,
+			Version: component.Version,
+		},
+	}
+	// Add the parent components to the impact path
+	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+		parentImpactPath := buildImpactPathForComponent(parent, components, dependencies...)
+		if len(parentImpactPath) > 0 {
+			impactPath = append(parentImpactPath, impactPath...)
+		}
+	}
+	return
+}
+
 func getComponentLocation(pathsByPriority ...string) *formats.Location {
 	for _, path := range pathsByPriority {
 		if path != "" {
@@ -323,7 +415,7 @@ func GetIssueIdentifier(cvesRow []formats.CveRow, issueId string, delimiter stri
 func ConvertCvesWithApplicability(cves []services.Cve, entitledForJas bool, applicabilityRuns []*sarif.Run, components map[string]services.Component) (convertedCves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus) {
 	convertedCves = convertCves(cves)
 	for i := range convertedCves {
-		convertedCves[i].Applicability = GetCveApplicabilityField(convertedCves[i].Id, applicabilityRuns, components)
+		convertedCves[i].Applicability = GetCveApplicabilityFieldAndFilterDisqualify(convertedCves[i].Id, applicabilityRuns, components)
 	}
 	applicabilityStatus = GetApplicableCveStatus(entitledForJas, applicabilityRuns, convertedCves)
 	return
@@ -471,7 +563,7 @@ func getImpactPathKey(path []services.ImpactPathNode) string {
 	return key
 }
 
-func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run, components map[string]services.Component) *formats.Applicability {
+func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Run) *formats.Applicability {
 	if len(applicabilityScanResults) == 0 {
 		return nil
 	}
@@ -495,7 +587,7 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 		for _, result := range cveResults {
 			// Add new evidences from locations
 			for _, location := range result.Locations {
-				if evidence := getEvidence(components, result, location, applicabilityRun.Invocations...); evidence != nil {
+				if evidence := getEvidence(result, location, applicabilityRun.Invocations...); evidence != nil {
 					applicability.Evidence = append(applicability.Evidence, *evidence)
 				}
 			}
@@ -514,14 +606,29 @@ func GetCveApplicabilityField(cveId string, applicabilityScanResults []*sarif.Ru
 	return &applicability
 }
 
-func getEvidence(components map[string]services.Component, result *sarif.Result, location *sarif.Location, invocations ...*sarif.Invocation) *formats.Evidence {
-	fileName := sarifutils.GetRelativeLocationFileName(location, invocations)
-	if shouldDisqualifyEvidence(components, fileName) {
-		return nil
+func GetCveApplicabilityFieldAndFilterDisqualify(cveId string, applicabilityScanResults []*sarif.Run, components map[string]services.Component) (applicability *formats.Applicability) {
+	if applicability = GetCveApplicabilityField(cveId, applicabilityScanResults); applicability == nil || len(applicability.Evidence) == 0 {
+		// nothing more to do
+		return
 	}
+	// Filter out evidences that are disqualified
+	filteredEvidence := make([]formats.Evidence, 0, len(applicability.Evidence))
+	for _, evidence := range applicability.Evidence {
+		fileName := evidence.Location.File
+		if fileName == "" || !shouldDisqualifyEvidence(components, filepath.Clean(fileName)) {
+			// If the file name is empty, we cannot determine if it should be disqualified
+			// If the evidence is not disqualified, keep it
+			filteredEvidence = append(filteredEvidence, evidence)
+		}
+	}
+	applicability.Evidence = filteredEvidence
+	return
+}
+
+func getEvidence(result *sarif.Result, location *sarif.Location, invocations ...*sarif.Invocation) *formats.Evidence {
 	return &formats.Evidence{
 		Location: formats.Location{
-			File:        fileName,
+			File:        sarifutils.GetRelativeLocationFileName(location, invocations),
 			StartLine:   sarifutils.GetLocationStartLine(location),
 			StartColumn: sarifutils.GetLocationStartColumn(location),
 			EndLine:     sarifutils.GetLocationEndLine(location),
@@ -546,6 +653,14 @@ func GetApplicableCveStatus(entitledForJas bool, applicabilityScanResults []*sar
 		}
 	}
 	return getFinalApplicabilityStatus(applicableStatuses)
+}
+
+// We only care to update the status if it's the first time we see it or if status is 0 (completed) and the new status is not (failed)
+func ShouldUpdateStatus(currentStatus, newStatus *int) bool {
+	if currentStatus == nil || (*currentStatus == 0 && newStatus != nil) {
+		return true
+	}
+	return false
 }
 
 func GetRuleUndeterminedReason(rule *sarif.ReportingDescriptor) string {
@@ -687,7 +802,7 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 
 // Resolve the actual technology from multiple sources:
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
-	if responseTechnology != "" {
+	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
 		// technology returned in the vulnerability/violation obj is the most specific technology
 		return techutils.Technology(responseTechnology)
 	}
@@ -712,6 +827,107 @@ func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus j
 	}
 	return true, nil
 }
+
+// This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
+// lists of the direct and indirect CVEs
+func ExtractCvesFromScanResponse(xrayScanResults []services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
+	directCvesSet := datastructures.MakeSet[string]()
+	indirectCvesSet := datastructures.MakeSet[string]()
+	for _, scanResult := range xrayScanResults {
+		for _, vulnerability := range scanResult.Vulnerabilities {
+			if isDirectComponents(maps.Keys(vulnerability.Components), directDependencies) {
+				addCvesToSet(vulnerability.Cves, directCvesSet)
+			} else {
+				addCvesToSet(vulnerability.Cves, indirectCvesSet)
+			}
+		}
+		for _, violation := range scanResult.Violations {
+			if isDirectComponents(maps.Keys(violation.Components), directDependencies) {
+				addCvesToSet(violation.Cves, directCvesSet)
+			} else {
+				addCvesToSet(violation.Cves, indirectCvesSet)
+			}
+		}
+	}
+
+	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
+}
+
+func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indirectCves []string) {
+	if bom == nil || bom.Components == nil || bom.Vulnerabilities == nil {
+		return
+	}
+	directCvesSet := datastructures.MakeSet[string]()
+	indirectCvesSet := datastructures.MakeSet[string]()
+	for _, vulnerability := range *bom.Vulnerabilities {
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			// No affected components, skip this vulnerability
+			continue
+		}
+		for _, affectedComponent := range *vulnerability.Affects {
+			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref)
+			if relation == cdxutils.TransitiveRelation {
+				indirectCvesSet.Add(vulnerability.BOMRef)
+			} else {
+				// All other relations are considered direct
+				directCvesSet.Add(vulnerability.BOMRef)
+			}
+		}
+	}
+	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
+}
+
+func isDirectComponents(components []string, directDependencies []string) bool {
+	for _, component := range components {
+		if slices.Contains(directDependencies, component) {
+			return true
+		}
+	}
+	return false
+}
+
+func addCvesToSet(cves []services.Cve, set *datastructures.Set[string]) {
+	for _, cve := range cves {
+		if cve.Id != "" {
+			set.Add(cve.Id)
+		}
+	}
+}
+
+func GetTargetDirectDependencies(targetResult *TargetResults, flatTree, convertToXrayCompId bool) (slice []string) {
+	slice = []string{}
+	if targetResult.ScaResults == nil || targetResult.ScaResults.Sbom == nil || targetResult.ScaResults.Sbom.Components == nil || targetResult.ScaResults.Sbom.Dependencies == nil {
+		return
+	}
+	if flatTree {
+		// If the flat tree is requested, we will use the flat tree of the SBOM
+		if root := BomToFlatTree(targetResult.ScaResults.Sbom, convertToXrayCompId); root != nil {
+			for _, component := range root.Nodes {
+				if component != nil && component.Id != "" {
+					// Add the component ID to the slice
+					slice = append(slice, component.Id)
+				}
+			}
+		}
+		return
+	}
+	// Translate refs to IDs
+	directIdsSet := datastructures.MakeSet[string]()
+	for _, root := range cdxutils.GetRootDependenciesEntries(targetResult.ScaResults.Sbom, true) {
+		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
+			continue
+		}
+		// Collect the IDs of the direct dependencies
+		for _, directDepRef := range *root.Dependencies {
+			if component := cdxutils.SearchComponentByRef(targetResult.ScaResults.Sbom.Components, directDepRef); component != nil {
+				directIdsSet.Add(techutils.PurlToXrayComponentId(component.PackageURL))
+			}
+		}
+	}
+	return directIdsSet.ToSlice()
+}
+
+// func extract
 
 func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *SecurityCommandResults) (targetResults *TargetResults) {
 	if resultsToCompare == nil {
@@ -894,14 +1110,14 @@ func IsMultiProject(sbom *cyclonedx.BOM) bool {
 		// No dependencies or components in the SBOM, return false
 		return false
 	}
-	return len(cdxutils.GetRootDependenciesEntries(sbom)) > 1
+	return len(cdxutils.GetRootDependenciesEntries(sbom, false)) > 1
 }
 
 func BomToTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode, fullDependencyTrees []*xrayUtils.GraphNode) {
-	return BomToFlatTree(sbom), BomToFullTree(sbom, true)
+	return BomToFlatTree(sbom, true), BomToFullTree(sbom, true)
 }
 
-func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
+func BomToFlatTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (flatTree *xrayUtils.GraphNode) {
 	flatTree = &xrayUtils.GraphNode{Id: "root"}
 	if sbom == nil || sbom.Components == nil {
 		return
@@ -913,22 +1129,26 @@ func BomToFlatTree(sbom *cyclonedx.BOM) (flatTree *xrayUtils.GraphNode) {
 			// We are only interested in libraries for the dependency tree
 			continue
 		}
-		id := techutils.PurlToXrayComponentId(component.PackageURL)
+		// Get the component ID
+		id := component.PackageURL
+		if convertToXrayCompId {
+			id = techutils.PurlToXrayComponentId(id)
+		}
 		if components.Exists(id) {
 			continue
 		}
 		components.Add(id)
-		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id})
+		flatTree.Nodes = append(flatTree.Nodes, &xrayUtils.GraphNode{Id: id, Parent: flatTree})
 	}
 	return
 }
 
-func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
+func BomToFullTree(sbom *cyclonedx.BOM, convertToXrayCompId bool) (fullDependencyTrees []*xrayUtils.GraphNode) {
 	if sbom == nil || sbom.Dependencies == nil {
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom, false) {
 		// Create a new GraphNode with ref as the ID, when populating the tree we need to use the ref as the ID
 		currentTree := &xrayUtils.GraphNode{Id: rootEntry.Ref}
 		populateDepsNodeDataFromBom(currentTree, sbom.Dependencies)
@@ -936,7 +1156,7 @@ func BomToFullTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependencyTre
 	}
 	// Translate refs to Purl/Xray IDs
 	for _, node := range fullDependencyTrees {
-		convertRefsToPackageID(node, isBuildInfoXray, *sbom.Components...)
+		convertRefsToPackageID(node, convertToXrayCompId, *sbom.Components...)
 	}
 	return
 }
@@ -955,18 +1175,18 @@ func populateDepsNodeDataFromBom(node *xrayUtils.GraphNode, dependencies *[]cycl
 	}
 }
 
-func convertRefsToPackageID(node *xrayUtils.GraphNode, isBuildInfoXray bool, components ...cyclonedx.Component) {
+func convertRefsToPackageID(node *xrayUtils.GraphNode, convertToXrayCompId bool, components ...cyclonedx.Component) {
 	if node == nil {
 		return
 	}
 	if component := cdxutils.SearchComponentByRef(&components, node.Id); component != nil {
 		node.Id = component.PackageURL
-		if isBuildInfoXray {
+		if convertToXrayCompId {
 			node.Id = techutils.PurlToXrayComponentId(node.Id)
 		}
 	}
 	for _, dep := range node.Nodes {
-		convertRefsToPackageID(dep, isBuildInfoXray, components...)
+		convertRefsToPackageID(dep, convertToXrayCompId, components...)
 	}
 }
 
@@ -975,7 +1195,7 @@ func BomToFullCompTree(sbom *cyclonedx.BOM, isBuildInfoXray bool) (fullDependenc
 		// No dependencies or components in the SBOM, return an empty slice
 		return
 	}
-	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom) {
+	for _, rootEntry := range cdxutils.GetRootDependenciesEntries(sbom, true) {
 		// Create a new GraphNode with ref as the ID
 		currentTree := toBinaryNode(sbom, rootEntry.Ref)
 		// Populate application tree
@@ -1053,4 +1273,212 @@ func convertBinaryRefsToPackageID(node *xrayUtils.BinaryGraphNode, isBuildInfoXr
 	for _, dep := range node.Nodes {
 		convertBinaryRefsToPackageID(dep, isBuildInfoXray, components...)
 	}
+}
+
+func ScanResponseToSbom(destination *cyclonedx.BOM, scanResponse services.ScanResponse) (err error) {
+	xrayService := &cyclonedx.Service{Name: utils.XrayToolName}
+	for _, vulnerability := range scanResponse.Vulnerabilities {
+		// Prepare the information needed to create the SCA vulnerability
+		impactedPackagesIds, fixedVersions, _, _, err := SplitComponents("", vulnerability.Components)
+		if err != nil {
+			return err
+		}
+		severity, err := severityutils.ParseSeverity(vulnerability.Severity, false)
+		if err != nil {
+			return err
+		}
+		extendedDescription := ""
+		if vulnerability.ExtendedInformation != nil {
+			extendedDescription = vulnerability.ExtendedInformation.FullDescription
+		}
+		cves, _, cwes, ratings := ExtractIssuesInfoForCdx(vulnerability.IssueId, convertCves(vulnerability.Cves), severity, jasutils.NotScanned, xrayService)
+		// Create vulnerability for each issueId
+		for id := 0; id < len(cves); id++ {
+			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+				// Create or get the affected component
+				affectedComponent := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+				// Create or Get the SCA vulnerability
+				params := cdxutils.CdxVulnerabilityParams{
+					Ref:         cves[id],
+					Ratings:     ratings[id],
+					CWE:         cwes[id],
+					ID:          vulnerability.IssueId,
+					Description: vulnerability.Summary,
+					Details:     extendedDescription,
+					References:  vulnerability.References,
+					Service:     xrayService,
+				}
+				cycloneVulnerability := cdxutils.GetOrCreateScaIssue(destination, params)
+				// Attach the affected impacted library component to the vulnerability
+				cdxutils.AttachComponentAffects(cycloneVulnerability, *affectedComponent, func(affectedComponent cyclonedx.Component) cyclonedx.Affects {
+					return cdxutils.CreateScaImpactedAffects(affectedComponent, fixedVersions[compIndex])
+				})
+
+			}
+		}
+	}
+	for _, license := range scanResponse.Licenses {
+		// Prepare the information needed to create the SCA license
+		impactedPackagesIds, _, _, _, err := SplitComponents("", license.Components)
+		if err != nil {
+			return err
+		}
+		for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
+			// Attach the license to the component
+			component := getOrCreateScaComponent(destination, impactedPackagesIds[compIndex])
+			cdxutils.AttachLicenseToComponent(component, cyclonedx.LicenseChoice{
+				License: &cyclonedx.License{
+					ID:   license.Key,
+					Name: license.Name,
+				},
+			})
+		}
+	}
+	return
+}
+
+func ExtractIssuesInfoForCdx(issueId string, cves []formats.CveRow, severity severityutils.Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) (cveIds []string, statuses []*formats.Applicability, cwe [][]string, ratings [][]cyclonedx.VulnerabilityRating) {
+	if len(cves) == 0 {
+		cveIds = append(cveIds, issueId)
+		ratings = [][]cyclonedx.VulnerabilityRating{{severityutils.CreateSeverityRating(severity, applicabilityStatus, service)}}
+		if applicabilityStatus != jasutils.NotScanned {
+			statuses = []*formats.Applicability{{Status: string(applicabilityStatus)}}
+		} else {
+			statuses = []*formats.Applicability{nil}
+		}
+		cwe = [][]string{{}}
+		return
+	}
+	for _, cve := range cves {
+		cveIds = append(cveIds, cve.Id)
+		cwe = append(cwe, cve.Cwe)
+		ratings = append(ratings, append(CreateCveRatings(cve), severityutils.CreateSeverityRating(severity, applicabilityStatus, service)))
+		var cveApplicability *formats.Applicability
+		if cve.Applicability != nil {
+			cveApplicability = cve.Applicability
+		} else if applicabilityStatus != jasutils.NotScanned {
+			cveApplicability = &formats.Applicability{Status: applicabilityStatus.String()}
+		}
+		statuses = append(statuses, cveApplicability)
+	}
+	return
+}
+
+func CreateCveRatings(cve formats.CveRow) (ratings []cyclonedx.VulnerabilityRating) {
+	if cve.CvssV2 != "" {
+		ratings = append(ratings, cyclonedx.VulnerabilityRating{
+			Source: &cyclonedx.Source{
+				Name: utils.XrayToolName,
+			},
+			Score:  severityutils.GetCvssScore(cve.CvssV2),
+			Vector: cve.CvssV2Vector,
+			Method: cyclonedx.ScoringMethodCVSSv2,
+		})
+	}
+	if cve.CvssV3 != "" {
+		ratings = append(ratings, cyclonedx.VulnerabilityRating{
+			Source: &cyclonedx.Source{
+				Name: utils.XrayToolName,
+			},
+			Score:  severityutils.GetCvssScore(cve.CvssV3),
+			Vector: cve.CvssV3Vector,
+			Method: cyclonedx.ScoringMethodCVSSv3,
+		})
+	}
+	return
+}
+
+func getOrCreateScaComponent(destination *cyclonedx.BOM, xrayCompId string) (libComponent *cyclonedx.Component) {
+	ref := techutils.XrayComponentIdToCdxComponentRef(xrayCompId)
+	// Check if the component already exists in the BOM
+	if component := cdxutils.SearchComponentByRef(destination.Components, ref); component != nil {
+		// The component already exists, return it
+		return component
+	}
+	// Create a new component, add it to the BOM and return it
+	if destination.Components == nil {
+		destination.Components = &[]cyclonedx.Component{}
+	}
+	component := CreateScaComponentFromXrayCompId(xrayCompId)
+	*destination.Components = append(*destination.Components, component)
+	return &(*destination.Components)[len(*destination.Components)-1]
+}
+
+func CdxToFixedVersions(affectedVersions *[]cyclonedx.AffectedVersions) (fixedVersion []string) {
+	fixedVersion = []string{}
+	if affectedVersions == nil || len(*affectedVersions) == 0 {
+		return
+	}
+	for _, version := range *affectedVersions {
+		if version.Version != "" {
+			fixedVersion = append(fixedVersion, version.Version)
+		}
+	}
+	return
+}
+
+func GetDirectDependenciesAsComponentRows(component cyclonedx.Component, components []cyclonedx.Component, dependencies []cyclonedx.Dependency) (directComponents []formats.ComponentRow) {
+	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
+		directComponents = append(directComponents, formats.ComponentRow{
+			Name:     parent.Name,
+			Version:  parent.Version,
+			Location: CdxEvidenceToLocation(parent.Evidence),
+		})
+	}
+	return
+}
+
+func CdxEvidenceToLocation(evidence *cyclonedx.Evidence) (location *formats.Location) {
+	if evidence == nil || evidence.Occurrences == nil || len(*evidence.Occurrences) == 0 {
+		return nil
+	}
+	// We take the first location as the main location
+	if len(*evidence.Occurrences) > 1 {
+		log.Debug("Multiple locations found for component evidence, using the first one as location")
+	}
+	loc := (*evidence.Occurrences)[0]
+	location = &formats.Location{
+		File: loc.Location,
+	}
+	return location
+}
+
+func CdxVulnToCveRows(vulnerability cyclonedx.Vulnerability, applicability *formats.Applicability) (cveRows []formats.CveRow) {
+	cwes := []string{}
+	if vulnerability.CWEs != nil {
+		for _, cwe := range *vulnerability.CWEs {
+			cwes = append(cwes, strconv.Itoa(cwe))
+		}
+	}
+	cvssV2 := ""
+	cvssV2Vector := ""
+	if rating := cdxutils.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv2); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV2 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV2Vector = rating.Vector
+	}
+	cvssV3 := ""
+	cvssV3Vector := ""
+	if rating := cdxutils.SearchRating(vulnerability.Ratings, cyclonedx.ScoringMethodCVSSv3); rating != nil {
+		if rating.Score != nil {
+			// convert the score to string using fmt.Sprintf to ensure it is a string
+			cvssV3 = fmt.Sprintf("%v", *rating.Score)
+		}
+		cvssV3Vector = rating.Vector
+	}
+	// If vulnerability ID starts with "CVE-", we consider it a CVE ID.
+	if strings.HasPrefix(vulnerability.BOMRef, "CVE-") {
+		cveRows = append(cveRows, formats.CveRow{
+			Id:            vulnerability.BOMRef,
+			Cwe:           cwes,
+			Applicability: applicability,
+			CvssV2:        cvssV2,
+			CvssV2Vector:  cvssV2Vector,
+			CvssV3:        cvssV3,
+			CvssV3Vector:  cvssV3Vector,
+		})
+	}
+	return
 }

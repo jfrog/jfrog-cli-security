@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -74,7 +75,7 @@ func ValidateSarifIssuesCount(t *testing.T, params ValidationParams, report *sar
 }
 
 func countScaResults(report *sarif.Report) (vulnerabilities, applicableVulnerabilitiesResults, undeterminedVulnerabilitiesResults, notCoveredVulnerabilitiesResults, notApplicableVulnerabilitiesResults, missingContextVulnerabilitiesResults, violations, securityViolations, licenseViolations, applicableViolationsResults, undeterminedViolationsResults, notCoveredViolationsResults, notApplicableViolationsResults, missingContextViolationsResults int) {
-	for _, run := range sarifutils.GetRunsByToolName(report, sarifparser.ScaScannerToolName) {
+	for _, run := range sarifutils.GetRunsByToolName(report, utils.XrayToolName) {
 		for _, result := range run.Results {
 			// If watch property exists, add to security violations or license violations else add to vulnerabilities
 			isViolations := false
