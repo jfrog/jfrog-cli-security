@@ -829,6 +829,7 @@ func TestCreateResultsContext(t *testing.T) {
 	mockWatches := []string{"watch-1", "watch-2"}
 	mockProjectKey := "project"
 	mockArtifactoryRepoPath := "repo/path"
+	mockApplicationKey := "app-key"
 
 	tests := []struct {
 		name                    string
@@ -862,6 +863,7 @@ func TestCreateResultsContext(t *testing.T) {
 			httpCloneUrl           string
 			watches                []string
 			jfrogProjectKey        string
+			jfrogApplicationKey    string
 			includeVulnerabilities bool
 			includeLicenses        bool
 			includeSbom            bool
@@ -870,6 +872,7 @@ func TestCreateResultsContext(t *testing.T) {
 			expectedHttpCloneUrl           string
 			expectedWatches                []string
 			expectedJfrogProjectKey        string
+			expectedJfrogApplicationKey    string
 			expectedIncludeVulnerabilities bool
 			expectedIncludeLicenses        bool
 			expectedIncludeSbom            bool
@@ -901,6 +904,12 @@ func TestCreateResultsContext(t *testing.T) {
 				expectedIncludeLicenses: true,
 			},
 			{
+				name:                           "Application Key",
+				jfrogApplicationKey:            mockApplicationKey,
+				expectedJfrogApplicationKey:    mockApplicationKey,
+				expectedIncludeVulnerabilities: true,
+			},
+			{
 				name:                           "Git Clone Url",
 				httpCloneUrl:                   validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
 				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
@@ -911,6 +920,7 @@ func TestCreateResultsContext(t *testing.T) {
 				httpCloneUrl:           validations.TestMockGitInfo.Source.GitRepoHttpsCloneUrl,
 				watches:                mockWatches,
 				jfrogProjectKey:        mockProjectKey,
+				jfrogApplicationKey:    mockApplicationKey,
 				includeVulnerabilities: true,
 				includeLicenses:        true,
 				includeSbom:            true,
@@ -918,6 +928,7 @@ func TestCreateResultsContext(t *testing.T) {
 				expectedHttpCloneUrl:           testCaseExpectedGitRepoHttpsCloneUrl,
 				expectedWatches:                mockWatches,
 				expectedJfrogProjectKey:        mockProjectKey,
+				expectedJfrogApplicationKey:    mockApplicationKey,
 				expectedIncludeVulnerabilities: true,
 				expectedIncludeLicenses:        true,
 				expectedIncludeSbom:            true,
@@ -927,11 +938,12 @@ func TestCreateResultsContext(t *testing.T) {
 			t.Run(fmt.Sprintf("%s - %s", test.name, testCase.name), func(t *testing.T) {
 				mockServer, serverDetails, _ := validations.XrayServer(t, validations.MockServerParams{XrayVersion: test.xrayVersion, ReturnMockPlatformWatches: test.expectedPlatformWatches})
 				defer mockServer.Close()
-				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom)
+				context := CreateAuditResultsContext(serverDetails, test.xrayVersion, testCase.watches, testCase.artifactoryRepoPath, testCase.jfrogProjectKey, testCase.httpCloneUrl, testCase.jfrogApplicationKey, testCase.includeVulnerabilities, testCase.includeLicenses, testCase.includeSbom)
 				assert.Equal(t, testCase.expectedArtifactoryRepoPath, context.RepoPath)
 				assert.Equal(t, testCase.expectedHttpCloneUrl, context.GitRepoHttpsCloneUrl)
 				assert.Equal(t, testCase.expectedWatches, context.Watches)
 				assert.Equal(t, testCase.expectedJfrogProjectKey, context.ProjectKey)
+				assert.Equal(t, testCase.expectedJfrogApplicationKey, context.ApplicationKey)
 				assert.Equal(t, testCase.expectedIncludeVulnerabilities, context.IncludeVulnerabilities)
 				assert.Equal(t, testCase.expectedIncludeLicenses, context.IncludeLicenses)
 				assert.Equal(t, testCase.expectedIncludeSbom, context.IncludeSbom)
