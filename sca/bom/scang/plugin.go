@@ -2,6 +2,7 @@ package scang
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/rpc"
 	"os"
@@ -24,7 +25,7 @@ import (
 const (
 	defaultScangPluginVersion     = "1.0.0"
 	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
-	scangPluginRtRepository       = "xsc-gen-exe-analyzer-manager-local/v1"
+	scangPluginRtRepository       = "scang/v1"
 
 	scangPluginDirName        = "scang"
 	scangPluginExecutableName = "scangplugin"
@@ -97,7 +98,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	// Assert that the plugin is of type Scanner
 	scanPlugin, ok := raw.(Scanner)
 	if !ok {
-		return nil, fmt.Errorf("plugin is not of type of scang plugin, expected Scanner, got %T", raw)
+		return nil, fmt.Errorf("plugin is not of type of SCANG plugin, expected Scanner, got %T", raw)
 	}
 	return scanPlugin, nil
 }
@@ -146,7 +147,7 @@ func DownloadScangPluginIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("scang plugin", downloadPath)
+	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("SCANG plugin", downloadPath)
 	if err != nil {
 		return err
 	}
@@ -167,7 +168,7 @@ func DownloadScangPluginIfNeeded() error {
 	if match, err := isLocalPluginMatchesRemote(scangPluginPath, remoteFileDetails); err != nil || match {
 		return err
 	}
-	log.Info("The 'Scang Plugin' app is not cached locally. Downloading it now...")
+	log.Info("The 'SCANG Plugin' app is not cached locally. Downloading it now...")
 	// Download the scang plugin file
 	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, false)
 }
@@ -195,6 +196,10 @@ func getScangExecutableName() string {
 }
 
 func getLocalScangExecutablePath() (scangPath string, err error) {
+	// Check if the scang plugin binary path is set in the PATH environment variable
+	if scangPath, err = exec.LookPath(scangPluginExecutableName); err != nil || scangPath == "" {
+		log.Debug(fmt.Sprintf("SCANG plugin not found in system PATH: %s", err.Error()))
+	}
 	// Check if exists in JFrog CLI directory
 	if scangPath, err = getScangPathAtJfrogDependenciesDir(); err != nil {
 		return
@@ -203,8 +208,7 @@ func getLocalScangExecutablePath() (scangPath string, err error) {
 	if err != nil || exists {
 		return
 	}
-	// If not found, check in $PATH
-	return exec.LookPath(scangPluginExecutableName)
+	return "", errors.New("SCANG plugin executable not found in JFrog CLI dependencies directory")
 }
 
 func getScangPathAtJfrogDependenciesDir() (string, error) {
@@ -216,14 +220,14 @@ func getScangPathAtJfrogDependenciesDir() (string, error) {
 }
 
 func isLocalPluginMatchesRemote(scangPluginPath string, remoteFileDetails *fileutils.FileDetails) (match bool, err error) {
-	// Find current AnalyzerManager checksum.
+	// Find current SCANG checksum.
 	exist, err := fileutils.IsFileExists(scangPluginPath, false)
 	if err != nil || !exist {
 		return false, err
 	}
 	sha256, err := utils.FileSha256(scangPluginPath)
 	if err != nil {
-		return false, fmt.Errorf("failed to calculate the local Scang plugin checksum: %w", err)
+		return false, fmt.Errorf("failed to calculate the local SCANG plugin checksum: %w", err)
 	}
 	// If the checksums are identical, there's no need to download.
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil

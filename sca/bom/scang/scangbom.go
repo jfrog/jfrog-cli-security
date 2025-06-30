@@ -49,7 +49,7 @@ func (sbg *ScangBomGenerator) PrepareGenerator() (err error) {
 	if sbg.binaryPath != "" {
 		exists, err := fileutils.IsFileExists(sbg.binaryPath, false)
 		if err == nil && !exists {
-			err = fmt.Errorf("unable to locate the scang executable at %s", sbg.binaryPath)
+			err = fmt.Errorf("unable to locate the SCANG executable at %s", sbg.binaryPath)
 		}
 		// No need to download the plugin if the binary path is set and valid
 		return err
@@ -66,12 +66,12 @@ func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyc
 	log.Info(fmt.Sprintf("Generating SBOM for target: %s", target.Target))
 	binaryPath, err := sbg.getScangExecutablePath()
 	if err != nil || binaryPath == "" {
-		return nil, fmt.Errorf("failed to get local Scang executable path: %w", err)
+		return nil, fmt.Errorf("failed to get local SCANG executable path: %w", err)
 	}
-	log.Debug(fmt.Sprintf("Using Scang executable at: %s", binaryPath))
+	log.Debug(fmt.Sprintf("Using SCANG executable at: %s", binaryPath))
 	// Run the scang command to generate the SBOM
 	if sbom, err = sbg.executeScanner(binaryPath, target); err != nil {
-		return nil, fmt.Errorf("failed to execute scang command: %w", err)
+		return nil, fmt.Errorf("failed to execute SCANG command: %w", err)
 	}
 	sbg.logScannerOutput(sbom, target.Target)
 	return
@@ -91,7 +91,7 @@ func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.
 	// Create a new plugin client
 	scanner, err := CreateScannerPluginClient(scangBinary)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create scang plugin client: %w", err)
+		return nil, fmt.Errorf("failed to create SCANG plugin client: %w", err)
 	}
 	scanConfig := Config{
 		BomRef:         cdxutils.GetFileRef(target.Target),
