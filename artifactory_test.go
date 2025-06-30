@@ -270,22 +270,24 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 	cdxFileToUpload := getTestCdxFile(t, tempDirPath)
 	// Configure the repository to upload the cdx file to
-	repoPath := generateTestRepoName()
-	for {
+	var repoPath string
+	for range 10 {
+		repoPath = generateTestRepoName()
+		// Check if the repository already exists, if it does, generate a new name
 		exists, err := securityIntegrationTestUtils.IsRepoExist(repoPath)
 		if err != nil {
 			log.Debug(fmt.Sprintf("Failed to check if repository %s exists: %s", repoPath, err.Error()))
-			// Retry with a new repo name
 			continue
 		}
 		if !exists {
 			// Found a unique not existing repository name
 			break
 		}
-		repoPath = generateTestRepoName()
+	}
+	if repoPath == "" {
+		t.Fatalf("Failed to generate a unique repository name after 10 attempts")
 	}
 	defer securityIntegrationTestUtils.ExecDeleteRepo(repoPath)
-
 	// Run the upload command
 	assert.NoError(t, integration.GetArtifactoryCli(cli.GetJfrogCliSecurityApp()).Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
 

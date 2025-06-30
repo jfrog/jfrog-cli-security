@@ -3,6 +3,7 @@ package upload
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -72,6 +73,9 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 }
 
 func validateInputFile(cdxFilePath string) (err error) {
+	if !strings.HasSuffix(cdxFilePath, ".cdx.json") {
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
+	}
 	// check if the file exists
 	if exists, err := fileutils.IsFileExists(cdxFilePath, false); err != nil {
 		return fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
