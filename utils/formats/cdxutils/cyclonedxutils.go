@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/uuid"
@@ -93,7 +94,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 		return UnknownRelation
 	}
 	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(bom) {
+	for _, root := range GetRootDependenciesEntries(bom, true) {
 		if root.Ref == componentRef {
 			// The component is a root, hence it is a direct dependency
 			return RootRelation
@@ -152,7 +153,7 @@ func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []s
 	return *depEntry.Dependencies
 }
 
-func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependency) {
+func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
 	if bom == nil {
 		return
@@ -176,7 +177,11 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependenc
 		for _, id := range refs.ToSlice() {
 			if dep := SearchDependencyEntry(bom.Dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
 				// This is a root dependency, add it
-				roots = append(roots, *dep)
+				if skipDefaultRoot {
+					roots = append(roots, potentialRootDependencyToRoots(bom, *dep)...)
+				} else {
+					roots = append(roots, *dep)
+				}
 			}
 		}
 	}
@@ -186,6 +191,24 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM) (roots []cyclonedx.Dependenc
 				// If no root dependencies were found, add all library components as roots
 				roots = append(roots, cyclonedx.Dependency{Ref: comp.BOMRef})
 			}
+		}
+	}
+	return
+}
+
+// For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
+func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
+	if !strings.Contains(dependency.Ref, "generic:root") {
+		return []cyclonedx.Dependency{dependency}
+	}
+	// dummy root, the actual roots are the dependencies of this component.
+	roots = []cyclonedx.Dependency{}
+	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+		return
+	}
+	for _, dep := range *dependency.Dependencies {
+		if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
+			roots = append(roots, *found)
 		}
 	}
 	return
