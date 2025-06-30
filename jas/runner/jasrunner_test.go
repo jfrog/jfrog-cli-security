@@ -43,7 +43,7 @@ func TestJasRunner(t *testing.T) {
 	securityParallelRunnerForTest := utils.CreateSecurityParallelRunner(cliutils.Threads)
 	targetResults := results.NewCommandResults(utils.SourceCode).SetEntitledForJas(true).SetSecretValidation(true).NewScanResults(results.ScanTarget{Target: "target", Technology: techutils.Pip})
 
-	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", []string{}, targetResults.GetTechnologies()...)))
+	jasScanner, err := jas.NewJasScanner(&jas.FakeServerDetails, jas.WithEnvVars(false, jas.NotDiffScanEnvValue, jas.GetAnalyzerManagerXscEnvVars("", "", "", "", []string{}, targetResults.GetTechnologies()...)))
 	assert.NoError(t, err)
 
 	targetResults.NewScaScanResults(0, jas.FakeBasicXrayResults[0])
