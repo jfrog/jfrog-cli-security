@@ -90,13 +90,13 @@ func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err er
 	}
 	// check if the file is a valid cdx file
 	bom, err := utils.ReadSbomFromFile(cdxFilePath)
-	if err != nil || bom == nil || bom.Metadata == nil {
+	if err != nil || bom == nil || bom.Metadata == nil || bom.Metadata.Component == nil {
 		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
 	metadata = bom.Metadata
-	metadataStr, err := utils.GetAsJsonString(bom.Metadata, true, true)
+	componentStr, err := utils.GetAsJsonString(bom.Metadata.Component, true, true)
 	if err == nil {
-		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata:\n%s", metadataStr))
+		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata component:\n%s", componentStr))
 	}
 	return
 }
@@ -129,6 +129,8 @@ func generateURLFromPath(baseUrl, repoPath, filePath, metadataComponent string) 
 		if sha256 != "" {
 			shaPart = fmt.Sprintf("sha256:%s/", sha256)
 		}
+		// If no metadata component is provided, use the artifact name as the package ID
+		metadataComponent = artifactName
 	}
 
 	packageID := fmt.Sprintf("generic://%s%s", shaPart, metadataComponent)

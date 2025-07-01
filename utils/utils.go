@@ -289,6 +289,10 @@ func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix s
 	}
 	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
+	return SaveCdxContentToFile(pathToSave, bom)
+}
+
+func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	file, err := os.Create(pathToSave)
 	defer func() {
 		err = errors.Join(err, file.Close())
