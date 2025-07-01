@@ -21,7 +21,7 @@ var expectedResult = &xrayUtils.GraphNode{
 		{Id: "conan://meson:1.4.1", Nodes: []*xrayUtils.GraphNode{{Id: "conan://ninja:1.12.1"}}},
 	},
 }
-var expectedUniqueDeps = []string{"conan://openssl:3.0.9", "conan://zlib:1.3.1", "conan://meson:1.4.1", "conan://ninja:1.12.1"}
+var expectedUniqueDeps = []string{"conan://openssl:3.0.9", "conan://zlib:1.3.1", "conan://meson:1.4.1", "conan://ninja:1.13.0"}
 
 func TestParseConanDependencyTree(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("other", "conan"))
