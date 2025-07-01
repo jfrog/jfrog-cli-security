@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// <SCAN_TYPE> + locationIdTemplate
+	// When template is used, provide <SCAN_TYPE>, locationIdTemplate
 	jasIssueLocationPropertyTemplate = "jfrog:%s:location:" + results.LocationIdTemplate
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
@@ -77,7 +77,7 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results
 	}
 	if violations {
 		// SCA violations are not supported in CycloneDX
-		log.Debug("SCA violations are not supported in CycloneDX. Skipping SCA violations parsing.")
+		log.Warn("SCA violations are not supported in CycloneDX. Skipping SCA violations parsing.")
 		return nil
 	}
 	cdc.addXrayToolIfMissing()
@@ -108,7 +108,8 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSbom(_ results.ScanTarget, sbom *c
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
-	return
+	// In CycloneDX, licenses are part of the components and dependencies, so we don't need to parse them separately.
+	return nil
 }
 
 func (cdc *CmdResultsCycloneDxConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
@@ -139,7 +140,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 	}
 	if violations {
 		// Secrets violations are not supported in CycloneDX
-		log.Debug("Secrets violations are not supported in CycloneDX. Skipping Secrets violations parsing.")
+		log.Warn("Secrets violations are not supported in CycloneDX. Skipping Secrets violations parsing.")
 		return nil
 	}
 	source := cdc.addJasService(secrets)
@@ -185,7 +186,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseIacs(target results.ScanTarget, vi
 	}
 	if violations {
 		// IAC violations are not supported in CycloneDX
-		log.Debug("IAC violations are not supported in CycloneDX. Skipping IAC violations parsing.")
+		log.Warn("IAC violations are not supported in CycloneDX. Skipping IAC violations parsing.")
 		return nil
 	}
 	// return
@@ -213,7 +214,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	}
 	if violations {
 		// SAST violations are not supported in CycloneDX
-		log.Debug("SAST violations are not supported in CycloneDX. Skipping SAST violations parsing.")
+		log.Warn("SAST violations are not supported in CycloneDX. Skipping SAST violations parsing.")
 		return nil
 	}
 	source := cdc.addJasService(sast)
@@ -236,7 +237,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 
 func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	// Violations are not supported in CycloneDX
-	log.Debug("Violations are not supported in CycloneDX. Skipping violations parsing.")
+	log.Warn("Violations are not supported in CycloneDX. Skipping violations parsing.")
 	return
 }
 

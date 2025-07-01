@@ -5,10 +5,17 @@ import (
 	"fmt"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/artifactory/services"
+	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
+	artifactoryUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/common/project"
+	"github.com/jfrog/jfrog-cli-core/v2/common/spec"
+	"github.com/jfrog/jfrog-cli-core/v2/plugins/common"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
+	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/generic"
 )
 
 type ArtifactoryDetails struct {
@@ -75,4 +82,67 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 		log.Debug("Using resolver config from", configFilePath)
 	}
 	return
+}
+
+func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo string) (err error) {
+	uploadCmd := generic.NewUploadCommand()
+	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Target(repo).Flat(true).BuildSpec())
+	uploadCmd.SetDetailedSummary(true)
+	err = uploadCmd.Run()
+	result := uploadCmd.Result()
+	defer common.CleanupResult(result, &err)
+	return common.PrintDeploymentView(result.Reader())
+}
+
+func IsRepoExists(repoKey string, serverDetails *config.ServerDetails) (exists bool, err error) {
+	if repoKey == "" || serverDetails == nil {
+		return false, errors.New("repository key and server details must be provided")
+	}
+	servicesManager, err := artifactoryUtils.CreateServiceManager(serverDetails, -1, 0, false)
+	if err != nil {
+		return false, err
+	}
+	return servicesManager.IsRepoExists(repoKey)
+}
+
+func CreateGenericLocalRepository(repoKey string, serverDetails *config.ServerDetails, xrayIndex bool) (err error) {
+	if repoKey == "" || serverDetails == nil {
+		return errors.New("repository key and server details must be provided")
+	}
+	servicesManager, err := artifactoryUtils.CreateServiceManager(serverDetails, -1, 0, false)
+	if err != nil {
+		return
+	}
+	log.Debug(fmt.Sprintf("Creating generic local repository %s (xrayIndex: %t)", repoKey, xrayIndex))
+	params := services.NewGenericLocalRepositoryParams()
+	params.Key = repoKey
+	params.XrayIndex = clientUtils.Pointer(xrayIndex)
+	return servicesManager.CreateLocalRepository().Generic(params)
+}
+
+func SearchArtifactsInRepo(serverDetails *config.ServerDetails, pattern, repo string) ([]artifactoryUtils.SearchResult, error) {
+	searchCmd := generic.NewSearchCommand()
+	if repo != "" {
+		pattern = fmt.Sprintf("%s/%s", repo, pattern)
+	}
+	searchCmd.SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).BuildSpec())
+	reader, err := searchCmd.Search()
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for artifacts in repository %s: %w", repo, err)
+	}
+	var resultItems []artifactoryUtils.SearchResult
+	readerNoDate, err := artifactoryUtils.SearchResultNoDate(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get search results without date for repository %s: %w", repo, err)
+	}
+	for searchResult := new(artifactoryUtils.SearchResult); readerNoDate.NextRecord(searchResult) == nil; searchResult = new(artifactoryUtils.SearchResult) {
+		resultItems = append(resultItems, *searchResult)
+	}
+	if err := reader.Close(); err != nil {
+		return nil, fmt.Errorf("couldn't close reader: %w", err)
+	}
+	if err := reader.GetError(); err != nil {
+		return nil, fmt.Errorf("couldn't get reader error: %w", err)
+	}
+	return resultItems, nil
 }

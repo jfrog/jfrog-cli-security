@@ -93,7 +93,7 @@ func GetRelativePath(fullPathWd, baseWd string) string {
 		log.Debug(fmt.Sprintf("Failed to get relative path from %s to %s: %v", fullPathWd, baseWd, err))
 		return filepath.ToSlash(fullPathWd) // Return the full path if an error occurs
 	}
-	// If rel starts with "..", then target is outside base
+	// If rel starts with "..", then target is outside base, so return the full path
 	if strings.HasPrefix(relativePath, "..") {
 		return filepath.ToSlash(fullPathWd)
 	}
@@ -158,4 +158,19 @@ func ToURI(path string) string {
 	}
 	// Return the string representation of the URL
 	return u.String()
+}
+
+func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, targetPath, artifactName, sha256 string) string {
+	// Path
+	path := fmt.Sprintf("ui/scans-list/repositories/%s/scan-descendants/%s", url.PathEscape(repoPath), url.PathEscape(artifactName))
+
+	// Query params
+	packageID := fmt.Sprintf("generic://sha256:%s/%s", sha256, artifactName)
+	query := url.Values{}
+	query.Set("package_id", packageID)
+	query.Set("path", fmt.Sprintf("%s/%s", repoPath, targetPath))
+	query.Set("page_type", "overview")
+
+	// Final URL
+	return fmt.Sprintf("%s%s?%s", baseUrl, path, query.Encode())
 }

@@ -26,6 +26,8 @@ import (
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
+
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
@@ -38,6 +40,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
+	"github.com/jfrog/jfrog-cli-security/commands/upload"
 
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -106,14 +109,22 @@ func getAuditAndScansCommands() []components.Command {
 			Category:    securityCategory,
 			Action:      CurationCmd,
 		},
-
 		{
 			Name:        "source-mcp",
 			Description: mcpDocs.GetDescription(),
 			Action:      SourceMcpCmd,
 			Hidden:      true,
 		},
-
+		{
+			Name:        flags.UploadCdx,
+			Aliases:     []string{"ucdx"},
+			Flags:       flags.GetCommandFlags(flags.UploadCdx),
+			Arguments:   uploadCdxDocs.GetArguments(),
+			Description: uploadCdxDocs.GetDescription(),
+			Category:    securityCategory,
+			Action:      UploadCdxCmd,
+			Hidden:      true,
+		},
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "audit-mvn",
@@ -443,12 +454,15 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-
+	includeSbom := c.GetBoolFlagValue(flags.Sbom)
+	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
+	}
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
+		SetIncludeSbom(includeSbom).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
@@ -721,4 +735,18 @@ func DockerScan(c *components.Context, image string) error {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return progressbar.ExecWithProgress(containerScanCommand)
+}
+
+func UploadCdxCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 {
+		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
+		SetUploadRepository(c.GetStringFlagValue(flags.UploadRepoPath)).
+		SetServerDetails(serverDetails)
+	return commandsCommon.Exec(uploadCmd)
 }

@@ -23,10 +23,9 @@ type ScanGraphStrategy struct {
 }
 
 func NewScanGraphStrategy() *ScanGraphStrategy {
-	sg := &ScanGraphStrategy{
+	return &ScanGraphStrategy{
 		ScanGraphParams: scangraph.ScanGraphParams{},
 	}
-	return sg
 }
 
 func WithParams(params scangraph.ScanGraphParams) scan.SbomScanOption {
