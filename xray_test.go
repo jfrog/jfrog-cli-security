@@ -15,7 +15,7 @@ import (
 func TestXrayCurl(t *testing.T) {
 	integration.InitXrayTest(t, "")
 	// Configure a new server named "default".
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	// Check curl command with the default configured server.
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/v1/system/version")

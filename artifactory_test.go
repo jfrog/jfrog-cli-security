@@ -2,25 +2,32 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/stretchr/testify/assert"
 
 	biutils "github.com/jfrog/build-info-go/utils"
 
+	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/artifactory"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 
 	"github.com/jfrog/jfrog-cli-artifactory/artifactory/commands/generic"
 	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
@@ -36,7 +43,7 @@ import (
 // We perform validation on dependency resolution from an Artifactory server during the construction of the dependency tree during 'audit' flow.
 // This process involves resolving all dependencies required by the project.
 func TestDependencyResolutionFromArtifactory(t *testing.T) {
-	integration.InitArtifactoryTest(t)
+	securityIntegrationTestUtils.InitArtifactoryTest(t)
 	testCases := []struct {
 		testProjectPath []string
 		resolveRepoName string
@@ -104,7 +111,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	for _, testCase := range testCases {
@@ -218,7 +225,7 @@ func clearOrRedirectLocalCacheIfNeeded(t *testing.T, projectType project.Project
 }
 
 func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
-	integration.InitArtifactoryTest(t)
+	securityIntegrationTestUtils.InitArtifactoryTest(t)
 	// Configure a new JFrog CLI home dir.
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
@@ -252,4 +259,112 @@ func TestDownloadAnalyzerManagerIfNeeded(t *testing.T) {
 	secondFileStat, err := os.Stat(amPath)
 	assert.NoError(t, err)
 	assert.Equal(t, firstFileStat.ModTime(), secondFileStat.ModTime())
+}
+
+func TestUploadCdxCmdCommand(t *testing.T) {
+	securityIntegrationTestUtils.InitArtifactoryTest(t)
+	// Create a temporary cdx file with suffix .cdx.json to upload
+	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer createTempDirCallback()
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, true)
+	defer securityTestUtils.CleanTestsHomeEnv()
+	cdxFileToUpload := getTestCdxFile(t, tempDirPath)
+	// Configure the repository to upload the cdx file to
+	var repoPath string
+	for range 10 {
+		repoPath = generateTestRepoName()
+		// Check if the repository already exists, if it does, generate a new name
+		exists, err := securityIntegrationTestUtils.IsRepoExist(repoPath)
+		if err != nil {
+			log.Debug(fmt.Sprintf("Failed to check if repository %s exists: %s", repoPath, err.Error()))
+			continue
+		}
+		if !exists {
+			// Found a unique not existing repository name
+			break
+		}
+	}
+	if repoPath == "" {
+		t.Fatalf("Failed to generate a unique repository name after 10 attempts")
+	}
+	defer securityIntegrationTestUtils.ExecDeleteRepo(repoPath)
+	// Run the upload command
+	assert.NoError(t, integration.GetArtifactoryCli(cli.GetJfrogCliSecurityApp()).Exec("upload-cdx", "--rt-repo-path", repoPath, cdxFileToUpload))
+
+	// Validate the file was uploaded successfully
+	searchResults, err := artifactory.SearchArtifactsInRepo(securityTests.RtDetails, filepath.Base(cdxFileToUpload), repoPath)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, searchResults, "Expected to find the uploaded CycloneDX file in the repository")
+}
+
+func generateTestRepoName() string {
+	// Generate a unique repository name for the test
+	return fmt.Sprintf("test-upload-cdx-%s", utils.GetCurrentTimeUnix())
+}
+
+func getTestCdxFile(t *testing.T, tempDir string) string {
+	// Create the cyclonedx BOM
+	bom := cyclonedx.NewBOM()
+	fileComponent := cdxutils.CreateFileOrDirComponent(tempDir)
+	bom.Metadata = &cyclonedx.Metadata{
+		Component: &fileComponent,
+	}
+	bom.Components = &[]cyclonedx.Component{
+		{
+			BOMRef:     "npm:npm-app-root:1.0.0",
+			Name:       "npm-app-root",
+			Version:    "1.0.0",
+			Type:       cyclonedx.ComponentTypeLibrary,
+			PackageURL: "pkg:npm/npm-app-root@1.0.0",
+		},
+		{
+			BOMRef:     "npm:npm-app-dep:1.0.0",
+			Name:       "npm-app-dep",
+			Version:    "1.0.0",
+			Type:       cyclonedx.ComponentTypeLibrary,
+			PackageURL: "pkg:npm/npm-app-dep@1.0.0",
+		},
+		{
+			BOMRef:     "npm:npm-app-transitive-dep:1.0.0",
+			Name:       "npm-app-transitive-dep",
+			Version:    "1.0.0",
+			Type:       cyclonedx.ComponentTypeLibrary,
+			PackageURL: "pkg:npm/npm-app-transitive-dep@1.0.0",
+		},
+	}
+	bom.Dependencies = &[]cyclonedx.Dependency{
+		{
+			Ref: "npm:npm-app-root:1.0.0",
+			Dependencies: &[]string{
+				"npm:npm-app-dep:1.0.0",
+			},
+		},
+		{
+			Ref: "npm:npm-app-dep:1.0.0",
+			Dependencies: &[]string{
+				"npm:npm-app-transitive-dep:1.0.0",
+			},
+		},
+	}
+	bom.Vulnerabilities = &[]cyclonedx.Vulnerability{
+		{
+			BOMRef:      "CVE-2021-1234",
+			ID:          "CVE-2021-1234",
+			Source:      &cyclonedx.Source{Name: "NVD"},
+			Description: "Example Vulnerability",
+			Affects: &[]cyclonedx.Affects{
+				{
+					Ref: "npm:npm-app-dep:1.0.0",
+				},
+			},
+		},
+	}
+	// Create a CycloneDX file in the temporary directory
+	cdxFilePath := filepath.Join(tempDir, fmt.Sprintf("upload-integration-test-%s.cdx.json", utils.GetCurrentTimeUnix()))
+	file, err := os.Create(cdxFilePath)
+	assert.NoError(t, err)
+	defer file.Close()
+	// Write the BOM to the file
+	assert.NoError(t, cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom))
+	return cdxFilePath
 }
