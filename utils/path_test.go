@@ -87,7 +87,7 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 		repoPath     string
 		targetPath   string
 		artifactName string
-		sha256       string
+		packageId    string
 		expected     string
 	}{
 		{
@@ -96,8 +96,8 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 			repoPath:     "my-repo",
 			targetPath:   "artifact.zip",
 			artifactName: "artifact.zip",
-			sha256:       "abc123",
-			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=generic%3A%2F%2Fsha256%3Aabc123%2Fartifact.zip&page_type=overview&path=my-repo%2Fartifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fartifact.zip",
 		},
 		{
 			name:         "with subdirectory",
@@ -105,15 +105,15 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 			repoPath:     "my-repo",
 			targetPath:   "path/to/artifact.zip",
 			artifactName: "artifact.zip",
-			sha256:       "abc123",
-			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=generic%3A%2F%2Fsha256%3Aabc123%2Fartifact.zip&page_type=overview&path=my-repo%2Fpath%2Fto%2Fartifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fpath%2Fto%2Fartifact.zip",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.targetPath, test.artifactName, test.sha256)
-			assert.Equal(t, result, test.expected, "expected '%s', got '%s'", test.expected, result)
+			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.targetPath, test.artifactName, test.packageId)
+			assert.Equal(t, test.expected, result, "expected '%s', got '%s'", test.expected, result)
 		})
 	}
 }
