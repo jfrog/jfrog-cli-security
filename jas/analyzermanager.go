@@ -39,6 +39,7 @@ const (
 	watchesEnvVariable                        = "AM_WATCHES"
 	projectEnvVariable                        = "AM_PROJECT_KEY"
 	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
+	applicationKeyEnvVariable                 = "AM_APPLICATION_KEY"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
 	unsupportedOsExitCode                     = 55

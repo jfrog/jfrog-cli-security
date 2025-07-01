@@ -450,13 +450,16 @@ func CheckForSecretValidation(xrayManager *xray.XrayServicesManager, xrayVersion
 	return err == nil && isEnabled
 }
 
-func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, watches []string, technologies ...techutils.Technology) map[string]string {
+func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey, applicationKey string, watches []string, technologies ...techutils.Technology) map[string]string {
 	envVars := map[string]string{utils.JfMsiEnvVariable: msi}
 	if gitRepoUrl != "" {
 		envVars[gitRepoEnvVariable] = gitRepoUrl
 	}
 	if projectKey != "" {
 		envVars[projectEnvVariable] = projectKey
+	}
+	if applicationKey != "" {
+		envVars[applicationKeyEnvVariable] = applicationKey
 	}
 	if len(watches) > 0 {
 		envVars[watchesEnvVariable] = strings.Join(watches, ",")

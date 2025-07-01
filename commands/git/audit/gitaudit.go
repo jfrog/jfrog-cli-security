@@ -84,6 +84,8 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.RepoPath,
 		params.resultsContext.ProjectKey,
 		params.source.Source.GitRepoHttpsCloneUrl,
+		// AppTrust is currently not supported in Git Audit command, therefore we pass an empty applicationKey
+		"",
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		false,

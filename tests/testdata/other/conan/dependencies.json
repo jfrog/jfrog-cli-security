@@ -133,7 +133,7 @@
             "visible": true
           },
           "4": {
-            "ref": "ninja/1.12.1",
+            "ref": "ninja/1.13.0",
             "run": true,
             "libs": false,
             "skip": false,
@@ -887,7 +887,7 @@
         "vendor": false,
         "dependencies": {
           "4": {
-            "ref": "ninja/1.12.1",
+            "ref": "ninja/1.13.0",
             "run": true,
             "libs": false,
             "skip": false,
@@ -906,7 +906,7 @@
         "test": false
       },
       "4": {
-        "ref": "ninja/1.12.1#fd583651bf0c6a901943495d49878803",
+        "ref": "ninja/1.13.0#fd583651bf0c6a901943495d49878803",
         "id": "4",
         "recipe": "Downloaded",
         "package_id": "3593751651824fb813502c69c971267624ced41a",
@@ -937,7 +937,7 @@
         "win_bash_run": null,
         "default_options": null,
         "options_description": null,
-        "version": "1.12.1",
+        "version": "1.13.0",
         "topics": [
           "ninja",
           "build"
@@ -993,7 +993,7 @@
           }
         },
         "conf_info": {},
-        "label": "ninja/1.12.1",
+        "label": "ninja/1.13.0",
         "info": {
           "settings": {
             "os": "Linux",
@@ -1012,7 +1012,7 @@
     },
     "overrides": {},
     "resolved_ranges": {
-      "ninja/[>=1.10.2 <2]": "ninja/1.12.1"
+      "ninja/[>=1.10.2 <2]": "ninja/1.13.0"
     },
     "replaced_requires": {},
     "error": null
