@@ -149,12 +149,11 @@ func ToURI(path string) string {
 	return u.String()
 }
 
-func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, targetPath, artifactName, sha256 string) string {
+func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, targetPath, artifactName, packageID string) string {
 	// Path
 	path := fmt.Sprintf("ui/scans-list/repositories/%s/scan-descendants/%s", url.PathEscape(repoPath), url.PathEscape(artifactName))
 
 	// Query params
-	packageID := fmt.Sprintf("generic://sha256:%s/%s", sha256, artifactName)
 	query := url.Values{}
 	query.Set("package_id", packageID)
 	query.Set("path", fmt.Sprintf("%s/%s", repoPath, targetPath))

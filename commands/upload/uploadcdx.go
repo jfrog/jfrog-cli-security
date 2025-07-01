@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -56,15 +57,20 @@ func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error
 
 func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	// Validate the file is cdx
-	if err = validateInputFile(ucc.fileToUpload); err != nil {
+	metadata, err := validateInputFile(ucc.fileToUpload)
+	if err != nil {
 		return
+	}
+	metadataComponent := ""
+	if metadata != nil && metadata.Component != nil {
+		metadataComponent = metadata.Component.Name
 	}
 	// Upload the CycloneDx file to the JFrog repository
 	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadataComponent)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
@@ -72,27 +78,27 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	return
 }
 
-func validateInputFile(cdxFilePath string) (err error) {
+func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err error) {
 	if !strings.HasSuffix(cdxFilePath, ".cdx.json") {
-		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
+		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
 	}
 	// check if the file exists
 	if exists, err := fileutils.IsFileExists(cdxFilePath, false); err != nil {
-		return fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
+		return nil, fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
 	} else if !exists {
-		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
+		return nil, fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
 	bom, err := utils.ReadSbomFromFile(cdxFilePath)
-	if err != nil || bom == nil {
-		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
+	if err != nil || bom == nil || bom.Metadata == nil {
+		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
-	metadata, err := utils.GetAsJsonString(bom.Metadata, true, true)
+	metadata = bom.Metadata
+	metadataStr, err := utils.GetAsJsonString(bom.Metadata, true, true)
 	if err == nil {
-		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata:\n%s", metadata))
+		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata:\n%s", metadataStr))
 	}
-	// No error means the file is valid
-	return nil
+	return
 }
 
 func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository string) (err error) {
@@ -110,14 +116,23 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository)
 }
 
-func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
+func generateURLFromPath(baseUrl, repoPath, filePath, metadataComponent string) (string, error) {
 	artifactName := filepath.Base(filePath)
-	// Calculate SHA256
-	sha256, err := calculateFileSHA256(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to calculate sha256: %w", err)
+
+	shaPart := ""
+	if metadataComponent == "" {
+		// Calculate SHA256
+		sha256, err := calculateFileSHA256(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to calculate sha256: %w", err)
+		}
+		if sha256 != "" {
+			shaPart = fmt.Sprintf("sha256:%s/", sha256)
+		}
 	}
-	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, artifactName, sha256), nil
+
+	packageID := fmt.Sprintf("generic://%s%s", shaPart, metadataComponent)
+	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, artifactName, packageID), nil
 }
 
 func calculateFileSHA256(filePath string) (string, error) {
