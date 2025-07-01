@@ -14,7 +14,7 @@ import (
 
 func TestXrayEnrichSbomOutput(t *testing.T) {
 	integration.InitEnrichTest(t, enrichgraph.EnrichMinimumVersionXray)
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	testCases := []struct {
 		name      string
