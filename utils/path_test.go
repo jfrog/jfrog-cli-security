@@ -71,7 +71,7 @@ func TestExtractRelativePath(t *testing.T) {
 			name:           "invalid project path",
 			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
 			projectPath:    "invalidProjectPath",
-			expectedResult: fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			expectedResult: filepath.ToSlash(fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js"))),
 		},
 		{
 			name:           "valid full path with private",
