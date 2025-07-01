@@ -546,7 +546,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 				),
 			},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
-			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: filepath.ToSlash("file://" + filepath.Join("usr", "local", "bin", "node")), StartLine: 1, StartColumn: 1})},
+			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file://usr/local/bin/node", StartLine: 1, StartColumn: 1})},
 		},
 	)
 	// Secrets scan results
