@@ -206,10 +206,13 @@ func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	}
 }
 
-func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
-	wd, err := os.Getwd()
-	assert.NoError(t, err, "Failed to get current dir")
-	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(wd, configTests.Out, "jfroghome"))
+func CreateJfrogHomeConfig(t *testing.T, home string, encryptPassword bool) {
+	if home == "" {
+		wd, err := os.Getwd()
+		assert.NoError(t, err, "Failed to get current dir")
+		home = wd
+	}
+	clientTests.SetEnvAndAssert(t, coreutils.HomeDir, filepath.Join(home, configTests.Out, "jfroghome"))
 
 	// Delete the default server if exist
 	config, err := commonCommands.GetConfig("default", false)
@@ -225,12 +228,17 @@ func CreateJfrogHomeConfig(t *testing.T, encryptPassword bool) {
 func InitTestCliDetails(testApplication components.App) {
 	configTests.TestApplication = &testApplication
 	if configTests.PlatformCli == nil {
-		configTests.PlatformCli = GetTestCli(testApplication, false)
+		configTests.PlatformCli = GetXrayTestCli(testApplication, false)
 	}
 }
 
-func GetTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
+func GetXrayTestCli(testApplication components.App, xrayUrlOnly bool) (testCli *coreTests.JfrogCli) {
 	creds := authenticateXray(xrayUrlOnly)
+	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
+}
+
+func GetArtifactoryCli(testApplication components.App) (testCli *coreTests.JfrogCli) {
+	creds := AuthenticateArtifactory()
 	return coreTests.NewJfrogCli(func() error { return plugins.RunCliWithPlugin(testApplication)() }, "", creds)
 }
 
@@ -399,27 +407,34 @@ func execCreateRepoRest(repoConfig, repoName string) {
 	log.Info("Repository", repoName, "created.")
 }
 
-func isRepoExist(repoName string) bool {
+func IsRepoExist(repoName string) (bool, error) {
 	client, err := httpclient.ClientBuilder().Build()
 	if err != nil {
-		log.Error(err)
-		os.Exit(1)
+		return false, err
 	}
 	resp, _, _, err := client.SendGet(configTests.RtDetails.ArtifactoryUrl+configTests.RepoDetailsEndpoint+repoName, true, configTests.RtHttpDetails, "")
 	if err != nil {
-		log.Error(err)
-		os.Exit(1)
+		return false, err
 	}
 
 	if resp.StatusCode != http.StatusBadRequest {
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
+}
+
+func isRepoExistExitOnError(repoName string) bool {
+	exist, err := IsRepoExist(repoName)
+	if err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
+	return exist
 }
 
 func DeleteRepos(repos map[*string]string) {
 	for repoName := range repos {
-		if isRepoExist(*repoName) {
+		if isRepoExistExitOnError(*repoName) {
 			ExecDeleteRepo(*repoName)
 		}
 	}
@@ -427,7 +442,7 @@ func DeleteRepos(repos map[*string]string) {
 
 func CreateRepos(repos map[*string]string) {
 	for repoName, configFile := range repos {
-		if !isRepoExist(*repoName) {
+		if !isRepoExistExitOnError(*repoName) {
 			repoConfig := configTests.GetTestResourcesPath() + "/artifactory-repo-configs/" + configFile
 			repoConfig, err := commonTests.ReplaceTemplateVariables(repoConfig, "", configTests.GetSubstitutionMap())
 			if err != nil {
@@ -442,13 +457,13 @@ func CreateRepos(repos map[*string]string) {
 func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands ...func() components.Command) (mockCli *coreTests.JfrogCli, cleanUp func()) {
 	oldHomeDir := os.Getenv(coreutils.HomeDir)
 	// Create server config to use with the command.
-	CreateJfrogHomeConfig(t, true)
+	CreateJfrogHomeConfig(t, "", true)
 	// Create mock cli with the mock commands.
 	commands := []components.Command{}
 	for _, mockCommand := range mockCommands {
 		commands = append(commands, mockCommand())
 	}
-	return GetTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
+	return GetXrayTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
 		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
 	}
 }
