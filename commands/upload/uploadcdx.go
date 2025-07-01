@@ -61,16 +61,12 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
-	metadataComponent := ""
-	if metadata != nil && metadata.Component != nil {
-		metadataComponent = metadata.Component.Name
-	}
 	// Upload the CycloneDx file to the JFrog repository
 	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadataComponent)
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadata)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
@@ -90,37 +86,45 @@ func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err er
 	}
 	// check if the file is a valid cdx file
 	bom, err := utils.ReadSbomFromFile(cdxFilePath)
-	if err != nil || bom == nil || bom.Metadata == nil || bom.Metadata.Component == nil {
+	if err != nil || bom == nil {
 		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
-	metadata = bom.Metadata
-	componentStr, err := utils.GetAsJsonString(bom.Metadata.Component, true, true)
-	if err == nil {
-		log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata component:\n%s", componentStr))
+	if bom.Metadata != nil && bom.Metadata.Component != nil {
+		metadata = bom.Metadata
+		componentStr, err := utils.GetAsJsonString(bom.Metadata.Component, true, true)
+		if err == nil {
+			log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata component:\n%s", componentStr))
+		}
 	}
 	return
 }
 
 func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository string) (err error) {
-	repoExists, err := artifactory.IsRepoExists(scanResultsRepository, serverDetails)
+	// scanResultsRepository may be the repository name and after the slash the path in the repository, we want to extract the repository name
+	repoName := strings.Split(scanResultsRepository, "/")[0]
+	if repoName == "" {
+		return fmt.Errorf("invalid repository name: %s", scanResultsRepository)
+	}
+	repoExists, err := artifactory.IsRepoExists(repoName, serverDetails)
 	if err != nil {
-		return fmt.Errorf("failed to check if repository %s exists: %s", scanResultsRepository, err.Error())
+		return fmt.Errorf("failed to check if repository %s exists: %s", repoName, err.Error())
 	}
 	// If the repository doesn't exist, create it
 	if !repoExists {
-		if err = artifactory.CreateGenericLocalRepository(scanResultsRepository, serverDetails, true); err != nil {
-			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", scanResultsRepository, err.Error())
+		if err = artifactory.CreateGenericLocalRepository(repoName, serverDetails, true); err != nil {
+			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
 		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
 	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository)
 }
 
-func generateURLFromPath(baseUrl, repoPath, filePath, metadataComponent string) (string, error) {
+func generateURLFromPath(baseUrl, repoPath, filePath string, metadata *cyclonedx.Metadata) (string, error) {
 	artifactName := filepath.Base(filePath)
 
+	metadataComponent := artifactName
 	shaPart := ""
-	if metadataComponent == "" {
+	if metadata == nil || metadata.Component == nil || metadata.Component.Version == "" {
 		// Calculate SHA256
 		sha256, err := calculateFileSHA256(filePath)
 		if err != nil {
@@ -129,12 +133,12 @@ func generateURLFromPath(baseUrl, repoPath, filePath, metadataComponent string) 
 		if sha256 != "" {
 			shaPart = fmt.Sprintf("sha256:%s/", sha256)
 		}
-		// If no metadata component is provided, use the artifact name as the package ID
-		metadataComponent = artifactName
+	} else {
+		metadataComponent = metadata.Component.Name
 	}
 
 	packageID := fmt.Sprintf("generic://%s%s", shaPart, metadataComponent)
-	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, artifactName, packageID), nil
+	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID), nil
 }
 
 func calculateFileSHA256(filePath string) (string, error) {

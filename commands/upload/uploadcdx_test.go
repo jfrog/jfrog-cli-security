@@ -73,30 +73,36 @@ func TestGenerateURLFromPath(t *testing.T) {
 	assert.NoError(t, utils.SaveCdxContentToFile(validCdxFilePath, cdx))
 
 	tests := []struct {
-		name              string
-		repoPath          string
-		filePath          string
-		metadataComponent string
-		expected          string
+		name     string
+		repoPath string
+		filePath string
+		metadata *cyclonedx.Metadata
+		expected string
 	}{
 		{
 			name:     "No metadata component",
 			repoPath: "testdata/",
 			filePath: validCdxFilePath,
-			expected: "https://example.com/ui/scans-list/repositories/testdata%2F/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
+			expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
 		},
 		{
-			name:              "With metadata component",
-			repoPath:          "testdata/",
-			filePath:          validCdxFilePath,
-			metadataComponent: fileComponent.Name,
-			expected:          "https://example.com/ui/scans-list/repositories/testdata%2F/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fa%2Fdirectory%2Ffile.txt&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
+			name:     "With metadata component",
+			repoPath: "testdata/",
+			filePath: validCdxFilePath,
+			metadata: &cyclonedx.Metadata{Component: &cyclonedx.Component{Name: "metadata-comp:name", Version: "1.0", Type: cyclonedx.ComponentTypeFile}},
+			expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fmetadata-comp%3Aname&page_type=overview&path=testdata%2F%2Fvalid_cdx.json",
+		},
+		{
+			name:     "With subdirectory in repoPath",
+			repoPath: "testdata/subdir/",
+			filePath: validCdxFilePath,
+			expected: "https://example.com/ui/scans-list/repositories/testdata/scan-descendants/valid_cdx.json?package_id=generic%3A%2F%2Fsha256%3A0d4ec5a32b4e6f0dcda6d22ae7b802339a0e9931dbd62363365e8e2977b943f0%2Fvalid_cdx.json&page_type=overview&path=testdata%2Fsubdir%2F%2Fvalid_cdx.json",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := generateURLFromPath(baseUrl, tt.repoPath, tt.filePath, tt.metadataComponent)
+			result, err := generateURLFromPath(baseUrl, tt.repoPath, tt.filePath, tt.metadata)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})

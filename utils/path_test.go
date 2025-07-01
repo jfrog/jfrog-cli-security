@@ -85,7 +85,6 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 		name         string
 		baseUrl      string
 		repoPath     string
-		targetPath   string
 		artifactName string
 		packageId    string
 		expected     string
@@ -94,25 +93,23 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 			name:         "basic case",
 			baseUrl:      "http://localhost:8081/",
 			repoPath:     "my-repo",
-			targetPath:   "artifact.zip",
 			artifactName: "artifact.zip",
 			packageId:    "abc123",
 			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fartifact.zip",
 		},
 		{
-			name:         "with subdirectory",
+			name:         "with sub dir in repoPath",
 			baseUrl:      "http://localhost:8081/",
-			repoPath:     "my-repo",
-			targetPath:   "path/to/artifact.zip",
+			repoPath:     "my-repo/subdir",
 			artifactName: "artifact.zip",
 			packageId:    "abc123",
-			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fpath%2Fto%2Fartifact.zip",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fsubdir%2Fartifact.zip",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.targetPath, test.artifactName, test.packageId)
+			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.artifactName, test.packageId)
 			assert.Equal(t, test.expected, result, "expected '%s', got '%s'", test.expected, result)
 		})
 	}
