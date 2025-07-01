@@ -93,7 +93,7 @@ func GetRelativePath(fullPathWd, baseWd string) string {
 		log.Debug(fmt.Sprintf("Failed to get relative path from %s to %s: %v", fullPathWd, baseWd, err))
 		return filepath.ToSlash(fullPathWd) // Return the full path if an error occurs
 	}
-	// If rel starts with "..", then target is outside base
+	// If rel starts with "..", then target is outside base, so return the full path
 	if strings.HasPrefix(relativePath, "..") {
 		return filepath.ToSlash(fullPathWd)
 	}

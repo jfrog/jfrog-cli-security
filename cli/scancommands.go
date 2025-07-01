@@ -443,12 +443,15 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-
+	includeSbom := c.GetBoolFlagValue(flags.Sbom)
+	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
+	}
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
+		SetIncludeSbom(includeSbom).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).

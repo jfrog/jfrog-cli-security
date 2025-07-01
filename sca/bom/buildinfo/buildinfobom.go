@@ -45,11 +45,10 @@ type BuildInfoBomGenerator struct {
 }
 
 func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
-	bi := &BuildInfoBomGenerator{
+	return &BuildInfoBomGenerator{
 		params:      technologies.BuildInfoBomGeneratorParams{},
 		descriptors: []string{},
 	}
-	return bi
 }
 
 func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGeneratorOption {
