@@ -6,6 +6,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -87,7 +88,6 @@ func (sbg *ScangBomGenerator) getScangExecutablePath() (scangPath string, err er
 }
 
 func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
-	log.Debug(fmt.Sprintf("Executing command: %s %q", scangBinary, target.Target))
 	// Create a new plugin client
 	scanner, err := CreateScannerPluginClient(scangBinary)
 	if err != nil {
@@ -98,6 +98,9 @@ func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,
 		IgnorePatterns: sbg.ignorePatterns,
+	}
+	if scanConfigStr, err := utils.GetAsJsonString(scanConfig, false, true); err == nil {
+		log.Debug(fmt.Sprintf("Scan configuration: %s", scanConfigStr))
 	}
 	return scanner.Scan(target.Target, scanConfig)
 }
