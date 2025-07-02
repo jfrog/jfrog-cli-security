@@ -57,6 +57,10 @@ github.com/elazarl/goproxy v1.7.2 h1:Y2o6urb7Eule09PjlhQRGNsqRfPmYI3KKQLFpCAV3+o
 github.com/elazarl/goproxy v1.7.2/go.mod h1:82vkLNir0ALaW14Rc399OTTjyNREgmdL2cVoIbS6XaE=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20250702130655-9799dfaf931c h1:IomGo8cqcZw0WBA+sL+1bnFAI6/lXLplnixO4G24XTI=
+github.com/eranturgeman/jfrog-cli-core/v2 v2.0.0-20250702130655-9799dfaf931c/go.mod h1:Os+FBzbs7k1NCI6K5ewzIwD+nluk1WQvAnIbWrPlwmo=
+github.com/eranturgeman/jfrog-client-go v0.0.0-20250702124746-524e5e2eec7f h1:iDmYR8j+b8xmcLGYXjmD3O6EZGJhhMLtCzVywa+bIWM=
+github.com/eranturgeman/jfrog-client-go v0.0.0-20250702124746-524e5e2eec7f/go.mod h1:1v0eih4thdPA4clBo9TuvAMT25sGDr1IQJ81DXQ/lBY=
 github.com/fatih/color v1.16.0 h1:zmkK9Ngbjj+K0yRhTVONQh1p/HknKYSlNT+vZCzyokM=
 github.com/fatih/color v1.16.0/go.mod h1:fL2Sau1YI5c0pdGEVCbKQbLXB6edEj1ZgiY4NijnWvE=
 github.com/forPelevin/gomoji v1.3.0 h1:WPIOLWB1bvRYlKZnSSEevLt3IfKlLs+tK+YA9fFYlkE=
@@ -126,10 +130,6 @@ github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYL
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
 github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250619124342-b7fdc5494ce6 h1:0hTNoMFqzN8rhxWLZ5EIvxM1KRg1wynVA1tGu0BJbtI=
 github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250619124342-b7fdc5494ce6/go.mod h1:WRA+JW1jaESrUaGhHgTl3tFKx0EVHe1qNuN86QC6ma0=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250619122826-54ff6f65b128 h1:SdNS8Z1H1c1wgtHxZJNjLf9cWx+zdfXDQPmjUwQ55Bo=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250619122826-54ff6f65b128/go.mod h1:JDMYJHxU3W0/jaiiSljHLAcd0QeEGwpAwsnOqVR8c/0=
-github.com/jfrog/jfrog-client-go v1.28.1-0.20250619121353-6ff3439c999d h1:0TNgRnYr92lmxC4my2P07MqaWmYBuLP/sgoCD5k/fhA=
-github.com/jfrog/jfrog-client-go v1.28.1-0.20250619121353-6ff3439c999d/go.mod h1:1v0eih4thdPA4clBo9TuvAMT25sGDr1IQJ81DXQ/lBY=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
 github.com/k0kubun/pp v3.0.1+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=
