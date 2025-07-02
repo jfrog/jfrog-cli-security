@@ -85,14 +85,14 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 	return
 }
 
-func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo string) (err error) {
+func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (err error) {
 	if strings.Contains(repo, "/") && !strings.HasSuffix(repo, "/") {
 		// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
 		// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
 		repo = fmt.Sprintf("%s/", repo)
 	}
 	uploadCmd := generic.NewUploadCommand()
-	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Target(repo).Flat(true).BuildSpec())
+	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Project(relatedProjectKey).Target(repo).Flat(true).BuildSpec())
 	uploadCmd.SetDetailedSummary(true)
 	err = uploadCmd.Run()
 	result := uploadCmd.Result()
@@ -111,7 +111,7 @@ func IsRepoExists(repoKey string, serverDetails *config.ServerDetails) (exists b
 	return servicesManager.IsRepoExists(repoKey)
 }
 
-func CreateGenericLocalRepository(repoKey string, serverDetails *config.ServerDetails, xrayIndex bool) (err error) {
+func CreateGenericLocalRepository(repoKey string, serverDetails *config.ServerDetails, xrayIndex bool, relatedProjectKey string) (err error) {
 	if repoKey == "" || serverDetails == nil {
 		return errors.New("repository key and server details must be provided")
 	}
@@ -122,6 +122,7 @@ func CreateGenericLocalRepository(repoKey string, serverDetails *config.ServerDe
 	log.Debug(fmt.Sprintf("Creating generic local repository %s (xrayIndex: %t)", repoKey, xrayIndex))
 	params := services.NewGenericLocalRepositoryParams()
 	params.Key = repoKey
+	params.ProjectKey = relatedProjectKey
 	params.XrayIndex = clientUtils.Pointer(xrayIndex)
 	return servicesManager.CreateLocalRepository().Generic(params)
 }
