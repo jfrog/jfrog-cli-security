@@ -3,6 +3,7 @@ package artifactory
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/artifactory/services"
@@ -85,6 +86,11 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 }
 
 func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo string) (err error) {
+	if strings.Contains(repo, "/") && !strings.HasSuffix(repo, "/") {
+		// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
+		// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
+		repo = fmt.Sprintf("%s/", repo)
+	}
 	uploadCmd := generic.NewUploadCommand()
 	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Target(repo).Flat(true).BuildSpec())
 	uploadCmd.SetDetailedSummary(true)
