@@ -129,7 +129,7 @@
             "scannerDescription": "The Scanner checks for CVE-2018-16487",
             "evidence": [
               {
-                "file": "Users/user/project-with-issues/file-C",
+                "file": "file-C",
                 "startLine": 1,
                 "startColumn": 2,
                 "endLine": 3,
@@ -233,7 +233,7 @@
             "scannerDescription": "The Scanner checks for CVE-2024-39249",
             "evidence": [
               {
-                "file": "Users/user/project-with-issues/file-A",
+                "file": "file-A",
                 "startLine": 1,
                 "startColumn": 2,
                 "endLine": 3,
@@ -242,7 +242,7 @@
                 "reason": "ca msg"
               },
               {
-                "file": "Users/user/project-with-issues/file-B",
+                "file": "file-B",
                 "startLine": 1,
                 "startColumn": 2,
                 "endLine": 3,
@@ -370,7 +370,7 @@
             "scannerDescription": "The Scanner checks for CVE-2024-39249",
             "evidence": [
               {
-                "file": "Users/user/project-with-issues/file-A",
+                "file": "file-A",
                 "startLine": 1,
                 "startColumn": 2,
                 "endLine": 3,
@@ -379,7 +379,7 @@
                 "reason": "ca msg"
               },
               {
-                "file": "Users/user/project-with-issues/file-B",
+                "file": "file-B",
                 "startLine": 1,
                 "startColumn": 2,
                 "endLine": 3,
