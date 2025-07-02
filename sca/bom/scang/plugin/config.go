@@ -1,4 +1,4 @@
-package scang
+package plugin
 
 // Config holds the configuration for scang library options.
 type Config struct {

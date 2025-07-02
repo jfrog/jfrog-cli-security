@@ -6,6 +6,7 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang/plugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -55,12 +56,12 @@ func (sbg *ScangBomGenerator) PrepareGenerator() (err error) {
 		// No need to download the plugin if the binary path is set and valid
 		return err
 	}
-	if envPath, err := exec.LookPath(scangPluginExecutableName); err != nil && envPath != "" {
+	if envPath, err := exec.LookPath(plugin.ScangPluginExecutableName); err != nil && envPath != "" {
 		// No need to download the plugin if it's found in the system PATH
 		return nil
 	}
 	// Download the scang plugin if needed
-	return DownloadScangPluginIfNeeded()
+	return plugin.DownloadScangPluginIfNeeded()
 }
 
 func (sbg *ScangBomGenerator) GenerateSbom(target results.ScanTarget) (sbom *cyclonedx.BOM, err error) {
@@ -84,16 +85,16 @@ func (sbg *ScangBomGenerator) getScangExecutablePath() (scangPath string, err er
 		scangPath = sbg.binaryPath
 		return
 	}
-	return getLocalScangExecutablePath()
+	return plugin.GetLocalScangExecutablePath()
 }
 
 func (sbg *ScangBomGenerator) executeScanner(scangBinary string, target results.ScanTarget) (output *cyclonedx.BOM, err error) {
 	// Create a new plugin client
-	scanner, err := CreateScannerPluginClient(scangBinary)
+	scanner, err := plugin.CreateScannerPluginClient(scangBinary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SCANG plugin client: %w", err)
 	}
-	scanConfig := Config{
+	scanConfig := plugin.Config{
 		BomRef:         cdxutils.GetFileRef(target.Target),
 		Type:           string(cyclonedx.ComponentTypeFile),
 		Name:           target.Target,

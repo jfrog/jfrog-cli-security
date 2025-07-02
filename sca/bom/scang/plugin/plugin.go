@@ -1,9 +1,10 @@
-package scang
+package plugin
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/rpc"
 	"os"
 	"os/exec"
@@ -28,7 +29,7 @@ const (
 	scangPluginRtRepository       = "scang/v1"
 
 	scangPluginDirName        = "scang"
-	scangPluginExecutableName = "scangplugin"
+	ScangPluginExecutableName = "scangplugin"
 	pluginName                = "scang"
 
 	scangPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
@@ -74,12 +75,19 @@ type ScannerRPCServer struct {
 }
 
 func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) {
-	// Create the plugin client
+	// Create the plugin client with JFrog logger adapter
+	// This will align the plugin's logging with JFrog CLI's logging
+	var logStdErr io.Writer
+	if jfrogLog, ok := log.GetLogger().(log.JfrogLogger); ok {
+		logStdErr = jfrogLog.ErrorLog.Writer()
+	}
 	client := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig: PluginHandshakeConfig,
 		Plugins:         map[string]goplugin.Plugin{pluginName: &Plugin{}},
 		Cmd:             &exec.Cmd{Path: scangBinary},
 		Managed:         true,
+		Stderr:          logStdErr,
+		Logger:          NewHclogToJfrogAdapter(),
 	})
 	defer func() {
 		if err != nil {
@@ -190,14 +198,14 @@ func getScangPluginVersion() string {
 
 func getScangExecutableName() string {
 	if coreutils.IsWindows() {
-		return scangPluginExecutableName + ".exe"
+		return ScangPluginExecutableName + ".exe"
 	}
-	return scangPluginExecutableName
+	return ScangPluginExecutableName
 }
 
-func getLocalScangExecutablePath() (scangPath string, err error) {
+func GetLocalScangExecutablePath() (scangPath string, err error) {
 	// Check if the scang plugin binary path is set in the PATH environment variable
-	if scangPath, err = exec.LookPath(scangPluginExecutableName); err != nil || scangPath == "" {
+	if scangPath, err = exec.LookPath(ScangPluginExecutableName); err != nil || scangPath == "" {
 		log.Debug(fmt.Sprintf("SCANG plugin not found in system PATH: %s", err.Error()))
 	}
 	// Check if exists in JFrog CLI directory
