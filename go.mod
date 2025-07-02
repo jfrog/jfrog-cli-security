@@ -8,6 +8,7 @@ require (
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/google/go-github/v56 v56.0.0
 	github.com/google/uuid v1.6.0
+	github.com/google/uuid v1.6.0
 	github.com/gookit/color v1.5.4
 	github.com/jfrog/build-info-go v1.10.14
 	github.com/jfrog/froggit-go v1.17.0

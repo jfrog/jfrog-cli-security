@@ -36,9 +36,11 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	packageInfo := fmt.Sprintf("%s:%s", packageName, VersionForMainModule)
 	expectedUniqueDeps := []string{
 		techutils.Cocoapods.GetPackageTypeId() + "AppAuth:1.7.5",
+		techutils.Cocoapods.GetPackageTypeId() + "AppAuth/Core:1.7.5",
+		techutils.Cocoapods.GetPackageTypeId() + "AppAuth/ExternalUserAgent:1.7.5",
 		techutils.Cocoapods.GetPackageTypeId() + "GoogleSignIn:6.2.4",
 		techutils.Cocoapods.GetPackageTypeId() + "GTMAppAuth:1.3.1",
-		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher:2.3.0",
+		techutils.Cocoapods.GetPackageTypeId() + "GTMSessionFetcher/Core:2.3.0",
 		techutils.Cocoapods.GetPackageTypeId() + "nanopb:0.3.0",
 		techutils.Cocoapods.GetPackageTypeId() + packageInfo,
 	}
@@ -50,13 +52,13 @@ func TestBuildCocoapodsDependencyList(t *testing.T) {
 	assert.NotEmpty(t, rootNode)
 
 	assert.Equal(t, rootNode[0].Id, techutils.Cocoapods.GetPackageTypeId()+packageInfo)
-	assert.Len(t, rootNode[0].Nodes, 5)
+	assert.Len(t, rootNode[0].Nodes, 2)
 
-	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "GTMSessionFetcher:2.3.0")
+	child1 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "nanopb:0.3.0")
 	assert.Len(t, child1.Nodes, 0)
 
 	child2 := tests.GetAndAssertNode(t, rootNode[0].Nodes, "GoogleSignIn:6.2.4")
-	assert.Len(t, child2.Nodes, 2)
+	assert.Len(t, child2.Nodes, 3)
 }
 
 func TestGetTechDependencyLocation(t *testing.T) {

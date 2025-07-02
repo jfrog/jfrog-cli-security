@@ -426,6 +426,7 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.ScaScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
+				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")))),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd), sarifutils.CreateDummyResultInPath(filepath.ToSlash(filepath.Join("dir", "file")))),
@@ -517,8 +518,8 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsWithRuleInformation(BinarySecretScannerToolName, "[Secret in Binary found] ", "rule-msg", "rule-markdown", "rule-msg", "rule-markdown", wd,
-					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js"))), "result-msg", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
-						sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.Join("usr", "src", "app", "server", "index.js"), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
+					sarifutils.CreateDummyResultWithFingerprint(fmt.Sprintf("🔒 Found Secrets in Binary docker scanning:\nImage: dockerImage:imageVersion\nLayer (sha1): 9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0\nFilepath: %s\nEvidence: snippet", filepath.ToSlash(filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js")))), "result-msg", jfrogFingerprintAlgorithmName, "dee156c9fd75a4237102dc8fb29277a2",
+						sarifutils.CreateDummyLocationWithPathAndLogicalLocation(filepath.ToSlash(filepath.Join("usr", "src", "app", "server", "index.js")), "9e88ea9de1b44baba5e96a79e33e4af64334b2bf129e838e12f6dae71b5c86f0", "layer", "algorithm", "sha1"),
 					),
 				),
 			},
