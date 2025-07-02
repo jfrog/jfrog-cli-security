@@ -1002,14 +1002,10 @@ func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]strin
 
 func CreateScaComponentFromXrayCompId(xrayImpactedPackageId string, properties ...cyclonedx.Property) (component cyclonedx.Component) {
 	compName, compVersion, compType := techutils.SplitComponentIdRaw(xrayImpactedPackageId)
-	originalCompName := compName
-	if compType == techutils.Cocoapods.GetPackageType() && strings.Contains(compName, "/") {
-		compName = strings.Split(compName, "/")[0]
-	}
 	component = cyclonedx.Component{
 		BOMRef:     techutils.XrayComponentIdToCdxComponentRef(xrayImpactedPackageId),
 		Type:       cyclonedx.ComponentTypeLibrary,
-		Name:       originalCompName,
+		Name:       compName,
 		Version:    compVersion,
 		PackageURL: techutils.ToPackageUrl(compName, compVersion, techutils.ToCdxPackageType(compType)),
 	}

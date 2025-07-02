@@ -884,8 +884,5 @@ func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 
 func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
-	if compType == Cocoapods.GetPackageType() && strings.Contains(compName, "/") {
-		compName = strings.Split(compName, "/")[0]
-	}
 	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
 }
