@@ -111,7 +111,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 		}
 	}
 	// No direct dependency found
-	if SearchComponentByRef(bom.Components, componentRef) != nil {
+	if component := SearchComponentByRef(bom.Components, componentRef); component != nil && component.Type == cyclonedx.ComponentTypeLibrary {
 		return TransitiveRelation
 	}
 	// reference not found in the BOM components or dependencies

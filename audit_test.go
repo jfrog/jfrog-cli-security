@@ -911,8 +911,8 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 6, SbomComponents: 6},
-		SbomComponents:    &validations.SbomCount{Direct: 2, Transitive: 4},
+		Total:             &validations.TotalCount{Vulnerabilities: 6, SbomComponents: 6 /*Direct*/ + 1 /*root*/ + 2 /*files*/, Licenses: 4},
+		SbomComponents:    &validations.SbomCount{Direct: 6},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
