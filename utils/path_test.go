@@ -71,7 +71,7 @@ func TestExtractRelativePath(t *testing.T) {
 			name:           "invalid project path",
 			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
 			projectPath:    "invalidProjectPath",
-			expectedResult: fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			expectedResult: filepath.ToSlash(fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js"))),
 		},
 		{
 			name:           "valid full path with private",
@@ -137,35 +137,32 @@ func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
 		name         string
 		baseUrl      string
 		repoPath     string
-		targetPath   string
 		artifactName string
-		sha256       string
+		packageId    string
 		expected     string
 	}{
 		{
 			name:         "basic case",
 			baseUrl:      "http://localhost:8081/",
 			repoPath:     "my-repo",
-			targetPath:   "artifact.zip",
 			artifactName: "artifact.zip",
-			sha256:       "abc123",
-			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=generic%3A%2F%2Fsha256%3Aabc123%2Fartifact.zip&page_type=overview&path=my-repo%2Fartifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fartifact.zip",
 		},
 		{
-			name:         "with subdirectory",
+			name:         "with sub dir in repoPath",
 			baseUrl:      "http://localhost:8081/",
-			repoPath:     "my-repo",
-			targetPath:   "path/to/artifact.zip",
+			repoPath:     "my-repo/subdir",
 			artifactName: "artifact.zip",
-			sha256:       "abc123",
-			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=generic%3A%2F%2Fsha256%3Aabc123%2Fartifact.zip&page_type=overview&path=my-repo%2Fpath%2Fto%2Fartifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fsubdir%2Fartifact.zip",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.targetPath, test.artifactName, test.sha256)
-			assert.Equal(t, result, test.expected, "expected '%s', got '%s'", test.expected, result)
+			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.artifactName, test.packageId)
+			assert.Equal(t, test.expected, result, "expected '%s', got '%s'", test.expected, result)
 		})
 	}
 }

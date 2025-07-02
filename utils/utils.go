@@ -300,12 +300,15 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
-func ReadSbomFromFile(cdxFilePath string) (*cyclonedx.BOM, error) {
-	bom := cyclonedx.NewBOM()
+func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
+	bom = cyclonedx.NewBOM()
 	file, err := os.Open(cdxFilePath)
 	if errorutils.CheckError(err) != nil {
 		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
 	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
 	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
 		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
 	}
@@ -319,13 +322,17 @@ func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix s
 	}
 	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
+	return SaveCdxContentToFile(pathToSave, bom)
+}
+
+func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	file, err := os.Create(pathToSave)
-	defer func() {
-		err = errors.Join(err, file.Close())
-	}()
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
