@@ -190,7 +190,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		components := *potentialComponents
 		for i := range components {
 			if components[i].Location != nil {
-				components[i].Location.File = filepath.ToSlash(components[i].Location.File)
+				components[i].Location.File = filepath.FromSlash(components[i].Location.File)
 			}
 		}
 	}
