@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	defaultScangPluginVersion     = "1.0.0"
+	defaultScangPluginVersion     = "0.0.1"
 	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
 	scangPluginRtRepository       = "scang/v1"
 
