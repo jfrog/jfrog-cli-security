@@ -347,10 +347,10 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 			},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
-				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-A"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
-				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-B"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
+				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.ToSlash(filepath.Join("Users", "user", "project-with-issues", "file-A")), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
+				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.ToSlash(filepath.Join("Users", "user", "project-with-issues", "file-B")), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
 				// Not Applicable result = remediation location, not a finding add for test confirmation
-				validations.CreateDummyApplicableResults("CVE-2018-16487", formats.Location{File: filepath.Join("Users", "user", "project-with-issues", "file-C"), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
+				validations.CreateDummyApplicableResults("CVE-2018-16487", formats.Location{File: filepath.ToSlash(filepath.Join("Users", "user", "project-with-issues", "file-C")), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet3"}),
 			},
 		},
 	)
@@ -546,7 +546,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 				),
 			},
 			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11")))},
-			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file://" + filepath.Join("usr", "local", "bin", "node")})},
+			Results:     []*sarif.Result{validations.CreateDummyApplicableResults("CVE-2024-6119", formats.Location{File: "file://usr/local/bin/node", StartLine: 1, StartColumn: 1})},
 		},
 	)
 	// Secrets scan results

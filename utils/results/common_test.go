@@ -409,9 +409,12 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedCves: []formats.CveRow{{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{
 				Reason: "result-msg",
 				Location: formats.Location{
-					File:      "fileName2",
-					StartLine: 1,
-					Snippet:   "snippet2",
+					File:        "fileName2",
+					StartLine:   1,
+					StartColumn: 1,
+					EndLine:     1,
+					EndColumn:   1,
+					Snippet:     "snippet2",
 				},
 			}}}}},
 		},
@@ -465,7 +468,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
 				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable),
-					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}},
+					Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"}}},
 				}},
 			},
 		},
@@ -567,7 +570,7 @@ func TestGetCveApplicabilityFieldAndFilterDisqualify(t *testing.T) {
 			expectedResult: jasutils.Applicable,
 			expectedCves: []formats.CveRow{
 				{Id: "testCve1", Applicability: &formats.Applicability{Status: string(jasutils.NotApplicable)}},
-				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, Snippet: "snippet"}}}}},
+				{Id: "testCve2", Applicability: &formats.Applicability{Status: string(jasutils.Applicable), Evidence: []formats.Evidence{{Reason: "result-msg", Location: formats.Location{File: "fileName4", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"}}}}},
 			},
 		},
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
@@ -73,6 +74,11 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Get() (T, error)
 }
 
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cyclonedx.BOM, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter()
+	return parseCommandResults(c.Params, parser, cmdResults)
+}
+
 func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.SecurityCommandResults) (simpleJsonResults formats.SimpleJsonResults, err error) {
 	parser := simplejsonparser.NewCmdResultsSimpleJsonConverter(false, c.Params.SimplifiedOutput)
 	return parseCommandResults(c.Params, parser, cmdResults)
@@ -106,6 +112,11 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 		if err = parser.ParseNewTargetResults(targetScansResults.ScanTarget, targetScansResults.Errors...); err != nil {
 			return
 		}
+		if params.IncludeSbom {
+			if err = parser.ParseSbom(targetScansResults.ScanTarget, targetScansResults.ScaResults.Sbom); err != nil {
+				return
+			}
+		}
 		if utils.IsScanRequested(cmdResults.CmdType, utils.ScaScan, params.RequestedScans...) && targetScansResults.ScaResults != nil {
 			if err = parseScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
 				return
@@ -127,16 +138,9 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		return
 	}
 	// Prepare attributes for parsing SCA results
-	actualTarget := getScaScanTarget(targetScansResults.ScaResults, targetScansResults.ScanTarget)
 	var applicableRuns []results.ScanResult[[]*sarif.Run]
 	if jasEntitled && targetScansResults.JasResults != nil {
 		applicableRuns = targetScansResults.JasResults.ApplicabilityScanResults
-	}
-	// Parse SBOM
-	if params.IncludeSbom {
-		if err = parser.ParseSbom(actualTarget, targetScansResults.ScaResults.Sbom); err != nil {
-			return
-		}
 	}
 	// If no enriched SBOM was provided, we can't parse new flow
 	if err = parseDeprecatedScaResults(params, parser, targetScansResults, jasEntitled); err != nil {
@@ -152,13 +156,13 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 			Scan:       targetScansResults.ScaResults.Sbom,
 			StatusCode: targetScansResults.ScaResults.ScanStatusCode,
 		}
-		if err = parser.ParseCVEs(actualTarget, vulnerabilityScan, applicableRuns...); err != nil {
+		if err = parser.ParseCVEs(targetScansResults.ScanTarget, vulnerabilityScan, applicableRuns...); err != nil {
 			return
 		}
 	}
 	// Parse SCA violations
 	if params.HasViolationContext && len(targetScansResults.ScaResults.Violations) > 0 {
-		if err = parser.ParseViolations(actualTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+		if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
 			return
 		}
 	}
@@ -168,7 +172,7 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		if targetScansResults.ScaResults.Sbom.Dependencies != nil {
 			dependencies = append(dependencies, *targetScansResults.ScaResults.Sbom.Dependencies...)
 		}
-		if err = parser.ParseSbomLicenses(actualTarget, *targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
+		if err = parser.ParseSbomLicenses(targetScansResults.ScanTarget, *targetScansResults.ScaResults.Sbom.Components, dependencies...); err != nil {
 			return
 		}
 	}

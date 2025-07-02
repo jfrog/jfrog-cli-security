@@ -306,12 +306,20 @@ func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+}
+
+func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+}
+
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), GetCurrentTimeUnix()))
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())

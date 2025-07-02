@@ -81,10 +81,21 @@ func GetCurationNugetCacheFolder() (string, error) {
 }
 
 func GetRelativePath(fullPathWd, baseWd string) string {
+	// Remove OS-specific file prefix
+	if strings.HasPrefix(fullPathWd, "file:///private") {
+		fullPathWd = strings.Replace(fullPathWd, "file:///private", "file://", 1)
+	}
+	if strings.HasPrefix(baseWd, "file:///private") {
+		baseWd = strings.Replace(baseWd, "file:///private", "file://", 1)
+	}
 	relativePath, err := filepath.Rel(baseWd, fullPathWd)
 	if err != nil {
 		log.Debug(fmt.Sprintf("Failed to get relative path from %s to %s: %v", fullPathWd, baseWd, err))
-		return fullPathWd // Return the full path if an error occurs
+		return filepath.ToSlash(fullPathWd) // Return the full path if an error occurs
+	}
+	// If rel starts with "..", then target is outside base, so return the full path
+	if strings.HasPrefix(relativePath, "..") {
+		return filepath.ToSlash(fullPathWd)
 	}
 	if relativePath == "." {
 		return "" // If the paths are the same, return an empty string
@@ -131,14 +142,13 @@ func ToURI(path string) string {
 	// Convert Windows path to URI format
 	// Use filepath.ToSlash to make sure the path uses forward slashes
 	path = filepath.ToSlash(path)
-
 	// If it's a Windows path, prepend "file:///" and replace the drive letter
 	if len(path) > 2 && path[1] == ':' {
 		// Convert "C:\\path\\to\\file" to "file:///C:/path/to/file"
 		path = "file:///" + path[:2] + path[2:]
 	} else {
 		// For Linux/Unix or other paths, just add "file://"
-		path = "file:///" + path
+		path = "file://" + path
 	}
 	// Parse the URL to ensure it's valid (this step is optional for simple paths)
 	u, err := url.Parse(path)

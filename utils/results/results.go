@@ -333,7 +333,11 @@ func (sr *TargetResults) GetDescriptors() []string {
 	if sr.ScaResults == nil {
 		return nil
 	}
-	return sr.ScaResults.Descriptors
+	descriptors := datastructures.MakeSet[string]()
+	for _, descriptor := range sr.ScaResults.Descriptors {
+		descriptors.Add(utils.GetRelativePath(utils.ToURI(descriptor), utils.ToURI(sr.Target)))
+	}
+	return descriptors.ToSlice()
 }
 
 func (sr *TargetResults) GetWatches() []string {

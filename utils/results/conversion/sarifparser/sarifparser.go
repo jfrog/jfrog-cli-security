@@ -166,7 +166,7 @@ func (sc *CmdResultsSarifConverter) createScaRun(target results.ScanTarget, erro
 		wd = filepath.Dir(wd)
 	}
 	run.Invocations = append(run.Invocations, sarif.NewInvocation().
-		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(wd)).
+		WithWorkingDirectory(sarif.NewSimpleArtifactLocation(utils.ToURI(wd))).
 		WithExecutionSuccessful(errorCount == 0),
 	)
 	return run
@@ -973,7 +973,7 @@ func getBinaryLocationMarkdownString(commandType utils.CommandType, subScanType 
 	if snippet := sarifutils.GetLocationSnippetText(location); snippet != "" {
 		content += fmt.Sprintf("\nEvidence: %s", snippet)
 	}
-	if tokenValidation := results.GetResultPropertyTokenValidation(result); tokenValidation != "" {
+	if tokenValidation := sarifutils.GetResultPropertyTokenValidation(result); tokenValidation != "" {
 		content += fmt.Sprintf("\nToken Validation %s", tokenValidation)
 	}
 	return

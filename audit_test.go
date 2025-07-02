@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -39,9 +40,73 @@ import (
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
+// test audit command parameters
+type auditCommandTestParams struct {
+	// Will combined with "," if provided and be used as --working-dirs flag value
+	WorkingDirsToScan []string
+	// Will be combined with ";" if provided and be used as --exclusions flag value
+	CustomExclusion []string
+	// --format flag value if provided
+	Format format.OutputFormat
+	// Will combined with "," if provided and be used as --watches flag value
+	Watches []string
+	// --project flag value if provided.
+	ProjectKey string
+	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
+	DisableFailOnFailedBuildFlag bool
+	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
+	WithVuln bool
+	// --licenses flag value if provided
+	WithLicense bool
+	// --sbom flag value if provided
+	WithSbom bool
+	// adds "--secrets", "--validate-secrets" flags if true
+	ValidateSecrets bool
+	// --threads flag value if provided
+	Threads int
+}
+
+func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
+	if len(params.WorkingDirsToScan) > 0 {
+		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
+	}
+	if len(params.CustomExclusion) > 0 {
+		args = append(args, "--exclusions="+strings.Join(params.CustomExclusion, ";"))
+	}
+	if params.Format != "" {
+		args = append(args, "--format="+string(params.Format))
+	}
+	if params.WithLicense {
+		args = append(args, "--licenses")
+	}
+	if params.ProjectKey != "" {
+		args = append(args, "--project="+params.ProjectKey)
+	}
+	if len(params.Watches) > 0 {
+		args = append(args, "--watches="+strings.Join(params.Watches, ","))
+	}
+	// Default value for --fail flag is 'true'. Unless we directly pass DisableFailOnFailedBuildFlag=true, the flow will fail when security issues are found
+	if params.DisableFailOnFailedBuildFlag {
+		args = append(args, "--fail=false")
+	}
+	if params.WithVuln {
+		args = append(args, "--vuln")
+	}
+	if params.ValidateSecrets {
+		args = append(args, "--secrets", "--validate-secrets")
+	}
+	if params.WithSbom {
+		args = append(args, "--sbom")
+	}
+	if params.Threads > 0 {
+		args = append(args, "--threads="+strconv.Itoa(params.Threads))
+	}
+	return args
+}
+
 func TestXrayAuditNpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditNpm(t, string(format.Json), false)
+	output := testAuditNpm(t, string(format.Json), "xray-json", false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total:      &validations.TotalCount{Licenses: 1, Violations: 1},
 		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
@@ -50,21 +115,21 @@ func TestXrayAuditNpmJson(t *testing.T) {
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditNpm(t, string(format.SimpleJson), true)
+	output := testAuditNpm(t, string(format.SimpleJson), "xray-simple-json", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:      &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
 	})
 }
 
-func testAuditNpm(t *testing.T, format string, withVuln bool) string {
+func testAuditNpm(t *testing.T, format, violationContextPrefix string, withVuln bool) string {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm"))
 	defer cleanUp()
 	// Run npm install before executing jfrog xr npm-audit
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
-	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, violationContextPrefix+"audit-policy", violationContextPrefix+"audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	args := []string{"audit", "--npm", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
 	if withVuln {
@@ -555,18 +620,41 @@ func addDummyPackageDescriptor(t *testing.T, hasPackageJson bool) {
 
 // JAS
 
+func TestAuditJasCycloneDx(t *testing.T) {
+	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-npm"), auditCommandTestParams{
+		WithSbom: true,
+		Threads:  3,
+		Format:   format.CycloneDx,
+	})
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		Total:          &validations.TotalCount{Vulnerabilities: 6, SbomComponents: 6},
+		SbomComponents: &validations.SbomCount{Direct: 2, Transitive: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 3, Sast: 2, Secrets: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},
+		},
+	})
+}
+
 func TestXrayAuditSastCppFlagSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), "3", false, "*out*")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "c"), auditCommandTestParams{
+		Threads:         3,
+		CustomExclusion: []string{"*out*"},
+		Format:          format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 2}},
 	})
 }
 func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
-	// Placeholder until C# Sast is implemented
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "dotnet", "dotnet-single"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sast: 1}},
@@ -575,7 +663,10 @@ func TestXrayAuditSastCSharpFlagSimpleJson(t *testing.T) {
 
 func TestXrayAuditJasMissingContextSimpleJson(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "maven", "missing-context"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{MissingContext: 1}},
 	})
@@ -585,7 +676,10 @@ func TestXrayAuditNotEntitledForJas(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, false, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 8}})
 }
 
@@ -608,7 +702,10 @@ func getNoJasAuditMockCommand() components.Command {
 
 func TestXrayAuditJasSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 23},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -620,7 +717,11 @@ func TestXrayAuditJasSimpleJson(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 	integration.InitAuditGeneralTests(t, jasutils.DynamicTokenValidationMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", true, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
+		ValidateSecrets: true,
+		Threads:         3,
+		Format:          format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Secrets: 5},
@@ -631,7 +732,10 @@ func TestXrayAuditJasSimpleJsonWithTokenValidation(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "1", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
+		Threads: 1,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 23},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -643,7 +747,10 @@ func TestXrayAuditJasSimpleJsonWithOneThread(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas-config"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 8},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -655,27 +762,23 @@ func TestXrayAuditJasSimpleJsonWithConfig(t *testing.T) {
 
 func TestXrayAuditJasNoViolationsSimpleJson(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("package-managers", "npm", "npm"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:           &validations.TotalCount{Vulnerabilities: 1},
 		Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1}},
 	})
 }
 
-func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string, threads string, validateSecrets bool, customExclusion string) string {
+func testXrayAuditWithCleanHome(t *testing.T, testCli *coreTests.JfrogCli, project string, params auditCommandTestParams) string {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
-	args := []string{"audit", "--format=" + string(format.SimpleJson), "--threads=" + threads}
-	if validateSecrets {
-		args = append(args, "--secrets", "--validate-secrets")
-	}
-	if len(customExclusion) != 0 {
-		args = append(args, "--exclusions", customExclusion)
-	}
-	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, args...)
+	return testCli.WithoutCredentials().RunCliCmdWithOutput(t, append([]string{"audit"}, getAuditCmdArgs(params)...)...)
 }
 
 func TestXrayAuditDetectTech(t *testing.T) {
@@ -735,7 +838,10 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun, cleanUp := integration.InitTestWithMockCommandOrParams(t, true, getNoJasAuditMockCommand)
 	defer cleanUp()
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	// Verify that scan results are printed
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 8}})
 	// Verify that JAS results are not printed
@@ -745,7 +851,10 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
 	cliToRun := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
-	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, "")
+	output := testXrayAuditWithCleanHome(t, cliToRun, filepath.Join("jas", "jas"), auditCommandTestParams{
+		Threads: 3,
+		Format:  format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -759,7 +868,11 @@ func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	integration.InitAuditJasTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditJas(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), "3", false, "non_existing_folder")
+	output := testXrayAuditWithCleanHome(t, securityTests.PlatformCli, filepath.Join("jas", "jas"), auditCommandTestParams{
+		CustomExclusion: []string{"non_existing_folder"},
+		Threads:         3,
+		Format:          format.SimpleJson,
+	})
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -767,53 +880,4 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Applicable: 3, Undetermined: 1, NotCovered: 1, NotApplicable: 2},
 		},
 	})
-}
-
-// test audit command parameters
-type auditCommandTestParams struct {
-	// Will combined with "," if provided and be used as --working-dirs flag value
-	WorkingDirsToScan []string
-	// Will be combined with ";" if provided and be used as --exclusions flag value
-	CustomExclusion []string
-	// --format flag value if provided
-	Format string
-	// Will combined with "," if provided and be used as --watches flag value
-	Watches []string
-	// --project flag value if provided.
-	ProjectKey string
-	// --fail flag value if provided, must be provided with 'createWatchesFuncs' to create watches for the test
-	DisableFailOnFailedBuildFlag bool
-	// -- vuln flag 'True' value must be provided with 'createWatchesFuncs' to create watches for the test
-	WithVuln bool
-	// --licenses flag value if provided
-	WithLicense bool
-}
-
-func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
-	if len(params.WorkingDirsToScan) > 0 {
-		args = append(args, "--working-dirs="+strings.Join(params.WorkingDirsToScan, ","))
-	}
-	if len(params.CustomExclusion) > 0 {
-		args = append(args, "--exclusions="+strings.Join(params.CustomExclusion, ";"))
-	}
-	if params.Format != "" {
-		args = append(args, "--format="+params.Format)
-	}
-	if params.WithLicense {
-		args = append(args, "--licenses")
-	}
-	if params.ProjectKey != "" {
-		args = append(args, "--project="+params.ProjectKey)
-	}
-	if len(params.Watches) > 0 {
-		args = append(args, "--watches="+strings.Join(params.Watches, ","))
-	}
-	// Default value for --fail flag is 'true'. Unless we directly pass DisableFailOnFailedBuildFlag=true, the flow will fail when security issues are found
-	if params.DisableFailOnFailedBuildFlag {
-		args = append(args, "--fail=false")
-	}
-	if params.WithVuln {
-		args = append(args, "--vuln")
-	}
-	return args
 }

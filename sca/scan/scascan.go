@@ -190,7 +190,7 @@ func dumpScanResponseToFileIfNeeded(results services.ScanResponse, scanResultsOu
 	if err != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
-	return utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId)
+	return utils.DumpJsonContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId)
 }
 
 // If an output dir was provided through --output-dir flag, we create in the provided path new file containing the scan results
