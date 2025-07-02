@@ -46,7 +46,8 @@ type BuildInfoBomGenerator struct {
 
 func NewBuildInfoBomGenerator() *BuildInfoBomGenerator {
 	return &BuildInfoBomGenerator{
-		params: technologies.BuildInfoBomGeneratorParams{},
+		params:      technologies.BuildInfoBomGeneratorParams{},
+		descriptors: []string{},
 	}
 }
 
@@ -58,7 +59,7 @@ func WithParams(params technologies.BuildInfoBomGeneratorParams) bom.SbomGenerat
 	}
 }
 
-func WithDescriptors(descriptors ...string) bom.SbomGeneratorOption {
+func WithDescriptors(descriptors []string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
 		if bi, ok := sg.(*BuildInfoBomGenerator); ok {
 			bi.descriptors = descriptors
@@ -74,8 +75,8 @@ func (b *BuildInfoBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) 
 }
 
 func (b *BuildInfoBomGenerator) PrepareGenerator() error {
-	// Nothing to do here, the generator is ready to use.
-	// Validations can be added here in the future if needed.
+	// Nothing to do here, the generator is already prepared with the provided parameters.
+	// Future validations can be added here if needed.
 	return nil
 }
 

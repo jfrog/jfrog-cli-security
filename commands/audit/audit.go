@@ -212,6 +212,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
+		SetOutputDir(auditCmd.scanResultsOutputDir).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(auditCmd.ScansToPerform())
@@ -340,7 +341,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			cmdResults.AddGeneralError(fmt.Errorf("failed to get target results to compare: %s", err.Error()), false)
 			continue
 		}
-		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors()...)),
+		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
 				AllowPartialResults:  params.AllowPartialResults(),

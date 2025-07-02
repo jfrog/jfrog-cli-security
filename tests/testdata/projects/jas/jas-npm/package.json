@@ -1,0 +1,8 @@
+{
+    "name": "test-jas-proj",
+    "version": "1.0.0",
+    "dependencies": {
+      "uglify-js": "2.2.5",
+      "minimist": "1.2.5"
+    }
+  }

@@ -33,7 +33,7 @@ func TestReportError(t *testing.T) {
 func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testAuditNpm(t, string(format.Json), false)
+	output := testAuditNpm(t, string(format.Json), "xsc-json", false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Violations: 1},
 	})
@@ -42,7 +42,7 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 func TestXscAuditNpmSimpleJsonWithWatch(t *testing.T) {
 	_, _, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
-	output := testAuditNpm(t, string(format.SimpleJson), true)
+	output := testAuditNpm(t, string(format.SimpleJson), "xsc-simple-json", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Licenses: 1, Violations: 1, Vulnerabilities: 1},
 	})
@@ -70,7 +70,7 @@ func TestXscAnalyticsForAudit(t *testing.T) {
 	xrayVersion, xscVersion, cleanUp := integration.InitXscTest(t)
 	defer cleanUp()
 	// Scan npm project and verify that analytics general event were sent to XSC.
-	output := testAuditNpm(t, string(format.SimpleJson), false)
+	output := testAuditNpm(t, string(format.SimpleJson), "xsc-analytics", false)
 	validateAnalyticsBasicEvent(t, xrayVersion, xscVersion, output)
 }
 

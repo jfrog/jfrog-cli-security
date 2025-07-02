@@ -404,7 +404,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 							ScannerDescription: "rule-msg",
 							Status:             jasutils.Applicable.String(),
 							Evidence: []formats.Evidence{{
-								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+								Location: formats.Location{File: "file", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"},
 								Reason:   "applic_CVE-2",
 							}},
 						},
@@ -603,7 +603,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 							ScannerDescription: "rule-msg",
 							Status:             jasutils.Applicable.String(),
 							Evidence: []formats.Evidence{{
-								Location: formats.Location{File: "file", StartLine: 0, StartColumn: 0, EndLine: 0, EndColumn: 0, Snippet: "snippet"},
+								Location: formats.Location{File: "file", StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1, Snippet: "snippet"},
 								Reason:   "applic_CVE-2",
 							}},
 						},

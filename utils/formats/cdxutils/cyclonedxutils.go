@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/uuid"
 
 	"github.com/jfrog/gofrog/datastructures"
 
@@ -32,6 +33,18 @@ const (
 )
 
 type ComponentRelation string
+
+func GetProperty(properties *[]cyclonedx.Property, name string) *cyclonedx.Property {
+	if properties == nil || len(*properties) == 0 || name == "" {
+		return nil
+	}
+	for _, property := range *properties {
+		if property.Name == name {
+			return &property
+		}
+	}
+	return nil
+}
 
 // AppendProperties appends new properties to the existing properties list and returns the updated list.
 func AppendProperties(properties *[]cyclonedx.Property, newProperties ...cyclonedx.Property) *[]cyclonedx.Property {
@@ -215,14 +228,14 @@ func SearchComponentByRef(components *[]cyclonedx.Component, ref string) (compon
 
 func CreateFileOrDirComponent(filePathOrUri string) (component cyclonedx.Component) {
 	component = cyclonedx.Component{
-		BOMRef: getFileRef(filePathOrUri),
+		BOMRef: GetFileRef(filePathOrUri),
 		Type:   cyclonedx.ComponentTypeFile,
 		Name:   convertToFileUrlIfNeeded(filePathOrUri),
 	}
 	return
 }
 
-func getFileRef(filePathOrUri string) string {
+func GetFileRef(filePathOrUri string) string {
 	uri := convertToFileUrlIfNeeded(filePathOrUri)
 	wdRef, err := utils.Md5Hash(uri)
 	if err != nil {
@@ -440,12 +453,12 @@ func GetOrCreateScaIssue(destination *cyclonedx.BOM, params CdxVulnerabilityPara
 	if destination.Vulnerabilities == nil {
 		destination.Vulnerabilities = &[]cyclonedx.Vulnerability{}
 	}
-	vulnerability := createBaseVulnerability(params, properties...)
+	vulnerability := CreateBaseVulnerability(params, properties...)
 	*destination.Vulnerabilities = append(*destination.Vulnerabilities, vulnerability)
 	return &(*destination.Vulnerabilities)[len(*destination.Vulnerabilities)-1]
 }
 
-func createBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
+func CreateBaseVulnerability(params CdxVulnerabilityParams, properties ...cyclonedx.Property) cyclonedx.Vulnerability {
 	var source *cyclonedx.Source
 	if params.Service != nil {
 		source = &cyclonedx.Source{
@@ -579,9 +592,46 @@ func SearchVulnerabilityByRef(destination *cyclonedx.BOM, ref string) *cyclonedx
 	if destination == nil || destination.Vulnerabilities == nil {
 		return nil
 	}
-	for _, vulnerability := range *destination.Vulnerabilities {
-		if vulnerability.BOMRef == ref {
-			return &vulnerability
+	for i := range *destination.Vulnerabilities {
+		if (*destination.Vulnerabilities)[i].BOMRef == ref {
+			return &(*destination.Vulnerabilities)[i]
+		}
+	}
+
+	return nil
+}
+
+func GetSerialNumber(id string) string {
+	if id == "" {
+		id = uuid.New().String()
+	}
+	return fmt.Sprintf("urn:uuid:%s", id)
+}
+
+func AddServiceToBomIfNotExists(bom *cyclonedx.BOM, service cyclonedx.Service) {
+	if SearchForServiceByName(bom, service.Name) != nil || bom == nil {
+		return // Service already exists
+	}
+	// Add the service to the BOM
+	if bom.Metadata == nil {
+		bom.Metadata = &cyclonedx.Metadata{}
+	}
+	if bom.Metadata.Tools == nil {
+		bom.Metadata.Tools = &cyclonedx.ToolsChoice{}
+	}
+	if bom.Metadata.Tools.Services == nil {
+		bom.Metadata.Tools.Services = &[]cyclonedx.Service{}
+	}
+	*bom.Metadata.Tools.Services = append(*bom.Metadata.Tools.Services, service)
+}
+
+func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.Service {
+	if bom == nil || bom.Metadata == nil || bom.Metadata.Tools == nil || bom.Metadata.Tools.Services == nil {
+		return nil
+	}
+	for i := range *bom.Metadata.Tools.Services {
+		if (*bom.Metadata.Tools.Services)[i].Name == serviceName {
+			return &(*bom.Metadata.Tools.Services)[i]
 		}
 	}
 	return nil

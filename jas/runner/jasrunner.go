@@ -232,7 +232,7 @@ func dumpSarifRunToFileIfNeeded(scanResultsOutputDir string, scanType jasutils.J
 		if fileContent, err = utils.GetAsJsonBytes(resultsToDump, true, true); err != nil {
 			err = errors.Join(err, fmt.Errorf("failed to write %s scan results to file", scanType))
 		} else {
-			err = errors.Join(err, utils.DumpContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId))
+			err = errors.Join(err, utils.DumpSarifContentToFile(fileContent, scanResultsOutputDir, scanType.String(), threadId))
 		}
 	}
 	return

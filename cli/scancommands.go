@@ -275,9 +275,6 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
-	}
 	pluginsCommon.FixWinPathsForFileSystemSourcedCmds(specFile, c)
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
@@ -449,9 +446,6 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
-	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
 		return "", "", nil, nil, err
@@ -460,12 +454,15 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-
+	includeSbom := c.GetBoolFlagValue(flags.Sbom)
+	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
+	}
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
-		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
+		SetIncludeSbom(includeSbom).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
@@ -710,9 +707,6 @@ func DockerScan(c *components.Context, image string) error {
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
 		return err
-	}
-	if c.GetBoolFlagValue(flags.Sbom) && format != outputFormat.Table {
-		log.Warn("The '--sbom' flag is only supported with the 'table' output format. Ignoring the flag.")
 	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {

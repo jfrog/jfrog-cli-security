@@ -519,22 +519,13 @@ func PrepareSimpleJsonJasIssues(entitledForJas, pretty bool, jasIssues ...*sarif
 					EndColumn:   sarifutils.GetLocationEndColumn(location),
 					Snippet:     sarifutils.GetLocationSnippetText(location),
 				},
-				Applicability: getJasResultApplicability(result),
+				Applicability: results.GetJasResultApplicability(result),
 				CodeFlow:      codeFlowToLocationFlow(sarifutils.GetLocationRelatedCodeFlowsFromResult(location, result), run.Invocations, pretty),
 			},
 		)
 		return nil
 	})
 	return rows, err
-}
-
-func getJasResultApplicability(result *sarif.Result) *formats.Applicability {
-	status := results.GetResultPropertyTokenValidation(result)
-	statusDescription := results.GetResultPropertyMetadata(result)
-	if status == "" && statusDescription == "" {
-		return nil
-	}
-	return &formats.Applicability{Status: status, ScannerDescription: statusDescription}
 }
 
 func codeFlowToLocationFlow(flows []*sarif.CodeFlow, invocations []*sarif.Invocation, isTable bool) (flowRows [][]formats.Location) {

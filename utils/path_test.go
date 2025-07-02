@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestGetRelativePath(t *testing.T) {
 			name:     "no common base path",
 			basePath: filepath.Join("dir1", "dir2"),
 			target:   filepath.Join("dir3", "dir4"),
-			expected: filepath.Join("..", "..", "dir3", "dir4"),
+			expected: filepath.Join("dir3", "dir4"),
 		},
 	}
 
@@ -38,6 +39,57 @@ func TestGetRelativePath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			result := GetRelativePath(test.target, test.basePath)
 			assert.Equal(t, result, filepath.ToSlash(test.expected), "expected '%s', got '%s'", filepath.ToSlash(test.expected), result)
+		})
+	}
+}
+func TestExtractRelativePath(t *testing.T) {
+	tests := []struct {
+		name           string
+		fullPath       string
+		projectPath    string
+		expectedResult string
+	}{
+		{
+			name:           "empty path",
+			fullPath:       "",
+			projectPath:    filepath.Join("Users", "user", "Desktop", "secrets_scanner"),
+			expectedResult: "",
+		},
+		{
+			name:           "invalid path",
+			fullPath:       "invalidFullPath",
+			projectPath:    filepath.Join("Users", "user", "Desktop", "secrets_scanner"),
+			expectedResult: "invalidFullPath",
+		},
+		{
+			name:           "valid full path",
+			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			projectPath:    fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner")),
+			expectedResult: "tests/req.nodejs/file.js",
+		},
+		{
+			name:           "invalid project path",
+			fullPath:       fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js")),
+			projectPath:    "invalidProjectPath",
+			expectedResult: filepath.ToSlash(fmt.Sprintf("file://%s", filepath.Join("Users", "user", "Desktop", "secrets_scanner", "tests", "req.nodejs", "file.js"))),
+		},
+		{
+			name:           "valid full path with private",
+			fullPath:       "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath:    "file:///Users/user/Desktop/secrets_scanner/",
+			expectedResult: "tests/req.nodejs/file.js",
+		},
+		{
+			name:           "invalid project path and path with private",
+			fullPath:       "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+			projectPath:    "invalidProjectPath",
+			expectedResult: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedResult, GetRelativePath(test.fullPath, test.projectPath))
 		})
 	}
 }

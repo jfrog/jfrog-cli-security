@@ -44,23 +44,22 @@ func NewIndexerBomGenerator() *IndexerBomGenerator {
 
 func WithXray(manager *xray.XrayServicesManager, xrayVersion string) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
-		if generator, ok := sg.(*IndexerBomGenerator); ok {
-			generator.xrayManager = manager
-			generator.xrayVersion = xrayVersion
+		if ibg, ok := sg.(*IndexerBomGenerator); ok {
+			ibg.xrayManager = manager
+			ibg.xrayVersion = xrayVersion
 		}
 	}
 }
 
 func WithBypassArchiveLimits(bypass bool) bom.SbomGeneratorOption {
 	return func(sg bom.SbomGenerator) {
-		if generator, ok := sg.(*IndexerBomGenerator); ok {
-			generator.bypassArchiveLimits = bypass
+		if ibg, ok := sg.(*IndexerBomGenerator); ok {
+			ibg.bypassArchiveLimits = bypass
 		}
 	}
 }
 
 func (ibg *IndexerBomGenerator) WithOptions(options ...bom.SbomGeneratorOption) bom.SbomGenerator {
-	// Apply the options to the generator.
 	for _, option := range options {
 		option(ibg)
 	}
