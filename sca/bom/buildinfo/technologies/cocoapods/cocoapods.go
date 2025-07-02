@@ -2,6 +2,7 @@ package cocoapods
 
 import (
 	"fmt"
+	"golang.org/x/exp/slices"
 	"os"
 	"path"
 	"path/filepath"
@@ -130,25 +131,17 @@ func FixTechDependency(dependencyName, dependencyVersion, fixVersion string, des
 	return nil
 }
 
-func GetPackageName(longPkgName string) string {
-	if strings.Contains(longPkgName, "/") {
-		splitNameParts := strings.Split(longPkgName, "/")
-		longPkgName = splitNameParts[0]
-	}
-	return longPkgName
-}
-
-func GetPodDependenciesGraph(data string) (map[string][]string, map[string]string) {
+func GetPodDependenciesGraph(data string) (map[string][]string, map[string]string, []string) {
 	var currentMainDep string
 	lines := strings.Split(data, "\n")
 	dependencyMap := make(map[string][]string, len(lines))
 	versionMap := make(map[string]string, len(lines))
+	var transitiveDependencies []string
 	for _, line := range lines {
-		line = strings.ReplaceAll(line, "\"", "")
 		mainDepMatch := mainDepRegex.FindStringSubmatch(line)
 		if len(mainDepMatch) == 3 {
 			versionMatch := versionRegex.FindStringSubmatch(line)
-			currentMainDep = GetPackageName(mainDepMatch[1])
+			currentMainDep = mainDepMatch[1]
 			_, ok := dependencyMap[currentMainDep]
 			if !ok {
 				dependencyMap[currentMainDep] = []string{}
@@ -159,12 +152,11 @@ func GetPodDependenciesGraph(data string) (map[string][]string, map[string]strin
 		subDepMatch := subDepRegex.FindStringSubmatch(line)
 		if len(subDepMatch) == 2 && currentMainDep != "" {
 			subDependency := subDepMatch[1]
-			if subDependency == GetPackageName(subDependency) {
-				dependencyMap[currentMainDep] = append(dependencyMap[currentMainDep], subDependency)
-			}
+			dependencyMap[currentMainDep] = append(dependencyMap[currentMainDep], subDependency)
+			transitiveDependencies = append(transitiveDependencies, subDependency)
 		}
 	}
-	return dependencyMap, versionMap
+	return dependencyMap, versionMap, transitiveDependencies
 }
 
 func extractPodsSection(filePath string) (string, error) {
@@ -219,9 +211,9 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 		return nil, nil, err
 	}
 	uniqueDepsSet := datastructures.MakeSet[string]()
-	dependenciesGraph, versionMap := GetPodDependenciesGraph(data)
+	dependenciesGraph, versionMap, transitiveDependencies := GetPodDependenciesGraph(data)
 	for key := range dependenciesGraph {
-		if key != packageName {
+		if key != packageName && !slices.Contains(transitiveDependencies, key) {
 			dependenciesGraph[packageName] = append(dependenciesGraph[packageName], key)
 		}
 	}
