@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,8 @@ const (
 	JasInfoURL                    = "https://jfrog.com/xray/"
 	EntitlementsMinVersion        = "3.66.5"
 	GitRepoKeyAnalyticsMinVersion = "3.114.0"
+
+	XrayToolName = "JFrog Xray Scanner"
 
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
 	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
@@ -104,15 +107,11 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 		IsScanRequested(cmdType, SastScan, requestedScans...)
 }
 
-func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount, threadId int) string {
-	threadPrefix := ""
-	if threadId >= 0 {
-		threadPrefix = clientutils.GetLogMsgPrefix(threadId, false)
-	}
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
 	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("%sNo %s findings", threadPrefix, scanType.String())
+		return fmt.Sprintf("No %s findings", scanType.String())
 	}
-	msg := fmt.Sprintf("%sFound", threadPrefix)
+	msg := "Found"
 	hasVulnerabilities := vulnerabilitiesCount > 0
 	if hasVulnerabilities {
 		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
@@ -218,6 +217,10 @@ func Sha1Hash(values ...string) (string, error) {
 	return toHash(crypto.SHA1, values...)
 }
 
+func Sha256Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA256, values...)
+}
+
 func toHash(hash crypto.Hash, values ...string) (string, error) {
 	h := hash.New()
 	for _, ob := range values {
@@ -267,25 +270,56 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string) (err error) {
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, getCurrentTime()))
+func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
+	bom = cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
+	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	return bom, nil
+}
+
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
+	return SaveCdxContentToFile(pathToSave, bom)
+}
+
+func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	file, err := os.Create(pathToSave)
 	if err != nil {
 		return errorutils.CheckError(err)
 	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), getCurrentTime()))
-	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.json", strings.ToLower(scanType), GetCurrentTimeUnix()))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
 	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
 }
 
-func getCurrentTime() string {
+func GetCurrentTimeUnix() string {
 	return fmt.Sprintf("%d", time.Now().UnixMilli())
 }
 

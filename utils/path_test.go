@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetRelativePath(t *testing.T) {
@@ -76,6 +76,41 @@ func TestGetCommonParentDir(t *testing.T) {
 			if result != test.expected {
 				t.Errorf("expected '%s', got '%s'", test.expected, result)
 			}
+		})
+	}
+}
+
+func TestGetRepositoriesScansListUrlForArtifact(t *testing.T) {
+	tests := []struct {
+		name         string
+		baseUrl      string
+		repoPath     string
+		artifactName string
+		packageId    string
+		expected     string
+	}{
+		{
+			name:         "basic case",
+			baseUrl:      "http://localhost:8081/",
+			repoPath:     "my-repo",
+			artifactName: "artifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fartifact.zip",
+		},
+		{
+			name:         "with sub dir in repoPath",
+			baseUrl:      "http://localhost:8081/",
+			repoPath:     "my-repo/subdir",
+			artifactName: "artifact.zip",
+			packageId:    "abc123",
+			expected:     "http://localhost:8081/ui/scans-list/repositories/my-repo/scan-descendants/artifact.zip?package_id=abc123&page_type=overview&path=my-repo%2Fsubdir%2Fartifact.zip",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := GetRepositoriesScansListUrlForArtifact(test.baseUrl, test.repoPath, test.artifactName, test.packageId)
+			assert.Equal(t, test.expected, result, "expected '%s', got '%s'", test.expected, result)
 		})
 	}
 }

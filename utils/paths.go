@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -147,4 +148,24 @@ func ToURI(path string) string {
 	}
 	// Return the string representation of the URL
 	return u.String()
+}
+
+func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID string) string {
+	repoName := repoPath
+	if strings.Contains(repoPath, "/") {
+		// If repoPath contains a slash, it may be a repository path with sub-paths.
+		// We need to extract the repository name from the path.
+		repoName = strings.Split(repoPath, "/")[0]
+	}
+	// Path
+	path := fmt.Sprintf("ui/scans-list/repositories/%s/scan-descendants/%s", url.PathEscape(repoName), url.PathEscape(artifactName))
+
+	// Query params
+	query := url.Values{}
+	query.Set("package_id", packageID)
+	query.Set("path", fmt.Sprintf("%s/%s", repoPath, artifactName))
+	query.Set("page_type", "overview")
+
+	// Final URL
+	return fmt.Sprintf("%s%s?%s", baseUrl, path, query.Encode())
 }

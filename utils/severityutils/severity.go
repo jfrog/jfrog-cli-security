@@ -2,8 +2,10 @@ package severityutils
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/gookit/color"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -253,6 +255,25 @@ func GetSeverityScore(severity Severity, applicabilityStatus jasutils.Applicabil
 	return GetSeverityDetails(severity, applicabilityStatus).Score
 }
 
+func GetSeverityScoreFloat64(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) *float64 {
+	score := GetSeverityScore(severity, applicabilityStatus)
+	// convert score to have up to 1 digits after the decimal point
+	convertedScore := float64(int(score*10)) / 10
+	return &convertedScore
+}
+
+func GetCvssScore(cvssScore string) *float64 {
+	if cvssScore == "" {
+		return nil
+	}
+	// convert score to float64
+	scoreFloat, err := strconv.ParseFloat(cvssScore, 64)
+	if err != nil {
+		return nil
+	}
+	return &scoreFloat
+}
+
 func GetSeverityPriority(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus) int {
 	return GetSeverityDetails(severity, applicabilityStatus).Priority
 }
@@ -302,4 +323,58 @@ func sarifSeverityLevelToSeverity(level SarifSeverityLevel) Severity {
 		// All other values (include default) mapped as 'Medium' severity
 		return Medium
 	}
+}
+
+func SeverityToCycloneDxSeverity(severity Severity) cyclonedx.Severity {
+	switch severity {
+	case Critical:
+		return cyclonedx.SeverityCritical
+	case High:
+		return cyclonedx.SeverityHigh
+	case Medium:
+		return cyclonedx.SeverityMedium
+	case Low:
+		return cyclonedx.SeverityLow
+	default:
+		return cyclonedx.SeverityUnknown
+	}
+}
+
+func CycloneDxSeverityToSeverity(severity cyclonedx.Severity) Severity {
+	switch severity {
+	case cyclonedx.SeverityCritical:
+		return Critical
+	case cyclonedx.SeverityHigh:
+		return High
+	case cyclonedx.SeverityMedium:
+		return Medium
+	case cyclonedx.SeverityLow:
+		return Low
+	default:
+		return Unknown
+	}
+}
+
+func CreateSeverityRating(severity Severity, applicabilityStatus jasutils.ApplicabilityStatus, service *cyclonedx.Service) cyclonedx.VulnerabilityRating {
+	return cyclonedx.VulnerabilityRating{
+		Source: &cyclonedx.Source{
+			Name: service.Name,
+		},
+		Severity: SeverityToCycloneDxSeverity(severity),
+		Score:    GetSeverityScoreFloat64(severity, applicabilityStatus),
+		Method:   cyclonedx.ScoringMethodOther,
+	}
+}
+
+func MostSevereSeverity(severities ...Severity) Severity {
+	if len(severities) == 0 {
+		return Unknown
+	}
+	mostSevere := severities[0]
+	for _, severity := range severities[1:] {
+		if CompareSeverity(severity, mostSevere) > 0 {
+			mostSevere = severity
+		}
+	}
+	return mostSevere
 }

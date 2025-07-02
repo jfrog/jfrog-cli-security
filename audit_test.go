@@ -29,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/progressbar"
 	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
 
+	scangraphstrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
@@ -385,7 +386,7 @@ func testXrayAuditGo(t *testing.T, noCreds bool, format, project string) string 
 	if noCreds {
 		cliToRun = securityTests.PlatformCli.WithoutCredentials()
 		// Configure a new server named "default"
-		securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+		securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 		defer securityTestUtils.CleanTestsHomeEnv()
 	}
 	return cliToRun.RunCliCmdWithOutput(t, "audit", "--go", "--licenses", "--format="+format)
@@ -411,7 +412,7 @@ func TestXrayAuditMultiProjects(t *testing.T) {
 		filepath.Join("package-managers", "maven", "maven"), filepath.Join("package-managers", "nuget", "single4.0"),
 		filepath.Join("package-managers", "python", "pip", "pip-project"), filepath.Join("jas", "jas"))
 	// Configure a new server named "default"
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson), workingDirsFlag)
 
@@ -599,7 +600,7 @@ func getNoJasAuditMockCommand() components.Command {
 			}
 			// Disable Jas for this test
 			auditCmd.SetUseJas(false)
-			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}
@@ -665,7 +666,7 @@ func testXrayAuditJas(t *testing.T, testCli *coreTests.JfrogCli, project string,
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", project)))
 	defer cleanUp()
 	// Configure a new server named "default"
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	args := []string{"audit", "--format=" + string(format.SimpleJson), "--threads=" + threads}
 	if validateSecrets {
@@ -720,7 +721,7 @@ func TestAuditOnEmptyProject(t *testing.T) {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), filepath.Join("projects", "empty_project", "python_project_with_no_deps")))
 	defer cleanUp()
 	// Configure a new server named "default"
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
@@ -743,7 +744,7 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	cliToRun := integration.GetTestCli(cli.GetJfrogCliSecurityApp(), true)
+	cliToRun := integration.GetXrayTestCli(cli.GetJfrogCliSecurityApp(), true)
 	output := testXrayAuditJas(t, cliToRun, filepath.Join("jas", "jas"), "3", false, "")
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 24},

@@ -166,7 +166,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
 	npmTargetResults := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("Users", "user", "project-with-issues"), Technology: techutils.Npm}).SetDescriptors(filepath.Join("Users", "user", "project-with-issues", "package.json"))
 	// SCA scan results
-	npmTargetResults.NewScaScanResults(0, services.ScanResponse{
+	npmTargetResults.ScaScanResults(0, services.ScanResponse{
 		ScanId: "711851ce-68c4-4dfd-7afb-c29737ebcb96",
 		Vulnerabilities: []services.Vulnerability{
 			{
@@ -439,7 +439,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 	cmdResults.SetEntitledForJas(true).SetXrayVersion("3.107.13").SetXscVersion("1.12.5").SetMultiScanId("7d5e4733-3f93-11ef-8147-e610d09d7daa")
 	dockerImageTarget := cmdResults.NewScanResults(results.ScanTarget{Target: filepath.Join("temp", "folders", "T", "jfrog.cli.temp.-11-11", "image.tar"), Name: "platform.jfrog.io/swamp-docker/swamp:latest", Technology: techutils.Oci})
 	// SCA scan results
-	dockerImageTarget.NewScaScanResults(0, services.ScanResponse{
+	dockerImageTarget.ScaScanResults(0, services.ScanResponse{
 		ScanId: "27da9106-88ea-416b-799b-bc7d15783473",
 		Vulnerabilities: []services.Vulnerability{
 			{

@@ -3,6 +3,7 @@ package swift
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -213,13 +214,15 @@ func GetDependenciesData(exePath, currentDir string) (*Dependencies, error) {
 	return data, nil
 }
 
-func GetMainPackageName(currentDir string) (string, error) {
+func GetMainPackageName(currentDir string) (name string, err error) {
 	file, err := os.Open(path.Join(currentDir, "Package.swift"))
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		return "", err
 	}
-	defer file.Close()
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
 
 	re := regexp.MustCompile(`name:\s*"([^"]+)"`)
 	scanner := bufio.NewScanner(file)
