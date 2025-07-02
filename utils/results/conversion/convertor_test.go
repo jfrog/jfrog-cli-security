@@ -345,7 +345,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 					validations.CreateDummyApplicabilityRule("CVE-2018-3721", "not_covered"),
 				),
 			},
-			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues", "package.json")))},
+			Invocations: []*sarif.Invocation{sarif.NewInvocation().WithWorkingDirectory(sarif.NewSimpleArtifactLocation(filepath.Join("Users", "user", "project-with-issues")))},
 			Results: []*sarif.Result{
 				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.ToSlash(filepath.Join("Users", "user", "project-with-issues", "file-A")), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet"}),
 				validations.CreateDummyApplicableResults("CVE-2024-39249", formats.Location{File: filepath.ToSlash(filepath.Join("Users", "user", "project-with-issues", "file-B")), StartLine: 1, StartColumn: 2, EndLine: 3, EndColumn: 4, Snippet: "snippet2"}),
