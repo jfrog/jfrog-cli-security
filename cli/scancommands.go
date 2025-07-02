@@ -450,7 +450,6 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-
 	// Set dynamic command logic based on flags
 	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
 	auditCmd.SetBomGenerator(sbomGenerator).
