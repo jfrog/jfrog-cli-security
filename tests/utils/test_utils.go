@@ -199,7 +199,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		for i := range impactPaths {
 			for j := range impactPaths[i] {
 				if impactPaths[i][j].Location != nil {
-					impactPaths[i][j].Location.File = filepath.ToSlash(impactPaths[i][j].Location.File)
+					impactPaths[i][j].Location.File = filepath.FromSlash(impactPaths[i][j].Location.File)
 				}
 			}
 		}
@@ -208,7 +208,7 @@ func convertScaSimpleJsonPathsForOS(potentialComponents *[]formats.ComponentRow,
 		impactedDependencyDetails := *potentialImpactedDependencyDetails
 		for i := range impactedDependencyDetails.Components {
 			if impactedDependencyDetails.Components[i].Location != nil {
-				impactedDependencyDetails.Components[i].Location.File = filepath.ToSlash(impactedDependencyDetails.Components[i].Location.File)
+				impactedDependencyDetails.Components[i].Location.File = filepath.FromSlash(impactedDependencyDetails.Components[i].Location.File)
 			}
 		}
 	}
