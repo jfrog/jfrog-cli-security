@@ -106,7 +106,7 @@ func getAuditCmdArgs(params auditCommandTestParams) (args []string) {
 
 func TestXrayAuditNpmJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditNpm(t, string(format.Json), false)
+	output := testAuditNpm(t, string(format.Json), "xray-json", false)
 	validations.VerifyJsonResults(t, output, validations.ValidationParams{
 		Total:      &validations.TotalCount{Licenses: 1, Violations: 1},
 		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
@@ -115,21 +115,21 @@ func TestXrayAuditNpmJson(t *testing.T) {
 
 func TestXrayAuditNpmSimpleJson(t *testing.T) {
 	integration.InitAuditJavaScriptTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditNpm(t, string(format.SimpleJson), true)
+	output := testAuditNpm(t, string(format.SimpleJson), "xray-simple-json", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total:      &validations.TotalCount{Licenses: 1, Vulnerabilities: 1, Violations: 1},
 		Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
 	})
 }
 
-func testAuditNpm(t *testing.T, format string, withVuln bool) string {
+func testAuditNpm(t *testing.T, format, violationContextPrefix string, withVuln bool) string {
 	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "npm", "npm"))
 	defer cleanUp()
 	// Run npm install before executing jfrog xr npm-audit
 	assert.NoError(t, exec.Command("npm", "install").Run())
 	// Add dummy descriptor file to check that we run only specific audit
 	addDummyPackageDescriptor(t, true)
-	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, "audit-policy", "audit-watch", xrayUtils.High)
+	watchName, deleteWatch := securityTestUtils.CreateTestPolicyAndWatch(t, violationContextPrefix+"audit-policy", violationContextPrefix+"audit-watch", xrayUtils.High)
 	defer deleteWatch()
 	args := []string{"audit", "--npm", "--licenses", "--format=" + format, "--watches=" + watchName, "--fail=false"}
 	if withVuln {

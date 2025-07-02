@@ -107,7 +107,7 @@ func TestXrayBinaryScanSimpleJson(t *testing.T) {
 
 func TestXrayBinaryScanCycloneDx(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "backupfriend-client.tar.gz")
+	output := testXrayBinaryScanJASArtifact(t, format.CycloneDx, "backupfriend-client.tar.gz", false)
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -119,7 +119,8 @@ func TestXrayBinaryScanCycloneDx(t *testing.T) {
 
 func TestXrayBinaryScanJsonDocker(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "xmas.tar")
+	// In Windows, indexer fails to index the tar, Caused by: failed to rename path for layer so we run in clean copy in temp dir
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "xmas.tar", true)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 6},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -131,7 +132,7 @@ func TestXrayBinaryScanJsonDocker(t *testing.T) {
 
 func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "backupfriend-client.tar.gz")
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "backupfriend-client.tar.gz", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -143,7 +144,7 @@ func TestXrayBinaryScanJsonGeneric(t *testing.T) {
 
 func TestXrayBinaryScanJsonJar(t *testing.T) {
 	integration.InitScanTest(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "student-services-security-0.0.1.jar")
+	output := testXrayBinaryScanJASArtifact(t, format.SimpleJson, "student-services-security-0.0.1.jar", false)
 	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 41},
 		Vulnerabilities: &validations.VulnerabilityCount{
@@ -193,10 +194,17 @@ func testXrayMultipleBinariesScan(t *testing.T, params binaryScanParams, errorEx
 	return testXrayBinaryScan(t, params, errorExpected)
 }
 
-func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string) string {
+func testXrayBinaryScanJASArtifact(t *testing.T, format format.OutputFormat, artifact string, inTempDir bool) string {
+	pathToScan := filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan")
+	if inTempDir {
+		var cleanUp func()
+		pathToScan, cleanUp = securityTestUtils.CreateTestProjectEnvAndChdir(t, pathToScan)
+		defer cleanUp()
+	}
+	pathToScan = filepath.Join(pathToScan, artifact)
 	return testXrayBinaryScan(t,
 		binaryScanParams{
-			BinaryPattern: filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "jas-scan", artifact),
+			BinaryPattern: pathToScan,
 			Format:        format,
 		},
 		false,
