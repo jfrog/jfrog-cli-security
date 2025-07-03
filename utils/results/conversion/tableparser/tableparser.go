@@ -96,17 +96,25 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 		return nil
 	}
 	err = results.ForEachSbomComponent(sbom, func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error {
-		if relation == cdxutils.UnknownRelation || relation == cdxutils.RootRelation {
+		if relation == cdxutils.UnknownRelation {
 			if relation == cdxutils.UnknownRelation {
 				log.Debug("Component %s (%s) has an unknown relation in the SBOM. It will not be included in the results table.", component.Name, component.PackageURL)
 			}
 			// No need to show the component as an entry
 			return nil
 		}
-		relationStr := "Direct"
-		isDirect := relation == cdxutils.DirectRelation
-		if !isDirect {
+		relationStr := ""
+		relationPriority := 0
+		switch relation {
+		case cdxutils.RootRelation:
+			relationStr = "Root"
+			relationPriority = 3
+		case cdxutils.DirectRelation:
+			relationStr = "Direct"
+			relationPriority = 2			
+		case cdxutils.TransitiveRelation:
 			relationStr = "Transitive"
+			relationPriority = 1
 		}
 		compName, compVersion, compType := techutils.SplitPackageURL(component.PackageURL)
 		tc.sbomRows = append(tc.sbomRows, formats.SbomTableRow{
@@ -115,7 +123,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 			PackageType: techutils.ConvertXrayPackageType(compType),
 			Relation:    relationStr,
 			// For sorting
-			Direct: isDirect,
+			RelationPriority: relationPriority,
 		})
 		return nil
 	})
@@ -124,19 +132,19 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 
 func sortSbom(components []formats.SbomTableRow) {
 	sort.Slice(components, func(i, j int) bool {
-		if components[i].Direct == components[j].Direct {
+		if components[i].RelationPriority == components[j].RelationPriority {
 			if components[i].Component == components[j].Component {
 				if components[i].Version == components[j].Version {
 					// Last order by type
 					return components[i].PackageType < components[j].PackageType
 				}
 				// Third order by version
-				return components[i].Version < components[j].Version
+				return components[i].Version > components[j].Version
 			}
 			// Second order by component
 			return components[i].Component < components[j].Component
 		}
 		// First order by direct components
-		return components[i].Direct
+		return components[i].RelationPriority > components[j].RelationPriority
 	})
 }

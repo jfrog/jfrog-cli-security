@@ -62,7 +62,7 @@ type SbomTableRow struct {
 	PackageType string `col-name:"Type"`
 	Relation    string `col-name:"Relation"`
 	// For sorting
-	Direct bool
+	RelationPriority int
 }
 
 type licenseTableRow struct {
