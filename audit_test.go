@@ -63,7 +63,7 @@ type auditCommandTestParams struct {
 	// adds "--secrets", "--validate-secrets" flags if true
 	ValidateSecrets bool
 	// adds "--new-sca" flag value if provided
-	WithNewSca     bool
+	WithNewSca bool
 	// --threads flag value if provided
 	Threads int
 }
@@ -930,7 +930,7 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
 		Total:             &validations.TotalCount{Vulnerabilities: 3, BomComponents: 6 /*components*/ + 3 /*modules*/ + 1 /*roots*/, Licenses: 2},
-		SbomComponents:    &validations.SbomCount{Direct: 6 , Root:  4 /*issue in bom generation*/ },
+		SbomComponents:    &validations.SbomCount{Direct: 6, Root: 4 /*issue in bom generation*/},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 3},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 2, NotApplicable: 1},

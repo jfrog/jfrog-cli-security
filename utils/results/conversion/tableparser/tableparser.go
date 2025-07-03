@@ -111,7 +111,7 @@ func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclon
 			relationPriority = 3
 		case cdxutils.DirectRelation:
 			relationStr = "Direct"
-			relationPriority = 2			
+			relationPriority = 2
 		case cdxutils.TransitiveRelation:
 			relationStr = "Transitive"
 			relationPriority = 1

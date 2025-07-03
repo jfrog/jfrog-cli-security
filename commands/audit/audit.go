@@ -576,7 +576,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
 			}
 		} else {
-			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false) + "using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
+			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
 		}
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
