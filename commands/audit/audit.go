@@ -570,14 +570,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		defer func() {
 			auditParallelRunner.JasWg.Done()
 		}()
-		logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 		// First download the analyzer manager if needed
 		if auditParams.customAnalyzerManagerBinaryPath == "" {
 			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-				return fmt.Errorf("%s failed to download analyzer manager: %s", logPrefix, err.Error())
+				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
 			}
 		} else {
-			log.Debug(fmt.Sprintf("%s using custom analyzer manager binary path: %s", logPrefix, auditParams.customAnalyzerManagerBinaryPath))
+			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false) + "using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
 		}
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
@@ -612,7 +611,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				AllowPartialResults:         auditParams.AllowPartialResults(),
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), auditParams.AllowPartialResults())
 				// We assign nil to 'generalError' after handling it to prevent it to propagate further, so it will not be captured twice - once here, and once in the error handling function of createJasScansTasks
 				generalError = nil
 			}
