@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-security/cli"
+	"github.com/jfrog/jfrog-cli-security/jas"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -199,7 +200,7 @@ func InitGitTest(t *testing.T, minXrayVersion string) (string, string, func()) {
 	}
 }
 
-func CreateJfrogHomeConfig(t *testing.T, home string, encryptPassword bool) {
+func CreateJfrogHomeConfig(t *testing.T, home string, details *config.ServerDetails, encryptPassword bool) {
 	if home == "" {
 		wd, err := os.Getwd()
 		assert.NoError(t, err, "Failed to get current dir")
@@ -459,4 +460,16 @@ func InitTestWithMockCommandOrParams(t *testing.T, xrayUrlCli bool, mockCommands
 	return GetXrayTestCli(components.CreateEmbeddedApp("security", commands), xrayUrlCli), func() {
 		clientTests.SetEnvAndAssert(t, coreutils.HomeDir, oldHomeDir)
 	}
+}
+
+func InitTestHomeResources(t *testing.T) (cleanUp func()) {
+	tempDir, cleanUp := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	// Can be referenced by the tests to get the JFrog Home that defines 'default' config
+	configTests.TestJfrogHomeResourcesPath = tempDir
+	CreateJfrogHomeConfig(t, configTests.TestJfrogHomeResourcesPath, true)
+
+	jas.DownloadAnalyzerManagerIfNeeded(0)
+
+	os.Unsetenv(coreutils.HomeDir)
+	return cleanUp
 }

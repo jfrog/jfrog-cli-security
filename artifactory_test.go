@@ -111,7 +111,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	for _, testCase := range testCases {

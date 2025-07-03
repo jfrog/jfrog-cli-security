@@ -37,6 +37,8 @@ const (
 var (
 	ServerId = "testServerId"
 
+	TestJfrogHomeResourcesPath = GetTestResourcesPathFromPath("resources", "jfrog_home")
+
 	// Repositories
 	RtRepo1       = "cli-rt1"
 	RtVirtualRepo = "cli-rt-virtual"
