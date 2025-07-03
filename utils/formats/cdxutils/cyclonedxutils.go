@@ -91,7 +91,7 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 }
 
 func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRelation {
-	if bom == nil || bom.Components == nil || bom.Dependencies == nil {
+	if bom == nil || bom.Components == nil {
 		return UnknownRelation
 	}
 	component := SearchComponentByRef(bom.Components, componentRef)
@@ -99,7 +99,11 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 		// The component is not found in the BOM components or not library, return UnknownRelation
 		return UnknownRelation
 	}
-	parents := SearchParents(componentRef, *bom.Components, *bom.Dependencies...)
+	dependencies := []cyclonedx.Dependency{}
+	if bom.Dependencies != nil {
+		dependencies = *bom.Dependencies
+	}
+	parents := SearchParents(componentRef, *bom.Components, dependencies...)
 	// Calculate the root components
 	for _, root := range GetRootDependenciesEntries(bom, true) {
 		if root.Ref == componentRef {
