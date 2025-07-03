@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -111,7 +112,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 		}
 		for _, parentRef := range parents {
 			if parentRef.BOMRef == root.Ref {
-				// The component is a parent of this root, hence it is a direct dependency
+				// At least one of parents is a component that is a child of this root, hence it is a direct dependency
 				return DirectRelation
 			}
 		}
@@ -131,26 +132,24 @@ func SearchParents(componentRef string, components []cyclonedx.Component, depend
 	}
 	parents := []cyclonedx.Component{}
 	for _, dependency := range dependencies {
-		parents = append(parents, searchDependencyParents(componentRef, dependency, components)...)
+		parents = append(parents, getDependencyComponentIfParent(componentRef, dependency, components)...)
 	}
 	return parents
 }
 
-func searchDependencyParents(componentRef string, dependency cyclonedx.Dependency, components []cyclonedx.Component) (parents []cyclonedx.Component) {
+func getDependencyComponentIfParent(componentRef string, dependency cyclonedx.Dependency, components []cyclonedx.Component) (parents []cyclonedx.Component) {
 	parents = []cyclonedx.Component{}
 	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-		// No dependencies, continue to the next dependency
+		// No dependencies, no parents
 		return
 	}
-	for _, dep := range *dependency.Dependencies {
-		if dep == componentRef {
-			parentComponent := SearchComponentByRef(&components, dependency.Ref)
-			if parentComponent == nil {
-				continue
-			}
-			// The component is a direct dependency, return it
-			parents = append(parents, *parentComponent)
-		}
+	parentComponent := SearchComponentByRef(&components, dependency.Ref)
+	if parentComponent == nil {
+		return
+	}
+	if slices.Contains(*dependency.Dependencies, componentRef) {
+		// The component is a child of this dependency, the dependency is a parent
+		return append(parents, *parentComponent)
 	}
 	return
 }

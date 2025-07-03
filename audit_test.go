@@ -895,7 +895,7 @@ func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTes
 	params.WorkingDirsToScan = []string{filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", project)}
 	params.WithNewSca = true
 	// No **/tests/** exclusion, we are scanning projects in the test resources path
-	params.CustomExclusion = []string{"**/node_modules/**", "**/vendor/**", "**/target/**", "**/build/**", "**/out/**"}
+	params.CustomExclusion = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "dist"}
 	// Configure a new server named "default"
 	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
