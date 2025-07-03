@@ -90,32 +90,39 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 }
 
 func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRelation {
-	if bom == nil {
+	if bom == nil || bom.Components == nil || bom.Dependencies == nil {
 		return UnknownRelation
 	}
+	component := SearchComponentByRef(bom.Components, componentRef)
+	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
+		// The component is not found in the BOM components or not library, return UnknownRelation
+		return UnknownRelation
+	}
+	parents := SearchParents(componentRef, *bom.Components, *bom.Dependencies...)
 	// Calculate the root components
 	for _, root := range GetRootDependenciesEntries(bom, true) {
 		if root.Ref == componentRef {
-			// The component is a root, hence it is a direct dependency
+			// The component is a root
 			return RootRelation
 		}
 		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
 			// No dependencies, continue to the next root
 			continue
 		}
-		for _, directDependencyRef := range *root.Dependencies {
-			if directDependencyRef == componentRef {
-				// The component is a direct dependency of this root
+		for _, parentRef := range parents {
+			if parentRef.BOMRef == root.Ref {
+				// The component is a parent of this root, hence it is a direct dependency
 				return DirectRelation
 			}
 		}
 	}
-	// No direct dependency found
-	if component := SearchComponentByRef(bom.Components, componentRef); component != nil && component.Type == cyclonedx.ComponentTypeLibrary {
-		return TransitiveRelation
+	// If we reach here, it means the component is not a root or not a child of a root component
+	if len(parents) == 0 {
+		// No parents found, the component is a direct dependency
+		return DirectRelation
 	}
-	// reference not found in the BOM components or dependencies
-	return UnknownRelation
+	// Parents found, but not a root or direct dependency, hence it is a transitive dependency
+	return TransitiveRelation
 }
 
 func SearchParents(componentRef string, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) []cyclonedx.Component {
