@@ -3,7 +3,6 @@ package results
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -383,12 +382,12 @@ func (sr *TargetResults) GetTechnologies() []techutils.Technology {
 	for _, scaResult := range sr.ScaResults.DeprecatedXrayResults {
 		xrayScanResult := scaResult.Scan
 		for _, vulnerability := range xrayScanResult.Vulnerabilities {
-			if tech := techutils.Technology(strings.ToLower(vulnerability.Technology)); tech != "" {
+			if tech := techutils.ToTechnology(vulnerability.Technology); tech != techutils.NoTech {
 				technologiesSet.Add(tech)
 			}
 		}
 		for _, violation := range xrayScanResult.Violations {
-			if tech := techutils.Technology(strings.ToLower(violation.Technology)); tech != "" {
+			if tech := techutils.ToTechnology(violation.Technology); tech != techutils.NoTech {
 				technologiesSet.Add(tech)
 			}
 		}

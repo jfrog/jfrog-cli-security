@@ -798,7 +798,7 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
 	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
 		// technology returned in the vulnerability/violation obj is the most specific technology
-		return techutils.Technology(responseTechnology)
+		return techutils.ToTechnology(responseTechnology)
 	}
 	// if no technology is provided, use the target technology
 	return targetTech
