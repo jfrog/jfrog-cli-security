@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,18 +16,18 @@ import (
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	biutils "github.com/jfrog/build-info-go/utils"
+	"github.com/jfrog/jfrog-cli-security/jas"
+
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 )
 
@@ -67,29 +66,10 @@ func ValidateXscVersion(t *testing.T, xscVersion, minVersion string) {
 	}
 }
 
-func CleanTestsHomeEnv() {
-	os.Unsetenv(coreutils.HomeDir)
-	CleanFileSystem()
-}
-
-func CleanFileSystem() {
-	removeDirs(configTests.Out, configTests.Temp)
-}
-
-func removeDirs(dirs ...string) {
-	for _, dir := range dirs {
-		isExist, err := fileutils.IsDirExists(dir, false)
-		if err != nil {
-			log.Error(err)
-		}
-		if isExist {
-			err = fileutils.RemoveTempDir(dir)
-			if err != nil {
-				log.Error(errors.New("Cannot remove path: " + dir + " due to: " + err.Error()))
-			}
-		}
-	}
-}
+// func CleanTestsHomeEnv(home string) {
+// 	os.Unsetenv(home)
+// 	CleanFileSystem()
+// }
 
 func GetTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
@@ -430,4 +410,24 @@ func CreateTestProjectFromZipAndChdir(t *testing.T, projectPath string) (string,
 		cleanCwd()
 		createTempDirCallback()
 	}
+}
+
+// Make sure to call this function before running any tests that require the analyzer manager binary.
+func PrepareAnalyzerManagerResource() (err error) {
+	if localPath := os.Getenv(configTests.TestJfrogLocalAnalyzerManagerDirEnvVar); localPath != "" {
+		// Copy the analyzer manager binary to the current JFrog Home.
+		amLocalPath, err := jas.GetAnalyzerManagerDirAbsolutePath()
+		if err != nil {
+			return fmt.Errorf("failed to get analyzer manager local path: %w", err)
+		}
+		// if exists, no need to copy
+		if exist, err := fileutils.IsDirExists(amLocalPath, false); err != nil || exist {
+			return nil
+		}
+		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
+			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
+		}
+	}
+	// Download the analyzer manager binary if it doesn't exist to current JFrog Home.
+	return jas.DownloadAnalyzerManagerIfNeeded(0)
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/cli"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
-	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -111,8 +110,8 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			projectType:     project.Poetry,
 		},
 	}
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", securityTests.XrDetails, true)
-	defer securityTestUtils.CleanTestsHomeEnv()
+	cleanUp := securityIntegrationTestUtils.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
 
 	for _, testCase := range testCases {
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
@@ -266,8 +265,8 @@ func TestUploadCdxCmdCommand(t *testing.T) {
 	// Create a temporary cdx file with suffix .cdx.json to upload
 	tempDirPath, createTempDirCallback := coreTests.CreateTempDirWithCallbackAndAssert(t)
 	defer createTempDirCallback()
-	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, true)
-	defer securityTestUtils.CleanTestsHomeEnv()
+	cleanUp := securityIntegrationTestUtils.CreateJfrogHomeConfig(t, tempDirPath, securityTests.RtDetails, true)
+	defer cleanUp()
 	cdxFileToUpload := getTestCdxFile(t, tempDirPath)
 	// Configure the repository to upload the cdx file to
 	var repoPath string

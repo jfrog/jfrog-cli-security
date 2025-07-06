@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -379,4 +380,17 @@ func ValidateSbomComponentsCount(t *testing.T, outputType string, exactMatch boo
 		CountValidation[int]{Expected: params.Direct, Actual: directComponents, Msg: GetValidationCountErrMsg("direct components", outputType, exactMatch, params.Direct, directComponents)},
 		CountValidation[int]{Expected: params.Transitive, Actual: transitiveComponents, Msg: GetValidationCountErrMsg("transitive components", outputType, exactMatch, params.Transitive, transitiveComponents)},
 	)
+}
+
+func ValidateCommandOutput(t *testing.T, output string, outFormat format.OutputFormat, params ValidationParams) {
+	switch outFormat {
+	case format.Json:
+		VerifyJsonResults(t, output, params)
+	case format.SimpleJson:
+		VerifySimpleJsonResults(t, output, params)
+	case format.CycloneDx:
+		VerifyCycloneDxResults(t, output, params)
+	default:
+		t.Fatalf("Unsupported output format: %s", outFormat)
+	}
 }
