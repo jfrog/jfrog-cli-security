@@ -185,12 +185,13 @@ func TestXrayAuditConan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			validationsParams := validations.ValidationParams{
-				Total:      &validations.TotalCount{Licenses: 2, Violations: 8},
-				Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 8}},
+				Total:      &validations.TotalCount{Licenses: 2, Violations: 4},
 			}
 			if tc.withVuln {
 				validationsParams.Total.Vulnerabilities = 8
+				// Not supported in JSON format
 				validationsParams.Vulnerabilities = &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 8}}
+				validationsParams.Violations = &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 4}}
 			}
 			validations.ValidateCommandOutput(t, testAuditConan(t, tc.format, tc.withVuln), tc.format, validationsParams)
 		})
@@ -436,10 +437,10 @@ func TestXrayAuditGo(t *testing.T) {
 	for _, outFormat := range []format.OutputFormat{format.Json, format.SimpleJson} {
 		t.Run(string(outFormat), func(t *testing.T) {
 			validationParams := validations.ValidationParams{
-				Total:           &validations.TotalCount{Licenses: 1, Vulnerabilities: 4},
-				Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 4}},
+				Total: &validations.TotalCount{Licenses: 1, Vulnerabilities: 4},
 			}
 			if outFormat == format.SimpleJson {
+				validationParams.Vulnerabilities = &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 4}}
 				validationParams.Vulnerabilities.ValidateApplicabilityStatus = &validations.ApplicabilityStatusCount{NotCovered: 1, NotApplicable: 3}
 			}
 			validations.ValidateCommandOutput(t, testXrayAuditGo(t, outFormat, "simple-project"), outFormat, validationParams)

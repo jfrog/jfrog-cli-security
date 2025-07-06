@@ -51,12 +51,12 @@ func TestXscAuditNpmJsonWithWatch(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			validationsParams := validations.ValidationParams{
-				Total:           &validations.TotalCount{Licenses: 1, Violations: 1},
-				Vulnerabilities: &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1}},
+				Total:      &validations.TotalCount{Licenses: 1, Violations: 1},
+				Violations: &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}},
 			}
 			if tc.withVuln {
-				validationsParams.Total.Violations = 1
-				validationsParams.Violations = &validations.ViolationCount{ValidateType: &validations.ScaViolationCount{Security: 1}}
+				validationsParams.Total.Vulnerabilities = 1
+				validationsParams.Vulnerabilities = &validations.VulnerabilityCount{ValidateScan: &validations.ScanCount{Sca: 1}}
 			}
 			validations.ValidateCommandOutput(t, testAuditNpm(t, tc.format, "xsc-", tc.withVuln), tc.format, validationsParams)
 		})
