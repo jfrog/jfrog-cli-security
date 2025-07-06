@@ -422,7 +422,7 @@ func PrepareAnalyzerManagerResource() (err error) {
 		}
 		// if exists, no need to copy
 		if exist, err := fileutils.IsDirExists(amLocalPath, false); err != nil || exist {
-			return nil
+			return err
 		}
 		if err := biutils.CopyDir(localPath, amLocalPath, true, []string{}); err != nil {
 			return fmt.Errorf("failed to copy analyzer manager from %s to %s: %w", localPath, amLocalPath, err)
