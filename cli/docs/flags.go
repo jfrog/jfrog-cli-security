@@ -114,6 +114,8 @@ const (
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
+	scanProjectKey      = scanPrefix + Project
+	uploadProjectKey    = UploadCdx + "-" + Project
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -149,31 +151,31 @@ var commandFlags = map[string][]string{
 	OfflineUpdate: {LicenseId, From, To, Version, Target, Stream, Periodic},
 	XrScan: {
 		url, user, password, accessToken, ServerId, SpecFlag, Threads, scanRecursive, scanRegexp, scanAnt,
-		Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
+		scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln,
 	},
 	Enrich: {
 		url, user, password, accessToken, ServerId, Threads,
 	},
 	BuildScan: {
-		url, user, password, accessToken, ServerId, Project, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
+		url, user, password, accessToken, ServerId, scanProjectKey, BuildVuln, OutputFormat, Fail, ExtendedTable, Rescan,
 	},
 	DockerScan: {
-		ServerId, Project, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
+		ServerId, scanProjectKey, Watches, RepoPath, Licenses, Sbom, OutputFormat, Fail, ExtendedTable, BypassArchiveLimits, MinSeverity, FixableOnly, ScanVuln, SecretValidation,
 	},
 	Audit: {
-		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, Project, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
+		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, Watches, RepoPath, Sbom, Licenses, OutputFormat, ExcludeTestDeps,
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
 	},
 	UploadCdx: {
-		UploadRepoPath,
+		UploadRepoPath, uploadProjectKey,
 	},
 	GitAudit: {
 		// Connection params
 		url, xrayUrl, user, password, accessToken, ServerId, InsecureTls,
 		// Violations params
-		Project, Watches, ScanVuln, Fail,
+		scanProjectKey, Watches, ScanVuln, Fail,
 		// Scan params
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
@@ -188,22 +190,22 @@ var commandFlags = map[string][]string{
 	},
 	// TODO: Deprecated commands (remove at next CLI major version)
 	AuditMvn: {
-		url, user, password, accessToken, ServerId, InsecureTls, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
+		url, user, password, accessToken, ServerId, InsecureTls, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable, useWrapperAudit,
 	},
 	AuditGradle: {
-		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, Project, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, ExcludeTestDeps, ExclusionsAudit, useWrapperAudit, scanProjectKey, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditNpm: {
-		url, user, password, accessToken, ServerId, DepType, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, DepType, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditGo: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPip: {
-		url, user, password, accessToken, ServerId, RequirementsFile, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
+		url, user, password, accessToken, ServerId, RequirementsFile, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, Fail, ExtendedTable,
 	},
 	AuditPipenv: {
-		url, user, password, accessToken, ServerId, Project, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
+		url, user, password, accessToken, ServerId, scanProjectKey, ExclusionsAudit, Watches, RepoPath, Licenses, OutputFormat, ExtendedTable,
 	},
 }
 
@@ -226,15 +228,16 @@ var flagsMap = map[string]components.Flag{
 	Stream:    components.NewStringFlag(Stream, fmt.Sprintf("Xray DBSync V3 stream, Possible values are: %s.", offlineupdate.NewValidStreams().GetValidStreamsString())),
 	Periodic:  components.NewBoolFlag(Periodic, fmt.Sprintf("Set to true to get the Xray DBSync V3 Periodic Package (Use with %s flag).", Stream)),
 	// Scan flags
-	SpecFlag:      components.NewStringFlag(SpecFlag, "Path to a File Spec."),
-	scanRecursive: components.NewBoolFlag(Recursive, "Set to false if you do not wish to collect artifacts in sub-folders to be scanned by Xray.", components.WithBoolDefaultValue(true)),
-	scanRegexp:    components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
-	scanAnt:       components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
-	Project:       components.NewStringFlag(Project, "JFrog project key, to enable Xray to determine security violations accordingly. The command accepts this option only if the --repo-path and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
-	Watches:       components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs and Licenses. Incompatible with --project and --repo-path."),
-	RepoPath:      components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
-	Licenses:      components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
-	Sbom:          components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
+	SpecFlag:         components.NewStringFlag(SpecFlag, "Path to a File Spec."),
+	scanRecursive:    components.NewBoolFlag(Recursive, "Set to false if you do not wish to collect artifacts in sub-folders to be scanned by Xray.", components.WithBoolDefaultValue(true)),
+	scanRegexp:       components.NewBoolFlag(RegexpFlag, "Set to true to use a regular expression instead of wildcards expression to collect files to scan."),
+	scanAnt:          components.NewBoolFlag(AntFlag, "Set to true to use an ant pattern instead of wildcards expression to collect files to scan."),
+	scanProjectKey:   components.NewStringFlag(Project, "JFrog project key, to enable Xray to determine security violations accordingly. The command accepts this option only if the --repo-path and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	uploadProjectKey: components.NewStringFlag(Project, "JFrog project key to upload the file to."),
+	Watches:          components.NewStringFlag(Watches, "Comma-separated list of Xray watches to determine violations. Supported violations are CVEs and Licenses. Incompatible with --project and --repo-path."),
+	RepoPath:         components.NewStringFlag(RepoPath, "Artifactory repository path, to enable Xray to determine violations accordingly. The command accepts this option only if the --project and --watches options are not provided. If none of the three options are provided, the command will show all known vulnerabilities."),
+	Licenses:         components.NewBoolFlag(Licenses, "Set if you'd also like the list of licenses to be displayed."),
+	Sbom:             components.NewBoolFlag(Sbom, "Set if you'd like all the SBOM (Software Bill of Materials) components to be displayed and not only the affected. Ignored if provided 'format' is not 'table' or 'cyclonedx'."),
 	OutputFormat: components.NewStringFlag(
 		OutputFormat,
 		"Defines the output format of the command. Acceptable values are: table, json, simple-json, sarif and cyclonedx. Note: the json format doesn't include information about scans that are included as part of the Advanced Security package.",
@@ -257,7 +260,7 @@ var flagsMap = map[string]components.Flag{
 	),
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
-	UploadRepoPath:      components.NewStringFlag(UploadRepoPath, "Artifactory repository name or path to upload the cyclonedx file to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray.", components.SetHiddenStrFlag(), components.WithStrDefaultValue("import-cdx-scan-results")),
+	UploadRepoPath:      components.NewStringFlag(UploadRepoPath, "Artifactory repository name or path to upload the cyclonedx file to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray.", components.WithStrDefaultValue("import-cdx-scan-results")),
 	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
 	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
