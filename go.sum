@@ -126,10 +126,10 @@ github.com/jfrog/jfrog-apps-config v1.0.1 h1:mtv6k7g8A8BVhlHGlSveapqf4mJfonwvXYL
 github.com/jfrog/jfrog-apps-config v1.0.1/go.mod h1:8AIIr1oY9JuH5dylz2S6f8Ym2MaadPLR6noCBO4C22w=
 github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250623095509-b3fe2c4681ad h1:cnbcCK0VTHdLdmmv/9fYTRjuR1ewrYBW/S87pVE+d+s=
 github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250623095509-b3fe2c4681ad/go.mod h1:hnXaevmDyQpyhpH5kwDufIjUUXXuKs54i+AX2CEywKE=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250702103155-efd0c6adf4f5 h1:+tbqR721+c91RrwcQkvye9RkvbDfH3W1LDU5juo0sNw=
-github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250702103155-efd0c6adf4f5/go.mod h1:BkDHfCVecjcRNC+aqmHtTrKe+/K8MyjzmHYe5rER5Yg=
-github.com/jfrog/jfrog-client-go v1.28.1-0.20250629142537-bb24db402fe1 h1:0t6dQHoalUDNVrfZujD3iCmDGLDl+ndHclFkmONSpq0=
-github.com/jfrog/jfrog-client-go v1.28.1-0.20250629142537-bb24db402fe1/go.mod h1:1v0eih4thdPA4clBo9TuvAMT25sGDr1IQJ81DXQ/lBY=
+github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250707105555-807262eb0f88 h1:OAhG6yUBIEKYW66Oe++8S8K6wsOgHhyr0/SEUkkF6oQ=
+github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250707105555-807262eb0f88/go.mod h1:wzsMWhIJJgaZMi4CJk1uE7cZqw9AMI/ijw2Bb8UQjF0=
+github.com/jfrog/jfrog-client-go v1.28.1-0.20250707095624-7062538a0961 h1:JI3qV665s4RlvQ3K4t7yXJ8hqvfFF4TVRwmaOF4zCls=
+github.com/jfrog/jfrog-client-go v1.28.1-0.20250707095624-7062538a0961/go.mod h1:1v0eih4thdPA4clBo9TuvAMT25sGDr1IQJ81DXQ/lBY=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
 github.com/k0kubun/pp v3.0.1+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
 github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=

@@ -24,7 +24,7 @@ func TestValidateInputFile(t *testing.T) {
 	assert.NoError(t, utils.SaveCdxContentToFile(validCdxFilePath, cdx))
 	// create a file with not valid extension
 	noCdxExtensionFile := filepath.Join(tempDirPath, "invalid_results.json")
-	assert.NoError(t, utils.DumpContentToFile([]byte("This is not a valid CycloneDX file."), tempDirPath, "invalid_results", "", -1))
+	assert.NoError(t, utils.DumpContentToFile([]byte("This is not a valid CycloneDX file."), tempDirPath, "invalid_results", ".json", -1))
 
 	tests := []struct {
 		name        string
