@@ -28,6 +28,7 @@ type SbomScanStrategy interface {
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
 	// Missing attributes:
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
+	// - Binary (Docker) indexer attributes (needed for Scan Graph)
 	DeprecatedScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
 	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations. (Violations will be moved at the future to the end of command)
 	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
