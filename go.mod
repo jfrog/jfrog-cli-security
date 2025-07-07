@@ -115,11 +115,9 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
-// attiasas:add_catalog
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250702063018-f37283b624cd
+replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go v1.28.1-0.20250707095624-7062538a0961
 
-// attiasas:add_catalog
-replace github.com/jfrog/jfrog-cli-core/v2 => github.com/attiasas/jfrog-cli-core/v2 v2.0.0-20250627203817-112fe8e7e1e2
+replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 v2.31.1-0.20250707105555-807262eb0f88
 
 replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory v0.3.3-0.20250623095509-b3fe2c4681ad
 
