@@ -452,8 +452,11 @@ func (sr *TargetResults) SetSbom(sbom *cyclonedx.BOM) *ScaScanResults {
 	if sr.ScaResults == nil {
 		sr.ScaResults = &ScaScanResults{}
 	}
-	sr.ScaResults.Sbom = sbom
-	sr.ScaResults.IsMultipleRootProject = clientutils.Pointer(IsMultiProject(sbom))
+	if sbom != nil {
+		// Only overwrite the existing SBOM if it is not nil.
+		sr.ScaResults.Sbom = sbom
+		sr.ScaResults.IsMultipleRootProject = clientutils.Pointer(IsMultiProject(sbom))
+	}
 	return sr.ScaResults
 }
 
