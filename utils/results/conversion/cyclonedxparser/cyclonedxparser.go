@@ -183,7 +183,6 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSecrets(target results.ScanTarget,
 func getSecretScannerRuleId(rule *sarif.ReportingDescriptor) string {
 	ruleId := sarifutils.GetRuleScannerId(rule)
 	if ruleId == "" {
-		// No rule ID available, return an empty string
 		return ""
 	}
 	return fmt.Sprintf("EXP-%s", ruleId)
