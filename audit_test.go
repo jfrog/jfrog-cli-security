@@ -921,6 +921,7 @@ func TestAuditNewScaCycloneDxNpm(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxMaven(t *testing.T) {
+	// Waiting for bug fix - https://jfrog-int.atlassian.net/browse/XRAY-121725
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "maven", "maven-example"), auditCommandTestParams{
 		WithSbom: true,
@@ -939,6 +940,7 @@ func TestAuditNewScaCycloneDxMaven(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxGradle(t *testing.T) {
+	// Waiting for bug fix - https://jfrog-int.atlassian.net/browse/XRAY-120432
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "gradle", "gradle-lock"), auditCommandTestParams{
 		WithSbom: true,
@@ -966,13 +968,13 @@ func TestAuditNewScaCycloneDxGo(t *testing.T) {
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
 		Total:             &validations.TotalCount{BomComponents: 1 /*root*/ + 1 /*direct*/ + 3 /*transitive*/},
-		SbomComponents:    &validations.SbomCount{Direct: 4 /** issue in sbom generation **/, Root: 1},
+		SbomComponents:    &validations.SbomCount{Direct: 4 /** issue in sbom generation, are not discovered as transitive **/, Root: 1},
 		Vulnerabilities:   &validations.VulnerabilityCount{},
 	})
 }
 
 func TestAuditNewScaCycloneDxNuget(t *testing.T) {
-	// ** issue in sbom generation **, nothing is generated
+	// TODO: change proj ** Not supported with .sln, .csproj files
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "multi"), auditCommandTestParams{
 		WithSbom: true,
@@ -996,8 +998,8 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 28, BomComponents: 2 /*components*/ + 7 /*files*/},
-		SbomComponents:    &validations.SbomCount{Root: 2 /*issue in bom generation*/},
+		Total:             &validations.TotalCount{Vulnerabilities: 28, BomComponents: 1 /*root*/ + 2 /*components*/ + 7 /*files*/},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan: &validations.ScanCount{Sast: 4, Iac: 9, Secrets: 15},
 		},
@@ -1005,7 +1007,7 @@ func TestAuditNewScaCycloneDxPip(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
-	// ** issue in sbom generation **, nothing is generated
+	// TODO: needs pip lock - ** issue in sbom generation **, nothing is generated
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
 	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-project"), auditCommandTestParams{
 		WithSbom: true,
@@ -1029,8 +1031,8 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{Vulnerabilities: 9, BomComponents: 4, Licenses: 1},
-		SbomComponents:    &validations.SbomCount{Root: 4 /** issue in sbom generation **/},
+		Total:             &validations.TotalCount{Vulnerabilities: 9, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 4},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 9},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 5},
@@ -1048,7 +1050,7 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		ExactResultsMatch: true,
 		Total:             &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
-		SbomComponents:    &validations.SbomCount{Root: 3 /** issues in sbom generation */},
+		SbomComponents:    &validations.SbomCount{Root: 1, Direct: 2},
 		Vulnerabilities: &validations.VulnerabilityCount{
 			ValidateScan:                &validations.ScanCount{Sca: 1},
 			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotApplicable: 1},
