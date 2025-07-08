@@ -207,6 +207,10 @@ func GetLocalScangExecutablePath() (scangPath string, err error) {
 	// Check if the scang plugin binary path is set in the PATH environment variable
 	if scangPath, err = exec.LookPath(ScangPluginExecutableName); err != nil || scangPath == "" {
 		log.Debug(fmt.Sprintf("SCANG plugin not found in system PATH: %s", err.Error()))
+	} else if scangPath != "" {
+		// If found in PATH, return the path
+		log.Debug(fmt.Sprintf("SCANG plugin found in system PATH: %s", scangPath))
+		return scangPath, nil
 	}
 	// Check if exists in JFrog CLI directory
 	if scangPath, err = getScangPathAtJfrogDependenciesDir(); err != nil {
