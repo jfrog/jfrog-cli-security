@@ -201,6 +201,7 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 		testDir                          string
 		technology                       techutils.Technology
 		installBeforeFetchingInitialDeps bool
+		rootDetected                     bool
 	}{
 		// pip
 		{
@@ -208,24 +209,28 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
 			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: false,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "pip: project installed before dep tree construction| install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
 			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: true,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "poetry: project not installed | install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
 			technology:                       techutils.Poetry,
 			installBeforeFetchingInitialDeps: false,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "poetry: project installed before dep tree construction| install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
 			technology:                       techutils.Poetry,
 			installBeforeFetchingInitialDeps: true,
+			rootDetected:                     false,
 		},
 	}
 
@@ -253,11 +258,12 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			}
 
 			if test.installBeforeFetchingInitialDeps {
-				restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
+				rootDetected, restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
 				defer func() {
 					assert.NoError(t, restoreEnv(), "restoring env after setting "+test.technology+" virtual env creation failed")
 				}()
 				require.NoError(t, err)
+				assert.Equal(t, test.rootDetected, rootDetected, "Root detection mismatch for "+test.technology+" technology")
 			}
 
 			// Checking dependencies before BuildDependencyTree
