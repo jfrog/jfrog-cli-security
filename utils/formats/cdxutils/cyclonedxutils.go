@@ -282,8 +282,10 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 		return &bom
 	}
 	filteredSbom = &bom
+	rootsCount := len(GetRootDependenciesEntries(&bom, true))
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef) == RootRelation {
+		// We ensure we don't trim the entire tree, therefore - we check that the specific component is not the only root in the tree
+		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || (rootsCount == 1 && GetComponentRelation(&bom, matchedBomComp.BOMRef) == RootRelation) || strings.Contains(compToExclude.BOMRef, "generic:root") {
 			// If not a match or Root component, skip it
 			continue
 		}
