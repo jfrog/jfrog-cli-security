@@ -15,6 +15,7 @@ import (
 	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
 	orderedJson "github.com/virtuald/go-ordered-json"
 
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
 
@@ -60,6 +61,21 @@ const (
 	ViolationTypeLicense         ViolationIssueType = "license"
 	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
+
+var subScanTypeToText = map[SubScanType]string{
+	ContextualAnalysisScan: "Contextual Analysis",
+	ScaScan:                "SCA",
+	IacScan:                "IaC",
+	SastScan:               "SAST",
+	SecretsScan:            "Secrets",
+}
+
+func (subScan SubScanType) ToTextString() string {
+	if text, ok := subScanTypeToText[subScan]; ok {
+		return text
+	}
+	return string(subScan)
+}
 
 type ViolationIssueType string
 
@@ -108,19 +124,24 @@ func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
 }
 
 func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+
 	if vulnerabilitiesCount == 0 && violationsCount == 0 {
-		return fmt.Sprintf("No %s findings", scanType.String())
+		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
 	}
 	msg := "Found"
 	hasVulnerabilities := vulnerabilitiesCount > 0
 	if hasVulnerabilities {
-		msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, scanType.String())
+		if scanType == SecretsScan {
+			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
+		} else {
+			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
+		}
 	}
 	if violationsCount > 0 {
 		if hasVulnerabilities {
 			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
 		} else {
-			msg += fmt.Sprintf(" %d %s violations", violationsCount, scanType.String())
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
 		}
 	}
 	return msg
@@ -219,6 +240,15 @@ func Sha1Hash(values ...string) (string, error) {
 
 func Sha256Hash(values ...string) (string, error) {
 	return toHash(crypto.SHA256, values...)
+}
+
+func FileSha256(filePath string) (string, error) {
+	// Read the file content
+	content, err := fileutils.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return Sha256Hash(string(content))
 }
 
 func toHash(hash crypto.Hash, values ...string) (string, error) {

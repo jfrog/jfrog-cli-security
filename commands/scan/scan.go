@@ -487,7 +487,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		return
 	}
 	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-	targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
+	targetResults.Technology = techutils.ToTechnology(graphScanResults.ScannedPackageType)
 	return
 }
 

@@ -37,7 +37,7 @@ func ValidateCommandCycloneDxOutput(t *testing.T, params ValidationParams) {
 func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content *cyclonedx.BOM) {
 	actualValues := validationCountActualValues{}
 
-	actualValues.SbomComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(content)
+	actualValues.SbomComponents, actualValues.RootComponents, actualValues.DirectComponents, actualValues.TransitiveComponents, actualValues.Licenses = countSbomComponents(content)
 	actualValues.ScaVulnerabilities, actualValues.ApplicableVulnerabilities, actualValues.UndeterminedVulnerabilities, actualValues.NotCoveredVulnerabilities, actualValues.NotApplicableVulnerabilities, actualValues.MissingContextVulnerabilities = countScaVulnerabilities(content)
 	actualValues.SastVulnerabilities, actualValues.SecretsVulnerabilities, actualValues.IacVulnerabilities, actualValues.InactiveSecretsVulnerabilities = countJasVulnerabilities(content)
 
@@ -46,23 +46,12 @@ func ValidateCycloneDxIssuesCount(t *testing.T, params ValidationParams, content
 	ValidateCount(t, "cyclonedx BOM", params, actualValues)
 }
 
-func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, directComponents, transitiveComponents, licenses int) {
+func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, rootComponents, directComponents, transitiveComponents, licenses int) {
 	if content == nil || content.Components == nil {
 		return
 	}
 	parsedLicenses := datastructures.MakeSet[string]()
 	for _, component := range *content.Components {
-		relation := cdxutils.GetComponentRelation(content, component.BOMRef)
-		if relation == cdxutils.UnknownRelation || relation == cdxutils.RootRelation {
-			continue
-		}
-		sbomComponents++
-		if relation == cdxutils.DirectRelation {
-			directComponents++
-		}
-		if relation == cdxutils.TransitiveRelation {
-			transitiveComponents++
-		}
 		if component.Licenses != nil {
 			for _, license := range *component.Licenses {
 				if license.License != nil && license.License.ID != "" {
@@ -70,7 +59,21 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, directComponen
 				}
 			}
 		}
+		relation := cdxutils.GetComponentRelation(content, component.BOMRef)
+		if relation == cdxutils.UnknownRelation {
+			continue
+		}
+		if relation == cdxutils.RootRelation {
+			rootComponents++
+		}
+		if relation == cdxutils.DirectRelation {
+			directComponents++
+		}
+		if relation == cdxutils.TransitiveRelation {
+			transitiveComponents++
+		}
 	}
+	sbomComponents = len(*content.Components)
 	licenses = parsedLicenses.Size()
 	return
 }

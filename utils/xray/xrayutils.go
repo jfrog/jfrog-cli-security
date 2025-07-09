@@ -4,7 +4,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-const maxUniqueAppearances = 10
+const MaxUniqueAppearances = 10
 
 type DepTreeNode struct {
 	Classifier *string   `json:"classifier"`
@@ -50,7 +50,7 @@ func populateXrayDependencyTree(currNode *xrayUtils.GraphNode, treeHelper map[st
 			Types:      treeHelper[childDepId].Types,
 			Classifier: treeHelper[childDepId].Classifier,
 		}
-		if dependencyAppearances[childDepId] >= maxUniqueAppearances || childNode.NodeHasLoop() {
+		if dependencyAppearances[childDepId] >= MaxUniqueAppearances || childNode.NodeHasLoop() {
 			continue
 		}
 		currNode.Nodes = append(currNode.Nodes, childNode)

@@ -50,7 +50,47 @@ const (
 )
 const Pypi = "pypi"
 
-var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.String(), Pnpm.String(), Yarn.String(), Go.String(), Pip.String(), Pipenv.String(), Poetry.String(), Nuget.String(), Dotnet.String(), Docker.String(), Oci.String(), Conan.String(), Gem.String()}
+var AllTechnologiesStrings = []string{
+	Maven.String(),
+	Gradle.String(),
+	Npm.String(),
+	Pnpm.String(),
+	Yarn.String(),
+	Go.String(),
+	Pip.String(),
+	Pipenv.String(),
+	Poetry.String(),
+	Nuget.String(),
+	Dotnet.String(),
+	Docker.String(),
+	Oci.String(),
+	Conan.String(),
+	Cocoapods.String(),
+	Swift.String(),
+	NoTech.String(),
+}
+
+func ToTechnology(tech string) Technology {
+	tech = strings.ToLower(tech)
+	if tech == "" {
+		return NoTech
+	}
+	if !IsValidTechnology(tech) {
+		return NoTech
+	}
+	return Technology(tech)
+}
+
+func IsValidTechnology(tech string) bool {
+	tech = strings.ToLower(tech)
+	// Check if the technology is in the list of all technologies
+	for _, t := range AllTechnologiesStrings {
+		if strings.ToLower(t) == tech {
+			return true
+		}
+	}
+	return false
+}
 
 type CodeLanguage string
 

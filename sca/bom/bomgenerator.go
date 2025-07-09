@@ -80,24 +80,26 @@ func updateTarget(target *results.TargetResults, sbom *cyclonedx.BOM) {
 		// Target name is already set, no need to update.
 		return
 	}
+	rootsRefs := []string{}
 	roots := cdxutils.GetRootDependenciesEntries(sbom, true)
-	if len(roots) == 0 {
+	for _, root := range roots {
+		rootsRefs = append(rootsRefs, root.Ref)
+	}
+	if len(rootsRefs) == 0 {
 		// No root dependencies found, nothing to update.
 		return
 	}
-	if len(roots) > 1 {
-		log.Warn(fmt.Sprintf("Found multiple root dependencies in the SBOM for target '%s'. Only the first one will be used as the root component.", target.Target))
-	}
-	for _, root := range roots {
-		rootComponent := cdxutils.SearchComponentByRef(sbom.Components, root.Ref)
-		if rootComponent == nil {
-			log.Warn(fmt.Sprintf("Root component '%s' not found in the SBOM components for target '%s'.", root.Ref, target.Target))
-			continue
-		}
-		// Update the target with the root component information.
-		target.Name, _, _ = techutils.SplitPackageURL(rootComponent.PackageURL)
+	if len(rootsRefs) > 1 {
+		log.Debug(fmt.Sprintf("Found multiple roots in the SBOM for target '%s'.", target.Target))
 		return
 	}
+	rootComponent := cdxutils.SearchComponentByRef(sbom.Components, rootsRefs[0])
+	if rootComponent == nil {
+		log.Warn(fmt.Sprintf("Root component '%s' not found in the SBOM components for target '%s'.", rootsRefs[0], target.Target))
+		return
+	}
+	// Update the target with the root component information.
+	target.Name, _, _ = techutils.SplitPackageURL(rootComponent.PackageURL)
 }
 
 func logLibComponents(components *[]cyclonedx.Component) (err error) {
