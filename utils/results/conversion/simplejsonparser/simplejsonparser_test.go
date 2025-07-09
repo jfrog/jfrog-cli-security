@@ -712,7 +712,7 @@ func TestPrepareSimpleJsonLicenses(t *testing.T) {
 
 func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 	issues := []*sarif.Run{
-		// Secret detection
+		// Secrets detection
 		sarifutils.CreateRunWithDummyResultsInWd("target",
 			sarifutils.CreateResultWithOneLocation(filepath.Join("target", "file"), 1, 2, 3, 4, "secret-snippet", "secret-rule-id", "note"),
 		),

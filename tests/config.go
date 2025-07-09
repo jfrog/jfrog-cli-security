@@ -45,6 +45,7 @@ var (
 	TestGit         *bool
 
 	TestAuditGeneral    *bool
+	TestAuditNewSca     *bool
 	TestAuditJas        *bool
 	TestAuditJavaScript *bool
 	TestAuditJava       *bool
@@ -100,6 +101,7 @@ func init() {
 	TestGit = flag.Bool("test.git", false, "Run Git commands integration tests")
 
 	TestAuditGeneral = flag.Bool("test.audit", false, "Run general (Detection, NoTech, MultiTech...) audit integration tests")
+	TestAuditNewSca = flag.Bool("test.audit.NewSca", false, "Run audit command with new SCA integration tests")
 	TestAuditJas = flag.Bool("test.audit.Jas", false, "Run Jas audit integration tests")
 	TestAuditJavaScript = flag.Bool("test.audit.JavaScript", false, "Run JavaScript technologies (Npm, Pnpm, Yarn) audit integration tests")
 	TestAuditJava = flag.Bool("test.audit.Java", false, "Run Java technologies (Maven, Gradle) audit integration tests")
@@ -124,7 +126,7 @@ func init() {
 func InitTestFlags() {
 	flag.Parse()
 	// If no test types flags were set, run all types
-	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestGit)
+	shouldRunAllTests := !isAtLeastOneFlagSet(TestUnit, TestArtifactory, TestXray, TestXsc, TestAuditGeneral, TestAuditNewSca, TestAuditJas, TestAuditJavaScript, TestAuditJava, TestAuditCTypes, TestAuditGo, TestAuditPython, TestAuditCocoapods, TestAuditSwift, TestScan, TestDockerScan, TestCuration, TestEnrich, TestGit)
 	if shouldRunAllTests {
 		log.Info("Running all tests. To run only specific tests, please specify the desired test flags.")
 		*TestUnit = true
@@ -132,6 +134,7 @@ func InitTestFlags() {
 		*TestXray = true
 		*TestXsc = true
 		*TestAuditGeneral = true
+		*TestAuditNewSca = true
 		*TestAuditJas = true
 		*TestAuditJavaScript = true
 		*TestAuditJava = true

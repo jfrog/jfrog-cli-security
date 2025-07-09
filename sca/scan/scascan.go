@@ -129,10 +129,17 @@ func hasDependenciesToScan(targetResults *results.TargetResults, logPrefix strin
 	if targetResults.ScaResults.Sbom.Dependencies != nil && len(*targetResults.ScaResults.Sbom.Dependencies) > 0 {
 		for _, dependencyEntry := range *targetResults.ScaResults.Sbom.Dependencies {
 			if dependencyEntry.Dependencies != nil && len(*dependencyEntry.Dependencies) > 0 {
-				log.Debug(fmt.Sprintf("%sFound %d dependencies in %s target, SCA scan will be performed", logPrefix, len(*dependencyEntry.Dependencies), targetResults.Target))
+				log.Debug(fmt.Sprintf("%sFound %d dependency entries in %s target, SCA scan will be performed", logPrefix, len(*dependencyEntry.Dependencies), targetResults.Target))
 				return true
 			}
-
+		}
+	}
+	if targetResults.ScaResults.Sbom.Components != nil && len(*targetResults.ScaResults.Sbom.Components) > 0 {
+		for _, component := range *targetResults.ScaResults.Sbom.Components {
+			if component.Type == cyclonedx.ComponentTypeLibrary {
+				log.Debug(fmt.Sprintf("%sFound %d components in %s target, SCA scan will be performed", logPrefix, len(*targetResults.ScaResults.Sbom.Components), targetResults.Target))
+				return true
+			}
 		}
 	}
 	log.Debug(fmt.Sprintf("%sSkipping SCA for %s as no dependencies were found in the target", logPrefix, targetResults.Target))

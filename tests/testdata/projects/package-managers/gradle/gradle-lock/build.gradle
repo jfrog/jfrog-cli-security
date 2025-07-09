@@ -1,0 +1,41 @@
+// Apply the Java plugin to add support for Java
+plugins {
+    id 'java'
+}
+
+// Set the group and version of the project
+group = 'com.example'
+version = '1.0.0'
+
+// Specify the repositories for dependencies
+repositories {
+    // Use Maven Central repository
+    mavenCentral()
+}
+
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+// Declare the dependencies for the project
+dependencies {
+    // Use JUnit 4 for testing
+    testImplementation 'junit:junit:4.13.2'
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    implementation group: 'ch.qos.logback', name: 'logback-access', version: '1.4.13'
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.5.4'
+    implementation 'log4j:log4j:1.2.14'
+}
+
+// Define a custom task (optional)
+task hello {
+    doLast {
+        println 'Hello, Gradle!'
+    }
+}
+
+// Specify the Java version compatibility
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -346,8 +347,9 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 
 func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
 	impactPathsRows = [][]formats.ComponentRow{}
+	componentAppearances := map[string]int8{}
 	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
-		impactedPath := buildImpactPathForComponent(parent, components, dependencies...)
+		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		// Add the affected component at the end of the impact path
 		impactedPath = append(impactedPath, formats.ComponentRow{
 			Name:    affectedComponent.Name,
@@ -359,7 +361,8 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclone
 	return
 }
 
-func buildImpactPathForComponent(component cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	componentAppearances[component.BOMRef]++
 	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
 		{
@@ -369,7 +372,12 @@ func buildImpactPathForComponent(component cyclonedx.Component, components []cyc
 	}
 	// Add the parent components to the impact path
 	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
-		parentImpactPath := buildImpactPathForComponent(parent, components, dependencies...)
+		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
+			// If the parent is the same as the affected component, we skip it (cyclic dependencies).
+			// If the component has already appeared too many times, skip it to avoid stack overflow.
+			continue
+		}
+		parentImpactPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		if len(parentImpactPath) > 0 {
 			impactPath = append(parentImpactPath, impactPath...)
 		}
@@ -790,7 +798,7 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
 	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
 		// technology returned in the vulnerability/violation obj is the most specific technology
-		return techutils.Technology(responseTechnology)
+		return techutils.ToTechnology(responseTechnology)
 	}
 	// if no technology is provided, use the target technology
 	return targetTech
