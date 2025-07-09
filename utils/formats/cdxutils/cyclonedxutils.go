@@ -217,6 +217,9 @@ func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dep
 		for _, dep := range *dependency.Dependencies {
 			if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
 				roots = append(roots, *found)
+			} else if found := SearchComponentByRef(bom.Components, dep); found != nil {
+				// Root without dependencies
+				roots = append(roots, cyclonedx.Dependency{Ref: found.BOMRef})
 			}
 		}
 	}

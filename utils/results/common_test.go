@@ -1550,6 +1550,10 @@ func TestIsMultiProject(t *testing.T) {
 		{
 			name: "multiple roots",
 			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Name: "Root 1", Version: "1.0.0", Type: "library"},
+					{BOMRef: "root2", Name: "Root 2", Version: "1.0.0", Type: "library"},
+				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root1", Dependencies: &[]string{"dep1", "dep2"}},
 					{Ref: "root2", Dependencies: &[]string{"dep3", "dep4"}},
