@@ -56,9 +56,9 @@ func (sbg *ScangBomGenerator) PrepareGenerator() (err error) {
 		// No need to download the plugin if the binary path is set and valid
 		return err
 	}
-	if envPath, err := exec.LookPath(plugin.ScangPluginExecutableName); err != nil || envPath != "" {
+	if envPath, e := exec.LookPath(plugin.ScangPluginExecutableName); e == nil && envPath != "" {
 		// No need to download the plugin if it's found in the system PATH
-		return err
+		return
 	}
 	// Download the scang plugin if needed
 	return plugin.DownloadScangPluginIfNeeded()
