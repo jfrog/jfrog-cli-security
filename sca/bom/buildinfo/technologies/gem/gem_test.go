@@ -18,7 +18,7 @@ var expectedResult = &xrayUtils.GraphNode{
 	Id: "root",
 	Nodes: []*xrayUtils.GraphNode{
 		{
-			Id: "rubygems://pumaa:5.6.9",
+			Id: "rubygems://puma:5.6.9",
 			Nodes: []*xrayUtils.GraphNode{
 				{
 					Id:    "rubygems://nio4r:2.7.4",
