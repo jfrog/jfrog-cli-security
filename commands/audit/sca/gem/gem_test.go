@@ -1,7 +1,6 @@
 package gem
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -37,13 +36,19 @@ func TestBuildDependencyTree(t *testing.T) {
 	actualTopLevelTrees, uniqueDeps, err := BuildDependencyTree(params)
 	assert.NoError(t, err, "BuildDependencyTree should not return an error")
 	expectedTopLevelTrees := expectedResult.Nodes
-	expectedJSON, err := json.MarshalIndent(expectedTopLevelTrees, "", "  ")
-	assert.NoError(t, err, "Failed to marshal expectedTopLevelTrees")
-	actualJSON, err := json.MarshalIndent(actualTopLevelTrees, "", "  ")
-	assert.NoError(t, err, "Failed to marshal actualTopLevelTrees")
 	if !reflect.DeepEqual(expectedTopLevelTrees, actualTopLevelTrees) {
+		expectedJSON, err := utils.GetAsJsonString(expectedTopLevelTrees, true, false)
+		if err != nil {
+			t.Fatalf("Failed to marshal expected dependency tree to JSON for error reporting: %v", err)
+		}
+
+		actualJSON, err := utils.GetAsJsonString(actualTopLevelTrees, true, false)
+		if err != nil {
+			t.Fatalf("Failed to marshal actual dependency tree to JSON for error reporting: %v", err)
+		}
+
 		t.Errorf("Dependency tree mismatch.\nExpected (JSON):\n%s\nGot (JSON):\n%s",
-			string(expectedJSON), string(actualJSON))
+			expectedJSON, actualJSON)
 	}
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "Unique dependencies mismatch. First is actual, Second is Expected")
 }

@@ -59,6 +59,7 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
+	Ruby       CodeLanguage = "ruby"
 	// CocoapodsLang package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
 	SwiftLang     CodeLanguage = "Any"
@@ -94,6 +95,7 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
+	"ruby":     "Ruby",
 }
 
 type TechData struct {
