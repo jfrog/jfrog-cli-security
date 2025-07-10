@@ -95,7 +95,7 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
-	"ruby":     "Ruby",
+	"rubygems": "Gem",
 }
 
 type TechData struct {
