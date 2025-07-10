@@ -160,23 +160,6 @@ var cdxPurlPackageTypes = map[string]string{
 	"swift":    "swift",
 }
 
-// The identifier of the package type used in cdx.
-// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
-var cdxPurlPackageTypes = map[string]string{
-	"gav":      "maven",
-	"docker":   "docker",
-	"rpm":      "rpm",
-	"deb":      "deb",
-	"nuget":    "nuget",
-	"generic":  "generic",
-	"npm":      "npm",
-	"pypi":     "pypi",
-	"composer": "composer",
-	"go":       "golang",
-	"alpine":   "alpine",
-	"swift":    "swift",
-}
-
 type TechData struct {
 	// The name of the package type used in this technology.
 	packageType string
@@ -924,4 +907,31 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 		return purl
 	}
 	return
+}
+
+func ToPackageRef(compName, version, packageType string) (output string) {
+	if packageType == "" {
+		packageType = "generic"
+	}
+	if version == "" {
+		// If the version is empty, we return the component name only
+		return fmt.Sprintf("%s:%s", packageType, compName)
+	}
+	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
+}
+
+// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
+func PurlToXrayComponentId(purl string) (xrayComponentId string) {
+	compName, compVersion, compType := SplitPackageURL(purl)
+	return ToXrayComponentId(CdxPackageTypeToXrayPackageType(compType), compName, compVersion)
+}
+
+func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
+	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
+}
+
+func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
+	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
 }
