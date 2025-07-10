@@ -925,30 +925,3 @@ func ToPackageUrl(compName, version, packageType string, properties ...packageur
 	}
 	return
 }
-
-func ToPackageRef(compName, version, packageType string) (output string) {
-	if packageType == "" {
-		packageType = "generic"
-	}
-	if version == "" {
-		// If the version is empty, we return the component name only
-		return fmt.Sprintf("%s:%s", packageType, compName)
-	}
-	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
-}
-
-// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
-func PurlToXrayComponentId(purl string) (xrayComponentId string) {
-	compName, compVersion, compType := SplitPackageURL(purl)
-	return ToXrayComponentId(CdxPackageTypeToXrayPackageType(compType), compName, compVersion)
-}
-
-func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
-	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
-	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
-}
-
-func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
-	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
-	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
-}
