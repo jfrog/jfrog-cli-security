@@ -29,7 +29,7 @@ const (
 	scangPluginRtRepository       = "scang/v1"
 
 	scangPluginDirName        = "scang"
-	ScangPluginExecutableName = "scangplugin"
+	ScangPluginExecutableName = "xray-scan-plugin"
 	pluginName                = "scang"
 
 	scangPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"

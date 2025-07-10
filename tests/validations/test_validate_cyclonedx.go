@@ -59,7 +59,7 @@ func countSbomComponents(content *cyclonedx.BOM) (sbomComponents, rootComponents
 				}
 			}
 		}
-		relation := cdxutils.GetComponentRelation(content, component.BOMRef)
+		relation := cdxutils.GetComponentRelation(content, component.BOMRef, true)
 		if relation == cdxutils.UnknownRelation {
 			continue
 		}

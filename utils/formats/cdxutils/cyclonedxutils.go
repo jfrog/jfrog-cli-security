@@ -90,7 +90,7 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
-func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRelation {
+func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRoot bool) ComponentRelation {
 	if bom == nil || bom.Components == nil {
 		return UnknownRelation
 	}
@@ -105,7 +105,7 @@ func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRela
 	}
 	parents := SearchParents(componentRef, *bom.Components, dependencies...)
 	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(bom, true) {
+	for _, root := range GetRootDependenciesEntries(bom, skipDefaultRoot) {
 		if root.Ref == componentRef {
 			// The component is a root
 			return RootRelation
@@ -283,7 +283,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef) == RootRelation {
+		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}
