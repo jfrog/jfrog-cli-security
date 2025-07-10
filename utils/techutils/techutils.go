@@ -160,6 +160,23 @@ var cdxPurlPackageTypes = map[string]string{
 	"swift":    "swift",
 }
 
+// The identifier of the package type used in cdx.
+// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
+var cdxPurlPackageTypes = map[string]string{
+	"gav":      "maven",
+	"docker":   "docker",
+	"rpm":      "rpm",
+	"deb":      "deb",
+	"nuget":    "nuget",
+	"generic":  "generic",
+	"npm":      "npm",
+	"pypi":     "pypi",
+	"composer": "composer",
+	"go":       "golang",
+	"alpine":   "alpine",
+	"swift":    "swift",
+}
+
 type TechData struct {
 	// The name of the package type used in this technology.
 	packageType string
