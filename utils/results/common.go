@@ -286,7 +286,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.GetComponentRelation(bom, component.BOMRef),
+			cdxutils.GetComponentRelation(bom, component.BOMRef, true),
 		); err != nil {
 			return err
 		}
@@ -859,7 +859,7 @@ func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indire
 			continue
 		}
 		for _, affectedComponent := range *vulnerability.Affects {
-			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref)
+			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref, true)
 			if relation == cdxutils.TransitiveRelation {
 				indirectCvesSet.Add(vulnerability.BOMRef)
 			} else {
