@@ -32,13 +32,13 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pip-example:1.2.3")
 	assert.Len(t, rootNode, 1)
+	// Test direct dependency
+	tests.GetAndAssertNode(t, rootNode, "pip-example:1.2.3")
 	if len(rootNode) > 0 {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		if rootNode[0].Nodes != nil {
-			// Test direct dependency
-			directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
 			// Test child module
-			childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
+			childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.8.0")
 			// Test sub child module
 			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
