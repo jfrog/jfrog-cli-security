@@ -8,7 +8,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/jfrog/jfrog-cli-security/commands/audit/sca"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
 
@@ -18,7 +18,7 @@ var expectedResult = &xrayUtils.GraphNode{
 	Id: "root",
 	Nodes: []*xrayUtils.GraphNode{
 		{
-			Id: "rubygems://puma:5.6.9",
+			Id: "rubygems://pumaa:5.6.9",
 			Nodes: []*xrayUtils.GraphNode{
 				{
 					Id:    "rubygems://nio4r:2.7.4",
@@ -30,7 +30,7 @@ var expectedResult = &xrayUtils.GraphNode{
 }
 
 func TestBuildDependencyTree(t *testing.T) {
-	_, cleanUp := sca.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gem"))
+	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gem"))
 	defer cleanUp()
 	params := &utils.AuditBasicParams{}
 	actualTopLevelTrees, uniqueDeps, err := BuildDependencyTree(params)

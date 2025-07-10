@@ -68,6 +68,7 @@ var AllTechnologiesStrings = []string{
 	Cocoapods.String(),
 	Swift.String(),
 	NoTech.String(),
+	Gem.String(),
 }
 
 func ToTechnology(tech string) Technology {

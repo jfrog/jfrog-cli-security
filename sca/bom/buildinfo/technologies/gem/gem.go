@@ -457,3 +457,4 @@ func calculateUniqueDependencies(trees []*xrayUtils.GraphNode) []string {
 
 	return result
 }
+
