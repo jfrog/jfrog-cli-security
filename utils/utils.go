@@ -41,11 +41,13 @@ const (
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
 	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
 	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
+
+	JfExcludeFoldersOnlyEnv = "JF_EXCLUDE_FOLDERS_ONLY"
 )
 
 var (
 	// Exclude pattern for files.
-	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
+	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**", "**test.go"}
 	// Exclude pattern for directories.
 	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
 )
