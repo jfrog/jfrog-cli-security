@@ -15,7 +15,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	cliUtils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 )
 
 const (
@@ -74,7 +74,7 @@ type internalGemRef struct {
 	Dependencies       map[string]internalGemDep
 }
 
-func BuildDependencyTree(params cliUtils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	currentDir, err := coreutils.GetWorkingDirectory()
 	if err != nil {
 		return
@@ -141,7 +141,7 @@ func getGemCmd(execPath, workingDir, cmd string, args ...string) *io.Command {
 //
 //	dependencyTrees: A slice of top-level dependency nodes.
 //	uniqueDeps: A slice of unique dependency IDs found in the graph.
-func calculateDependencies(bundleExecPath, workingDir string, _ cliUtils.AuditParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
+func calculateDependencies(bundleExecPath, workingDir string, _ technologies.BuildInfoBomGeneratorParams) (dependencyTrees []*xrayUtils.GraphNode, uniqueDeps []string, err error) {
 	log.Debug("Ensuring Gemfile.lock is up to date using 'bundle lock'...")
 	if _, err = getGemCmd(bundleExecPath, workingDir, "lock").RunWithOutput(); err != nil {
 		err = fmt.Errorf("failed to execute 'bundle lock': %w. Ensure Gemfile is present and bundle can run", err)
@@ -457,4 +457,3 @@ func calculateUniqueDependencies(trees []*xrayUtils.GraphNode) []string {
 
 	return result
 }
-

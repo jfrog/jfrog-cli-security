@@ -32,7 +32,7 @@ var expectedResult = &xrayUtils.GraphNode{
 func TestBuildDependencyTree(t *testing.T) {
 	_, cleanUp := technologies.CreateTestWorkspace(t, filepath.Join("projects", "package-managers", "gem"))
 	defer cleanUp()
-	params := &utils.AuditBasicParams{}
+	params := technologies.BuildInfoBomGeneratorParams{SkipAutoInstall: true}
 	actualTopLevelTrees, uniqueDeps, err := BuildDependencyTree(params)
 	assert.NoError(t, err, "BuildDependencyTree should not return an error")
 	expectedTopLevelTrees := expectedResult.Nodes
@@ -57,7 +57,6 @@ func TestBuildDependencyTree(t *testing.T) {
 // expectedUniqueDeps := []string{"rubygems://puma:5.6.9", "rubygems://nio4r:2.7.4"}
 func TestCalculateUniqueDeps(t *testing.T) {
 	var input = &xrayUtils.GraphNode{
-		Id: "root",
 		Nodes: []*xrayUtils.GraphNode{
 			{
 				Id: "rubygems://puma:5.6.9",
