@@ -123,6 +123,7 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Dotnet:    project.Dotnet,
 	Cocoapods: project.Cocoapods,
 	Swift:     project.Swift,
+	Gem:       project.Ruby,
 }
 
 var packageTypes = map[string]string{
