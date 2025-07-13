@@ -67,7 +67,7 @@ const (
 	NotScanned                ApplicabilityStatus = ""
 )
 
-const SastFingerprintKey = "precise_sink_and_sink_function"
+const SastFingerprintKey = "significant_full_path"
 
 func (as ApplicabilityStatus) String() string {
 	return string(as)
