@@ -46,9 +46,7 @@ func TestBuildDependencyTree(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to marshal actual dependency tree to JSON for error reporting: %v", err)
 		}
-
-		t.Errorf("Dependency tree mismatch.\nExpected (JSON):\n%s\nGot (JSON):\n%s",
-			expectedJSON, actualJSON)
+		t.Errorf("Dependency tree mismatch.\nExpected (JSON):\n%s\nGot (JSON):\n%s", expectedJSON, actualJSON)
 	}
 	assert.ElementsMatch(t, uniqueDeps, expectedUniqueDeps, "Unique dependencies mismatch. First is actual, Second is Expected")
 }

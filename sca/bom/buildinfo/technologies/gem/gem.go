@@ -53,6 +53,7 @@ type GemRef struct {
 
 // NodeName returns the reference string of the gem, used as its ID in the graph.
 func (gr *GemRef) NodeName() string { return gr.Ref }
+
 func (gr *GemRef) Node(children ...*xrayUtils.GraphNode) *xrayUtils.GraphNode {
 	if gr.node == nil {
 		gr.node = &xrayUtils.GraphNode{Id: gr.NodeName()}
@@ -63,12 +64,15 @@ func (gr *GemRef) Node(children ...*xrayUtils.GraphNode) *xrayUtils.GraphNode {
 
 // GemGraphInput represents the top-level structure for unmarshalling the gem dependency graph.
 type GemGraphInput struct {
-	Graph struct {
-		Nodes map[string]GemRef `json:"nodes"`
-	} `json:"graph"`
+	Graph GemGraph `json:"graph"`
+}
+
+type GemGraph struct {
+	Nodes map[string]GemRef `json:"nodes"`
 }
 
 type internalGemDep struct{ Name, Constraint string }
+
 type internalGemRef struct {
 	Ref, Name, Version string
 	Dependencies       map[string]internalGemDep
@@ -195,7 +199,9 @@ func parseLockfileToInternalData(lockFilePath string) (
 	scanner := bufio.NewScanner(file)
 
 	if !advanceToSpecs(scanner) {
+		log.Debug("Could not find 'specs:' section in Gemfile.lock. Assuming no dependencies.")
 		return []*internalGemRef{}, make(map[string]string), nil
+
 	}
 
 	orderedGems, resolvedVersions = parseSpecsSection(scanner)
