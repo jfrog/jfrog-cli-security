@@ -48,7 +48,7 @@ type TotalCount struct {
 	// Expected number of total violations (sca security + sca license + sca operational + sast + iac + secrets)
 	Violations int
 	// Expected number of components in the sbom
-	SbomComponents int
+	BomComponents int
 }
 
 type ScanCount struct {
@@ -67,6 +67,8 @@ type SbomCount struct {
 	Direct int
 	// Expected number of transitive components
 	Transitive int
+	// Expected number of root components
+	Root int
 }
 
 type VulnerabilityCount struct {
@@ -288,14 +290,14 @@ type validationCountActualValues struct {
 	SecurityViolations, LicenseViolations, OperationalViolations                                                                                     int
 	ApplicableViolations, UndeterminedViolations, NotCoveredViolations, NotApplicableViolations, MissingContextViolations, InactiveSecretsViolations int
 	// Sbom counts
-	DirectComponents, TransitiveComponents int
+	RootComponents, DirectComponents, TransitiveComponents int
 }
 
 func ValidateCount(t *testing.T, outputType string, params ValidationParams, actual validationCountActualValues) {
 	ValidateTotalCount(t, outputType, params.ExactResultsMatch, params.Total, actual.Vulnerabilities, actual.Violations, actual.Licenses, actual.SbomComponents)
 	ValidateVulnerabilitiesCount(t, outputType, params.ExactResultsMatch, params.Vulnerabilities, actual)
 	ValidateViolationCount(t, outputType, params.ExactResultsMatch, params.Violations, actual)
-	ValidateSbomComponentsCount(t, outputType, params.ExactResultsMatch, params.SbomComponents, actual.DirectComponents, actual.TransitiveComponents)
+	ValidateSbomComponentsCount(t, outputType, params.ExactResultsMatch, params.SbomComponents, actual.RootComponents, actual.DirectComponents, actual.TransitiveComponents)
 }
 
 func ValidateTotalCount(t *testing.T, outputType string, exactMatch bool, params *TotalCount, vulnerabilities, violations, license, sbomComponents int) {
@@ -306,7 +308,7 @@ func ValidateTotalCount(t *testing.T, outputType string, exactMatch bool, params
 		CountValidation[int]{Expected: params.Vulnerabilities, Actual: vulnerabilities, Msg: GetValidationCountErrMsg("vulnerabilities", outputType, exactMatch, params.Vulnerabilities, vulnerabilities)},
 		CountValidation[int]{Expected: params.Violations, Actual: violations, Msg: GetValidationCountErrMsg("violations", outputType, exactMatch, params.Violations, violations)},
 		CountValidation[int]{Expected: params.Licenses, Actual: license, Msg: GetValidationCountErrMsg("licenses", outputType, exactMatch, params.Licenses, license)},
-		CountValidation[int]{Expected: params.SbomComponents, Actual: sbomComponents, Msg: GetValidationCountErrMsg("sbom components", outputType, exactMatch, params.SbomComponents, sbomComponents)},
+		CountValidation[int]{Expected: params.BomComponents, Actual: sbomComponents, Msg: GetValidationCountErrMsg("sbom components", outputType, exactMatch, params.BomComponents, sbomComponents)},
 	)
 }
 
@@ -372,11 +374,12 @@ func ValidateScaViolationCount(t *testing.T, outputType string, exactMatch bool,
 	)
 }
 
-func ValidateSbomComponentsCount(t *testing.T, outputType string, exactMatch bool, params *SbomCount, directComponents, transitiveComponents int) {
+func ValidateSbomComponentsCount(t *testing.T, outputType string, exactMatch bool, params *SbomCount, rootComponents, directComponents, transitiveComponents int) {
 	if params == nil {
 		return
 	}
 	ValidateContent(t, exactMatch,
+		CountValidation[int]{Expected: params.Root, Actual: rootComponents, Msg: GetValidationCountErrMsg("root components", outputType, exactMatch, params.Root, 0)},
 		CountValidation[int]{Expected: params.Direct, Actual: directComponents, Msg: GetValidationCountErrMsg("direct components", outputType, exactMatch, params.Direct, directComponents)},
 		CountValidation[int]{Expected: params.Transitive, Actual: transitiveComponents, Msg: GetValidationCountErrMsg("transitive components", outputType, exactMatch, params.Transitive, transitiveComponents)},
 	)

@@ -36,7 +36,7 @@ const (
 )
 
 func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (dependencyTree []*clientutils.GraphNode, uniqueDeps []string, downloadUrls map[string]string, err error) {
-	dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
+	rootDetected, dependenciesGraph, directDependenciesList, pipUrls, errGetTree := getDependencies(params, technology)
 	if errGetTree != nil {
 		err = errGetTree
 		return
@@ -52,16 +52,40 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams, techno
 		populatePythonDependencyTree(directDependency, dependenciesGraph, uniqueDepsSet)
 		directDependencies = append(directDependencies, directDependency)
 	}
-	root := &clientutils.GraphNode{
-		Id:    "root",
-		Nodes: directDependencies,
-	}
-	dependencyTree = []*clientutils.GraphNode{root}
+	dependencyTree = getRootNodes(directDependencies, rootDetected)
 	uniqueDeps = uniqueDepsSet.ToSlice()
 	return
 }
 
-func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
+func getRootNodes(directDependencies []*clientutils.GraphNode, rootDetected bool) (roots []*clientutils.GraphNode) {
+	if !rootDetected {
+		return []*clientutils.GraphNode{{
+			Id:    "root",
+			Nodes: directDependencies,
+		}}
+	}
+	// root was detected. in Pip, the pip version is also detected as root component.
+	// In this case, we need to append the pip node to the actual roots.
+	roots = []*clientutils.GraphNode{}
+	var pipNode *clientutils.GraphNode
+	// Search if pip is one of the direct dependencies.
+	for _, dep := range directDependencies {
+		if strings.HasPrefix(dep.Id, PythonPackageTypeIdentifier+techutils.Pip.String()+":") {
+			pipNode = dep
+		} else {
+			roots = append(roots, dep)
+		}
+	}
+	if pipNode != nil {
+		// Append pip node to actual roots.
+		for _, root := range roots {
+			root.Nodes = append(root.Nodes, pipNode)
+		}
+	}
+	return
+}
+
+func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology techutils.Technology) (rootDetected bool, dependenciesGraph map[string][]string, directDependencies []string, pipUrls map[string]string, err error) {
 	wd, err := os.Getwd()
 	if errorutils.CheckError(err) != nil {
 		return
@@ -95,7 +119,7 @@ func getDependencies(params technologies.BuildInfoBomGeneratorParams, technology
 	pythonTool := pythonutils.PythonTool(technology)
 	if technology == techutils.Pipenv || !params.SkipAutoInstall {
 		var restoreEnv func() error
-		restoreEnv, err = runPythonInstall(params, pythonTool)
+		rootDetected, restoreEnv, err = runPythonInstall(params, pythonTool)
 		defer func() {
 			err = errors.Join(err, restoreEnv())
 		}()
@@ -180,7 +204,7 @@ type pypiMetaData struct {
 	Version string `json:"version"`
 }
 
-func runPythonInstall(params technologies.BuildInfoBomGeneratorParams, tool pythonutils.PythonTool) (restoreEnv func() error, err error) {
+func runPythonInstall(params technologies.BuildInfoBomGeneratorParams, tool pythonutils.PythonTool) (rootDetected bool, restoreEnv func() error, err error) {
 	switch tool {
 	case pythonutils.Pip:
 		return installPipDeps(params)
@@ -192,28 +216,28 @@ func runPythonInstall(params technologies.BuildInfoBomGeneratorParams, tool pyth
 	return
 }
 
-func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
+func installPoetryDeps(params technologies.BuildInfoBomGeneratorParams) (rootDetected bool, restoreEnv func() error, err error) {
 	restoreEnv = func() error {
 		return nil
 	}
 	if params.DependenciesRepository != "" {
 		rtUrl, username, password, err := artifactoryutils.GetPypiRepoUrlWithCredentials(params.ServerDetails, params.DependenciesRepository, false)
 		if err != nil {
-			return restoreEnv, err
+			return false, restoreEnv, err
 		}
 		if password != "" {
 			err = artifactoryutils.ConfigPoetryRepo(rtUrl.Scheme+"://"+rtUrl.Host+rtUrl.Path, username, password, params.DependenciesRepository)
 			if err != nil {
-				return restoreEnv, err
+				return false, restoreEnv, err
 			}
 		}
 	}
 	// Run 'poetry install'
 	_, err = executeCommand("poetry", "install")
-	return restoreEnv, err
+	return false, restoreEnv, err
 }
 
-func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
+func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (rootDetected bool, restoreEnv func() error, err error) {
 	// Set virtualenv path to venv dir
 	err = os.Setenv("WORKON_HOME", ".jfrog")
 	if err != nil {
@@ -223,14 +247,14 @@ func installPipenvDeps(params technologies.BuildInfoBomGeneratorParams) (restore
 		return os.Unsetenv("WORKON_HOME")
 	}
 	if params.DependenciesRepository != "" {
-		return restoreEnv, runPipenvInstallFromRemoteRegistry(params.ServerDetails, params.DependenciesRepository)
+		return false, restoreEnv, runPipenvInstallFromRemoteRegistry(params.ServerDetails, params.DependenciesRepository)
 	}
 	// Run 'pipenv install -d'
 	_, err = executeCommand("pipenv", "install", "-d")
-	return restoreEnv, err
+	return false, restoreEnv, err
 }
 
-func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv func() error, err error) {
+func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (setupFileUsed bool, restoreEnv func() error, err error) {
 	restoreEnv, err = SetPipVirtualEnvPath()
 	if err != nil {
 		return
@@ -256,7 +280,7 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 		}
 		reportFileName = pythonReportFile
 	}
-
+	setupFileUsed = params.PipRequirementsFile == ""
 	pipInstallArgs := getPipInstallArgs(params.PipRequirementsFile, remoteUrl, curationCachePip, reportFileName, params.InstallCommandArgs...)
 	var reqErr error
 	_, err = executeCommand("python", pipInstallArgs...)
@@ -269,6 +293,7 @@ func installPipDeps(params technologies.BuildInfoBomGeneratorParams) (restoreEnv
 		} else {
 			err = nil
 		}
+		setupFileUsed = false
 	}
 	if err != nil || reqErr != nil {
 		if msgToUser := technologies.GetMsgToUserForCurationBlock(params.IsCurationCmd, techutils.Pip, errors.Join(err, reqErr).Error()); msgToUser != "" {

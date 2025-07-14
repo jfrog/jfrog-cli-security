@@ -32,13 +32,13 @@ func TestBuildPipDependencyListSetuppy(t *testing.T) {
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pip-example:1.2.3")
 	assert.Len(t, rootNode, 1)
+	// Test direct dependency
+	tests.GetAndAssertNode(t, rootNode, "pip-example:1.2.3")
 	if len(rootNode) > 0 {
 		assert.NotEmpty(t, rootNode[0].Nodes)
 		if rootNode[0].Nodes != nil {
-			// Test direct dependency
-			directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
 			// Test child module
-			childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
+			childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.8.0")
 			// Test sub child module
 			tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 		}
@@ -69,11 +69,10 @@ func TestBuildPipDependencyListSetuppyForCuration(t *testing.T) {
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"ptyprocess:0.7.0")
 	assert.Contains(t, uniqueDeps, PythonPackageTypeIdentifier+"pip-example:1.2.3")
 	assert.Len(t, rootNode, 1)
+	tests.GetAndAssertNode(t, rootNode, "pip-example:1.2.3")
 	if assert.NotNil(t, rootNode[0].Nodes) && assert.NotEmpty(t, rootNode[0].Nodes) {
-		// Test direct dependency
-		directDepNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pip-example:1.2.3")
 		// Test child module
-		childNode := tests.GetAndAssertNode(t, directDepNode.Nodes, "pexpect:4.8.0")
+		childNode := tests.GetAndAssertNode(t, rootNode[0].Nodes, "pexpect:4.8.0")
 		// Test sub child module
 		tests.GetAndAssertNode(t, childNode.Nodes, "ptyprocess:0.7.0")
 
@@ -201,6 +200,7 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 		testDir                          string
 		technology                       techutils.Technology
 		installBeforeFetchingInitialDeps bool
+		rootDetected                     bool
 	}{
 		// pip
 		{
@@ -208,24 +208,28 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
 			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: false,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "pip: project installed before dep tree construction| install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "pip", "pip", "requirementsproject"),
 			technology:                       techutils.Pip,
 			installBeforeFetchingInitialDeps: true,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "poetry: project not installed | install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
 			technology:                       techutils.Poetry,
 			installBeforeFetchingInitialDeps: false,
+			rootDetected:                     false,
 		},
 		{
 			name:                             "poetry: project installed before dep tree construction| install forbidden",
 			testDir:                          filepath.Join("projects", "package-managers", "python", "poetry", "poetry"),
 			technology:                       techutils.Poetry,
 			installBeforeFetchingInitialDeps: true,
+			rootDetected:                     false,
 		},
 	}
 
@@ -253,11 +257,12 @@ func TestBuildDependencyTreeWhenInstallForbidden(t *testing.T) {
 			}
 
 			if test.installBeforeFetchingInitialDeps {
-				restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
+				rootDetected, restoreEnv, err := runPythonInstall(params, pythonutils.PythonTool(test.technology))
 				defer func() {
 					assert.NoError(t, restoreEnv(), "restoring env after setting "+test.technology+" virtual env creation failed")
 				}()
 				require.NoError(t, err)
+				assert.Equal(t, test.rootDetected, rootDetected, "Root detection mismatch for "+test.technology+" technology")
 			}
 
 			// Checking dependencies before BuildDependencyTree

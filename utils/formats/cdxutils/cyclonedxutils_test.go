@@ -73,42 +73,216 @@ func TestGetComponentRelation(t *testing.T) {
 		expected     ComponentRelation
 	}{
 		{
-			name: "Root component",
-			bom: &cyclonedx.BOM{
-				Dependencies: &[]cyclonedx.Dependency{
-					{Ref: "root", Dependencies: &[]string{"comp1"}},
-				},
-			},
-			componentRef: "root",
-			expected:     RootRelation,
+			name:         "Unknown - Nil BOM",
+			bom:          nil,
+			componentRef: "comp1",
+			expected:     UnknownRelation,
 		},
 		{
-			name: "Root component with no dependencies",
+			name: "Unknown - BOM with nil components",
+			bom: &cyclonedx.BOM{
+				Components: nil,
+			},
+			componentRef: "comp1",
+			expected:     UnknownRelation,
+		},
+		{
+			name: "Unknown - Component not found in BOM",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "root", Type: "library", Name: "Root Component"},
-					{BOMRef: "comp1", Type: "library", Name: "Component 1"},
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+				},
+			},
+			componentRef: "comp1",
+			expected:     UnknownRelation,
+		},
+		{
+			name: "Unknown - Component found but not library type",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeFile, Name: "File Component"},
+				},
+			},
+			componentRef: "comp1",
+			expected:     UnknownRelation,
+		},
+		{
+			name: "Root - identified as root dependency",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1"}},
 				},
 			},
 			componentRef: "root",
 			expected:     RootRelation,
 		},
 		{
-			name: "Direct dependency",
+			name: "Root - identified when no dependencies exist",
 			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+				},
+			},
+			componentRef: "root",
+			expected:     RootRelation,
+		},
+		{
+			name: "Root - Multiple root dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component 1"},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component 2"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"comp1"}},
+					{Ref: "root2", Dependencies: &[]string{"comp2"}},
+				},
+			},
+			componentRef: "root2",
+			expected:     RootRelation,
+		},
+		{
+			name: "Root - child of metadata component",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "project-path-sha",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project Source",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root"},
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 2"},
+					{BOMRef: "lib3", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "project-path-sha", Dependencies: &[]string{"root"}},
+					{Ref: "root", Dependencies: &[]string{"lib1", "lib2"}},
+					{Ref: "lib1", Dependencies: &[]string{"lib3"}},
+				},
+			},
+			componentRef: "root",
+			expected:     RootRelation,
+		},
+		{
+			name: "Root - stand alone from metadata component",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "project-path-sha",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Empty Metadata",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "project-path-sha", Type: cyclonedx.ComponentTypeFile, Name: "Empty Metadata"},
+					{BOMRef: "standalone", Type: cyclonedx.ComponentTypeLibrary, Name: "Standalone"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "project-path-sha", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			componentRef: "standalone",
+			expected:     RootRelation,
+		},
+		{
+			name: "Direct - child of root",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
-					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
 				},
 			},
 			componentRef: "comp1",
 			expected:     DirectRelation,
 		},
 		{
-			name: "Transitive dependency",
+			name: "Direct - Component both direct and transitive",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "comp2", Name: "Component 2"},
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+					{BOMRef: "shared", Type: cyclonedx.ComponentTypeLibrary, Name: "Shared Component"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "shared"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+					{Ref: "comp2", Dependencies: &[]string{"shared"}},
+				},
+			},
+			componentRef: "shared",
+			expected:     DirectRelation,
+		},
+		{
+			name: "Direct - identified with metadata component connection",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "project-path-sha",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project Source",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root"},
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 2"},
+					{BOMRef: "lib3", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "project-path-sha", Dependencies: &[]string{"root"}},
+					{Ref: "root", Dependencies: &[]string{"lib1", "lib2"}},
+					{Ref: "lib1", Dependencies: &[]string{"lib3"}},
+				},
+			},
+			componentRef: "lib2",
+			expected:     DirectRelation,
+		},
+		{
+			name: "Transitive - identified with metadata component connection",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "project-path-sha",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project Source",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root"},
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 2"},
+					{BOMRef: "lib3", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "project-path-sha", Dependencies: &[]string{"root"}},
+					{Ref: "root", Dependencies: &[]string{"lib1", "lib2"}},
+					{Ref: "lib1", Dependencies: &[]string{"lib3"}},
+				},
+			},
+			componentRef: "lib3",
+			expected:     TransitiveRelation,
+		},
+		{
+			name: "Transitive - child of direct dependency",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
@@ -119,24 +293,102 @@ func TestGetComponentRelation(t *testing.T) {
 			expected:     TransitiveRelation,
 		},
 		{
-			name: "Unknown relation",
+			name: "Transitive - descendant of a direct dependency",
 			bom: &cyclonedx.BOM{
 				Components: &[]cyclonedx.Component{
-					{BOMRef: "root", Name: "Root Component"},
-					{BOMRef: "comp1", Name: "Component 1"},
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 3"},
+					{BOMRef: "comp4", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 4"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+					{Ref: "comp2", Dependencies: &[]string{"comp3", "comp4"}},
+				},
+			},
+			componentRef: "comp3",
+			expected:     TransitiveRelation,
+		},
+		{
+			name: "Transitive - Diamond dependency pattern",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"comp1", "comp2"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp3"}},
+					{Ref: "comp2", Dependencies: &[]string{"comp3"}},
+				},
+			},
+			componentRef: "comp3",
+			expected:     TransitiveRelation,
+		},
+		{
+			name: "Transitive - Circular dependency handling",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
 				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"comp1"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+					{Ref: "comp2", Dependencies: &[]string{"comp1"}}, // Circular reference
 				},
 			},
 			componentRef: "comp2",
-			expected:     UnknownRelation,
+			expected:     TransitiveRelation,
+		},
+		{
+			name: "Root - skip generic root, actual roots are dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "actual-root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
+					{BOMRef: "actual-root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "generic:root", Dependencies: &[]string{"actual-root1", "actual-root2"}},
+					{Ref: "actual-root1", Dependencies: &[]string{"comp1"}},
+					{Ref: "actual-root2", Dependencies: &[]string{}},
+				},
+			},
+			componentRef: "actual-root1",
+			expected:     RootRelation,
+		},
+		{
+			name: "Direct - both direct and transitive in diff roots",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 1"},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root 2"},
+					{BOMRef: "intermediate1", Type: cyclonedx.ComponentTypeLibrary, Name: "Intermediate 1"},
+					{BOMRef: "intermediate2", Type: cyclonedx.ComponentTypeLibrary, Name: "Intermediate 2"},
+					{BOMRef: "target", Type: cyclonedx.ComponentTypeLibrary, Name: "Target Component"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root1", Dependencies: &[]string{"intermediate1"}},
+					{Ref: "root2", Dependencies: &[]string{"target"}},
+					{Ref: "intermediate1", Dependencies: &[]string{"intermediate2"}},
+					{Ref: "intermediate2", Dependencies: &[]string{"target"}},
+				},
+			},
+			componentRef: "target",
+			expected:     DirectRelation,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetComponentRelation(tt.bom, tt.componentRef)
+			result := GetComponentRelation(tt.bom, tt.componentRef, true)
 			assert.Equal(t, tt.expected, result, "Expected component relation does not match")
 		})
 	}
@@ -330,26 +582,85 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 	tests := []struct {
 		name     string
 		bom      *cyclonedx.BOM
+		skipRoot bool
 		expected []cyclonedx.Dependency
 	}{
 		{
-			name:     "No dependencies",
+			name: "Empty BOM",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "file-root",
+						Type:   cyclonedx.ComponentTypeFile,
+					},
+				},
+			},
 			expected: []cyclonedx.Dependency{},
 		},
 		{
-			name: "Single root dependency",
+			name: "No components",
 			bom: &cyclonedx.BOM{
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "root", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			expected: []cyclonedx.Dependency{},
+		},
+		{
+			name: "BuildInfo - Single root dependency",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+					{BOMRef: "dep2", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 2"},
+					{BOMRef: "dep3", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 3"},
+				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
 					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
 					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
 				},
 			},
+			skipRoot: true,
 			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}},
 		},
 		{
-			name: "Multiple root dependencies",
+			name: "SCANG - Single root dependency",
 			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "file-root",
+						Type:   cyclonedx.ComponentTypeFile,
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+					{BOMRef: "dep2", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 2"},
+					{BOMRef: "dep3", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "file-root", Dependencies: &[]string{"root"}},
+					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
+					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}},
+		},
+		{
+			name: "BuildInfo - Multiple root dependencies",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "root", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component"},
+					{BOMRef: "root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Root Component 2"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+					{BOMRef: "dep2", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 2"},
+					{BOMRef: "dep3", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 3"},
+					{BOMRef: "dep4", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 4"},
+					{BOMRef: "dep5", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 5"},
+				},
 				Dependencies: &[]cyclonedx.Dependency{
 					{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
 					{Ref: "dep2", Dependencies: &[]string{"dep3", "dep4"}},
@@ -357,13 +668,152 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 					{Ref: "dep4", Dependencies: &[]string{"dep5"}},
 				},
 			},
-			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}, {Ref: "root2", Dependencies: &[]string{"dep4", "dep5"}}},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}},
+				{Ref: "root2", Dependencies: &[]string{"dep4", "dep5"}},
+			},
+		},
+		{
+			name: "BuildInfo - generic root with skipDefaultRoot=true",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 1"},
+					{BOMRef: "actual_root2", Type: cyclonedx.ComponentTypeLibrary, Name: "Actual Root 2"},
+					{BOMRef: "dep1", Type: cyclonedx.ComponentTypeLibrary, Name: "Dep 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+					{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "actual_root1", Dependencies: &[]string{"dep1"}},
+				{Ref: "actual_root2"},
+				{Ref: "generic:root", Dependencies: &[]string{"actual_root1", "actual_root2"}},
+			},
+		},
+		{
+			name: "BuildInfo - generic root with skipDefaultRoot=false",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "generic:root", Type: cyclonedx.ComponentTypeLibrary, Name: "Generic Root"},
+					{BOMRef: "not_actual_root1", Type: cyclonedx.ComponentTypeLibrary, Name: "Not Actual Root 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+					{Ref: "not_actual_root1", Dependencies: &[]string{}},
+				},
+			},
+			skipRoot: false,
+			expected: []cyclonedx.Dependency{
+				{Ref: "generic:root", Dependencies: &[]string{"not_actual_root1"}},
+			},
+		},
+		{
+			name: "SCANG - Multiple root dependencies",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "metadata:comp",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project Root",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "metadata:comp", Type: cyclonedx.ComponentTypeFile, Name: "Project Root"},
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 2"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "metadata:comp", Dependencies: &[]string{"lib1", "lib2"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{{Ref: "lib1"}, {Ref: "lib2"}},
+		},
+		{
+			name: "No root found - fallback to library components",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "lib1", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 1"},
+					{BOMRef: "lib2", Type: cyclonedx.ComponentTypeLibrary, Name: "Library 2"},
+					{BOMRef: "file1", Type: cyclonedx.ComponentTypeFile, Name: "File 1"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "lib1"},
+				{Ref: "lib2"},
+			},
+		},
+		{
+			name: "SCANG - Circular dependencies",
+			bom: &cyclonedx.BOM{
+				Metadata: &cyclonedx.Metadata{
+					Component: &cyclonedx.Component{
+						BOMRef: "metadata:comp",
+						Type:   cyclonedx.ComponentTypeFile,
+						Name:   "Project Root",
+					},
+				},
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "metadata:comp", Dependencies: &[]string{"comp2"}},
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+					{Ref: "comp2", Dependencies: &[]string{"comp3"}},
+					{Ref: "comp3", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{{Ref: "comp2", Dependencies: &[]string{"comp3"}}},
+		},
+		{
+			name: "BuildInfo - Circular dependencies - no clear root",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "comp1", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 1"},
+					{BOMRef: "comp2", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 2"},
+					{BOMRef: "comp3", Type: cyclonedx.ComponentTypeLibrary, Name: "Component 3"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{
+					{Ref: "comp1", Dependencies: &[]string{"comp2"}},
+					{Ref: "comp2", Dependencies: &[]string{"comp3"}},
+					{Ref: "comp3", Dependencies: &[]string{"comp1"}},
+				},
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{}, // All components are in dependedRefs, none becomes root
+		},
+		{
+			name: "BuildInfo - fallback scenario - only standalone components",
+			bom: &cyclonedx.BOM{
+				Components: &[]cyclonedx.Component{
+					{BOMRef: "standalone1", Type: cyclonedx.ComponentTypeLibrary, Name: "Standalone Library 1"},
+					{BOMRef: "standalone2", Type: cyclonedx.ComponentTypeLibrary, Name: "Standalone Library 2"},
+					{BOMRef: "file1", Type: cyclonedx.ComponentTypeFile, Name: "File Component"},
+				},
+				Dependencies: &[]cyclonedx.Dependency{}, // No dependencies, so fallback applies
+			},
+			skipRoot: true,
+			expected: []cyclonedx.Dependency{
+				{Ref: "standalone1"},
+				{Ref: "standalone2"},
+				// file1 is not included because it's not a library type
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetRootDependenciesEntries(tt.bom, true)
+			result := GetRootDependenciesEntries(tt.bom, tt.skipRoot)
 			assert.ElementsMatch(t, tt.expected, result, "Expected root dependencies do not match")
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -89,33 +90,44 @@ func SearchDependencyEntry(dependencies *[]cyclonedx.Dependency, ref string) *cy
 	return nil
 }
 
-func GetComponentRelation(bom *cyclonedx.BOM, componentRef string) ComponentRelation {
-	if bom == nil {
+func GetComponentRelation(bom *cyclonedx.BOM, componentRef string, skipDefaultRoot bool) ComponentRelation {
+	if bom == nil || bom.Components == nil {
 		return UnknownRelation
 	}
+	component := SearchComponentByRef(bom.Components, componentRef)
+	if component == nil || component.Type != cyclonedx.ComponentTypeLibrary {
+		// The component is not found in the BOM components or not library, return UnknownRelation
+		return UnknownRelation
+	}
+	dependencies := []cyclonedx.Dependency{}
+	if bom.Dependencies != nil {
+		dependencies = *bom.Dependencies
+	}
+	parents := SearchParents(componentRef, *bom.Components, dependencies...)
 	// Calculate the root components
-	for _, root := range GetRootDependenciesEntries(bom, true) {
+	for _, root := range GetRootDependenciesEntries(bom, skipDefaultRoot) {
 		if root.Ref == componentRef {
-			// The component is a root, hence it is a direct dependency
+			// The component is a root
 			return RootRelation
 		}
 		if root.Dependencies == nil || len(*root.Dependencies) == 0 {
 			// No dependencies, continue to the next root
 			continue
 		}
-		for _, directDependencyRef := range *root.Dependencies {
-			if directDependencyRef == componentRef {
-				// The component is a direct dependency of this root
+		for _, parentRef := range parents {
+			if parentRef.BOMRef == root.Ref {
+				// At least one of parents is a component that is a child of this root, hence it is a direct dependency
 				return DirectRelation
 			}
 		}
 	}
-	// No direct dependency found
-	if SearchComponentByRef(bom.Components, componentRef) != nil {
-		return TransitiveRelation
+	// If we reach here, it means the component is not a root or not a child of a root component
+	if len(parents) == 0 {
+		// No parents found, the component is a direct dependency
+		return DirectRelation
 	}
-	// reference not found in the BOM components or dependencies
-	return UnknownRelation
+	// Parents found, but not a root or direct dependency, hence it is a transitive dependency
+	return TransitiveRelation
 }
 
 func SearchParents(componentRef string, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) []cyclonedx.Component {
@@ -124,24 +136,26 @@ func SearchParents(componentRef string, components []cyclonedx.Component, depend
 	}
 	parents := []cyclonedx.Component{}
 	for _, dependency := range dependencies {
-		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-			// No dependencies, continue to the next dependency
-			continue
-		}
-		// Check if the component is a direct dependency
-		for _, dep := range *dependency.Dependencies {
-			if dep == componentRef {
-				parentComponent := SearchComponentByRef(&components, dependency.Ref)
-				if parentComponent == nil {
-					log.Debug(fmt.Sprintf("Failed to find parent component for dependency '%s' in components", dependency.Ref))
-					continue
-				}
-				// The component is a direct dependency, return it
-				parents = append(parents, *parentComponent)
-			}
-		}
+		parents = append(parents, getDependencyComponentIfParent(componentRef, dependency, components)...)
 	}
 	return parents
+}
+
+func getDependencyComponentIfParent(componentRef string, dependency cyclonedx.Dependency, components []cyclonedx.Component) (parents []cyclonedx.Component) {
+	parents = []cyclonedx.Component{}
+	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+		// No dependencies, no parents
+		return
+	}
+	parentComponent := SearchComponentByRef(&components, dependency.Ref)
+	if parentComponent == nil {
+		return
+	}
+	if slices.Contains(*dependency.Dependencies, componentRef) {
+		// The component is a child of this dependency, the dependency is a parent
+		return append(parents, *parentComponent)
+	}
+	return
 }
 
 func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []string {
@@ -155,7 +169,7 @@ func GetDirectDependencies(dependencies *[]cyclonedx.Dependency, ref string) []s
 
 func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
 	roots = []cyclonedx.Dependency{}
-	if bom == nil {
+	if bom == nil || bom.Components == nil || len(*bom.Components) == 0 {
 		return
 	}
 	// Create a Set to track all references that are listed in `dependsOn`
@@ -177,11 +191,7 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 		for _, id := range refs.ToSlice() {
 			if dep := SearchDependencyEntry(bom.Dependencies, id); dep != nil && !dependedRefs.Exists(dep.Ref) {
 				// This is a root dependency, add it
-				if skipDefaultRoot {
-					roots = append(roots, potentialRootDependencyToRoots(bom, *dep)...)
-				} else {
-					roots = append(roots, *dep)
-				}
+				roots = append(roots, potentialRootDependencyToRoots(bom, *dep, skipDefaultRoot)...)
 			}
 		}
 	}
@@ -197,18 +207,36 @@ func GetRootDependenciesEntries(bom *cyclonedx.BOM, skipDefaultRoot bool) (roots
 }
 
 // For some technologies, inserting 'root' as dummy component, in this case the actual roots are the dependencies of this component.
-func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency) (roots []cyclonedx.Dependency) {
-	if !strings.Contains(dependency.Ref, "generic:root") {
-		return []cyclonedx.Dependency{dependency}
+func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dependency, skipDefaultRoot bool) (roots []cyclonedx.Dependency) {
+	if strings.Contains(dependency.Ref, "generic:root") && skipDefaultRoot {
+		// dummy root, the actual roots are the dependencies of this component.
+		roots = []cyclonedx.Dependency{}
+		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+			return
+		}
+		for _, dep := range *dependency.Dependencies {
+			if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
+				roots = append(roots, *found)
+			} else if found := SearchComponentByRef(bom.Components, dep); found != nil {
+				// Root without dependencies
+				roots = append(roots, cyclonedx.Dependency{Ref: found.BOMRef})
+			}
+		}
 	}
-	// dummy root, the actual roots are the dependencies of this component.
-	roots = []cyclonedx.Dependency{}
-	if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
-		return
+	// This is a potential root dependency
+	depComponent := SearchComponentByRef(bom.Components, dependency.Ref)
+	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
+		// The component is the root
+		return append(roots, dependency)
 	}
-	for _, dep := range *dependency.Dependencies {
-		if found := SearchDependencyEntry(bom.Dependencies, dep); found != nil {
-			roots = append(roots, *found)
+	// In SCANG the root can be a file or directory component (the Metadata component) and the actual roots are the component children
+	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
+		roots = append(roots, dependency)
+	} else if bom.Metadata != nil && bom.Metadata.Component != nil && bom.Metadata.Component.BOMRef == dependency.Ref {
+		for _, root := range *dependency.Dependencies {
+			if rootDepEntry := SearchDependencyEntry(bom.Dependencies, root); rootDepEntry != nil {
+				roots = append(roots, *rootDepEntry)
+			}
 		}
 	}
 	return
@@ -255,7 +283,7 @@ func Exclude(bom cyclonedx.BOM, componentsToExclude ...cyclonedx.Component) (fil
 	}
 	filteredSbom = &bom
 	for _, compToExclude := range componentsToExclude {
-		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef) == RootRelation {
+		if matchedBomComp := SearchComponentByRef(bom.Components, compToExclude.BOMRef); matchedBomComp == nil || GetComponentRelation(&bom, matchedBomComp.BOMRef, false) == RootRelation {
 			// If not a match or Root component, skip it
 			continue
 		}

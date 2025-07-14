@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -152,8 +153,15 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-	isRecursiveScan := len(auditCmd.workingDirs) == 0
+	isRecursiveScan := false
+	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+		if len(auditCmd.workingDirs) > 1 {
+			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
+		}
+	} else {
+		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+		isRecursiveScan = len(auditCmd.workingDirs) == 0
+	}
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
@@ -172,6 +180,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
+		SetScaScanStrategy(auditCmd.scaScanStrategy).
+		SetCustomAnalyzerManagerBinaryPath(auditCmd.customAnalyzerManagerBinaryPath).
+		SetCustomBomGenBinaryPath(auditCmd.customBomGenBinaryPath).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
@@ -209,7 +220,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secrets Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -287,6 +298,9 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
+		// SCANG Bom Generator Options
+		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
+		scang.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -556,10 +570,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		defer func() {
 			auditParallelRunner.JasWg.Done()
 		}()
-		logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 		// First download the analyzer manager if needed
-		if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-			return fmt.Errorf("%s failed to download analyzer manager: %s", logPrefix, err.Error())
+		if auditParams.customAnalyzerManagerBinaryPath == "" {
+			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
+			}
+		} else {
+			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
 		}
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
@@ -569,14 +586,15 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                 auditParallelRunner,
-				ServerDetails:          serverDetails,
-				Scanner:                scanner,
-				Module:                 appsConfigModule,
-				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:        secrets.SecretsScannerType,
+				Runner:                          auditParallelRunner,
+				ServerDetails:                   serverDetails,
+				Scanner:                         scanner,
+				CustomAnalyzerManagerBinaryPath: auditParams.customAnalyzerManagerBinaryPath,
+				Module:                          appsConfigModule,
+				ConfigProfile:                   auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:                  auditParams.ScansToPerform(),
+				SourceResultsToCompare:          scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:                 secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
@@ -593,7 +611,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				AllowPartialResults:         auditParams.AllowPartialResults(),
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), auditParams.AllowPartialResults())
 				// We assign nil to 'generalError' after handling it to prevent it to propagate further, so it will not be captured twice - once here, and once in the error handling function of createJasScansTasks
 				generalError = nil
 			}
