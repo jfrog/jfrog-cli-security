@@ -407,8 +407,10 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
 		resultsToCompare,
 	)
+	// Let's check if the target results to compare are valid.
+	// If the current target result is a new module, it will not have any previous target results to compare with.
 	if targetResultsToCompare == nil || targetResultsToCompare.ScaResults == nil || targetResultsToCompare.ScaResults.Sbom == nil {
-		err = fmt.Errorf("no target results found to compare")
+		log.Debug(fmt.Sprintf("No previous target results found to compare with for %s", targetResult.Target))
 	}
 	return
 }
