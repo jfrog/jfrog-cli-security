@@ -339,9 +339,7 @@ func parseGemfileLockDeps(lockFilePath string) (*GemGraphInput, error) {
 		}
 	}
 
-	outputStructure := GemGraphInput{Graph: struct {
-		Nodes map[string]GemRef `json:"nodes"`
-	}{Nodes: gemRefMap}}
+	outputStructure := GemGraphInput{Graph: GemGraph{Nodes: gemRefMap}}
 
 	return &outputStructure, nil
 }
