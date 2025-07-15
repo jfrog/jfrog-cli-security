@@ -53,6 +53,7 @@ func NewFailBuildError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
 }
 
+// TODO eran delete this func
 // In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
 func CheckIfFailBuild(results []services.ScanResponse) bool {
 	for _, result := range results {
@@ -63,6 +64,131 @@ func CheckIfFailBuild(results []services.ScanResponse) bool {
 		}
 	}
 	return false
+}
+
+// This func iterated every violation and checks if there is a violation that should fail the build.
+// The build should be failed by a violation if it holds the following conditions:
+// 1) The violation is set to fail the build
+// 2) The violation has applicability status other than 'NotApplicable' OR the violation has 'NotApplicable' status and is not set to skip-non-applicable
+func CheckIfFailBuildNew(auditResults *SecurityCommandResults) (shouldFailBuild bool, err error) {
+	for _, target := range auditResults.Targets {
+		jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
+
+		// Get violations from the target
+		violations := target.ScaResults.Violations
+
+		// If no violations are found in the new flow, try to convert vulnerabilities from enriched SBOM to violations
+		if len(violations) == 0 && target.ScaResults.Sbom != nil && target.ScaResults.Sbom.Vulnerabilities != nil {
+			// Convert vulnerabilities from enriched SBOM to violations for fail-build checking
+			violations, err = convertVulnerabilitiesToViolations(target.ScaResults.Sbom, target.Target)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		// Here we iterate the new violation results and check if any of them should fail the build.
+		_, _, err = ForEachScanGraphViolation(
+			target.ScanTarget,
+			violations,
+			auditResults.EntitledForJas,
+			jasApplicabilityResults,
+			checkIfShouldFailBuildAccordingToPolicy(&shouldFailBuild),
+			nil,
+			nil)
+		if err != nil {
+			return
+		}
+
+		// Here we iterate the deprecated violation results to check if any of them should fail the build.
+		// TODO remove this part once the DeprecatedXrayResults are completely removed and no longer in use
+		for _, result := range target.ScaResults.DeprecatedXrayResults {
+			_, _, err = ForEachScanGraphViolation(
+				target.ScanTarget,
+				result.Scan.Violations,
+				auditResults.EntitledForJas,
+				jasApplicabilityResults,
+				checkIfShouldFailBuildAccordingToPolicy(&shouldFailBuild),
+				nil,
+				nil)
+			if err != nil {
+				return
+			}
+		}
+
+	}
+	return shouldFailBuild, err
+}
+func checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild *bool) func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		if !violation.FailBuild && !violation.FailPr {
+			// If the violation is not set to fail the build we simply return
+			return nil
+		}
+		// If the violation is set to fail the build, we check if the violation has NotApplicable status and is set to skip-non-applicable.
+		// If the violation is NotApplicable and is set to skip-non-applicable, we don't fail the build.
+		// If the violation has any other status OR has NotApplicable status but is not set to skip-not-applicable, we fail the build.
+		var shouldSkip bool
+		if shouldSkip, err = shouldSkipNotApplicable(violation, applicabilityStatus); err != nil {
+			return err
+		}
+		if !shouldSkip {
+			*shouldFailBuild = true
+		}
+		return nil
+	}
+}
+
+// convertVulnerabilitiesToViolations converts vulnerabilities from enriched SBOM to violations for fail-build checking
+func convertVulnerabilitiesToViolations(sbom *cyclonedx.BOM, target string) (violations []services.Violation, err error) {
+	if sbom == nil || sbom.Vulnerabilities == nil {
+		return nil, nil
+	}
+
+	for _, vulnerability := range *sbom.Vulnerabilities {
+		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
+			continue
+		}
+
+		// Create a violation for each affected component
+		for _, affectedComponent := range *vulnerability.Affects {
+			// Find the component
+			component := cdxutils.SearchComponentByRef(sbom.Components, affectedComponent.Ref)
+			if component == nil {
+				continue
+			}
+
+			// Create a violation with default fail-build settings
+			violation := services.Violation{
+				IssueId:       vulnerability.ID,
+				Summary:       vulnerability.Description,
+				Severity:      cdxRatingToSeverity(vulnerability.Ratings).String(),
+				FailBuild:     false, // Default to false for converted vulnerabilities
+				FailPr:        false, // Default to false for converted vulnerabilities
+				ViolationType: utils.ViolationTypeSecurity.String(),
+				Components:    map[string]services.Component{},
+			}
+
+			// Add the component to the violation
+			compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
+			componentId := fmt.Sprintf("%s:%s", compName, compVersion)
+			violation.Components[componentId] = services.Component{
+				FixedVersions: []string{},
+				ImpactPaths:   [][]services.ImpactPathNode{},
+				Cpes:          []string{},
+			}
+
+			// Convert CVEs - extract from vulnerability ID or use a default
+			if vulnerability.ID != "" {
+				violation.Cves = append(violation.Cves, services.Cve{
+					Id: vulnerability.ID,
+				})
+			}
+
+			violations = append(violations, violation)
+		}
+	}
+
+	return violations, nil
 }
 
 type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
