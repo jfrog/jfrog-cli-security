@@ -46,6 +46,7 @@ const (
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
 	NoTech    Technology = ""
+	Gem       Technology = "gem"
 )
 const Pypi = "pypi"
 
@@ -67,6 +68,7 @@ var AllTechnologiesStrings = []string{
 	Cocoapods.String(),
 	Swift.String(),
 	NoTech.String(),
+	Gem.String(),
 }
 
 func ToTechnology(tech string) Technology {
@@ -100,6 +102,7 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
+	Ruby       CodeLanguage = "ruby"
 	// CocoapodsLang package can have multiple languages
 	CocoapodsLang CodeLanguage = "Any"
 	SwiftLang     CodeLanguage = "Any"
@@ -120,6 +123,7 @@ var TechToProjectType = map[Technology]project.ProjectType{
 	Dotnet:    project.Dotnet,
 	Cocoapods: project.Cocoapods,
 	Swift:     project.Swift,
+	Gem:       project.Ruby,
 }
 
 var packageTypes = map[string]string{
@@ -137,6 +141,7 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
+	"rubygems": "Gem",
 }
 
 // The identifier of the package type used in cdx.
@@ -277,6 +282,11 @@ var technologiesData = map[Technology]TechData{
 		packageDescriptors: []string{"Package.swift", "Package.resolved"},
 		formal:             "Swift",
 		packageTypeId:      "swift://",
+	},
+	Gem: {
+		indicators:         []string{"Gemfile"},
+		packageDescriptors: []string{"Gemfile"},
+		formal:             "gem",
 	},
 }
 
