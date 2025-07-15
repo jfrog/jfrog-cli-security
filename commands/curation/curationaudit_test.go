@@ -726,6 +726,92 @@ func getTestCasesForDoCurationAudit() []testCase {
 			},
 		},
 		{
+			name:          "gem tree - one blocked package",
+			tech:          techutils.Gem,
+			pathToProject: filepath.Join("projects", "package-managers", "gem", "curation-project"),
+
+			// This function now prepares a completely isolated environment before your code runs.
+			funcToGetGoals: func(t *testing.T) []string {
+				// Create a new, empty temporary directory for this test run only.
+				tempGemHome, err := os.MkdirTemp("", "gem-home")
+				require.NoError(t, err)
+
+				// Return a shell command that sets the GEM_HOME.
+				// Your application's subsequent 'bundle lock' will run in this clean environment.
+				return []string{"export", "GEM_HOME=" + tempGemHome}
+			},
+
+			serveResources: map[string]string{
+				"Gemfile": filepath.Join("tests", "testdata", "projects", "package-managers", "gem", "curation-project", "Gemfile"),
+			},
+
+			// Block a package that your logs confirm is being requested.
+			requestToFail: map[string]bool{
+				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+			},
+
+			// Expect a report containing the exact blocked package.
+			expectedResp: map[string]*CurationReport{
+				"Ruby-Project": {
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "actionview",
+							ParentVersion:     "5.2.3",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "indirect",
+							PkgType:           "gem",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+						{
+							Action:            "blocked",
+							ParentName:        "activesupport",
+							ParentVersion:     "5.2.3",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "direct",
+							PkgType:           "gem",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+						{
+							Action:            "blocked",
+							ParentName:        "rails-dom-testing",
+							ParentVersion:     "2.3.0",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "indirect",
+							PkgType:           "gem",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 17,
+				},
+			},
+			allowInsecureTls: true,
+		},
+		{
 			name:          "maven tree - one blocked package",
 			tech:          techutils.Maven,
 			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation"),
