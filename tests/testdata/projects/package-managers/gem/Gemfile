@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+ruby "2.6.10"
+
+gem "puma", "~> 5.0"         # Web server   # Stylesheets
+
