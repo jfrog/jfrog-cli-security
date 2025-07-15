@@ -240,7 +240,12 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if failBuild && auditResults.HasViolationContext() && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	shouldFailBuildByPolicy, err := results.CheckIfFailBuildNew(auditResults)
+	if err != nil {
+		return fmt.Errorf("failed to check if the build should fail: %w", err)
+	}
+
+	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
 		err = results.NewFailBuildError()
 	}
 	return
