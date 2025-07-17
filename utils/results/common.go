@@ -69,16 +69,16 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 				// If we found a violation that should fail the build, we return true.
 				return true, nil
 			}
-		}
-
-		// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
-		var shouldFailBuild bool
-		if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
-			return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
-		}
-		if shouldFailBuild {
-			// If we found a violation that should fail the build, we return true.
-			return true, nil
+		} else {
+			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
+			var shouldFailBuild bool
+			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
+				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
+			}
+			if shouldFailBuild {
+				// If we found a violation that should fail the build, we return true.
+				return true, nil
+			}
 		}
 	}
 	return false, nil
