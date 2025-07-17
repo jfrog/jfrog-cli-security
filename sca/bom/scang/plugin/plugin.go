@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	// "strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -26,7 +27,7 @@ import (
 const (
 	defaultScangPluginVersion     = "0.0.1"
 	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
-	scangPluginRtRepository       = "scang/v1"
+	scangPluginRtRepository       = "xsc-scan-lib/v0"
 
 	scangPluginDirName        = "scang"
 	ScangPluginExecutableName = "xray-scan-plugin"
@@ -178,7 +179,7 @@ func DownloadScangPluginIfNeeded() error {
 	}
 	log.Info("The 'SCANG Plugin' app is not cached locally. Downloading it now...")
 	// Download the scang plugin file
-	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, false)
+	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, true)
 }
 
 func GetScangPluginDownloadPath() (string, error) {
@@ -186,6 +187,11 @@ func GetScangPluginDownloadPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Split the osAndArc into OS and Architecture (on '-' character).
+	// For example, "linux-amd64" will be split into "linux" and "amd64"
+	// os := strings.Split(osAndArc, "-")[0]
+	// arch := strings.Split(osAndArc, "-")[1]
+	// downloadArtifact := fmt.Sprintf("%s-lib-%s", ScangPluginExecutableName, getScangPluginVersion())
 	return path.Join(scangPluginRtRepository, getScangPluginVersion(), osAndArc, getScangExecutableName()), nil
 }
 
