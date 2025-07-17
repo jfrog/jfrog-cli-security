@@ -52,7 +52,7 @@ func TestDetectScansToPerform(t *testing.T) {
 			wd:   dir,
 			params: func() *AuditParams {
 				param := NewAuditParams().SetWorkingDirs([]string{dir})
-				param.SetTechnologies([]string{"maven", "npm", "go"}).SetIsRecursiveScan(true)
+				param.SetTechnologies([]string{"maven", "npm", "go", "gem"}).SetIsRecursiveScan(true)
 				return param
 			},
 			expected: []*results.TargetResults{
@@ -95,6 +95,26 @@ func TestDetectScansToPerform(t *testing.T) {
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "dir", "npm", "package.json")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Gem,
+						Target:     filepath.Join(dir, "dir", "gem"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "gem", "Gemfile")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Gem,
+						Target:     filepath.Join(dir, "gem"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "gem", "Gemfile")},
 					},
 				},
 				{
@@ -187,6 +207,26 @@ func TestDetectScansToPerform(t *testing.T) {
 					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
 					ScaResults: &results.ScaScanResults{
 						Descriptors: []string{filepath.Join(dir, "yarn", "Pipenv", "Pipfile")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Gem,
+						Target:     filepath.Join(dir, "dir", "gem"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "dir", "gem", "Gemfile")},
+					},
+				},
+				{
+					ScanTarget: results.ScanTarget{
+						Technology: techutils.Gem,
+						Target:     filepath.Join(dir, "gem"),
+					},
+					JasResults: &results.JasScansResults{JasVulnerabilities: results.JasScanResults{}, JasViolations: results.JasScanResults{}},
+					ScaResults: &results.ScaScanResults{
+						Descriptors: []string{filepath.Join(dir, "gem", "Gemfile")},
 					},
 				},
 			},
@@ -1049,12 +1089,14 @@ func createTestDir(t *testing.T) (directory string, cleanUp func()) {
 	// │   │   ├── maven-sub
 	// │   │   └── maven-sub
 	// │   ├── npm
-	// │   └── go
+	// │   ├── go
+	// │   └── gem
 	// ├── yarn
 	// │   ├── Pip
 	// │   └── Pipenv
-	// └── Nuget
-	//	   ├── Nuget-sub
+	// ├── Nuget
+	// │   └── Nuget-sub
+	// └── gem
 
 	dir := createEmptyDir(t, filepath.Join(tmpDir, "dir"))
 	// Maven
@@ -1071,6 +1113,10 @@ func createTestDir(t *testing.T) (directory string, cleanUp func()) {
 	// Go
 	goDir := createEmptyDir(t, filepath.Join(dir, "go"))
 	createEmptyFile(t, filepath.Join(goDir, "go.mod"))
+	// Gem
+	gem := createEmptyDir(t, filepath.Join(dir, "gem"))
+	createEmptyFile(t, filepath.Join(gem, "Gemfile"))
+	createEmptyFile(t, filepath.Join(gem, "Gemfile.lock"))
 	// Yarn
 	yarn := createEmptyDir(t, filepath.Join(tmpDir, "yarn"))
 	createEmptyFile(t, filepath.Join(yarn, "package.json"))
@@ -1087,6 +1133,9 @@ func createTestDir(t *testing.T) (directory string, cleanUp func()) {
 	createEmptyFile(t, filepath.Join(nuget, "project.sln"))
 	nugetSub := createEmptyDir(t, filepath.Join(nuget, "Nuget-sub"))
 	createEmptyFile(t, filepath.Join(nugetSub, "project.csproj"))
+	// Gem (root level)
+	gemRoot := createEmptyDir(t, filepath.Join(tmpDir, "gem"))
+	createEmptyFile(t, filepath.Join(gemRoot, "Gemfile"))
 
 	return tmpDir, func() {
 		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't removeAll: "+tmpDir)
