@@ -22,26 +22,6 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func TestViolationFailBuild(t *testing.T) {
-	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
-	tests := []struct {
-		violations    []services.Violation
-		expectedError bool
-	}{
-		{[]services.Violation{{Components: components, FailBuild: false}, {Components: components, FailBuild: false}, {Components: components, FailBuild: false}}, false},
-		{[]services.Violation{{Components: components, FailBuild: false}, {Components: components, FailBuild: true}, {Components: components, FailBuild: false}}, true},
-		{[]services.Violation{{Components: components, FailBuild: true}, {Components: components, FailBuild: true}, {Components: components, FailBuild: true}}, true},
-	}
-
-	for _, test := range tests {
-		var err error
-		if CheckIfFailBuild([]services.ScanResponse{{Violations: test.violations}}) {
-			err = NewFailBuildError()
-		}
-		assert.Equal(t, test.expectedError, err != nil)
-	}
-}
-
 func TestViolationFailBuildNew(t *testing.T) {
 	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
 	cveId := "CVE-2024-1234"

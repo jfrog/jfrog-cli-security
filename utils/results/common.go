@@ -53,19 +53,6 @@ func NewFailBuildError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
 }
 
-// TODO eran delete this func
-// In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
-func CheckIfFailBuild(results []services.ScanResponse) bool {
-	for _, result := range results {
-		for _, violation := range result.Violations {
-			if violation.FailBuild {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // This func iterated every violation and checks if there is a violation that should fail the build.
 // The build should be failed by a violation if it holds the following conditions:
 // 1) The violation is set to fail the build
