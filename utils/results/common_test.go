@@ -22,7 +22,7 @@ import (
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
-func TestViolationFailBuildNew(t *testing.T) {
+func TestViolationFailBuild(t *testing.T) {
 	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
 	cveId := "CVE-2024-1234"
 
@@ -32,7 +32,7 @@ func TestViolationFailBuildNew(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			name: "non-applicable violations found in ScaResults.Violations with no skipping - build should fail",
+			name: "non-applicable violations with FailBuild & no skip-non-applicable in ScaResults.Violations - build should fail",
 			auditResults: &SecurityCommandResults{
 				EntitledForJas: true,
 				Targets: []*TargetResults{
@@ -80,7 +80,7 @@ func TestViolationFailBuildNew(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name: "non-applicable violations found in ScaResults.Violations with skipping - build should not fail",
+			name: "non-applicable violations with FailBuild & skip-non-applicable in ScaResults.Violations - build should not fail",
 			auditResults: &SecurityCommandResults{
 				EntitledForJas: true,
 				Targets: []*TargetResults{
@@ -128,7 +128,7 @@ func TestViolationFailBuildNew(t *testing.T) {
 			expectedResult: false,
 		},
 		{
-			name: "non-applicable violations found in DeprecatedXrayResults with no skipping - build should fail",
+			name: "non-applicable violations with FailBuild & no skip-non-applicable in DeprecatedXrayResults - build should fail",
 			auditResults: &SecurityCommandResults{
 				EntitledForJas: true,
 				Targets: []*TargetResults{
@@ -182,7 +182,7 @@ func TestViolationFailBuildNew(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name: "non-applicable violations found in DeprecatedXrayResults with skipping - build should not fail",
+			name: "non-applicable violations with FailBuild & skip-non-applicable in DeprecatedXrayResults - build should not fail",
 			auditResults: &SecurityCommandResults{
 				EntitledForJas: true,
 				Targets: []*TargetResults{
@@ -235,11 +235,174 @@ func TestViolationFailBuildNew(t *testing.T) {
 			},
 			expectedResult: false,
 		},
+		{
+			name: "no applicability results, violations with FailBuild in DeprecatedXrayResults - build should fail",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						ScanTarget: ScanTarget{Target: "test-target"},
+						ScaResults: &ScaScanResults{
+							Violations: []services.Violation{
+								{
+									Components:    components,
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     true,
+									Cves:          []services.Cve{{Id: cveId}},
+									Severity:      "High",
+								},
+							},
+						},
+						JasResults: nil, // No JAS results
+					},
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "no applicability results, violations with FailBuild in ScaResults.Violations - build should fail",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						ScanTarget: ScanTarget{Target: "test-target"},
+						ScaResults: &ScaScanResults{
+							DeprecatedXrayResults: []ScanResult[services.ScanResponse]{
+								{
+									Scan: services.ScanResponse{
+										Violations: []services.Violation{
+											{
+												Components:    components,
+												ViolationType: utils.ViolationTypeSecurity.String(),
+												FailBuild:     true,
+												Cves:          []services.Cve{{Id: cveId}},
+												Severity:      "High",
+											},
+										},
+									},
+								},
+							},
+						},
+						JasResults: nil, // No JAS results
+					},
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "multiple targets - first target should not fail, second target should fail",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						// First target - should not fail
+						ScanTarget: ScanTarget{Target: "test-target-1"},
+						ScaResults: &ScaScanResults{
+							Violations: []services.Violation{
+								{
+									// Violation 1: FailBuild & FailPr set to false - should not fail
+									Components:    components,
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     false,
+									FailPr:        false,
+									Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
+									Severity:      "High",
+								},
+								{
+									// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
+									Components:    components,
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     true,
+									Policies:      []services.Policy{{SkipNotApplicable: true}},
+									Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
+									Severity:      "High",
+								},
+							},
+						},
+						JasResults: &JasScansResults{
+							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
+								{
+									Scan: []*sarif.Run{
+										{
+											Tool: &sarif.Tool{
+												Driver: &sarif.ToolComponent{
+													Rules: []*sarif.ReportingDescriptor{
+														{
+															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-2222")),
+															Properties: &sarif.PropertyBag{
+																Properties: map[string]interface{}{
+																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						// Second target - should fail
+						ScanTarget: ScanTarget{Target: "test-target-2"},
+						ScaResults: &ScaScanResults{
+							Violations: []services.Violation{
+								{
+									// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
+									Components:    components,
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     true,
+									Policies:      []services.Policy{{SkipNotApplicable: false}},
+									Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
+									Severity:      "High",
+								},
+								{
+									// Violation 2: FailBuild & FailPr set to false - should not fail
+									Components:    components,
+									ViolationType: utils.ViolationTypeSecurity.String(),
+									FailBuild:     false,
+									FailPr:        false,
+									Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
+									Severity:      "High",
+								},
+							},
+						},
+						JasResults: &JasScansResults{
+							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
+								{
+									Scan: []*sarif.Run{
+										{
+											Tool: &sarif.Tool{
+												Driver: &sarif.ToolComponent{
+													Rules: []*sarif.ReportingDescriptor{
+														{
+															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-3333")),
+															Properties: &sarif.PropertyBag{
+																Properties: map[string]interface{}{
+																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true, // Should fail because second target has a violation that should fail
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			shouldFailBuild, err := CheckIfFailBuildNew(test.auditResults)
+			shouldFailBuild, err := CheckIfFailBuild(test.auditResults)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedResult, shouldFailBuild)
 		})
