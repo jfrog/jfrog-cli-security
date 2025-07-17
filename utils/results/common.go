@@ -77,15 +77,6 @@ func CheckIfFailBuildNew(auditResults *SecurityCommandResults) (shouldFailBuild 
 		// Get violations from the target
 		violations := target.ScaResults.Violations
 
-		// If no violations are found in the new flow, try to convert vulnerabilities from enriched SBOM to violations
-		if len(violations) == 0 && target.ScaResults.Sbom != nil && target.ScaResults.Sbom.Vulnerabilities != nil {
-			// Convert vulnerabilities from enriched SBOM to violations for fail-build checking
-			violations, err = convertVulnerabilitiesToViolations(target.ScaResults.Sbom, target.Target)
-			if err != nil {
-				return false, err
-			}
-		}
-
 		// Here we iterate the new violation results and check if any of them should fail the build.
 		_, _, err = ForEachScanGraphViolation(
 			target.ScanTarget,
@@ -136,59 +127,6 @@ func checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild *bool) func(violati
 		}
 		return nil
 	}
-}
-
-// convertVulnerabilitiesToViolations converts vulnerabilities from enriched SBOM to violations for fail-build checking
-func convertVulnerabilitiesToViolations(sbom *cyclonedx.BOM, target string) (violations []services.Violation, err error) {
-	if sbom == nil || sbom.Vulnerabilities == nil {
-		return nil, nil
-	}
-
-	for _, vulnerability := range *sbom.Vulnerabilities {
-		if vulnerability.Affects == nil || len(*vulnerability.Affects) == 0 {
-			continue
-		}
-
-		// Create a violation for each affected component
-		for _, affectedComponent := range *vulnerability.Affects {
-			// Find the component
-			component := cdxutils.SearchComponentByRef(sbom.Components, affectedComponent.Ref)
-			if component == nil {
-				continue
-			}
-
-			// Create a violation with default fail-build settings
-			violation := services.Violation{
-				IssueId:       vulnerability.ID,
-				Summary:       vulnerability.Description,
-				Severity:      cdxRatingToSeverity(vulnerability.Ratings).String(),
-				FailBuild:     false, // Default to false for converted vulnerabilities
-				FailPr:        false, // Default to false for converted vulnerabilities
-				ViolationType: utils.ViolationTypeSecurity.String(),
-				Components:    map[string]services.Component{},
-			}
-
-			// Add the component to the violation
-			compName, compVersion, _ := techutils.SplitPackageURL(component.PackageURL)
-			componentId := fmt.Sprintf("%s:%s", compName, compVersion)
-			violation.Components[componentId] = services.Component{
-				FixedVersions: []string{},
-				ImpactPaths:   [][]services.ImpactPathNode{},
-				Cpes:          []string{},
-			}
-
-			// Convert CVEs - extract from vulnerability ID or use a default
-			if vulnerability.ID != "" {
-				violation.Cves = append(violation.Cves, services.Cve{
-					Id: vulnerability.ID,
-				})
-			}
-
-			violations = append(violations, violation)
-		}
-	}
-
-	return violations, nil
 }
 
 type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
