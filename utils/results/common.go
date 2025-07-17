@@ -61,10 +61,7 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 	for _, target := range auditResults.Targets {
 		// We first check if JasResults exist so we can extract CA results and consider Applicability status when checking if the build should fail.
 		if target.JasResults == nil {
-			shouldFailBuild, err := checkIfFailBuildWithoutConsideringApplicability(target)
-			if err != nil {
-				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
-			}
+			shouldFailBuild := checkIfFailBuildWithoutConsideringApplicability(target)
 			if shouldFailBuild {
 				// If we found a violation that should fail the build, we return true.
 				return true, nil
@@ -122,10 +119,10 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 	return nil
 }
 
-func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) (bool, error) {
+func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool {
 	for _, newViolation := range target.ScaResults.Violations {
 		if newViolation.FailBuild || newViolation.FailPr {
-			return true, nil
+			return true
 		}
 	}
 
@@ -133,12 +130,12 @@ func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) (boo
 	for _, scanResponse := range target.GetScaScansXrayResults() {
 		for _, oldViolation := range scanResponse.Violations {
 			if oldViolation.FailBuild || oldViolation.FailPr {
-				return true, nil
+				return true
 			}
 		}
 	}
 
-	return false, nil
+	return false
 }
 
 func checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild *bool) func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
