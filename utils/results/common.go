@@ -53,9 +53,9 @@ func NewFailBuildError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
 }
 
-// This func iterated every violation and checks if there is a violation that should fail the build.
+// This func iterates every violation and checks if there is a violation that should fail the build.
 // The build should be failed if there exists at least one violation in any target that holds the following conditions:
-// 1) The violation is set to fail the build
+// 1) The violation is set to fail the build by FailBuild or FailPr
 // 2) The violation has applicability status other than 'NotApplicable' OR the violation has 'NotApplicable' status and is not set to skip-non-applicable
 func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 	for _, target := range auditResults.Targets {
@@ -134,7 +134,6 @@ func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool
 			}
 		}
 	}
-
 	return false
 }
 

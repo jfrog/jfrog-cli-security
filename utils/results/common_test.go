@@ -32,32 +32,32 @@ func TestViolationFailBuild(t *testing.T) {
 	}{
 		{
 			name:           "non-applicable violations with FailBuild & no skip-non-applicable in ScaResults.Violations - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, true, utils.NewBoolPtr(false)),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(false)),
 			expectedResult: true,
 		},
 		{
 			name:           "non-applicable violations with FailBuild & skip-non-applicable in ScaResults.Violations - build should not fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, true, utils.NewBoolPtr(true)),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(true, true, utils.NewBoolPtr(true)),
 			expectedResult: false,
 		},
 		{
 			name:           "non-applicable violations with FailBuild & no skip-non-applicable in DeprecatedXrayResults - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, true, utils.NewBoolPtr(false)),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(false)),
 			expectedResult: true,
 		},
 		{
 			name:           "non-applicable violations with FailBuild & skip-non-applicable in DeprecatedXrayResults - build should not fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, true, utils.NewBoolPtr(true)),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(false, true, utils.NewBoolPtr(true)),
 			expectedResult: false,
 		},
 		{
 			name:           "no applicability results, violations with FailBuild in DeprecatedXrayResults - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(false, false, true, nil),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(false, false, nil),
 			expectedResult: true,
 		},
 		{
 			name:           "no applicability results, violations with FailBuild in ScaResults.Violations - build should fail",
-			auditResults:   createSecurityCommandResultsForFailBuildTest(true, false, true, nil),
+			auditResults:   createSecurityCommandResultsForFailBuildTest(true, false, nil),
 			expectedResult: true,
 		},
 		{
@@ -180,7 +180,7 @@ func TestViolationFailBuild(t *testing.T) {
 	}
 }
 
-func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, failBuild bool, skipNotApplicable *bool) *SecurityCommandResults {
+func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasResults bool, skipNotApplicable *bool) *SecurityCommandResults {
 	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
 	cveId := "CVE-2024-1234"
 
@@ -192,7 +192,7 @@ func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasR
 	violation := services.Violation{
 		Components:    components,
 		ViolationType: utils.ViolationTypeSecurity.String(),
-		FailBuild:     failBuild,
+		FailBuild:     true,
 		Cves:          []services.Cve{{Id: cveId}},
 		Severity:      "High",
 	}
