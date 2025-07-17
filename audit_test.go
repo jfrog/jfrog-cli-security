@@ -1057,3 +1057,25 @@ func TestAuditNewScaCycloneDxYarn(t *testing.T) {
 		},
 	})
 }
+func TestXrayAuditGemJson(t *testing.T) {
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayAuditGem(t, string(format.Json))
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 1},
+	})
+}
+
+func TestXrayAuditGemSimpleJson(t *testing.T) {
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayAuditGem(t, string(format.SimpleJson))
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 1},
+	})
+}
+
+func testXrayAuditGem(t *testing.T, format string) string {
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gem"))
+	defer cleanUp()
+	addDummyPackageDescriptor(t, false)
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format="+format)
+}
