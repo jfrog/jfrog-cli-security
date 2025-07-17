@@ -76,7 +76,7 @@ const (
 	MinArtiGolangSupport      = "7.87.0"
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
-	MinArtiGradlesupport      = "7.63.5"
+	MinArtiGradleGemSupport   = "7.63.5"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -96,10 +96,10 @@ var supportedTech = map[techutils.Technology]func(ca *CurationAuditCommand) (boo
 		return ca.checkSupportByVersionOrEnv(techutils.Nuget, MinArtiNuGetSupport)
 	},
 	techutils.Gradle: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Gradle, MinArtiGradlesupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Gradle, MinArtiGradleGemSupport)
 	},
 	techutils.Gem: func(ca *CurationAuditCommand) (bool, error) {
-		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiPassThroughSupport)
+		return ca.checkSupportByVersionOrEnv(techutils.Gem, MinArtiGradleGemSupport)
 	},
 }
 
@@ -454,17 +454,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		return err
 	}
 	rootNode := depTreeResult.FullDepTrees[0]
-	// we don't pass artiUrl and repo as we don't want to download the package, only to get the name and version.
-	var projectName, projectScope, projectVersion string
-	// Check if this technology needs a static project
-	staticProjectName := getStaticProjectName(tech)
-	if staticProjectName != "" {
-		// Use the static project name for technologies that don't support project names metadata file
-		projectName = staticProjectName
-	} else {
-		// Extract project name from the dependency tree for technologies that support it
-		_, projectName, projectScope, projectVersion = getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
-	}
+	// Extract project name from the dependency tree
+	_, projectName, projectScope, projectVersion := getUrlNameAndVersionByTech(tech, rootNode, nil, "", "")
 	// If the project name is not set, we use the current working directory name
 	if projectName == "" {
 		workPath, err := os.Getwd()
@@ -1016,6 +1007,13 @@ func getGoNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, 
 
 // https://hts1.jfrog.io/artifactory/api/gems/test-gems-remote/gems/devise-4.7.1.gem -O -L
 func getGemNameScopeAndVersion(id, artiUrl, repo string) (downloadUrls []string, name, scope, version string) {
+	// For Ruby technology, always return Ruby-Project as the project name
+	// This matches the original getStaticProjectName behavior and unit test expectations
+	if artiUrl == "" && repo == "" {
+		// This is a project name extraction call (not a dependency processing call)
+		log.Debug("Ruby project name extraction - returning Ruby-Project")
+		return nil, "Ruby-Project", "", ""
+	}
 	id = strings.TrimPrefix(id, "rubygems://")
 	allParts := strings.Split(id, ":")
 	if len(allParts) != 2 {
@@ -1118,18 +1116,6 @@ func buildNpmDownloadUrl(url, repo, name, scope, version string) []string {
 		packageUrl = fmt.Sprintf("%s/api/npm/%s/%s/-/%s-%s.tgz", strings.TrimSuffix(url, "/"), repo, name, name, version)
 	}
 	return []string{packageUrl}
-}
-
-// getStaticProjectName returns a static project name for technologies that don't support
-// project names in their metadata files. Returns empty string for technologies that do support it.
-func getStaticProjectName(tech techutils.Technology) string {
-	switch tech {
-	case techutils.Gem:
-		return "Ruby-Project"
-	// Add more technologies here as needed
-	default:
-		return ""
-	}
 }
 
 func GetCurationOutputFormat(formatFlagVal string) (format outFormat.OutputFormat, err error) {

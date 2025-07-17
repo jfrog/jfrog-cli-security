@@ -1124,6 +1124,59 @@ func Test_getGradleNameScopeAndVersion(t *testing.T) {
 	}
 }
 
+func Test_getGemNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Realistic package from example - devise",
+			id:               "rubygems://devise:4.7.1",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "test-gems-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/gems/test-gems-remote/gems/devise-4.7.1.gem"},
+			wantName:         "devise",
+			wantScope:        "",
+			wantVersion:      "4.7.1",
+		},
+		{
+			name:             "Project name extraction case",
+			id:               "rubygems://some-gem:1.0.0",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "Ruby-Project",
+			wantScope:        "",
+			wantVersion:      "",
+		},
+		{
+			name:             "Invalid format case",
+			id:               "rubygems://invalid-format",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "test-gems-remote",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantScope:        "",
+			wantVersion:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getGemNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
 func Test_getNugetNameScopeAndVersion(t *testing.T) {
 	tests := []struct {
 		name        string
