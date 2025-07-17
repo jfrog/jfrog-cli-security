@@ -55,13 +55,15 @@ func TestCountContributorsFlags(t *testing.T) {
 }
 
 func testGitAuditCommand(t *testing.T, params auditCommandTestParams) (string, error) {
-	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git", "audit"}, getAuditCmdArgs(params)...)...)
+	return securityTests.PlatformCli.RunCliCmdWithOutputs(t, append([]string{"git"}, getAuditCmdArgs(params)...)...)
 }
 
 func createTestProjectRunGitAuditAndValidate(t *testing.T, projectPath string, gitAuditParams auditCommandTestParams, xrayVersion, xscVersion, expectError string, validationParams validations.ValidationParams) {
 	// Create the project to scan
 	_, cleanUpProject := securityTestUtils.CreateTestProjectFromZipAndChdir(t, projectPath)
 	defer cleanUpProject()
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
 	// Run the audit command with git repo and verify violations are reported to the platform.
 	output, err := testGitAuditCommand(t, gitAuditParams)
 	if expectError != "" {
