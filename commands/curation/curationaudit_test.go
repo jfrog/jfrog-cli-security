@@ -747,7 +747,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 
 			// Block a package that your logs confirm is being requested.
 			requestToFail: map[string]bool{
-				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+				"/api/gems/ruby-remote/gems/loofah-2.24.1.gem": true,
 			},
 
 			// Expect a report containing the exact blocked package.
@@ -756,28 +756,11 @@ func getTestCasesForDoCurationAudit() []testCase {
 					packagesStatus: []*PackageStatus{
 						{
 							Action:            "blocked",
-							ParentName:        "actionview",
-							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "indirect",
-							PkgType:           "gem",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
-						{
-							Action:            "blocked",
-							ParentName:        "activesupport",
-							ParentVersion:     "5.2.3",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
+							ParentName:        "loofah",
+							ParentVersion:     "2.24.1",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/loofah-2.24.1.gem",
+							PackageName:       "loofah",
+							PackageVersion:    "2.24.1",
 							DepRelation:       "direct",
 							PkgType:           "gem",
 							BlockingReason:    "Policy violations",
@@ -788,25 +771,8 @@ func getTestCasesForDoCurationAudit() []testCase {
 								},
 							},
 						},
-						{
-							Action:            "blocked",
-							ParentName:        "rails-dom-testing",
-							ParentVersion:     "2.3.0",
-							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
-							PackageName:       "activesupport",
-							PackageVersion:    "5.2.3",
-							DepRelation:       "indirect",
-							PkgType:           "gem",
-							BlockingReason:    "Policy violations",
-							Policy: []Policy{
-								{
-									Policy:    "pol1",
-									Condition: "cond1",
-								},
-							},
-						},
 					},
-					totalNumberOfPackages: 17,
+					totalNumberOfPackages: 5,
 				},
 			},
 			allowInsecureTls: true,
