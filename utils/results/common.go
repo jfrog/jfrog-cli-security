@@ -59,23 +59,19 @@ func NewFailBuildError() error {
 // 2) The violation has applicability status other than 'NotApplicable' OR the violation has 'NotApplicable' status and is not set to skip-non-applicable
 func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 	for _, target := range auditResults.Targets {
+		shouldFailBuild := false
 		// We first check if JasResults exist so we can extract CA results and consider Applicability status when checking if the build should fail.
 		if target.JasResults == nil {
-			shouldFailBuild := checkIfFailBuildWithoutConsideringApplicability(target)
-			if shouldFailBuild {
-				// If we found a violation that should fail the build, we return true.
-				return true, nil
-			}
+			shouldFailBuild = checkIfFailBuildWithoutConsideringApplicability(target)
 		} else {
 			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
-			var shouldFailBuild bool
 			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
 				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
 			}
-			if shouldFailBuild {
-				// If we found a violation that should fail the build, we return true.
-				return true, nil
-			}
+		}
+		if shouldFailBuild {
+			// If we found a violation that should fail the build, we return true.
+			return true, nil
 		}
 	}
 	return false, nil
