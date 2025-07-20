@@ -762,7 +762,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
-							PkgType:           "gem",
+							PkgType:           "ruby",
 							BlockingReason:    "Policy violations",
 							Policy: []Policy{
 								{
@@ -779,7 +779,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "direct",
-							PkgType:           "gem",
+							PkgType:           "ruby",
 							BlockingReason:    "Policy violations",
 							Policy: []Policy{
 								{
@@ -796,7 +796,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							PackageName:       "activesupport",
 							PackageVersion:    "5.2.3",
 							DepRelation:       "indirect",
-							PkgType:           "gem",
+							PkgType:           "ruby",
 							BlockingReason:    "Policy violations",
 							Policy: []Policy{
 								{
