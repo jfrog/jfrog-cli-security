@@ -533,6 +533,13 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 			result.totalNumberOfPackages = 0
 		}
 	}
+	// the number of packages is not deterministic for gem, as it depends on the version of the package manager.
+	if testCase.tech == techutils.Gem {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
 	assert.Equal(t, testCase.expectedResp, results)
 	for _, requestDone := range testCase.expectedRequest {
 		assert.True(t, requestDone)
@@ -806,7 +813,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 							},
 						},
 					},
-					totalNumberOfPackages: 24,
+					totalNumberOfPackages: 0, // Ignore package count for cross-platform compatibility
 				},
 			},
 			allowInsecureTls: true,
