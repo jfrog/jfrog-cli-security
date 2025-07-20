@@ -1065,10 +1065,10 @@ func TestXrayAuditGemJson(t *testing.T) {
 	})
 }
 
-func TestXrayAuditGemSimpleJson(t *testing.T) {
+func TestXrayAuditGemCycloneDx(t *testing.T) {
 	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditGem(t, string(format.SimpleJson))
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+	output := testXrayAuditGem(t, string(format.CycloneDx))
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
 		Total: &validations.TotalCount{Vulnerabilities: 1},
 	})
 }
