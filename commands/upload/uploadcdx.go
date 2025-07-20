@@ -121,23 +121,16 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 
 func generateURLFromPath(baseUrl, repoPath, filePath string, metadata *cyclonedx.Metadata) (string, error) {
 	artifactName := filepath.Base(filePath)
-
-	metadataComponent := artifactName
-	shaPart := ""
-	if metadata == nil || metadata.Component == nil || metadata.Component.Version == "" {
-		// Calculate SHA256
-		sha256, err := calculateFileSHA256(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to calculate sha256: %w", err)
-		}
-		if sha256 != "" {
-			shaPart = fmt.Sprintf("sha256:%s/", sha256)
-		}
-	} else {
-		metadataComponent = metadata.Component.Name
+	// Calculate SHA256
+	sha256, err := calculateFileSHA256(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate sha256: %w", err)
+	}
+	if sha256 != "" {
+		sha256 = fmt.Sprintf("sha256:%s/", sha256)
 	}
 
-	packageID := fmt.Sprintf("generic://%s%s", shaPart, metadataComponent)
+	packageID := fmt.Sprintf("generic://%s%s", sha256, artifactName)
 	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID), nil
 }
 
