@@ -1074,7 +1074,7 @@ func TestXrayAuditGemCycloneDx(t *testing.T) {
 }
 
 func testXrayAuditGem(t *testing.T, format string) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gem"))
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gem", "audit-gem"))
 	defer cleanUp()
 	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format="+format)
 }
