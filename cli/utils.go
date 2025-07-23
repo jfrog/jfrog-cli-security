@@ -111,7 +111,7 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomScanStrategy) {
 	var bomGenerator bom.SbomGenerator = buildinfo.NewBuildInfoBomGenerator()
 	var scanStrategy scan.SbomScanStrategy = scangraph.NewScanGraphStrategy()
-	if c.GetBoolFlagValue("new-sca") {
+	if c.GetBoolFlagValue(flags.StaticSca) {
 		bomGenerator = scang.NewScangBomGenerator()
 		scanStrategy = enrich.NewEnrichScanStrategy()
 	}

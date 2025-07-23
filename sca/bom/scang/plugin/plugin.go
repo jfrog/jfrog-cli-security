@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -26,11 +27,11 @@ import (
 const (
 	defaultScangPluginVersion     = "0.0.1"
 	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
-	scangPluginRtRepository       = "scang/v1"
-
-	scangPluginDirName        = "scang"
-	ScangPluginExecutableName = "xray-scan-plugin"
-	pluginName                = "scang"
+	scangPluginRtRepository       = "xsc-scan-lib/v0"
+	scangZipName                  = "scang-plugin.zip"
+	scangPluginDirName            = "scang"
+	ScangPluginExecutableName     = "xray-scan-plugin"
+	pluginName                    = "scang"
 
 	scangPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
 )
@@ -178,7 +179,7 @@ func DownloadScangPluginIfNeeded() error {
 	}
 	log.Info("The 'SCANG Plugin' app is not cached locally. Downloading it now...")
 	// Download the scang plugin file
-	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, false)
+	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, true)
 }
 
 func GetScangPluginDownloadPath() (string, error) {
@@ -186,7 +187,12 @@ func GetScangPluginDownloadPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Join(scangPluginRtRepository, getScangPluginVersion(), osAndArc, getScangExecutableName()), nil
+	// Split the osAndArc into OS and Architecture (on '-' character).
+	tokens := strings.Split(osAndArc, "-")
+	if len(tokens) != 2 {
+		return "", fmt.Errorf("invalid OS and Architecture format: %s", osAndArc)
+	}
+	return path.Join(scangPluginRtRepository, getScangPluginVersion(), tokens[0], tokens[1], scangZipName), nil
 }
 
 func getScangPluginVersion() string {

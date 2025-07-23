@@ -114,7 +114,7 @@ const (
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
-	NewSca              = "new-sca"
+	StaticSca           = "static-sca"
 
 	// Unique audit flags
 	auditPrefix                  = "audit-"
@@ -168,7 +168,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		NewSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
 	},
 	UploadCdx: {
 		UploadRepoPath,
@@ -184,7 +184,7 @@ var commandFlags = map[string][]string{
 		// Output params
 		Licenses, OutputFormat, ExtendedTable,
 		// Scan Logic params
-		NewSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile,
@@ -293,7 +293,7 @@ var flagsMap = map[string]components.Flag{
 	RequirementsFile:          components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
 	AnalyzerManagerCustomPath: components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
 	ScangBinaryCustomPath:     components.NewStringFlag(ScangBinaryCustomPath, "Defines the custom path to the scang binary.", components.SetHiddenStrFlag()),
-	NewSca:                    components.NewBoolFlag(NewSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
+	StaticSca:                 components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
 	CurationOutput:            components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
 	Sca:                       components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
 	Iac:                       components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
