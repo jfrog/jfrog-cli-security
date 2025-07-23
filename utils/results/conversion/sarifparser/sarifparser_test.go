@@ -587,14 +587,14 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			subScan: utils.SecretsScan,
 			input: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWd(fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file"))),
+					sarifutils.CreateDummyResultInPathWithPartialFingerprint(fmt.Sprintf("file://%s", filepath.Join(wd, "dir", "file")), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
 					// No location, should be removed in the output
 					sarifutils.CreateDummyResult("some-markdown", "some-other-msg", "rule", "level"),
 				),
 			},
 			expectedResults: []*sarif.Run{
 				sarifutils.CreateRunWithDummyResultsInWdWithHelp("rule-msg", "rule-markdown", fmt.Sprintf("file://%s", wd),
-					sarifutils.CreateDummyResultInPath(filepath.ToSlash(filepath.Join("dir", "file"))),
+					sarifutils.CreateDummyResultInPathWithPartialFingerprint(filepath.ToSlash(filepath.Join("dir", "file")), map[string]string{"jfrog-algo": "jfrog-algo-value"}),
 				),
 			},
 		},

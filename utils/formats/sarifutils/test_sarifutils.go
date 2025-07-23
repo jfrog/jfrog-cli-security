@@ -93,6 +93,12 @@ func CreateDummyResultInPath(fileName string) *sarif.Result {
 	return CreateResultWithOneLocation(fileName, 0, 0, 0, 0, "snippet", "rule", "level")
 }
 
+func CreateDummyResultInPathWithPartialFingerprint(fileName string, partialFingerprints map[string]string) *sarif.Result {
+	result := CreateResultWithOneLocation(fileName, 0, 0, 0, 0, "snippet", "rule", "level")
+	result.PartialFingerprints = partialFingerprints
+	return result
+}
+
 func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
 	result := &sarif.Result{
 		Message: &sarif.Message{Text: &msg, Markdown: &markdown},
