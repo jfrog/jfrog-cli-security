@@ -240,7 +240,12 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if failBuild && auditResults.HasViolationContext() && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(auditResults)
+	if err != nil {
+		return fmt.Errorf("failed to check if the build should fail: %w", err)
+	}
+
+	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
 		err = results.NewFailBuildError()
 	}
 	return
@@ -375,11 +380,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			// No need to generate the SBOM if we are not going to use it.
 			continue
 		}
-		targetResultsToCompare, err := getTargetResultsToCompare(cmdResults, params.ResultsToCompare(), targetResult)
-		if err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to get target results to compare: %s", err.Error()), false)
-			continue
-		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
@@ -387,7 +387,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 				ScanResultsOutputDir: params.scanResultsOutputDir,
 				// Diff mode - SCA
 				DiffMode:              params.DiffMode(),
-				TargetResultToCompare: targetResultsToCompare,
+				TargetResultToCompare: getTargetResultsToCompare(cmdResults, params.ResultsToCompare(), targetResult),
 			},
 		)
 	}
@@ -399,7 +399,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	log.Info(fmt.Sprintf("Performing scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
 }
 
-func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults, err error) {
+func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults) {
 	if resultsToCompare == nil {
 		return
 	}
@@ -407,8 +407,10 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
 		resultsToCompare,
 	)
+	// Let's check if the target results to compare are valid.
+	// If the current target result is a new module, it will not have any previous target results to compare with.
 	if targetResultsToCompare == nil || targetResultsToCompare.ScaResults == nil || targetResultsToCompare.ScaResults.Sbom == nil {
-		err = fmt.Errorf("no target results found to compare")
+		log.Debug(fmt.Sprintf("No previous target results found to compare with for %s", targetResult.Target))
 	}
 	return
 }
