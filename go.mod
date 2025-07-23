@@ -15,7 +15,7 @@ require (
 	github.com/jfrog/froggit-go v1.20.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.5.0
+	github.com/jfrog/jfrog-cli-artifactory v0.5.1
 	github.com/jfrog/jfrog-cli-core/v2 v2.59.3
 	github.com/jfrog/jfrog-client-go v1.54.3
 	github.com/magiconair/properties v1.8.9
@@ -53,7 +53,7 @@ require (
 	github.com/gfleury/go-bitbucket-v1 v0.0.0-20230825095122-9bc1711434ab // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
