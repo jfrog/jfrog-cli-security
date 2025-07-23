@@ -57,8 +57,7 @@ func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error
 
 func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	// Validate the file is cdx
-	metadata, err := validateInputFile(ucc.fileToUpload)
-	if err != nil {
+	if _, err = validateInputFile(ucc.fileToUpload); err != nil {
 		return
 	}
 	// Upload the CycloneDx file to the JFrog repository
@@ -66,7 +65,7 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadata)
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
@@ -119,7 +118,7 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository)
 }
 
-func generateURLFromPath(baseUrl, repoPath, filePath string, metadata *cyclonedx.Metadata) (string, error) {
+func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
 	artifactName := filepath.Base(filePath)
 	// Calculate SHA256
 	sha256, err := calculateFileSHA256(filePath)
