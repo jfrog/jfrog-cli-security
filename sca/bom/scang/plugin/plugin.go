@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	// "strings"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -28,10 +28,10 @@ const (
 	defaultScangPluginVersion     = "0.0.1"
 	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
 	scangPluginRtRepository       = "xsc-scan-lib/v0"
-
-	scangPluginDirName        = "scang"
-	ScangPluginExecutableName = "xray-scan-plugin"
-	pluginName                = "scang"
+	scangZipName                  = "scang-plugin.zip"
+	scangPluginDirName            = "scang"
+	ScangPluginExecutableName     = "xray-scan-plugin"
+	pluginName                    = "scang"
 
 	scangPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
 )
@@ -188,11 +188,11 @@ func GetScangPluginDownloadPath() (string, error) {
 		return "", err
 	}
 	// Split the osAndArc into OS and Architecture (on '-' character).
-	// For example, "linux-amd64" will be split into "linux" and "amd64"
-	// os := strings.Split(osAndArc, "-")[0]
-	// arch := strings.Split(osAndArc, "-")[1]
-	// downloadArtifact := fmt.Sprintf("%s-lib-%s", ScangPluginExecutableName, getScangPluginVersion())
-	return path.Join(scangPluginRtRepository, getScangPluginVersion(), osAndArc, getScangExecutableName()), nil
+	tokens := strings.Split(osAndArc, "-")
+	if len(tokens) != 2 {
+		return "", fmt.Errorf("invalid OS and Architecture format: %s", osAndArc)
+	}
+	return path.Join(scangPluginRtRepository, getScangPluginVersion(), tokens[0], tokens[1], scangZipName), nil
 }
 
 func getScangPluginVersion() string {
