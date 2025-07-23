@@ -3,6 +3,7 @@ package output
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,7 +25,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
 const (
@@ -73,6 +74,7 @@ func newResultSummary(cmdResults *results.SecurityCommandResults, serverDetails 
 	summary.ResultType = cmdResults.CmdType
 	summary.Args = &ResultSummaryArgs{BaseJfrogUrl: serverDetails.Url}
 	summary.Summary, err = conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: vulnerabilitiesRequested,
 		HasViolationContext:    violationsRequested,
 		Pretty:                 true,
@@ -184,19 +186,24 @@ func RecordSecurityCommandSummary(content ScanCommandResultSummary) (err error) 
 	return manager.Record(content)
 }
 
-func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulnerabilities, hasViolationContext bool, requestedScans ...utils.SubScanType) (err error) {
+func RecordSarifOutput(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails, includeVulnerabilities, hasViolationContext bool, requestedScans ...utils.SubScanType) (err error) {
 	// Verify if we should record the results
 	manager, err := getRecordManager()
 	if err != nil || manager == nil {
 		return
 	}
-	if !cmdResults.EntitledForJas || !commandsummary.StaticMarkdownConfig.IsExtendedSummary() {
-		// If no JAS no GHAS
+	record, err := ifNoJasNoGHAS(cmdResults, serverDetails)
+	if err != nil {
+		return
+	}
+	if !record {
+		// No JAS no GHAS
 		log.Info("Results can be uploaded to Github security tab automatically by upgrading your JFrog subscription.")
 		return
 	}
 	// Convert the results to SARIF format
 	sarifReport, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
+		PlatformUrl:            serverDetails.Url,
 		IncludeVulnerabilities: includeVulnerabilities,
 		HasViolationContext:    hasViolationContext,
 		PatchBinaryPaths:       true,
@@ -212,6 +219,13 @@ func RecordSarifOutput(cmdResults *results.SecurityCommandResults, includeVulner
 		return errorutils.CheckError(err)
 	}
 	return manager.RecordWithIndex(out, commandsummary.SarifReport)
+}
+
+func ifNoJasNoGHAS(cmdResults *results.SecurityCommandResults, serverDetails *config.ServerDetails) (extended bool, err error) {
+	if !cmdResults.EntitledForJas {
+		return
+	}
+	return commandsummary.CheckExtendedSummaryEntitled(serverDetails.Url)
 }
 
 func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
@@ -230,11 +244,7 @@ func CombineSarifOutputFiles(dataFilePaths []string) (data []byte, err error) {
 	if err != nil {
 		return
 	}
-	combined, err := sarifutils.CombineReports(reports...)
-	if err != nil {
-		return
-	}
-	return utils.GetAsJsonBytes(combined, false, false)
+	return utils.GetAsJsonBytes(sarifutils.CombineReports(reports...), false, false)
 }
 
 func loadSarifReport(dataFilePath string) (report *sarif.Report, err error) {
@@ -520,12 +530,37 @@ func getJfrogUrl(index commandsummary.Index, args ResultSummaryArgs, summary *fo
 		return Link.Format(commandsummary.StaticMarkdownConfig.GetExtendedSummaryLangPage(), "🐸 Unlock detailed findings")
 	}
 	if moreInfoUrls := summary.GetMoreInfoUrls(); len(moreInfoUrls) > 0 {
-		return Link.Format(moreInfoUrls[0], "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(moreInfoUrls[0], index), "See the results of the scan in JFrog")
 	}
 	if defaultUrl := args.GetUrl(index, summary.GetScanIds()...); defaultUrl != "" {
-		return Link.Format(defaultUrl, "See the results of the scan in JFrog")
+		return Link.Format(addAnalyticsQueryParamsIfNeeded(defaultUrl, index), "See the results of the scan in JFrog")
 	}
 	return
+}
+
+// adds analytics query params to the url if running in Github
+func addAnalyticsQueryParamsIfNeeded(platformUrl string, index commandsummary.Index) string {
+	githubJobId := os.Getenv(utils.JfrogExternalJobIdEnv)
+	if githubJobId == "" {
+		// Not running in Github no need to add analytics
+		return platformUrl
+	}
+	// M=3 (type of event)
+	suffixValues := []string{"s=1", "m=3", fmt.Sprintf("gh_job_id=%s", url.QueryEscape(githubJobId))}
+	// Add section analytics
+	indexValue := "gh_section="
+	switch index {
+	case commandsummary.BuildScan:
+		indexValue += "build"
+	default:
+		indexValue += "on_demand_scan"
+	}
+	suffixValues = append(suffixValues, indexValue)
+	// Add the suffix to the url
+	if strings.Contains(platformUrl, "?") {
+		return fmt.Sprintf("%s&%s", platformUrl, strings.Join(suffixValues, "&"))
+	}
+	return fmt.Sprintf("%s?%s", platformUrl, strings.Join(suffixValues, "&"))
 }
 
 func (mg DynamicMarkdownGenerator) generateResultsMarkdown(violations bool, moreInfoUrl string, content *formats.ScanResultSummary) (markdown string) {

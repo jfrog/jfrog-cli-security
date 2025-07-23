@@ -5,11 +5,17 @@ import (
 	"crypto"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
+	xscutils "github.com/jfrog/jfrog-client-go/xsc/services/utils"
+	orderedJson "github.com/virtuald/go-ordered-json"
+
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"golang.org/x/exp/slices"
 
@@ -17,6 +23,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
 
@@ -24,16 +31,23 @@ const (
 	NodeModulesPattern = "**/*node_modules*/**"
 	JfMsiEnvVariable   = "JF_MSI"
 
-	BaseDocumentationURL   = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
-	JasInfoURL             = "https://jfrog.com/xray/"
-	EntitlementsMinVersion = "3.66.5"
+	BaseDocumentationURL          = "https://docs.jfrog-applications.jfrog.io/jfrog-security-features/"
+	JasInfoURL                    = "https://jfrog.com/xray/"
+	EntitlementsMinVersion        = "3.66.5"
+	GitRepoKeyAnalyticsMinVersion = "3.114.0"
+
+	XrayToolName = "JFrog Xray Scanner"
+
+	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
+	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
+	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
 )
 
 var (
 	// Exclude pattern for files.
-	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**"}
+	DefaultJasExcludePatterns = []string{"**/.git/**", "**/*test*/**", "**/*venv*/**", NodeModulesPattern, "**/target/**", "**/dist/**"}
 	// Exclude pattern for directories.
-	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*"}
+	DefaultScaExcludePatterns = []string{"*.git*", "*node_modules*", "*target*", "*venv*", "*test*", "dist"}
 )
 
 const (
@@ -48,6 +62,21 @@ const (
 	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
 )
 
+var subScanTypeToText = map[SubScanType]string{
+	ContextualAnalysisScan: "Contextual Analysis",
+	ScaScan:                "SCA",
+	IacScan:                "IaC",
+	SastScan:               "SAST",
+	SecretsScan:            "Secrets",
+}
+
+func (subScan SubScanType) ToTextString() string {
+	if text, ok := subScanTypeToText[subScan]; ok {
+		return text
+	}
+	return string(subScan)
+}
+
 type ViolationIssueType string
 
 func (v ViolationIssueType) String() string {
@@ -55,6 +84,10 @@ func (v ViolationIssueType) String() string {
 }
 
 type SubScanType string
+
+func (s SubScanType) String() string {
+	return string(s)
+}
 
 const (
 	SourceCode  CommandType = "source_code"
@@ -66,10 +99,6 @@ const (
 )
 
 type CommandType string
-
-func (s SubScanType) String() string {
-	return string(s)
-}
 
 func (s CommandType) IsTargetBinary() bool {
 	return s == Binary || s == DockerImage
@@ -85,6 +114,37 @@ func IsScanRequested(cmdType CommandType, subScan SubScanType, requestedScans ..
 		return false
 	}
 	return len(requestedScans) == 0 || slices.Contains(requestedScans, subScan)
+}
+
+func IsJASRequested(cmdType CommandType, requestedScans ...SubScanType) bool {
+	return IsScanRequested(cmdType, ContextualAnalysisScan, requestedScans...) ||
+		IsScanRequested(cmdType, SecretsScan, requestedScans...) ||
+		IsScanRequested(cmdType, IacScan, requestedScans...) ||
+		IsScanRequested(cmdType, SastScan, requestedScans...)
+}
+
+func GetScanFindingsLog(scanType SubScanType, vulnerabilitiesCount, violationsCount int) string {
+
+	if vulnerabilitiesCount == 0 && violationsCount == 0 {
+		return fmt.Sprintf("No %s findings", subScanTypeToText[scanType])
+	}
+	msg := "Found"
+	hasVulnerabilities := vulnerabilitiesCount > 0
+	if hasVulnerabilities {
+		if scanType == SecretsScan {
+			msg += fmt.Sprintf(" %d %s exposures", vulnerabilitiesCount, subScanTypeToText[scanType])
+		} else {
+			msg += fmt.Sprintf(" %d %s vulnerabilities", vulnerabilitiesCount, subScanTypeToText[scanType])
+		}
+	}
+	if violationsCount > 0 {
+		if hasVulnerabilities {
+			msg = fmt.Sprintf("%s (%d violations)", msg, violationsCount)
+		} else {
+			msg += fmt.Sprintf(" %d %s violations", violationsCount, subScanTypeToText[scanType])
+		}
+	}
+	return msg
 }
 
 func IsCI() bool {
@@ -112,7 +172,7 @@ func UniqueUnion[T comparable](arr []T, elements ...T) []T {
 
 func GetAsJsonBytes(output interface{}, escapeValues, indent bool) (results []byte, err error) {
 	if escapeValues {
-		if results, err = json.Marshal(output); errorutils.CheckError(err) != nil {
+		if results, err = orderedJson.Marshal(output); errorutils.CheckError(err) != nil {
 			return
 		}
 	} else {
@@ -146,6 +206,10 @@ func GetAsJsonString(output interface{}, escapeValues, indent bool) (string, err
 	return string(results), nil
 }
 
+func NewStringPtr(v string) *string {
+	return &v
+}
+
 func NewBoolPtr(v bool) *bool {
 	return &v
 }
@@ -162,12 +226,29 @@ func NewFloat64Ptr(v float64) *float64 {
 	return &v
 }
 
+func NewStrPtr(v string) *string {
+	return &v
+}
+
 func Md5Hash(values ...string) (string, error) {
 	return toHash(crypto.MD5, values...)
 }
 
 func Sha1Hash(values ...string) (string, error) {
 	return toHash(crypto.SHA1, values...)
+}
+
+func Sha256Hash(values ...string) (string, error) {
+	return toHash(crypto.SHA256, values...)
+}
+
+func FileSha256(filePath string) (string, error) {
+	// Read the file content
+	content, err := fileutils.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return Sha256Hash(string(content))
 }
 
 func toHash(hash crypto.Hash, values ...string) (string, error) {
@@ -219,19 +300,71 @@ func splitEnvVar(envVar string) (key, value string) {
 	return split[0], strings.Join(split[1:], "=")
 }
 
-func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string) (err error) {
-	// TODO this function should be in utils/results/results.go after the refactor, since it is a common code for Jas and SCA scanners
-	// TODO AFTER merging the refactor - make sure to create a new directory for every Scan Target and convert results to Sarif before writing them to file
-	var curTimeHash string
-	if curTimeHash, err = Md5Hash(time.Now().String()); err != nil {
-		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
+func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
+	bom = cyclonedx.NewBOM()
+	file, err := os.Open(cdxFilePath)
+	if errorutils.CheckError(err) != nil {
+		return nil, fmt.Errorf("failed to open cdx file %s: %w", cdxFilePath, err)
 	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+	if err = cyclonedx.NewBOMDecoder(file, cyclonedx.BOMFileFormatJSON).Decode(bom); err != nil {
+		return nil, fmt.Errorf("failed to decode provided cdx file %s: %w", cdxFilePath, err)
+	}
+	return bom, nil
+}
 
-	resultsFileName := strings.ToLower(scanType) + "_results_" + curTimeHash + ".json"
-	resultsFileFullPath := filepath.Join(scanResultsOutputDir, resultsFileName)
-	log.Debug(fmt.Sprintf("Scans output directory was provided, saving %s scan results to file '%s'...", scanType, resultsFileFullPath))
-	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); err != nil {
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
+	return SaveCdxContentToFile(pathToSave, bom)
+}
+
+func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
+	file, err := os.Create(pathToSave)
+	if err != nil {
+		return errorutils.CheckError(err)
+	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
+}
+
+func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
+}
+
+func DumpSarifContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "sarif", threadId)
+}
+
+func DumpContentToFile(fileContent []byte, scanResultsOutputDir string, scanType, suffix string, threadId int) (err error) {
+	logPrefix := ""
+	if threadId >= 0 {
+		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
+	}
+	resultsFileFullPath := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.%s", strings.ToLower(scanType), GetCurrentTimeUnix(), suffix))
+	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving %s scan results to file '%s'...", logPrefix, scanType, resultsFileFullPath))
+	if err = os.WriteFile(resultsFileFullPath, fileContent, 0644); errorutils.CheckError(err) != nil {
 		return fmt.Errorf("failed to write %s scan results to file: %s", scanType, err.Error())
 	}
 	return
+}
+
+func GetCurrentTimeUnix() string {
+	return fmt.Sprintf("%d", time.Now().UnixMilli())
+}
+
+// Returns the key for the git reop Url, as expected by the Analyzer Manager and the Analytics event report
+func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
+	if gitRepoHttpsCloneUrl == "" {
+		return ""
+	}
+	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
 }

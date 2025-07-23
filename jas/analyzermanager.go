@@ -11,6 +11,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
@@ -24,7 +25,7 @@ import (
 const (
 	ApplicabilityFeatureId                    = "contextual_analysis"
 	AnalyzerManagerZipName                    = "analyzerManager.zip"
-	defaultAnalyzerManagerVersion             = "1.9.9"
+	defaultAnalyzerManagerVersion             = "1.22.0"
 	analyzerManagerDownloadPath               = "xsc-gen-exe-analyzer-manager-local/v1"
 	analyzerManagerDirName                    = "analyzerManager"
 	analyzerManagerExecutableName             = "analyzerManager"
@@ -33,7 +34,11 @@ const (
 	jfPasswordEnvVariable                     = "JF_PASS"
 	jfTokenEnvVariable                        = "JF_TOKEN"
 	jfPlatformUrlEnvVariable                  = "JF_PLATFORM_URL"
+	jfPlatformXrayUrlEnvVariable              = "JF_PLATFORM_XRAY_URL"
 	logDirEnvVariable                         = "AM_LOG_DIRECTORY"
+	watchesEnvVariable                        = "AM_WATCHES"
+	projectEnvVariable                        = "AM_PROJECT_KEY"
+	gitRepoEnvVariable                        = "AM_GIT_REPO_VIOLATIONS"
 	notEntitledExitCode                       = 31
 	unsupportedCommandExitCode                = 13
 	unsupportedOsExitCode                     = 55
@@ -41,9 +46,18 @@ const (
 	jfrogCliAnalyzerManagerVersionEnvVariable = "JFROG_CLI_ANALYZER_MANAGER_VERSION"
 	JfPackageManagerEnvVariable               = "AM_PACKAGE_MANAGER"
 	JfLanguageEnvVariable                     = "AM_LANGUAGE"
+	DiffScanEnvVariable                       = "AM_DIFF_SCAN"
 	// #nosec G101 -- Not credentials.
 	JfSecretValidationEnvVariable = "JF_VALIDATE_SECRETS"
 )
+
+const (
+	NotDiffScanEnvValue        JasDiffScanEnvValue = ""
+	FirstScanDiffScanEnvValue  JasDiffScanEnvValue = "first_scan"
+	SecondScanDiffScanEnvValue JasDiffScanEnvValue = "second_scan"
+)
+
+type JasDiffScanEnvValue string
 
 var exitCodeErrorsMap = map[int]string{
 	notEntitledExitCode:        "got not entitled error from analyzer manager",
@@ -87,6 +101,16 @@ func (am *AnalyzerManager) ExecWithOutputFile(configFile, scanCommand, workingDi
 		err = errorutils.CheckError(err)
 	}
 	return
+}
+
+func GetDiffScanTypeValue(diffScan bool, resultsToCompare *results.SecurityCommandResults) JasDiffScanEnvValue {
+	if !diffScan {
+		return NotDiffScanEnvValue
+	}
+	if resultsToCompare == nil {
+		return FirstScanDiffScanEnvValue
+	}
+	return SecondScanDiffScanEnvValue
 }
 
 func GetAnalyzerManagerDownloadPath() (string, error) {
@@ -138,10 +162,11 @@ func GetAnalyzerManagerExecutableName() string {
 
 func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVars map[string]string, err error) {
 	envVars = map[string]string{
-		jfUserEnvVariable:        serverDetails.User,
-		jfPasswordEnvVariable:    serverDetails.Password,
-		jfPlatformUrlEnvVariable: serverDetails.Url,
-		jfTokenEnvVariable:       serverDetails.AccessToken,
+		jfUserEnvVariable:            serverDetails.User,
+		jfPasswordEnvVariable:        serverDetails.Password,
+		jfPlatformUrlEnvVariable:     serverDetails.Url,
+		jfPlatformXrayUrlEnvVariable: serverDetails.XrayUrl,
+		jfTokenEnvVariable:           serverDetails.AccessToken,
 	}
 	if !utils.IsCI() {
 		analyzerManagerLogFolder, err := coreutils.CreateDirInJfrogHome(filepath.Join(coreutils.JfrogLogsDirName, analyzerManagerLogDirName))
@@ -154,18 +179,26 @@ func GetAnalyzerManagerEnvVariables(serverDetails *config.ServerDetails) (envVar
 }
 
 func ParseAnalyzerManagerError(scanner jasutils.JasScanType, err error) (formatErr error) {
+	if err == nil {
+		return
+	}
+	if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[GetAnalyzerManagerExitCode(err)]; exitCodeExists {
+		log.Warn(exitCodeDescription)
+		return nil
+	}
+	return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+}
+
+func GetAnalyzerManagerExitCode(err error) int {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		exitCode := exitError.ExitCode()
-		if exitCodeDescription, exitCodeExists := exitCodeErrorsMap[exitCode]; exitCodeExists {
-			log.Warn(exitCodeDescription)
-			return nil
-		}
+		return exitError.ExitCode()
 	}
 	if err != nil {
-		return fmt.Errorf(ErrFailedScannerRun, scanner, err.Error())
+		// An exit code of -1 is used to indicate that an error occurred before the command was executed or that the exit code could not be determined.
+		return -1
 	}
-	return
+	return 0
 }
 
 // Download the latest AnalyzerManager executable if not cached locally.

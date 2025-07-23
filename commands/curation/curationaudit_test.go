@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -18,16 +16,20 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+
+	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	testUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
@@ -409,102 +411,140 @@ func fillSyncedMap(pkgStatus []*PackageStatus) *sync.Map {
 
 func TestDoCurationAudit(t *testing.T) {
 	tests := getTestCasesForDoCurationAudit()
+	basePathToTests, err := filepath.Abs(TestDataDir)
+	assert.NoError(t, err)
+
+	cleanUpFlags := setCurationFlagsForTest(t)
+	defer cleanUpFlags()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set configuration for test
-			currentDir, err := os.Getwd()
-			assert.NoError(t, err)
-			configurationDir := tt.pathToTest
-			callback := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, filepath.Join(currentDir, configurationDir))
-			defer callback()
-			callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
-			defer callbackCurationFlag()
-			// Golang option to disable the use of the checksum database
-			callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
-			defer callbackNoSum()
-
-			// Create Mock server and write configuration file
+			// Create Mock server
 			mockServer, config := curationServer(t, tt.expectedBuildRequest, tt.expectedRequest, tt.requestToFail, tt.requestToError, tt.serveResources)
 			defer mockServer.Close()
-			configFilePath := WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, configurationDir, tt.createServerWithoutCreds)
-			defer func() {
-				assert.NoError(t, fileutils.RemoveTempDir(configFilePath))
-			}()
-			rootDir, err := os.Getwd()
-			assert.NoError(t, err)
-
-			// Run pre-test command
-			if tt.preTestExec != "" {
-				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, tt.pathToPreTest)
-				output, err := exec.Command(tt.preTestExec, tt.funcToGetGoals(t)...).CombinedOutput()
-				assert.NoErrorf(t, err, string(output))
-				callbackPreTest()
-			}
-
-			// Set the working dir for project.
-			callback3 := clienttestutils.ChangeDirWithCallback(t, rootDir, strings.TrimSuffix(tt.pathToTest, string(os.PathSeparator)+".jfrog"))
-			defer func() {
-				cacheFolder, err := utils.GetCurationCacheFolder()
-				require.NoError(t, err)
-				err = fileutils.RemoveTempDir(cacheFolder)
-				if err != nil {
-					// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
-					assert.ErrorIs(t, err, os.ErrPermission)
-				}
-				callback3()
-			}()
-
+			// Create test env
+			cleanUp := createCurationTestEnv(t, basePathToTests, tt, config)
+			defer cleanUp()
 			// Create audit command, and run it
-			curationCmd := NewCurationAuditCommand()
-			curationCmd.SetIsCurationCmd(true)
-			curationCmd.parallelRequests = 3
-			curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
-			results := map[string]*CurationReport{}
+			results, err := createCurationCmdAndRun(tt)
+			// Validate the results
 			if tt.requestToError == nil {
-				require.NoError(t, curationCmd.doCurateAudit(results))
+				assert.NoError(t, err)
 			} else {
-				gotError := curationCmd.doCurateAudit(results)
-				assert.Error(t, gotError)
+				assert.Error(t, err)
 				startUrl := strings.Index(tt.expectedError, "/")
 				assert.GreaterOrEqual(t, startUrl, 0)
 				errMsgExpected := tt.expectedError[:startUrl] + config.ArtifactoryUrl +
 					tt.expectedError[strings.Index(tt.expectedError, "/")+1:]
-				assert.EqualError(t, gotError, errMsgExpected)
+				assert.EqualError(t, err, errMsgExpected)
 			}
-			defer func() {
-				if tt.cleanDependencies != nil {
-					assert.NoError(t, tt.cleanDependencies())
-				}
-			}()
-
-			// Add the mock server to the expected blocked message url
-			for key := range tt.expectedResp {
-				for index := range tt.expectedResp[key].packagesStatus {
-					tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s",
-						strings.TrimSuffix(config.GetArtifactoryUrl(), "/"),
-						tt.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
-				}
-			}
-			// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
-			if tt.tech == techutils.Pip {
-				for key := range results {
-					result := results[key]
-					result.totalNumberOfPackages = 0
-				}
-			}
-			assert.Equal(t, tt.expectedResp, results)
-			for _, requestDone := range tt.expectedRequest {
-				assert.True(t, requestDone)
-			}
-			for _, requestDone := range tt.expectedBuildRequest {
-				assert.True(t, requestDone)
-			}
+			validateCurationResults(t, tt, results, config)
 		})
+	}
+}
+
+func createCurationTestEnv(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) func() {
+	_, cleanUpHome := createTempHomeDirWithConfig(t, basePathToTests, testCase, config)
+	testDirPath, cleanUpTestPathDir := testUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(basePathToTests, testCase.pathToProject))
+	var cleanUpChdir func()
+	if testCase.pathToTest != "" {
+		// Set the test path as the current working directory
+		cleanUpChdir = testUtils.ChangeWDWithCallback(t, filepath.Join(testDirPath, testCase.pathToTest))
+	}
+	// Run pre test exec
+	runPreTestExec(t, testDirPath, testCase)
+	return func() {
+		if cleanUpChdir != nil {
+			cleanUpChdir()
+		}
+		cleanUpTestPathDir()
+		cleanUpHome()
+	}
+}
+
+func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase testCase, config *config.ServerDetails) (string, func()) {
+	tempHomeDirPath, err := fileutils.CreateTempDir()
+	assert.NoError(t, err)
+	// create .jfrog dir in temp home dir
+	jfrogDir := filepath.Join(tempHomeDirPath, ".jfrog")
+	assert.NoError(t, os.MkdirAll(jfrogDir, 0777))
+	// copy .jfrog config content from test project to temp home dir
+	assert.NoError(t, biutils.CopyDir(filepath.Join(basePathToTests, testCase.getPathToTests(), ".jfrog"), jfrogDir, true, nil))
+	// Set the home dir
+	callbackHomeDir := clienttestutils.SetEnvWithCallbackAndAssert(t, coreutils.HomeDir, tempHomeDirPath)
+	// Create the server details config file
+	WriteServerDetailsConfigFileBytes(t, config.ArtifactoryUrl, tempHomeDirPath, testCase.createServerWithoutCreds)
+	return tempHomeDirPath, func() {
+		callbackHomeDir()
+		err := fileutils.RemoveTempDir(tempHomeDirPath)
+		if err != nil {
+			// in some package manager the cache folder can be deleted only by root, in this case, test continue without failing
+			assert.ErrorIs(t, err, os.ErrPermission)
+		}
+	}
+}
+
+func setCurationFlagsForTest(t *testing.T) func() {
+	callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
+	// Golang option to disable the use of the checksum database
+	callbackNoSum := clienttestutils.SetEnvWithCallbackAndAssert(t, "GOSUMDB", "off")
+	return func() {
+		callbackCurationFlag()
+		callbackNoSum()
+	}
+}
+
+func runPreTestExec(t *testing.T, basePathToTests string, testCase testCase) {
+	if testCase.preTestExec == "" {
+		return
+	}
+	callbackPreTest := testUtils.ChangeWDWithCallback(t, filepath.Join(basePathToTests, testCase.pathToPreTest))
+	output, err := exec.Command(testCase.preTestExec, testCase.funcToGetGoals(t)...).CombinedOutput()
+	assert.NoErrorf(t, err, string(output))
+	callbackPreTest()
+}
+
+func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport, err error) {
+	curationCmd := NewCurationAuditCommand()
+	curationCmd.SetIsCurationCmd(true)
+	curationCmd.parallelRequests = 3
+	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
+	curationCmd.SetInsecureTls(true)
+	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
+	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
+	cmdResults = map[string]*CurationReport{}
+	err = curationCmd.doCurateAudit(cmdResults)
+	return
+}
+
+func validateCurationResults(t *testing.T, testCase testCase, results map[string]*CurationReport, config *config.ServerDetails) {
+	// Add the mock server to the expected blocked message url
+	for key := range testCase.expectedResp {
+		for index := range testCase.expectedResp[key].packagesStatus {
+			testCase.expectedResp[key].packagesStatus[index].BlockedPackageUrl = fmt.Sprintf("%s%s",
+				strings.TrimSuffix(config.GetArtifactoryUrl(), "/"),
+				testCase.expectedResp[key].packagesStatus[index].BlockedPackageUrl)
+		}
+	}
+	// the number of packages is not deterministic for pip, as it depends on the version of the package manager.
+	if testCase.tech == techutils.Pip {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
+	assert.Equal(t, testCase.expectedResp, results)
+	for _, requestDone := range testCase.expectedRequest {
+		assert.True(t, requestDone)
+	}
+	for _, requestDone := range testCase.expectedBuildRequest {
+		assert.True(t, requestDone)
 	}
 }
 
 type testCase struct {
 	name                     string
+	pathToProject            string
 	pathToTest               string
 	pathToPreTest            string
 	preTestExec              string
@@ -517,9 +557,16 @@ type testCase struct {
 	expectedResp             map[string]*CurationReport
 	requestToError           map[string]bool
 	expectedError            string
-	cleanDependencies        func() error
 	tech                     techutils.Technology
 	createServerWithoutCreds bool
+	allowInsecureTls         bool
+}
+
+func (tc testCase) getPathToTests() string {
+	if len(tc.pathToTest) > 0 {
+		return filepath.Join(tc.pathToProject, tc.pathToTest)
+	}
+	return tc.pathToProject
 }
 
 func getTestCasesForDoCurationAudit() []testCase {
@@ -527,7 +574,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                     "go tree - one blocked package",
 			tech:                     techutils.Go,
-			pathToTest:               filepath.Join(TestDataDir, "projects", "package-managers", "go", "curation-project", ".jfrog"),
+			pathToProject:            filepath.Join("projects", "package-managers", "go", "curation-project"),
 			createServerWithoutCreds: true,
 			serveResources: map[string]string{
 				"v1.5.2.mod":                              filepath.Join("resources", "quote-v1.5.2.mod"),
@@ -584,11 +631,67 @@ func getTestCasesForDoCurationAudit() []testCase {
 				},
 			},
 		},
-
 		{
-			name:       "python tree - one blocked package",
-			tech:       techutils.Pip,
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "python", "pip", "pip-curation", ".jfrog"),
+			name:          "gradle tree - one blocked package",
+			tech:          techutils.Gradle,
+			pathToProject: filepath.Join("projects", "package-managers", "gradle", "curation-project"),
+			funcToGetGoals: func(t *testing.T) []string {
+				// To ensure only the blocked package is resolved during testing, we pre-populate the cache with dependencies beforehand.
+				// Since the cache location depends on the project directory, we need to mimic that setup during the pretest build.
+				// This way, the test phase will use the same cache directory, already filled with required dependencies.
+				restoreWD := testUtils.ChangeWDWithCallback(t, "tests/testdata/projects/package-managers")
+				defer restoreWD()
+
+				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Gradle)
+				require.NoError(t, err)
+
+				return []string{
+					"gradle", "build",
+					"--build-file", "build.gradle",
+					"--gradle-user-home=" + curationCache,
+					"--no-daemon",
+				}
+			},
+			serveResources: map[string]string{
+				"build.gradle": filepath.Join("tests", "testdata", "projects", "package-managers", "gradle", "curation-project", "build.gradle"),
+			},
+			requestToFail: map[string]bool{
+				"/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar": true,
+			},
+			expectedResp: map[string]*CurationReport{
+				"com.example:curation-project:1.0.0": {
+					// Ensure packagesStatus is properly initialized, even if empty initially
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "log4j:log4j",
+							ParentVersion:     "1.2.14",
+							BlockedPackageUrl: "/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar",
+							PackageName:       "log4j:log4j",
+							PackageVersion:    "1.2.14",
+							BlockingReason:    "Policy violations",
+							DepRelation:       "direct",
+							PkgType:           "gradle",
+							WaiverAllowed:     false,
+							Policy: []Policy{
+								{
+									Policy:         "pol1",
+									Condition:      "cond1",
+									Explanation:    "",
+									Recommendation: "",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 5, // Adjust the number if necessary
+				},
+			},
+			allowInsecureTls: true,
+		},
+		{
+			name:          "python tree - one blocked package",
+			tech:          techutils.Pip,
+			pathToProject: filepath.Join("projects", "package-managers", "python", "pip", "pip-curation"),
 			serveResources: map[string]string{
 				"pip":                                   filepath.Join("resources", "pip-resp"),
 				"pexpect":                               filepath.Join("resources", "pexpect-resp"),
@@ -600,7 +703,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/pypi/pypi-remote/packages/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"pip-curation": &CurationReport{packagesStatus: []*PackageStatus{
+				"pip-curation": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "4.8.0",
@@ -625,31 +728,28 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:          "maven tree - one blocked package",
 			tech:          techutils.Maven,
-			pathToPreTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "pretest"),
+			pathToProject: filepath.Join("projects", "package-managers", "maven", "maven-curation"),
+			pathToTest:    "test",
+			pathToPreTest: "pretest",
 			preTestExec:   "mvn",
 			funcToGetGoals: func(t *testing.T) []string {
-				rootDir, err := os.Getwd()
-				assert.NoError(t, err)
-				// set the cache to test project dir, in order to fill its cache with dependencies
-				callbackPreTest := clienttestutils.ChangeDirWithCallback(t, rootDir, filepath.Join("..", "test"))
+				// We want to populate the cache with dependencies before running the tests, so that during the test only the blocked package needs to be resolved.
+				// The cache directory is determined by the project directory, so we need to "simulate" the cache directory when running the pretest build.
+				// During the test, the blocked package will be resolved from the same cache directory that was populated in the pretest build.
+				cleanUpTestDirChange := testUtils.ChangeWDWithCallback(t, filepath.Join("..", "test"))
 				curationCache, err := utils.GetCurationCacheFolderByTech(techutils.Maven)
-				callbackPreTest()
 				require.NoError(t, err)
+				cleanUpTestDirChange()
 				return []string{"com.jfrog:maven-dep-tree:tree", "-DdepsTreeOutputFile=output", "-Dmaven.repo.local=" + curationCache}
 			},
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation", "test", ".jfrog"),
 			expectedBuildRequest: map[string]bool{
 				"/api/curation/audit/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.pom": false,
-			},
-			cleanDependencies: func() error {
-				return os.RemoveAll(filepath.Join(TestDataDir, "projects", "package-managers", "maven", "maven-curation",
-					".jfrog", "curation", "cache", "maven", "org", "webjars", "npm"))
 			},
 			requestToFail: map[string]bool{
 				"/maven-remote/org/webjars/npm/underscore/1.13.6/underscore-1.13.6.jar": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"test:my-app:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"test:my-app:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -677,7 +777,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked package ",
 			tech:                   techutils.Npm,
-			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -687,7 +787,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/underscore/-/underscore-1.13.6.tgz": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"npm_test:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -713,7 +813,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 		{
 			name:                   "npm tree - two blocked one error",
 			tech:                   techutils.Npm,
-			pathToTest:             filepath.Join(TestDataDir, "projects", "package-managers", "npm", "npm-project", ".jfrog"),
+			pathToProject:          filepath.Join("projects", "package-managers", "npm", "npm-project"),
 			shouldIgnoreConfigFile: true,
 			expectedRequest: map[string]bool{
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
@@ -726,7 +826,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz": false,
 			},
 			expectedResp: map[string]*CurationReport{
-				"npm_test:1.0.0": &CurationReport{packagesStatus: []*PackageStatus{
+				"npm_test:1.0.0": {packagesStatus: []*PackageStatus{
 					{
 						Action:            "blocked",
 						ParentVersion:     "1.13.6",
@@ -753,13 +853,13 @@ func getTestCasesForDoCurationAudit() []testCase {
 				"/api/npm/npms/lightweight/-/lightweight-0.1.0.tgz", "lightweight:0.1.0", http.StatusInternalServerError),
 		},
 		{
-			name:       "dotnet tree",
-			tech:       techutils.Dotnet,
-			pathToTest: filepath.Join(TestDataDir, "projects", "package-managers", "dotnet", "dotnet-curation"),
+			name:          "dotnet tree",
+			tech:          techutils.Dotnet,
+			pathToProject: filepath.Join("projects", "package-managers", "dotnet", "dotnet-curation"),
 			serveResources: map[string]string{
-				"curated-nuget": filepath.Join("resources", "feed.json"),
-				"index.json":    filepath.Join("resources", "index.json"),
-				"13.0.3":        filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
+				"curated-nuget/index.json": filepath.Join("resources", "feed.json"),
+				"index.json":               filepath.Join("resources", "index.json"),
+				"13.0.3":                   filepath.Join("resources", "newtonsoft.json.13.0.3.nupkg"),
 			},
 			requestToFail: map[string]bool{
 				"/api/nuget/v3/curated-nuget/registration-semver2/Download/newtonsoft.json/13.0.3": false,
@@ -787,6 +887,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 					totalNumberOfPackages: 1,
 				},
 			},
+			allowInsecureTls: true,
 		},
 	}
 	return tests
@@ -794,7 +895,7 @@ func getTestCasesForDoCurationAudit() []testCase {
 
 func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expectedRequest map[string]bool, requestToFail map[string]bool, requestToError map[string]bool, resourceToServe map[string]string) (*httptest.Server, *config.ServerDetails) {
 	mapLockReadWrite := sync.Mutex{}
-	serverMock, config, _ := coretests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	serverMock, config, _ := coreCommonTests.CreateRtRestsMockServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			mapLockReadWrite.Lock()
 			if _, exist := expectedRequest[r.RequestURI]; exist {
@@ -810,7 +911,7 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 		}
 		if r.Method == http.MethodGet {
 			if resourceToServe != nil {
-				if pathToRes, ok := resourceToServe[path.Base(r.RequestURI)]; ok && strings.Contains(r.RequestURI, "api/curation/audit") {
+				if pathToRes := getResourceToServe(resourceToServe, r.RequestURI); pathToRes != "" && strings.Contains(r.RequestURI, "api/curation/audit") {
 					f, err := fileutils.ReadFile(pathToRes)
 					require.NoError(t, err)
 					f = bytes.ReplaceAll(f, []byte("127.0.0.1:80"), []byte(r.Host))
@@ -833,7 +934,17 @@ func curationServer(t *testing.T, expectedBuildRequest map[string]bool, expected
 			}
 		}
 	})
+	config.XrayUrl = config.Url + "xray/"
 	return serverMock, config
+}
+
+func getResourceToServe(resourcesToServe map[string]string, pathToRes string) string {
+	for key, value := range resourcesToServe {
+		if strings.HasSuffix(strings.TrimSuffix(pathToRes, "/"), key) {
+			return value
+		}
+	}
+	return ""
 }
 
 func WriteServerDetailsConfigFileBytes(t *testing.T, url string, configPath string, withoutCreds bool) string {
@@ -888,6 +999,41 @@ func Test_getGoNameScopeAndVersion(t *testing.T) {
 			assert.Equal(t, tt.downloadUrls, gotDownloadUrls)
 			assert.Equal(t, tt.compName, gotName)
 			assert.Equal(t, tt.version, gotVersion)
+		})
+	}
+}
+
+func Test_getGradleNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		node             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Realistic package from example - log4j",
+			id:               "gav://log4j:log4j:1.2.14",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "gradle-virtual",
+			node:             "",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/gradle-virtual/log4j/log4j/1.2.14/log4j-1.2.14.jar"},
+			wantName:         "log4j:log4j",
+			wantScope:        "",
+			wantVersion:      "1.2.14",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getGradleNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo, nil)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
 		})
 	}
 }
@@ -1071,6 +1217,184 @@ func Test_convertResultsToSummary(t *testing.T) {
 				})
 			}
 			assert.Equal(t, tt.expected, summary)
+		})
+	}
+}
+
+func Test_getSelectedPackages(t *testing.T) {
+	blockedPackages := []*PackageStatus{
+		{PackageName: "pkg1", PackageVersion: "1.0.0"},
+		{PackageName: "pkg2", PackageVersion: "2.0.0"},
+		{PackageName: "pkg3", PackageVersion: "3.0.0"},
+		{PackageName: "pkg4", PackageVersion: "4.0.0"},
+	}
+
+	tests := []struct {
+		name           string
+		requestedRows  string
+		expectedResult []*PackageStatus
+		expectedOk     bool
+	}{
+		{
+			name:           "Select all packages",
+			requestedRows:  "all",
+			expectedResult: blockedPackages,
+			expectedOk:     true,
+		},
+		{
+			name:           "Select single package",
+			requestedRows:  "2",
+			expectedResult: []*PackageStatus{blockedPackages[1]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select multiple packages",
+			requestedRows:  "1,3",
+			expectedResult: []*PackageStatus{blockedPackages[0], blockedPackages[2]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select range of packages",
+			requestedRows:  "2-4",
+			expectedResult: []*PackageStatus{blockedPackages[1], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select mixed indices and ranges",
+			requestedRows:  "1,3-4",
+			expectedResult: []*PackageStatus{blockedPackages[0], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Select overlapping ranges",
+			requestedRows:  "2-3,2,3,3-4",
+			expectedResult: []*PackageStatus{blockedPackages[1], blockedPackages[2], blockedPackages[3]},
+			expectedOk:     true,
+		},
+		{
+			name:           "Empty input",
+			requestedRows:  "",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+		{
+			name:           "Invalid format",
+			requestedRows:  "invalid",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+		{
+			name:           "Out of range index",
+			requestedRows:  "5",
+			expectedResult: nil,
+			expectedOk:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := getSelectedPackages(tt.requestedRows, blockedPackages)
+			assert.Equal(t, tt.expectedResult, result)
+			assert.Equal(t, tt.expectedOk, ok)
+		})
+	}
+}
+
+func TestSendWaiverRequests(t *testing.T) {
+	tests := []struct {
+		name           string
+		pkgs           []*PackageStatus
+		msg            string
+		mockResponse   string
+		expectedStatus []WaiverResponse
+		expectError    bool
+		testCase
+	}{
+		{
+			name: "Single package approved",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:          "Requesting waiver for testing",
+			mockResponse: `{"errors":[{"status":200,"message":"waiver-id|approved"}]}`,
+			expectedStatus: []WaiverResponse{
+				{
+					PkgName:     "rsc.io/sampler",
+					Status:      "approved",
+					WaiverID:    "waiver-id",
+					Explanation: WaiverRequestApproved,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Single package forbidden",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:          "Requesting waiver for testing",
+			mockResponse: `{"errors":[{"status":403,"message":"waiver-id|forbidden"}]}`,
+			expectedStatus: []WaiverResponse{
+				{
+					PkgName:     "rsc.io/sampler",
+					Status:      "forbidden",
+					WaiverID:    "waiver-id",
+					Explanation: WaiverRequestForbidden,
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Error while sending requests",
+			pkgs: []*PackageStatus{
+				{
+					BlockedPackageUrl: "http://localhost:8046/artifactory/api/go/go-virtual/rsc.io/sampler/@v/v1.3.0.zip",
+					PackageName:       "rsc.io/sampler",
+					PackageVersion:    "v1.3.0",
+				},
+			},
+			msg:            "Requesting waiver for testing",
+			mockResponse:   `{"errors":[{"status":500,"message":"error"}]}`,
+			expectedStatus: nil,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock server to simulate Artifactory responses
+			testHandler := func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, err := w.Write([]byte(tt.mockResponse))
+				assert.NoError(t, err)
+			}
+			mockServer, serverDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+			defer mockServer.Close()
+
+			// Create CurationAuditCommand instance
+			ca := &CurationAuditCommand{}
+
+			// Call the function
+			for _, pkg := range tt.pkgs {
+				pkg.BlockedPackageUrl = strings.ReplaceAll(pkg.BlockedPackageUrl, "http://localhost:8046/", serverDetails.GetArtifactoryUrl())
+			}
+			requestStatuses, err := ca.sendWaiverRequests(tt.pkgs, tt.msg, serverDetails)
+
+			// Assertions
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedStatus, requestStatuses)
+			}
 		})
 	}
 }

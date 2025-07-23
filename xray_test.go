@@ -7,13 +7,15 @@ import (
 	securityDocs "github.com/jfrog/jfrog-cli-security/cli/docs"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
+	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
+	securityIntegrationTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestXrayCurl(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
+	integration.InitXrayTest(t, "")
 	// Configure a new server named "default".
-	securityTestUtils.CreateJfrogHomeConfig(t, true)
+	securityIntegrationTestUtils.CreateJfrogHomeConfig(t, "", true)
 	defer securityTestUtils.CleanTestsHomeEnv()
 	// Check curl command with the default configured server.
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "curl", "-XGET", "/api/v1/system/version")
@@ -27,7 +29,7 @@ func TestXrayCurl(t *testing.T) {
 }
 
 func TestXrayOfflineDBSyncV3(t *testing.T) {
-	securityTestUtils.InitSecurityTest(t, "")
+	integration.InitXrayTest(t, "")
 	// Validate license-id
 	err := securityTests.PlatformCli.WithoutCredentials().Exec("xr", "ou")
 	assert.EqualError(t, err, "Mandatory flag 'license-id' is missing")

@@ -5,44 +5,64 @@ package formats
 // Use the conversion methods in this package to convert from the API structs to the table structs.
 
 type ResultsTables struct {
-	SecurityVulnerabilitiesTable   []vulnerabilityTableRow
-	SecurityViolationsTable        []vulnerabilityTableRow
-	LicensesTable                  []licenseTableRow
+	// Licenses
+	LicensesTable []licenseTableRow
+	// SBOM (Software Bill of Materials)
+	SbomTable []SbomTableRow
+	// Sca tables
+	SecurityVulnerabilitiesTable   []scaVulnerabilityOrViolationTableRow
+	SecurityViolationsTable        []scaVulnerabilityOrViolationTableRow
 	LicenseViolationsTable         []licenseViolationTableRow
 	OperationalRiskViolationsTable []operationalRiskViolationTableRow
-	IacTable                       []iacOrSastTableRow
-	SastTable                      []iacOrSastTableRow
-	SecretsTable                   []secretsTableRow
-	Errors                         []error
+	// Iac tables
+	IacVulnerabilitiesTable []iacOrSastTableRow
+	IacViolationsTable      []iacOrSastTableRow
+	// Sast tables
+	SastVulnerabilitiesTable []iacOrSastTableRow
+	SastViolationsTable      []iacOrSastTableRow
+	// Secrets
+	SecretsVulnerabilitiesTable []secretsTableRow
+	SecretsViolationsTable      []secretsTableRow
 }
 
 // Used for vulnerabilities and security violations
-type vulnerabilityTableRow struct {
-	severity   string `col-name:"Severity"`
-	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
+type scaVulnerabilityOrViolationTableRow struct {
+	cves       []cveTableRow `embed-table:"true"`
+	severity   string        `col-name:"Severity"`
+	applicable string        `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting
 	severityNumValue          int
 	directDependencies        []directDependenciesTableRow `embed-table:"true"`
-	impactedDependencyName    string                       `col-name:"Impacted\nDependency\nName"`
-	impactedDependencyVersion string                       `col-name:"Impacted\nDependency\nVersion"`
+	impactedDependencyName    string                       `col-name:"Affected\nComponent\nName"`
+	impactedDependencyVersion string                       `col-name:"Affected\nComponent\nVersion"`
 	fixedVersions             string                       `col-name:"Fixed\nVersions"`
 	impactedDependencyType    string                       `col-name:"Type"`
-	cves                      []cveTableRow                `embed-table:"true"`
+	watch                     string                       `col-name:"Watch Name" omitempty:"true"`
 	issueId                   string                       `col-name:"Issue ID" extended:"true"`
 }
 
+// For Binary scans
 type vulnerabilityScanTableRow struct {
-	severity   string `col-name:"Severity"`
-	applicable string `col-name:"Contextual\nAnalysis" omitempty:"true"`
+	cves       []cveTableRow `embed-table:"true"`
+	severity   string        `col-name:"Severity"`
+	applicable string        `col-name:"Contextual\nAnalysis" omitempty:"true"`
 	// For sorting
 	severityNumValue       int
 	directPackages         []directPackagesTableRow `embed-table:"true"`
-	impactedPackageName    string                   `col-name:"Impacted\nPackage\nName"`
-	impactedPackageVersion string                   `col-name:"Impacted\nPackage\nVersion"`
+	impactedPackageName    string                   `col-name:"Affected\nComponent\nName"`
+	impactedPackageVersion string                   `col-name:"Affected\nComponent\nVersion"`
 	fixedVersions          string                   `col-name:"Fixed\nVersions"`
 	ImpactedPackageType    string                   `col-name:"Type"`
-	cves                   []cveTableRow            `embed-table:"true"`
 	issueId                string                   `col-name:"Issue ID" extended:"true"`
+}
+
+type SbomTableRow struct {
+	Component   string `col-name:"Component"`
+	Version     string `col-name:"Version"`
+	PackageType string `col-name:"Type"`
+	Relation    string `col-name:"Relation"`
+	// For sorting
+	RelationPriority int
 }
 
 type licenseTableRow struct {
@@ -70,6 +90,7 @@ type licenseViolationTableRow struct {
 	impactedDependencyName    string                       `col-name:"Impacted\nDependency"`
 	impactedDependencyVersion string                       `col-name:"Impacted\nDependency\nVersion"`
 	impactedDependencyType    string                       `col-name:"Type"`
+	watch                     string                       `col-name:"Watch Name"`
 }
 
 type licenseViolationScanTableRow struct {
@@ -139,9 +160,11 @@ type secretsTableRow struct {
 	severity        string `col-name:"Severity"`
 	file            string `col-name:"File"`
 	lineColumn      string `col-name:"Line:Column"`
+	origin          string `col-name:"Origin" omitempty:"true"`
 	secret          string `col-name:"Secret"`
 	tokenValidation string `col-name:"Token Validation" omitempty:"true"`
 	tokenInfo       string `col-name:"Token Info" omitempty:"true"`
+	watch           string `col-name:"Watch Name" omitempty:"true"`
 }
 
 type iacOrSastTableRow struct {
@@ -149,4 +172,5 @@ type iacOrSastTableRow struct {
 	file       string `col-name:"File"`
 	lineColumn string `col-name:"Line:Column"`
 	finding    string `col-name:"Finding"`
+	watch      string `col-name:"Watch Name" omitempty:"true"`
 }

@@ -4,11 +4,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
+
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
-
-	"github.com/stretchr/testify/assert"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 )
 
 func TestNewSastScanManager(t *testing.T) {
@@ -17,7 +23,8 @@ func TestNewSastScanManager(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{"currentDir"})
 	assert.NoError(t, err)
 	// Act
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	assert.NoError(t, err)
 
 	// Assert
 	if assert.NotNil(t, sastScanManager) {
@@ -29,6 +36,24 @@ func TestNewSastScanManager(t *testing.T) {
 	}
 }
 
+func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
+	scanner, cleanUp := jas.InitJasTest(t)
+	defer cleanUp()
+	tempDir, cleanUpTempDir := coreTests.CreateTempDirWithCallbackAndAssert(t)
+	defer cleanUpTempDir()
+
+	scanner.TempDir = tempDir
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	require.NoError(t, err)
+
+	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
+	require.NoError(t, err)
+
+	// Check if path value exists and file is created
+	assert.NotEmpty(t, sastScanManager.resultsToCompareFileName)
+	assert.True(t, fileutils.IsPathExists(sastScanManager.resultsToCompareFileName, false))
+}
+
 func TestSastParseResults_EmptyResults(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
@@ -36,19 +61,20 @@ func TestSastParseResults_EmptyResults(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Arrange
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", true)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", true)
+	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "no-violations.sarif")
 
 	// Act
-	sastScanManager.sastScannerResults, err = jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
 
 	// Assert
-	if assert.NoError(t, err) && assert.NotNil(t, sastScanManager.sastScannerResults) {
-		assert.Len(t, sastScanManager.sastScannerResults, 1)
-		assert.Empty(t, sastScanManager.sastScannerResults[0].Results)
-		groupResultsByLocation(sastScanManager.sastScannerResults)
-		assert.Len(t, sastScanManager.sastScannerResults, 1)
-		assert.Empty(t, sastScanManager.sastScannerResults[0].Results)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Empty(t, vulnerabilitiesResults[0].Results)
+		groupResultsByLocation(vulnerabilitiesResults)
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.Empty(t, vulnerabilitiesResults[0].Results)
 	}
 }
 
@@ -58,19 +84,20 @@ func TestSastParseResults_ResultsContainIacViolations(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 	// Arrange
-	sastScanManager := newSastScanManager(scanner, "temoDirPath", false)
+	sastScanManager, err := newSastScanManager(scanner, "temoDirPath", false)
+	assert.NoError(t, err)
 	sastScanManager.resultsFileName = filepath.Join(jas.GetTestDataPath(), "sast-scan", "contains-sast-violations.sarif")
 
 	// Act
-	sastScanManager.sastScannerResults, err = jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
+	vulnerabilitiesResults, _, err := jas.ReadJasScanRunsFromFile(sastScanManager.resultsFileName, jfrogAppsConfigForTest.Modules[0].SourceRoot, sastDocsUrlSuffix, scanner.MinSeverity)
 
 	// Assert
-	if assert.NoError(t, err) && assert.NotNil(t, sastScanManager.sastScannerResults) {
-		assert.Len(t, sastScanManager.sastScannerResults, 1)
-		assert.NotEmpty(t, sastScanManager.sastScannerResults[0].Results)
-		groupResultsByLocation(sastScanManager.sastScannerResults)
+	if assert.NoError(t, err) && assert.NotNil(t, vulnerabilitiesResults) {
+		assert.Len(t, vulnerabilitiesResults, 1)
+		assert.NotEmpty(t, vulnerabilitiesResults[0].Results)
+		groupResultsByLocation(vulnerabilitiesResults)
 		// File has 4 results, 2 of them at the same location different codeFlow
-		assert.Len(t, sastScanManager.sastScannerResults[0].Results, 3)
+		assert.Len(t, vulnerabilitiesResults[0].Results, 3)
 	}
 }
 

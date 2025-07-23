@@ -7,19 +7,16 @@ import (
 
 type SecurityParallelRunner struct {
 	Runner        parallel.Runner
-	ErrorsQueue   chan error
 	ResultsMu     sync.Mutex
 	ScaScansWg    sync.WaitGroup // Verify that the sca scan routines are done before running contextual scan
 	JasScannersWg sync.WaitGroup // Verify that all scanners routines are done before cleaning temp dir
 	JasWg         sync.WaitGroup // Verify that downloading analyzer manager and running all scanners are done
-	ErrWg         sync.WaitGroup // Verify that all errors are handled before finishing the audit func
+
+	onScanEndFunc func()
 }
 
 func NewSecurityParallelRunner(numOfParallelScans int) SecurityParallelRunner {
-	return SecurityParallelRunner{
-		Runner:      parallel.NewRunner(numOfParallelScans, 20000, false),
-		ErrorsQueue: make(chan error, 100),
-	}
+	return SecurityParallelRunner{Runner: parallel.NewRunner(numOfParallelScans, 20000, false)}
 }
 
 func CreateSecurityParallelRunner(numOfParallelScans int) *SecurityParallelRunner {
@@ -27,6 +24,20 @@ func CreateSecurityParallelRunner(numOfParallelScans int) *SecurityParallelRunne
 	return &securityParallelRunner
 }
 
-func (spr *SecurityParallelRunner) AddErrorToChan(err error) {
-	spr.ErrorsQueue <- err
+func (spr *SecurityParallelRunner) OnScanEnd(funcToRunOnScanEnd func()) *SecurityParallelRunner {
+	spr.onScanEndFunc = funcToRunOnScanEnd
+	return spr
+}
+
+func (spr *SecurityParallelRunner) Start() {
+	go func() {
+		spr.ScaScansWg.Wait()
+		spr.JasWg.Wait()
+		spr.JasScannersWg.Wait()
+		if spr.onScanEndFunc != nil {
+			spr.onScanEndFunc()
+		}
+		spr.Runner.Done()
+	}()
+	spr.Runner.Run()
 }

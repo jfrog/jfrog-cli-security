@@ -3,6 +3,9 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	buildInfoUtils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/common/cliutils"
@@ -14,29 +17,32 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	coreConfig "github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
-	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
-	"github.com/jfrog/jfrog-cli-security/commands/enrich"
-	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/errorutils"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
-	"github.com/urfave/cli"
-	"os"
-	"strings"
-
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	auditSpecificDocs "github.com/jfrog/jfrog-cli-security/cli/docs/auditspecific"
+	enrichDocs "github.com/jfrog/jfrog-cli-security/cli/docs/enrich"
+	mcpDocs "github.com/jfrog/jfrog-cli-security/cli/docs/mcp"
 	auditDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/audit"
 	buildScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/buildscan"
 	curationDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/curation"
 	dockerScanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/dockerscan"
 	scanDocs "github.com/jfrog/jfrog-cli-security/cli/docs/scan/scan"
+	uploadCdxDocs "github.com/jfrog/jfrog-cli-security/cli/docs/upload"
+
+	"github.com/jfrog/jfrog-cli-security/commands/enrich"
+	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
+	"github.com/jfrog/jfrog-cli-security/jas"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/urfave/cli"
 
 	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/commands/curation"
 	"github.com/jfrog/jfrog-cli-security/commands/scan"
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/commands/upload"
+
+	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
@@ -103,7 +109,22 @@ func getAuditAndScansCommands() []components.Command {
 			Category:    securityCategory,
 			Action:      CurationCmd,
 		},
-
+		{
+			Name:        "source-mcp",
+			Description: mcpDocs.GetDescription(),
+			Action:      SourceMcpCmd,
+			Hidden:      true,
+		},
+		{
+			Name:        flags.UploadCdx,
+			Aliases:     []string{"ucdx"},
+			Flags:       flags.GetCommandFlags(flags.UploadCdx),
+			Arguments:   uploadCdxDocs.GetArguments(),
+			Description: uploadCdxDocs.GetDescription(),
+			Category:    securityCategory,
+			Action:      UploadCdxCmd,
+			Hidden:      true,
+		},
 		// TODO: Deprecated commands (remove at next CLI major version)
 		{
 			Name:        "audit-mvn",
@@ -168,6 +189,28 @@ func getAuditAndScansCommands() []components.Command {
 	}
 }
 
+func SourceMcpCmd(c *components.Context) error {
+
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+
+	am_env, err := jas.GetAnalyzerManagerEnvVariables(serverDetails)
+	if err != nil {
+		return err
+	}
+
+	mcp_cmd := source_mcp.McpCommand{
+		Env:        am_env,
+		Arguments:  c.Arguments,
+		InputPipe:  os.Stdin,
+		OutputPipe: os.Stdout,
+		ErrorPipe:  os.Stderr,
+	}
+	return mcp_cmd.Run()
+}
+
 func EnrichCmd(c *components.Context) error {
 	if len(c.Arguments) == 0 {
 		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
@@ -176,7 +219,7 @@ func EnrichCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	if err = validateXrayContext(c, serverDetails); err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	specFile := createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
@@ -202,18 +245,23 @@ func ScanCmd(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+		return err
+	}
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
 	var specFile *spec.SpecFiles
+	repoPath := ""
 	if c.IsFlagSet(flags.SpecFlag) && len(c.GetStringFlagValue(flags.SpecFlag)) > 0 {
 		specFile, err = pluginsCommon.GetFileSystemSpec(c)
 		if err != nil {
 			return err
 		}
 	} else {
-		specFile = createDefaultScanSpec(c, addTrailingSlashToRepoPathIfNeeded(c))
+		repoPath = addTrailingSlashToRepoPathIfNeeded(c)
+		specFile = createDefaultScanSpec(c, repoPath)
 	}
 	err = spec.ValidateSpec(specFile.Files, false, false)
 	if err != nil {
@@ -233,13 +281,19 @@ func ScanCmd(c *components.Context) error {
 		return err
 	}
 	scanCmd := scan.NewScanCommand().
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
 		SetThreads(threads).
 		SetSpec(specFile).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(repoPath).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
@@ -249,30 +303,6 @@ func ScanCmd(c *components.Context) error {
 		scanCmd.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return commandsCommon.Exec(scanCmd)
-}
-
-func createServerDetailsWithConfigOffer(c *components.Context) (*coreConfig.ServerDetails, error) {
-	return pluginsCommon.CreateServerDetailsWithConfigOffer(c, true, cliutils.Xr)
-}
-
-func validateXrayContext(c *components.Context, serverDetails *coreConfig.ServerDetails) error {
-	if serverDetails.XrayUrl == "" {
-		return errorutils.CheckErrorf("JFrog Xray URL must be provided in order run this command. Use the 'jf c add' command to set the Xray server details.")
-	}
-	contextFlag := 0
-	if c.GetStringFlagValue(flags.Watches) != "" {
-		contextFlag++
-	}
-	if isProjectProvided(c) {
-		contextFlag++
-	}
-	if c.GetStringFlagValue(flags.RepoPath) != "" {
-		contextFlag++
-	}
-	if contextFlag > 1 {
-		return errorutils.CheckErrorf("only one of the following flags can be supplied: --watches, --project or --repo-path")
-	}
-	return nil
 }
 
 func getMinimumSeverity(c *components.Context) (severity severityutils.Severity, err error) {
@@ -285,17 +315,6 @@ func getMinimumSeverity(c *components.Context) (severity severityutils.Severity,
 		return
 	}
 	return
-}
-
-func isProjectProvided(c *components.Context) bool {
-	return getProject(c) != ""
-}
-
-func getProject(c *components.Context) string {
-	if c.IsFlagSet(flags.Project) {
-		return c.GetStringFlagValue(flags.Project)
-	}
-	return os.Getenv(coreutils.Project)
 }
 
 func addTrailingSlashToRepoPathIfNeeded(c *components.Context) string {
@@ -324,15 +343,6 @@ func shouldIncludeVulnerabilities(c *components.Context) bool {
 	return c.GetStringFlagValue(flags.Watches) == "" && !isProjectProvided(c) && c.GetStringFlagValue(flags.RepoPath) == ""
 }
 
-func splitByCommaAndTrim(paramValue string) (res []string) {
-	args := strings.Split(paramValue, ",")
-	res = make([]string, len(args))
-	for i, arg := range args {
-		res[i] = strings.TrimSpace(arg)
-	}
-	return
-}
-
 // Scan published builds with Xray
 func BuildScan(c *components.Context) error {
 	if len(c.Arguments) > 2 {
@@ -346,8 +356,7 @@ func BuildScan(c *components.Context) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
-	if err != nil {
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
 		return err
 	}
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
@@ -369,14 +378,14 @@ func BuildScan(c *components.Context) error {
 }
 
 func AuditCmd(c *components.Context) error {
-	auditCmd, err := CreateAuditCmd(c)
+	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
 
 	// Check if user used specific technologies flags
 	allTechnologies := techutils.GetAllTechnologiesList()
-	technologies := []string{}
+	technologiesToScan := []string{}
 	for _, tech := range allTechnologies {
 		var techExists bool
 		if tech == techutils.Maven {
@@ -386,10 +395,10 @@ func AuditCmd(c *components.Context) error {
 			techExists = c.GetBoolFlagValue(tech.String())
 		}
 		if techExists {
-			technologies = append(technologies, tech.String())
+			technologiesToScan = append(technologiesToScan, tech.String())
 		}
 	}
-	auditCmd.SetTechnologies(technologies)
+	auditCmd.SetTechnologies(technologiesToScan)
 
 	if c.GetBoolFlagValue(flags.WithoutCA) && !c.GetBoolFlagValue(flags.Sca) {
 		// No CA flag provided but sca flag is not provided, error
@@ -401,14 +410,9 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
-	allSubScans := utils.GetAllSupportedScans()
-	subScans := []utils.SubScanType{}
-	for _, subScan := range allSubScans {
-		if shouldAddSubScan(subScan, c) {
-			subScans = append(subScans, subScan)
-		}
-	}
-	if len(subScans) > 0 {
+	if subScans, err := getSubScansToPreform(c); err != nil {
+		return err
+	} else if len(subScans) > 0 {
 		auditCmd.SetScansToPerform(subScans)
 	}
 
@@ -417,67 +421,57 @@ func AuditCmd(c *components.Context) error {
 		return err
 	}
 	auditCmd.SetThreads(threads)
-	err = progressbar.ExecWithProgress(auditCmd)
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
 }
 
-func shouldAddSubScan(subScan utils.SubScanType, c *components.Context) bool {
-	return c.GetBoolFlagValue(subScan.String()) ||
-		(subScan == utils.ContextualAnalysisScan && c.GetBoolFlagValue(flags.Sca) && !c.GetBoolFlagValue(flags.WithoutCA)) || (subScan == utils.SecretTokenValidationScan && c.GetBoolFlagValue(flags.Secrets) && c.GetBoolFlagValue(flags.SecretValidation))
-}
-
-func reportErrorIfExists(err error, auditCmd *audit.AuditCommand) {
-	if err == nil || !usage.ShouldReportUsage() {
-		return
-	}
-	var serverDetails *coreConfig.ServerDetails
-	serverDetails, innerError := auditCmd.ServerDetails()
-	if innerError != nil {
-		log.Debug(fmt.Sprintf("failed to get server details for error report: %q", innerError))
-		return
-	}
-	if reportError := xsc.ReportError(serverDetails, err, "cli"); reportError != nil {
-		log.Debug("failed to report error log:" + reportError.Error())
-	}
-}
-
-func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
+func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDetails, *audit.AuditCommand, error) {
 	auditCmd := audit.NewGenericAuditCommand()
 	serverDetails, err := createServerDetailsWithConfigOffer(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
-	err = validateXrayContext(c, serverDetails)
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+		return "", "", nil, nil, err
+	}
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	format, err := outputFormat.GetOutputFormat(c.GetStringFlagValue(flags.OutputFormat))
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	minSeverity, err := getMinimumSeverity(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
 	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
 	if err != nil {
-		return nil, err
+		return "", "", nil, nil, err
 	}
-
-	auditCmd.SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails))
-
+	// Set dynamic command logic based on flags
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	auditCmd.SetBomGenerator(sbomGenerator).
+		SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.ScangBinaryCustomPath))
+	auditCmd.SetScaScanStrategy(scaScanStrategy)
+	// Make sure include SBOM is only set if the output format supports it
+	includeSbom := c.GetBoolFlagValue(flags.Sbom)
+	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
+		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
+	}
 	auditCmd.SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetProject(getProject(c)).
-		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
+		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(includeSbom).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetMinSeverityFilter(minSeverity).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
 		SetScansResultsOutputDir(scansOutputDir).
+		SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath)).
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
 		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 
@@ -489,6 +483,8 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		auditCmd.SetWorkingDirs(splitByCommaAndTrim(c.GetStringFlagValue(flags.WorkingDirs)))
 	}
 	auditCmd.SetServerDetails(serverDetails).
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetExcludeTestDependencies(c.GetBoolFlagValue(flags.ExcludeTestDeps)).
 		SetOutputFormat(format).
 		SetUseJas(true).
@@ -496,8 +492,9 @@ func CreateAuditCmd(c *components.Context) (*audit.AuditCommand, error) {
 		SetInsecureTls(c.GetBoolFlagValue(flags.InsecureTls)).
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile)).
+		SetMaxTreeDepth(c.GetStringFlagValue(flags.MaxTreeDepth)).
 		SetExclusions(pluginsCommon.GetStringsArrFlagValue(c, flags.Exclusions))
-	return auditCmd, err
+	return xrayVersion, xscVersion, serverDetails, auditCmd, err
 }
 
 func logNonGenericAuditCommandDeprecation(cmdName string) {
@@ -513,17 +510,14 @@ func logNonGenericAuditCommandDeprecation(cmdName string) {
 
 func AuditSpecificCmd(c *components.Context, technology techutils.Technology) error {
 	logNonGenericAuditCommandDeprecation(c.CommandName)
-	auditCmd, err := CreateAuditCmd(c)
+	xrayVersion, xscVersion, serverDetails, auditCmd, err := CreateAuditCmd(c)
 	if err != nil {
 		return err
 	}
 	technologies := []string{string(technology)}
 	auditCmd.SetTechnologies(technologies)
-	err = progressbar.ExecWithProgress(auditCmd)
-
 	// Reporting error if Xsc service is enabled
-	reportErrorIfExists(err, auditCmd)
-	return err
+	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(auditCmd))
 }
 
 func CurationCmd(c *components.Context) error {
@@ -600,7 +594,7 @@ func ShouldRunCurationAfterFailure(c *components.Context, tech techutils.Technol
 	if err != nil {
 		return
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails, xray.WithScopedProjectKey(getProject(c)))
 	if err != nil {
 		return
 	}
@@ -705,7 +699,10 @@ func DockerScan(c *components.Context, image string) error {
 	if err != nil {
 		return err
 	}
-	err = validateXrayContext(c, serverDetails)
+	if err = validateConnectionAndViolationContextInputs(c, serverDetails); err != nil {
+		return err
+	}
+	xrayVersion, xscVersion, err := xsc.GetJfrogServicesVersion(serverDetails)
 	if err != nil {
 		return err
 	}
@@ -719,22 +716,40 @@ func DockerScan(c *components.Context, image string) error {
 		return err
 	}
 	containerScanCommand.SetImageTag(image).
-		SetTargetRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
+		SetBomGenerator(indexer.NewIndexerBomGenerator()).
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
 		SetServerDetails(serverDetails).
+		SetXrayVersion(xrayVersion).
+		SetXscVersion(xscVersion).
 		SetOutputFormat(format).
 		SetProject(getProject(c)).
+		SetBaseRepoPath(addTrailingSlashToRepoPathIfNeeded(c)).
 		SetIncludeVulnerabilities(c.GetBoolFlagValue(flags.Vuln) || shouldIncludeVulnerabilities(c)).
 		SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).
+		SetIncludeSbom(c.GetBoolFlagValue(flags.Sbom)).
 		SetFail(c.GetBoolFlagValue(flags.Fail)).
 		SetPrintExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable)).
 		SetBypassArchiveLimits(c.GetBoolFlagValue(flags.BypassArchiveLimits)).
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetMinSeverityFilter(minSeverity).
 		SetThreads(threads).
-		SetAnalyticsMetricsService(xsc.NewAnalyticsMetricsService(serverDetails)).
 		SetSecretValidation(c.GetBoolFlagValue(flags.SecretValidation))
 	if c.GetStringFlagValue(flags.Watches) != "" {
 		containerScanCommand.SetWatches(splitByCommaAndTrim(c.GetStringFlagValue(flags.Watches)))
 	}
 	return progressbar.ExecWithProgress(containerScanCommand)
+}
+
+func UploadCdxCmd(c *components.Context) error {
+	if len(c.Arguments) == 0 {
+		return pluginsCommon.PrintHelpAndReturnError("providing a file path argument is mandatory", c)
+	}
+	serverDetails, err := createServerDetailsWithConfigOffer(c)
+	if err != nil {
+		return err
+	}
+	uploadCmd := upload.NewUploadCycloneDxCommand().SetFileToUpload(c.Arguments[0]).
+		SetUploadRepository(c.GetStringFlagValue(flags.UploadRepoPath)).
+		SetServerDetails(serverDetails)
+	return commandsCommon.Exec(uploadCmd)
 }

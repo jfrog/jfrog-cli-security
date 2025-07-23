@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,6 +43,115 @@ func TestParseSeverity(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tc.expectedOutput, output)
+		})
+	}
+}
+
+func TestGetSeverityScoreFloat64(t *testing.T) {
+	tests := []struct {
+		name     string
+		severity Severity
+		status   jasutils.ApplicabilityStatus
+		expected float64
+	}{
+		{"Critical Applicable", Critical, jasutils.Applicable, 10.0},
+		{"High NotApplicable", High, jasutils.NotApplicable, 8.9},
+		{"Medium MissingContext", Medium, jasutils.MissingContext, 6.9},
+		{"Low NotCovered", Low, jasutils.NotCovered, 3.9},
+		{"Unknown NotApplicable", Unknown, jasutils.NotApplicable, 0.0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetSeverityScoreFloat64(tc.severity, tc.status)
+			assert.NotNil(t, actual)
+			assert.InDelta(t, tc.expected, *actual, 0.0001)
+		})
+	}
+}
+
+func TestGetCvssScore(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected *float64
+	}{
+		{"Valid float", "7.1234", func() *float64 { f := 7.1234; return &f }()},
+		{"Empty string", "", nil},
+		{"Invalid string", "notanumber", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := GetCvssScore(tc.input)
+			if tc.expected == nil {
+				assert.Nil(t, actual)
+			} else {
+				assert.NotNil(t, actual)
+				assert.InDelta(t, *tc.expected, *actual, 0.0001)
+			}
+		})
+	}
+}
+
+func TestSeverityToCycloneDxSeverity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    Severity
+		expected cyclonedx.Severity
+	}{
+		{"Critical", Critical, cyclonedx.SeverityCritical},
+		{"High", High, cyclonedx.SeverityHigh},
+		{"Medium", Medium, cyclonedx.SeverityMedium},
+		{"Low", Low, cyclonedx.SeverityLow},
+		{"Unknown", Unknown, cyclonedx.SeverityUnknown},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := SeverityToCycloneDxSeverity(tc.input)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestCycloneDxSeverityToSeverity(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    cyclonedx.Severity
+		expected Severity
+	}{
+		{"Critical", cyclonedx.SeverityCritical, Critical},
+		{"High", cyclonedx.SeverityHigh, High},
+		{"Medium", cyclonedx.SeverityMedium, Medium},
+		{"Low", cyclonedx.SeverityLow, Low},
+		{"Unknown", cyclonedx.SeverityUnknown, Unknown},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := CycloneDxSeverityToSeverity(tc.input)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestCreateSeverityRating(t *testing.T) {
+	tests := []struct {
+		name        string
+		severity    Severity
+		status      jasutils.ApplicabilityStatus
+		service     *cyclonedx.Service
+		expSeverity cyclonedx.Severity
+		expScore    float64
+	}{
+		{"Critical Applicable", Critical, jasutils.Applicable, &cyclonedx.Service{Name: "testsvc"}, cyclonedx.SeverityCritical, 10.0},
+		{"High NotApplicable", High, jasutils.NotApplicable, &cyclonedx.Service{Name: "svc2"}, cyclonedx.SeverityHigh, 8.9},
+		{"Low NotCovered", Low, jasutils.NotCovered, &cyclonedx.Service{Name: "svc3"}, cyclonedx.SeverityLow, 3.9},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rating := CreateSeverityRating(tc.severity, tc.status, tc.service)
+			assert.Equal(t, tc.service.Name, rating.Source.Name)
+			assert.Equal(t, tc.expSeverity, rating.Severity)
+			assert.NotNil(t, rating.Score)
+			assert.InDelta(t, tc.expScore, *rating.Score, 0.0001)
 		})
 	}
 }

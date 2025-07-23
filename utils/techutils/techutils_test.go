@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/maps"
 )
@@ -244,6 +245,51 @@ func TestMapWorkingDirectoriesToTechnologies(t *testing.T) {
 	}
 }
 
+func TestAddNoTechIfNeeded(t *testing.T) {
+	tmpDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "folder")))
+	assert.NoError(t, fileutils.CreateDirIfNotExist(filepath.Join(tmpDir, "tech-folder")))
+
+	prevWd, err := os.Getwd()
+	assert.NoError(t, err, "Couldn't get working directory")
+	assert.NoError(t, os.Chdir(tmpDir), "Couldn't change working directory")
+	defer func() {
+		clientTests.ChangeDirAndAssert(t, prevWd)
+		assert.NoError(t, fileutils.RemoveTempDir(tmpDir), "Couldn't remove temp dir")
+	}()
+
+	tests := []struct {
+		name                 string
+		path                 string
+		dirList              []string
+		technologiesDetected map[Technology]map[string][]string
+		expected             map[Technology]map[string][]string
+	}{
+		{
+			name:                 "No tech detected",
+			path:                 tmpDir,
+			dirList:              []string{},
+			technologiesDetected: map[Technology]map[string][]string{},
+			expected:             map[Technology]map[string][]string{NoTech: {tmpDir: {}}},
+		},
+		{
+			name:                 "No tech detected, sub dir",
+			path:                 tmpDir,
+			dirList:              []string{filepath.Join(tmpDir, "folder"), filepath.Join(tmpDir, "tech-folder")},
+			technologiesDetected: map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}},
+			expected:             map[Technology]map[string][]string{Npm: {filepath.Join(tmpDir, "tech-folder"): {}}, NoTech: {filepath.Join(tmpDir, "folder"): {}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := addNoTechIfNeeded(test.technologiesDetected, test.path, test.dirList)
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}
+
 func TestGetExistingRootDir(t *testing.T) {
 	tests := []struct {
 		name                         string
@@ -432,6 +478,42 @@ func createTempDirWithPyProjectToml(t *testing.T, tech Technology) (tmpDir strin
 	return
 }
 
+func TestCleanSubDirectoriesForTechUnsupportedMulti(t *testing.T) {
+	workingDirectoryToIndicators := map[string][]string{
+		"project-root": {filepath.Join("project-root", "package.json")},
+		filepath.Join("project-root", "directory"): {filepath.Join("project-root", "directory", "package.json")},
+	}
+
+	testCases := []struct {
+		name                string
+		cleanSubDirectories bool
+		expected            map[string][]string
+	}{
+		{
+			name:                "cleanSubDirectories is true",
+			cleanSubDirectories: true,
+			expected:            map[string][]string{"project-root": {filepath.Join("project-root", "package.json"), filepath.Join("project-root", "directory", "package.json")}},
+		},
+		{
+			name: "cleanSubDirectories is false",
+			expected: map[string][]string{
+				"project-root": {filepath.Join("project-root", "package.json")},
+				filepath.Join("project-root", "directory"): {filepath.Join("project-root", "directory", "package.json")},
+			},
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.cleanSubDirectories {
+				unsetEnv := clientTests.SetEnvWithCallbackAndAssert(t, JfrogCleanTechSubModulesEnv, "TRUE")
+				defer unsetEnv()
+			}
+			assertTechInformation(t, Npm, workingDirectoryToIndicators, map[string][]Technology{}, map[Technology][]string{}, false, test.expected)
+		})
+	}
+}
+
 func TestGetTechInformationFromWorkingDir(t *testing.T) {
 	projectDir, callback := createTempDirWithPyProjectToml(t, Pip)
 	defer callback()
@@ -590,15 +672,19 @@ func TestGetTechInformationFromWorkingDir(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			techInformation, err := getTechInformationFromWorkingDir(test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors, test.techProvidedByUser)
-			assert.NoError(t, err)
-			expectedKeys := maps.Keys(test.expected)
-			actualKeys := maps.Keys(techInformation)
-			assert.ElementsMatch(t, expectedKeys, actualKeys, fmt.Sprintf("expected: %v, actual: %v", expectedKeys, actualKeys))
-			for key, value := range test.expected {
-				assert.ElementsMatch(t, value, techInformation[key], fmt.Sprintf("expected: %v, actual: %v", value, techInformation[key]))
-			}
+			assertTechInformation(t, test.tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, test.requestedDescriptors, test.techProvidedByUser, test.expected)
 		})
+	}
+}
+
+func assertTechInformation(t *testing.T, tech Technology, workingDirectoryToIndicators map[string][]string, excludedTechAtWorkingDir map[string][]Technology, requestedDescriptors map[Technology][]string, techProvidedByUser bool, expected map[string][]string) {
+	techInformation, err := getTechInformationFromWorkingDir(tech, workingDirectoryToIndicators, excludedTechAtWorkingDir, requestedDescriptors, techProvidedByUser)
+	assert.NoError(t, err)
+	expectedKeys := maps.Keys(expected)
+	actualKeys := maps.Keys(techInformation)
+	assert.ElementsMatch(t, expectedKeys, actualKeys, fmt.Sprintf("expected: %v, actual: %v", expectedKeys, actualKeys))
+	for key, value := range expected {
+		assert.ElementsMatch(t, value, techInformation[key], fmt.Sprintf("expected: %v, actual: %v", value, techInformation[key]))
 	}
 }
 
@@ -623,6 +709,255 @@ func TestTechnologyToLanguage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.language, TechnologyToLanguage(tt.technology), "TechnologyToLanguage(%v) == %v", tt.technology, tt.language)
+		})
+	}
+}
+
+func TestToCdxPackageType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"gav to maven", "gav", "maven"},
+		{"docker to docker", "docker", "docker"},
+		{"go to golang", "go", "golang"},
+		{"unknown passthrough", "foobar", "foobar"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.expected, ToCdxPackageType(tt.input), "ToCdxPackageType(%v) == %v", tt.input, tt.expected)
+		})
+	}
+}
+
+func TestCdxPackageTypeToXrayPackageType(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"maven to gav", "maven", "gav"},
+		{"docker to docker", "docker", "docker"},
+		{"golang to go", "golang", "go"},
+		{"unknown passthrough", "foobar", "foobar"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.expected, CdxPackageTypeToXrayPackageType(tt.input), "CdxPackageTypeToXrayPackageType(%v) == %v", tt.input, tt.expected)
+		})
+	}
+}
+
+func TestSplitPackageUrlWithQualifiers(t *testing.T) {
+	tests := []struct {
+		name          string
+		purl          string
+		compName      string
+		compNamespace string
+		compVersion   string
+		packageType   string
+		qualifiers    map[string]string
+	}{
+		{
+			name:          "npm scope with version",
+			purl:          "pkg:npm/@scope/package@1.0.0",
+			compName:      "package",
+			compNamespace: "@scope",
+			compVersion:   "1.0.0",
+			packageType:   "npm",
+			qualifiers:    map[string]string{},
+		},
+		{
+			name:          "escaped npm scope with version",
+			purl:          "pkg:npm/%40scope/package@1.0.0",
+			compName:      "package",
+			compNamespace: "@scope",
+			compVersion:   "1.0.0",
+			packageType:   "npm",
+			qualifiers:    map[string]string{},
+		},
+		{
+			name:          "golang with version",
+			purl:          "pkg:golang/github.com/gophish/gophish@v0.1.2",
+			compName:      "gophish",
+			compNamespace: "github.com/gophish",
+			compVersion:   "v0.1.2",
+			packageType:   "golang",
+			qualifiers:    map[string]string{},
+		},
+		{
+			name:          "golang without version",
+			purl:          "pkg:golang/github.com/go-gitea/gitea",
+			compName:      "gitea",
+			compNamespace: "github.com/go-gitea",
+			packageType:   "golang",
+			qualifiers:    map[string]string{},
+		},
+		{
+			name:          "maven with qualifier",
+			purl:          "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f",
+			compName:      "commons-lang3",
+			compNamespace: "org.apache.commons",
+			compVersion:   "3.12.0",
+			packageType:   "maven",
+			qualifiers:    map[string]string{"package-id": "d3f8d67af404667f"},
+		},
+		{
+			name:        "gav with version",
+			purl:        "pkg:gav/xpp3:xpp3_min@1.1.4c",
+			compName:    "xpp3:xpp3_min",
+			compVersion: "1.1.4c",
+			packageType: "gav",
+			qualifiers:  map[string]string{},
+		},
+		{
+			name:          "docker with namespace",
+			purl:          "pkg:docker/docker.io/library/nginx@1.27-alpine",
+			compName:      "nginx",
+			compNamespace: "docker.io/library",
+			compVersion:   "1.27-alpine",
+			packageType:   "docker",
+			qualifiers:    map[string]string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compType, namespace, name, version, qualifiers := SplitPackageUrlWithQualifiers(tt.purl)
+			assert.Equalf(t, tt.packageType, compType, "SplitPackageUrlWithQualifiers(%v) compType == %v", tt.purl, tt.packageType)
+			assert.Equalf(t, tt.compName, name, "SplitPackageUrlWithQualifiers(%v) compName == %v", tt.purl, tt.compName)
+			assert.Equalf(t, tt.compNamespace, namespace, "SplitPackageUrlWithQualifiers(%v) compNamespace == %v", tt.purl, tt.compNamespace)
+			assert.Equalf(t, tt.compVersion, version, "SplitPackageUrlWithQualifiers(%v) compVersion == %v", tt.purl, tt.compVersion)
+			assert.Equalf(t, tt.qualifiers, qualifiers, "SplitPackageUrlWithQualifiers(%v) qualifiers == %v", tt.purl, tt.qualifiers)
+		})
+	}
+}
+
+func TestSplitPackageURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		purl        string
+		compName    string
+		compVersion string
+		packageType string
+	}{
+		{"npm scope with version", "pkg:npm/@scope/package@1.0.0", "@scope/package", "1.0.0", "npm"},
+		{"escaped npm scope with version", "pkg:npm/%40scope/package@1.0.0", "@scope/package", "1.0.0", "npm"},
+		{"golang with version", "pkg:golang/github.com/gophish/gophish@v0.1.2", "github.com/gophish/gophish", "v0.1.2", "golang"},
+		{"gav with version", "pkg:gav/xpp3:xpp3_min@1.1.4c", "xpp3:xpp3_min", "1.1.4c", "gav"},
+		{"maven with qualifier", "pkg:maven/org.apache.commons/commons-lang3@3.12.0?package-id=d3f8d67af404667f", "org.apache.commons/commons-lang3", "3.12.0", "maven"},
+		{"docker with namespace", "pkg:docker/docker.io/library/nginx@1.27-alpine", "docker.io/library/nginx", "1.27-alpine", "docker"},
+		{"golang without version", "pkg:golang/github.com/go-gitea/gitea", "github.com/go-gitea/gitea", "", "golang"},
+		{"generic", "pkg:generic/sha256:534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "sha256:534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c/sha256__534a70dc82967ee32184e13d28ea485e909b20d3f13d553122bab3e4de03b50c.tar", "", "generic"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, version, compType := SplitPackageURL(tt.purl)
+			assert.Equal(t, tt.compName, name, "compName")
+			assert.Equal(t, tt.compVersion, version, "compVersion")
+			assert.Equal(t, tt.packageType, compType, "packageType")
+		})
+	}
+}
+
+func TestToPackageUrl(t *testing.T) {
+	tests := []struct {
+		name        string
+		compName    string
+		version     string
+		packageType string
+		expected    string
+	}{
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "pkg:npm/@scope/package@1.0.0"},
+		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "pkg:gav/xpp3:xpp3_min@1.1.4c"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := ToPackageUrl(tt.compName, tt.version, tt.packageType)
+			assert.Equalf(t, tt.expected, actual, "ToPackageUrl(%v, %v, %v) == %v", tt.compName, tt.version, tt.packageType, tt.expected)
+		})
+	}
+}
+
+func TestToPackageRef(t *testing.T) {
+	tests := []struct {
+		name        string
+		compName    string
+		version     string
+		packageType string
+		expected    string
+	}{
+		{"npm scope with version", "@scope/package", "1.0.0", "npm", "npm:@scope/package:1.0.0"},
+		{"golang", "github.com/gophish/gophish", "v0.1.2", "golang", "golang:github.com/gophish/gophish:v0.1.2"},
+		{"gav", "xpp3:xpp3_min", "1.1.4c", "gav", "gav:xpp3:xpp3_min:1.1.4c"},
+		{"no version", "github.com/gophish/gophish", "", "golang", "golang:github.com/gophish/gophish"},
+		{"root", "root", "", "", "generic:root"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := ToPackageRef(tt.compName, tt.version, tt.packageType)
+			assert.Equalf(t, tt.expected, actual, "ToPackageRef(%v, %v, %v) == %v", tt.compName, tt.version, tt.packageType, tt.expected)
+		})
+	}
+}
+
+func TestPurlToXrayComponentId(t *testing.T) {
+	tests := []struct {
+		name     string
+		purl     string
+		expected string
+	}{
+		{"golang", "pkg:golang/github.com/gophish/gophish@v0.1.2", "go://github.com/gophish/gophish:v0.1.2"},
+		{"no version golang", "pkg:golang/github.com/gophish/gophish", "go://github.com/gophish/gophish"},
+		{"maven", "pkg:maven/xpp3:xpp3_min@1.1.4c", "gav://xpp3:xpp3_min:1.1.4c"},
+		{"npm", "pkg:npm/@scope/package@1.0.0", "npm://@scope/package:1.0.0"},
+		{"docker", "pkg:docker/docker.io/library/nginx@1.27-alpine", "docker://docker.io/library/nginx:1.27-alpine"},
+		{"rpm", "pkg:rpm/openssl@0:1.1.0l-1.3.mga7", "rpm://openssl:0:1.1.0l-1.3.mga7"},
+		{"root", "pkg:generic/root", "generic://root"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := PurlToXrayComponentId(tt.purl)
+			assert.Equalf(t, tt.expected, actual, "PurlToXrayComponentId(%v) == %v", tt.purl, tt.expected)
+		})
+	}
+}
+
+func TestXrayComponentIdToPurl(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "pkg:maven/xpp3:xpp3_min@1.1.4c"},
+		{"npm", "npm://@scope/package:1.0.0", "pkg:npm/@scope/package@1.0.0"},
+		{"go", "go://github.com/gophish/gophish:v0.1.2", "pkg:golang/github.com/gophish/gophish@v0.1.2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := XrayComponentIdToPurl(tt.input)
+			assert.Equalf(t, tt.expected, actual, "XrayComponentIdToPurl(%v) == %v", tt.input, tt.expected)
+		})
+	}
+}
+
+func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
+		{"gav", "gav://xpp3:xpp3_min:1.1.4c", "maven:xpp3:xpp3_min:1.1.4c"},
+		{"npm", "npm://@scope/package:1.0.0", "npm:@scope/package:1.0.0"},
+		{"go", "go://github.com/gophish/gophish:v0.1.2", "golang:github.com/gophish/gophish:v0.1.2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := XrayComponentIdToCdxComponentRef(tt.input)
+			assert.Equalf(t, tt.expected, actual, "XrayComponentIdToCdxComponentRef(%v) == %v", tt.input, tt.expected)
 		})
 	}
 }

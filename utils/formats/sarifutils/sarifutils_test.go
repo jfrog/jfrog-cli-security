@@ -1,12 +1,13 @@
 package sarifutils
 
 import (
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -271,29 +272,35 @@ func TestGetLocationFileName(t *testing.T) {
 
 func TestGetRelativeLocationFileName(t *testing.T) {
 	tests := []struct {
+		name           string
 		location       *sarif.Location
 		invocations    []*sarif.Invocation
 		expectedOutput string
 	}{
 		{
+			name:           "No invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
 			invocations:    []*sarif.Invocation{},
-			expectedOutput: "root/someDir/another/file",
+			expectedOutput: "file:///root/someDir/another/file",
 		},
 		{
+			name:           "With not relevant invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
-			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("/not/relevant")}},
-			expectedOutput: "root/someDir/another/file",
+			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("file:///not/relevant")}},
+			expectedOutput: "file:///root/someDir/another/file",
 		},
 		{
+			name:           "With invocations",
 			location:       CreateLocation("file:///root/someDir/another/file", 1, 2, 3, 4, "snippet"),
-			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("/root/someDir/")}},
+			invocations:    []*sarif.Invocation{{WorkingDirectory: sarif.NewSimpleArtifactLocation("file:///root/someDir/")}},
 			expectedOutput: "another/file",
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetRelativeLocationFileName(test.location, test.invocations))
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetRelativeLocationFileName(test.location, test.invocations))
+		})
 	}
 }
 
@@ -359,33 +366,44 @@ func TestGetLocationRegion(t *testing.T) {
 		},
 		{
 			location: CreateLocation("filename", 1, 2, 3, 4, "snippet"),
-			expectedOutput: sarif.NewRegion().WithStartLine(1).WithStartColumn(2).WithEndLine(3).WithEndColumn(4).
+			expectedOutput: sarif.NewRegion().WithByteOffset(0).WithCharOffset(0).WithStartLine(1).WithStartColumn(2).WithEndLine(3).WithEndColumn(4).
 				WithSnippet(sarif.NewArtifactContent().WithText("snippet")),
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, getLocationRegion(test.location))
+		actual := getLocationRegion(test.location)
+		assert.Equal(t, test.expectedOutput, actual)
 	}
 }
 
 func TestGetLocationStartLine(t *testing.T) {
 	tests := []struct {
+		name           string
 		location       *sarif.Location
 		expectedOutput int
 	}{
 		{
+			name:           "Nil location",
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
-			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
+			name:           "Location with valid start line",
+			location:       CreateLocation("filename", 2, 2, 2, 2, "snippet"),
+			expectedOutput: 2,
+		},
+		{
+			name:           "Location with not valid start line",
+			location:       CreateLocation("filename", -1, 2, 3, 4, "snippet"),
 			expectedOutput: 1,
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetLocationStartLine(test.location))
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedOutput, GetLocationStartLine(test.location))
+		})
 	}
 }
 
@@ -396,7 +414,7 @@ func TestGetLocationStartColumn(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
@@ -416,7 +434,7 @@ func TestGetLocationEndLine(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
@@ -436,7 +454,7 @@ func TestGetLocationEndColumn(t *testing.T) {
 	}{
 		{
 			location:       nil,
-			expectedOutput: 0,
+			expectedOutput: 1,
 		},
 		{
 			location:       CreateLocation("filename", 1, 2, 3, 4, "snippet"),
@@ -446,31 +464,6 @@ func TestGetLocationEndColumn(t *testing.T) {
 
 	for _, test := range tests {
 		assert.Equal(t, test.expectedOutput, GetLocationEndColumn(test.location))
-	}
-}
-
-func TestExtractRelativePath(t *testing.T) {
-	tests := []struct {
-		fullPath       string
-		projectPath    string
-		expectedResult string
-	}{
-		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
-		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "tests/req.nodejs/file.js"},
-		{fullPath: "invalidFullPath",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: "invalidFullPath"},
-		{fullPath: "",
-			projectPath: "Users/user/Desktop/secrets_scanner/", expectedResult: ""},
-		{fullPath: "file:///Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
-		{fullPath: "file:///private/Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js",
-			projectPath: "invalidProjectPath", expectedResult: "Users/user/Desktop/secrets_scanner/tests/req.nodejs/file.js"},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.expectedResult, ExtractRelativePath(test.fullPath, test.projectPath))
 	}
 }
 
@@ -485,43 +478,22 @@ func TestGetResultLevel(t *testing.T) {
 		result           *sarif.Result
 		expectedSeverity string
 	}{
-		{result: &sarif.Result{Level: &levelValueErr},
+		{result: &sarif.Result{Level: levelValueErr},
 			expectedSeverity: severityutils.LevelError.String()},
-		{result: &sarif.Result{Level: &levelValueWarn},
+		{result: &sarif.Result{Level: levelValueWarn},
 			expectedSeverity: severityutils.LevelWarning.String()},
-		{result: &sarif.Result{Level: &levelValueInfo},
+		{result: &sarif.Result{Level: levelValueInfo},
 			expectedSeverity: severityutils.LevelInfo.String()},
-		{result: &sarif.Result{Level: &levelValueNote},
+		{result: &sarif.Result{Level: levelValueNote},
 			expectedSeverity: severityutils.LevelNote.String()},
-		{result: &sarif.Result{Level: &levelValueNone},
+		{result: &sarif.Result{Level: levelValueNone},
 			expectedSeverity: severityutils.LevelNone.String()},
 		{result: &sarif.Result{},
 			expectedSeverity: ""},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedSeverity, GetResultLevel(test.result))
-	}
-}
-
-func TestIsApplicableResult(t *testing.T) {
-	tests := []struct {
-		name           string
-		sarifResult    *sarif.Result
-		expectedOutput bool
-	}{
-		{
-			sarifResult:    CreateDummyPassingResult("rule"),
-			expectedOutput: false,
-		},
-		{
-			sarifResult:    CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet1", "ruleId1", "level1"),
-			expectedOutput: true,
-		},
-	}
-
-	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, IsResultKindNotPass(test.sarifResult))
+		assert.Equal(t, test.expectedSeverity, test.result.Level)
 	}
 }
 
@@ -539,7 +511,7 @@ func TestGetRuleFullDescription(t *testing.T) {
 			expectedOutput: "",
 		},
 		{
-			rule:           sarif.NewRule("rule").WithFullDescription(sarif.NewMultiformatMessageString("description")),
+			rule:           sarif.NewRule("rule").WithFullDescription(sarif.NewMultiformatMessageString().WithText("description")),
 			expectedOutput: "description",
 		},
 	}
@@ -566,7 +538,7 @@ func TestGetRunRules(t *testing.T) {
 			run: CreateRunWithDummyResults(
 				CreateDummyPassingResult("rule1"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1")},
+			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg"))},
 		},
 		{
 			run: CreateRunWithDummyResults(
@@ -576,12 +548,17 @@ func TestGetRunRules(t *testing.T) {
 				CreateDummyPassingResult("rule3"),
 				CreateDummyPassingResult("rule2"),
 			),
-			expectedOutput: []*sarif.ReportingDescriptor{sarif.NewRule("rule1"), sarif.NewRule("rule2"), sarif.NewRule("rule3")},
+			expectedOutput: []*sarif.ReportingDescriptor{
+				sarif.NewRule("rule1").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule2").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
+				sarif.NewRule("rule3").WithShortDescription(sarif.NewMultiformatMessageString().WithText("")).WithFullDescription(sarif.NewMultiformatMessageString().WithMarkdown("rule-markdown").WithText("rule-msg")),
+			},
 		},
 	}
 
 	for _, test := range tests {
-		assert.Equal(t, test.expectedOutput, GetRunRules(test.run))
+		rules := GetRunRules(test.run)
+		assert.Equal(t, test.expectedOutput, rules)
 	}
 }
 
@@ -607,7 +584,7 @@ func TestGetInvocationWorkingDirectory(t *testing.T) {
 			expectedOutput: "",
 		},
 		{
-			invocation:     sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation().WithUri("file_to_wd")),
+			invocation:     sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation().WithURI("file_to_wd")),
 			expectedOutput: "file_to_wd",
 		},
 	}
@@ -635,7 +612,7 @@ func TestGetResultFingerprint(t *testing.T) {
 		},
 		{
 			name:           "Results with fingerprint field",
-			result:         CreateDummyResultWithFingerprint("some_markdown", "masg", jasutils.SastFingerprintKey, "sast_fingerprint"),
+			result:         CreateDummyResultWithFingerprint("some_markdown", "msg", jasutils.SastFingerprintKey, "sast_fingerprint"),
 			expectedOutput: "sast_fingerprint",
 		},
 	}

@@ -3,9 +3,11 @@ package techutils
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -19,29 +21,77 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/package-url/packageurl-go"
 )
+
+const JfrogCleanTechSubModulesEnv = "JFROG_CLI_CLEAN_SUB_MODULES"
 
 type Technology string
 
 const (
-	Maven  Technology = "maven"
-	Gradle Technology = "gradle"
-	Npm    Technology = "npm"
-	Pnpm   Technology = "pnpm"
-	Yarn   Technology = "yarn"
-	Go     Technology = "go"
-	Pip    Technology = "pip"
-	Pipenv Technology = "pipenv"
-	Poetry Technology = "poetry"
-	Nuget  Technology = "nuget"
-	Dotnet Technology = "dotnet"
-	Docker Technology = "docker"
-	Oci    Technology = "oci"
-	Conan  Technology = "conan"
+	Maven     Technology = "maven"
+	Gradle    Technology = "gradle"
+	Npm       Technology = "npm"
+	Pnpm      Technology = "pnpm"
+	Yarn      Technology = "yarn"
+	Go        Technology = "go"
+	Pip       Technology = "pip"
+	Pipenv    Technology = "pipenv"
+	Poetry    Technology = "poetry"
+	Nuget     Technology = "nuget"
+	Dotnet    Technology = "dotnet"
+	Docker    Technology = "docker"
+	Oci       Technology = "oci"
+	Conan     Technology = "conan"
+	Cocoapods Technology = "cocoapods"
+	Swift     Technology = "swift"
+	NoTech    Technology = ""
+	Gem       Technology = "gem"
 )
 const Pypi = "pypi"
 
-var AllTechnologiesStrings = []string{Maven.String(), Gradle.String(), Npm.String(), Pnpm.String(), Yarn.String(), Go.String(), Pip.String(), Pipenv.String(), Poetry.String(), Nuget.String(), Dotnet.String(), Docker.String(), Oci.String(), Conan.String()}
+var AllTechnologiesStrings = []string{
+	Maven.String(),
+	Gradle.String(),
+	Npm.String(),
+	Pnpm.String(),
+	Yarn.String(),
+	Go.String(),
+	Pip.String(),
+	Pipenv.String(),
+	Poetry.String(),
+	Nuget.String(),
+	Dotnet.String(),
+	Docker.String(),
+	Oci.String(),
+	Conan.String(),
+	Cocoapods.String(),
+	Swift.String(),
+	NoTech.String(),
+	Gem.String(),
+}
+
+func ToTechnology(tech string) Technology {
+	tech = strings.ToLower(tech)
+	if tech == "" {
+		return NoTech
+	}
+	if !IsValidTechnology(tech) {
+		return NoTech
+	}
+	return Technology(tech)
+}
+
+func IsValidTechnology(tech string) bool {
+	tech = strings.ToLower(tech)
+	// Check if the technology is in the list of all technologies
+	for _, t := range AllTechnologiesStrings {
+		if strings.ToLower(t) == tech {
+			return true
+		}
+	}
+	return false
+}
 
 type CodeLanguage string
 
@@ -52,25 +102,34 @@ const (
 	Java       CodeLanguage = "java"
 	CSharp     CodeLanguage = "C#"
 	CPP        CodeLanguage = "C++"
+	Ruby       CodeLanguage = "ruby"
+	// CocoapodsLang package can have multiple languages
+	CocoapodsLang CodeLanguage = "Any"
+	SwiftLang     CodeLanguage = "Any"
 )
 
 // Associates a technology with project type (used in config commands for the package-managers).
 // Docker is not present, as there is no docker-config command and, consequently, no docker.yaml file we need to operate on.
 var TechToProjectType = map[Technology]project.ProjectType{
-	Maven:  project.Maven,
-	Gradle: project.Gradle,
-	Npm:    project.Npm,
-	Yarn:   project.Yarn,
-	Go:     project.Go,
-	Pip:    project.Pip,
-	Pipenv: project.Pipenv,
-	Poetry: project.Poetry,
-	Nuget:  project.Nuget,
-	Dotnet: project.Dotnet,
+	Maven:     project.Maven,
+	Gradle:    project.Gradle,
+	Npm:       project.Npm,
+	Yarn:      project.Yarn,
+	Go:        project.Go,
+	Pip:       project.Pip,
+	Pipenv:    project.Pipenv,
+	Poetry:    project.Poetry,
+	Nuget:     project.Nuget,
+	Dotnet:    project.Dotnet,
+	Cocoapods: project.Cocoapods,
+	Swift:     project.Swift,
+	Gem:       project.Ruby,
 }
 
 var packageTypes = map[string]string{
 	"gav":      "Maven",
+	"maven":    "Maven",
+	"gradle":   "Gradle",
 	"docker":   "Docker",
 	"rpm":      "RPM",
 	"deb":      "Debian",
@@ -82,6 +141,24 @@ var packageTypes = map[string]string{
 	"composer": "Composer",
 	"go":       "Go",
 	"alpine":   "Alpine",
+	"rubygems": "Gem",
+}
+
+// The identifier of the package type used in cdx.
+// https://github.com/package-url/purl-spec/blob/main/PURL-TYPES.rst
+var cdxPurlPackageTypes = map[string]string{
+	"gav":      "maven",
+	"docker":   "docker",
+	"rpm":      "rpm",
+	"deb":      "deb",
+	"nuget":    "nuget",
+	"generic":  "generic",
+	"npm":      "npm",
+	"pypi":     "pypi",
+	"composer": "composer",
+	"go":       "golang",
+	"alpine":   "alpine",
+	"swift":    "swift",
 }
 
 type TechData struct {
@@ -190,9 +267,26 @@ var technologiesData = map[Technology]TechData{
 	Docker: {},
 	Oci:    {},
 	Conan: {
-		indicators:         []string{"conanfile.txt", "conanfile.py "},
-		packageDescriptors: []string{"conanfile.txt", "conanfile.py "},
+		indicators:         []string{"conanfile.txt", "conanfile.py"},
+		packageDescriptors: []string{"conanfile.txt", "conanfile.py"},
 		formal:             "Conan",
+	},
+	Cocoapods: {
+		indicators:         []string{"Podfile", "Podfile.lock"},
+		packageDescriptors: []string{"Podfile", "Podfile.lock"},
+		formal:             "Cocoapods",
+		packageTypeId:      "cocoapods://",
+	},
+	Swift: {
+		indicators:         []string{"Package.swift", "Package.resolved"},
+		packageDescriptors: []string{"Package.swift", "Package.resolved"},
+		formal:             "Swift",
+		packageTypeId:      "swift://",
+	},
+	Gem: {
+		indicators:         []string{"Gemfile"},
+		packageDescriptors: []string{"Gemfile"},
+		formal:             "gem",
 	},
 }
 
@@ -223,17 +317,19 @@ func pyProjectTomlIndicatorContent(tech Technology) ContentValidator {
 
 func TechnologyToLanguage(technology Technology) CodeLanguage {
 	languageMap := map[Technology]CodeLanguage{
-		Npm:    JavaScript,
-		Pip:    Python,
-		Poetry: Python,
-		Pipenv: Python,
-		Go:     GoLang,
-		Maven:  Java,
-		Gradle: Java,
-		Nuget:  CSharp,
-		Dotnet: CSharp,
-		Yarn:   JavaScript,
-		Pnpm:   JavaScript,
+		Npm:       JavaScript,
+		Pip:       Python,
+		Poetry:    Python,
+		Pipenv:    Python,
+		Go:        GoLang,
+		Maven:     Java,
+		Gradle:    Java,
+		Nuget:     CSharp,
+		Dotnet:    CSharp,
+		Yarn:      JavaScript,
+		Pnpm:      JavaScript,
+		Cocoapods: CocoapodsLang,
+		Swift:     SwiftLang,
 	}
 	return languageMap[technology]
 }
@@ -322,10 +418,11 @@ func detectedTechnologiesListInPath(path string, recursive bool) (technologies [
 }
 
 // If recursive is true, the search will not be limited to files in the root path.
+// If recursive is true the search may return Technology.NoTech value
 // If requestedTechs is empty, all technologies will be checked.
 // If excludePathPattern is not empty, files/directories that match the wildcard pattern will be excluded from the search.
 func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs []string, requestedDescriptors map[Technology][]string, excludePathPattern string) (technologiesDetected map[Technology]map[string][]string, err error) {
-	filesList, err := fspatterns.ListFiles(path, recursive, false, true, true, excludePathPattern)
+	filesList, dirsList, err := listFilesAndDirs(path, recursive, true, true, excludePathPattern)
 	if err != nil {
 		return
 	}
@@ -340,8 +437,82 @@ func DetectTechnologiesDescriptors(path string, recursive bool, requestedTechs [
 		log.Debug(fmt.Sprintf("mapped %d working directories with indicators/descriptors:\n%s", len(workingDirectoryToIndicators), strJson))
 	}
 	technologiesDetected, err = mapWorkingDirectoriesToTechnologies(workingDirectoryToIndicators, excludedTechAtWorkingDir, ToTechnologies(requestedTechs), requestedDescriptors)
-	if len(technologiesDetected) > 0 {
-		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", len(technologiesDetected), path, maps.Keys(technologiesDetected)))
+	if err != nil {
+		return
+	}
+	if recursive {
+		// If recursive search, we need to also make sure to include directories that do not have any technology indicators.
+		technologiesDetected = addNoTechIfNeeded(technologiesDetected, path, dirsList)
+	}
+	techCount := len(technologiesDetected)
+	if _, exist := technologiesDetected[NoTech]; exist {
+		techCount--
+	}
+	if techCount > 0 {
+		log.Debug(fmt.Sprintf("Detected %d technologies at %s: %s.", techCount, path, maps.Keys(technologiesDetected)))
+	}
+	return
+}
+
+func listFilesAndDirs(rootPath string, isRecursive, excludeWithRelativePath, preserveSymlink bool, excludePathPattern string) (files, dirs []string, err error) {
+	filesOrDirsInPath, err := fspatterns.ListFiles(rootPath, isRecursive, true, excludeWithRelativePath, preserveSymlink, excludePathPattern)
+	if err != nil {
+		return
+	}
+	for _, path := range filesOrDirsInPath {
+		if isDir, e := fileutils.IsDirExists(path, preserveSymlink); e != nil {
+			err = errors.Join(err, fmt.Errorf("failed to check if %s is a directory: %w", path, e))
+			continue
+		} else if isDir {
+			dirs = append(dirs, path)
+		} else {
+			files = append(files, path)
+		}
+	}
+	return
+}
+
+func addNoTechIfNeeded(technologiesDetected map[Technology]map[string][]string, rootPath string, dirsList []string) (_ map[Technology]map[string][]string) {
+	noTechMap := map[string][]string{}
+	for _, dir := range getDirNoTechList(technologiesDetected, rootPath, dirsList) {
+		// Convert the directories
+		noTechMap[dir] = []string{}
+	}
+	if len(technologiesDetected) == 0 || len(noTechMap) > 0 {
+		// no technologies detected at all (add NoTech without any directories) or some directories were added to NoTech
+		technologiesDetected[NoTech] = noTechMap
+	}
+	return technologiesDetected
+}
+
+func getDirNoTechList(technologiesDetected map[Technology]map[string][]string, dir string, dirsList []string) (noTechList []string) {
+	for _, techDirs := range technologiesDetected {
+		if _, exist := techDirs[dir]; exist {
+			// The directory is already mapped to a technology, no need to add the dir or its sub directories to NoTech
+			return
+		}
+	}
+	children := getDirChildren(dir, dirsList)
+	childNoTechCount := 0
+	for _, child := range children {
+		childNoTechList := getDirNoTechList(technologiesDetected, child, dirsList)
+		if len(childNoTechList) > 0 {
+			childNoTechCount++
+		}
+		noTechList = append(noTechList, childNoTechList...)
+	}
+	if childNoTechCount == len(children) {
+		// If all children exists in childNoTechList, add only the parent directory to NoTech
+		noTechList = []string{dir}
+	}
+	return
+}
+
+func getDirChildren(dir string, dirsList []string) (children []string) {
+	for _, dirPath := range dirsList {
+		if filepath.Dir(dirPath) == dir {
+			children = append(children, dirPath)
+		}
 	}
 	return
 }
@@ -485,9 +656,24 @@ func getTechInformationFromWorkingDir(tech Technology, workingDirectoryToIndicat
 			techWorkingDirs[wd] = descriptorsAtWd
 		}
 	}
-	// Don't allow working directory if sub directory already exists as key for the same technology
-	techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	if tech == Maven || tech == Gradle || tech == Nuget || tech == Dotnet || shouldCleanSubModulesInUnsupportedTechs() {
+		// Multi Module - Don't allow working directory if sub directory already exists as key for the same technology
+		techWorkingDirs = cleanSubDirectories(techWorkingDirs)
+	}
 	return
+}
+
+func shouldCleanSubModulesInUnsupportedTechs() bool {
+	// Turn on clean sub modules for tech that we do not support multi-module projects if requested
+	shouldCleanEnvValRaw := os.Getenv(JfrogCleanTechSubModulesEnv)
+	if shouldCleanEnvValRaw == "" {
+		return false
+	}
+	shouldClean, e := strconv.ParseBool(shouldCleanEnvValRaw)
+	if e != nil {
+		log.Warn(fmt.Sprintf("Failed to parse %s: %s", JfrogCleanTechSubModulesEnv, e.Error()))
+	}
+	return shouldClean
 }
 
 func isTechExcludedInWorkingDir(tech Technology, wd string, excludedTechAtWorkingDir map[string][]Technology) bool {
@@ -545,6 +731,9 @@ func hasCompletePathPrefix(root, wd string) bool {
 func DetectedTechnologiesToSlice(detected map[Technology]map[string][]string) []string {
 	keys := make([]string, 0, len(detected))
 	for tech := range detected {
+		if tech == NoTech {
+			continue
+		}
 		keys = append(keys, string(tech))
 	}
 	return keys
@@ -564,7 +753,7 @@ func GetAllTechnologiesList() (technologies []Technology) {
 	return
 }
 
-// SplitComponentId splits a Xray component ID to the component name, version and package type.
+// SplitComponentIdRaw splits a Xray component ID to the component name, version and package type.
 // In case componentId doesn't contain a version, the returned version will be an empty string.
 // In case componentId's format is invalid, it will be returned as the component name
 // and empty strings will be returned instead of the version and the package type.
@@ -573,18 +762,18 @@ func GetAllTechnologiesList() (technologies []Technology) {
 //     Returned values:
 //     Component name: "antparent:ant"
 //     Component version: "1.6.5"
-//     Package type: "Maven"
+//     Package type: "gav"
 //  2. componentId: "generic://sha256:244fd47e07d1004f0aed9c156aa09083c82bf8944eceb67c946ff7430510a77b/foo.jar"
 //     Returned values:
 //     Component name: "foo.jar"
 //     Component version: ""
-//     Package type: "Generic"
+//     Package type: "generic"
 //  3. componentId: "invalid-comp-id"
 //     Returned values:
 //     Component name: "invalid-comp-id"
 //     Component version: ""
 //     Package type: ""
-func SplitComponentId(componentId string) (string, string, string) {
+func SplitComponentIdRaw(componentId string) (string, string, string) {
 	compIdParts := strings.Split(componentId, "://")
 	// Invalid component ID
 	if len(compIdParts) != 2 {
@@ -597,7 +786,7 @@ func SplitComponentId(componentId string) (string, string, string) {
 	// Generic identifier structure: generic://sha256:<Checksum>/name
 	if packageType == "generic" {
 		lastSlashIndex := strings.LastIndex(packageId, "/")
-		return packageId[lastSlashIndex+1:], "", packageTypes[packageType]
+		return packageId[lastSlashIndex+1:], "", packageType
 	}
 
 	var compName, compVersion string
@@ -626,5 +815,124 @@ func SplitComponentId(componentId string) (string, string, string) {
 		compName = packageId
 	}
 
-	return compName, compVersion, packageTypes[packageType]
+	return compName, compVersion, packageType
+}
+
+func SplitComponentId(componentId string) (string, string, string) {
+	compName, compVersion, packageType := SplitComponentIdRaw(componentId)
+	return compName, compVersion, ConvertXrayPackageType(packageType)
+}
+
+func ConvertXrayPackageType(xrayPackageType string) string {
+	if xrayPackageType != "" && packageTypes[xrayPackageType] != "" {
+		return packageTypes[xrayPackageType]
+	}
+	return xrayPackageType
+}
+
+func ToXrayComponentId(packageType, componentName, componentVersion string) string {
+	if componentVersion == "" {
+		// If the component version is empty, we return the component name only
+		return fmt.Sprintf("%s://%s", packageType, componentName)
+	}
+	return fmt.Sprintf("%s://%s:%s", packageType, componentName, componentVersion)
+}
+
+func CdxPackageTypeToTechnology(cdxPackageType string) Technology {
+	for tech, cdxType := range cdxPurlPackageTypes {
+		if cdxType == cdxPackageType {
+			if tech == "gav" {
+				return Technology(cdxType)
+			}
+			return Technology(tech)
+		}
+	}
+	// If the package type is not found in the map, return NoTech
+	return NoTech
+}
+
+func ToCdxPackageType(packageType string) string {
+	if cdxPackageType, exist := cdxPurlPackageTypes[packageType]; exist {
+		return cdxPackageType
+	}
+	return packageType
+}
+
+func CdxPackageTypeToXrayPackageType(cdxPackageType string) string {
+	for xrayPackageType, cdxType := range cdxPurlPackageTypes {
+		if cdxType == cdxPackageType {
+			return xrayPackageType
+		}
+	}
+	return cdxPackageType
+}
+
+// https://github.com/package-url/purl-spec/blob/main/PURL-SPECIFICATION.rst
+// Parse a given Package URL (purl) and return the component namespace, name, version, and package type.
+func SplitPackageUrlWithQualifiers(purl string) (packageType, compNamespace, compName, compVersion string, qualifiers map[string]string) {
+	parsed, err := packageurl.FromString(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to parse package URL '%s': %s", purl, err))
+		return "", "", purl, "", nil
+	}
+	packageType = parsed.Type
+	compNamespace = parsed.Namespace
+	compName = parsed.Name
+	compVersion = parsed.Version
+	if err := parsed.Qualifiers.Normalize(); err != nil {
+		log.Debug(fmt.Sprintf("Failed to normalize '%s' qualifiers: %s", purl, err))
+		return
+	}
+	qualifiers = parsed.Qualifiers.Map()
+	return
+}
+
+func SplitPackageURL(purl string) (compName, compVersion, packageType string) {
+	packageType, compNamespace, compName, compVersion, _ := SplitPackageUrlWithQualifiers(purl)
+	if compNamespace != "" {
+		compName = compNamespace + "/" + compName
+	}
+	return
+}
+
+func ToPackageUrl(compName, version, packageType string, properties ...packageurl.Qualifier) (output string) {
+	if packageType == "" {
+		packageType = "generic"
+	}
+	purl := packageurl.NewPackageURL(packageType, "", compName, version, properties, "").String()
+	// Unescape the output
+	output, err := url.QueryUnescape(purl)
+	if err != nil {
+		log.Debug(fmt.Sprintf("Failed to unescape package URL: %s", err))
+		// Return the original output
+		return purl
+	}
+	return
+}
+
+func ToPackageRef(compName, version, packageType string) (output string) {
+	if packageType == "" {
+		packageType = "generic"
+	}
+	if version == "" {
+		// If the version is empty, we return the component name only
+		return fmt.Sprintf("%s:%s", packageType, compName)
+	}
+	return fmt.Sprintf("%s:%s:%s", packageType, compName, version)
+}
+
+// Extract the component name, version and type from PackageUrl and translate it to an Xray component id
+func PurlToXrayComponentId(purl string) (xrayComponentId string) {
+	compName, compVersion, compType := SplitPackageURL(purl)
+	return ToXrayComponentId(CdxPackageTypeToXrayPackageType(compType), compName, compVersion)
+}
+
+func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayComponentId)
+	return ToPackageUrl(compName, compVersion, ToCdxPackageType(compType))
+}
+
+func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
+	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
+	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
 }

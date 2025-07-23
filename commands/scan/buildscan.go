@@ -79,7 +79,7 @@ func (bsc *BuildScanCommand) SetRescan(rescan bool) *BuildScanCommand {
 
 // Scan published builds with Xray
 func (bsc *BuildScanCommand) Run() (err error) {
-	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails)
+	xrayManager, xrayVersion, err := xrayutils.CreateXrayServiceManagerAndGetVersion(bsc.serverDetails, xrayutils.WithScopedProjectKey(bsc.buildConfiguration.GetProject()))
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		return false, err
 	}
 
-	// A patch for Xray issue where it returns Base URL from the API but it is somtimes not the URL that is configured in the CLI
+	// A patch for Xray issue where it returns Base URL from the API but it is sometimes not the URL that is configured in the CLI
 	// More info in https://jfrog-int.atlassian.net/browse/XRAY-77451
 
 	url, endpoint, trimerr := trimUrl(buildScanResults.MoreDetailsUrl)
@@ -145,9 +145,12 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 	log.Info("The scan data is available at: " + buildScanResults.MoreDetailsUrl)
 	isFailBuildResponse = buildScanResults.FailBuild
 
-	cmdResults := results.NewCommandResults(utils.Build, xrayVersion, false, false)
+	cmdResults := results.NewCommandResults(utils.Build).
+		SetXrayVersion(xrayVersion).
+		SetResultsContext(results.ResultContext{ProjectKey: params.Project, IncludeVulnerabilities: bsc.includeVulnerabilities})
+
 	scanResults := cmdResults.NewScanResults(results.ScanTarget{Name: fmt.Sprintf("%s (%s)", params.BuildName, params.BuildNumber)})
-	scanResults.NewScaScanResults(services.ScanResponse{
+	scanResults.ScaScanResults(0, services.ScanResponse{
 		Violations:      buildScanResults.Violations,
 		Vulnerabilities: buildScanResults.Vulnerabilities,
 		XrayDataUrl:     buildScanResults.MoreDetailsUrl,
@@ -155,9 +158,9 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 
 	resultsPrinter := output.NewResultsWriter(cmdResults).
 		SetOutputFormat(bsc.outputFormat).
+		SetPlatformUrl(bsc.serverDetails.Url).
+		// In build-scan we always want to print the violations.
 		SetHasViolationContext(true).
-		SetIncludeVulnerabilities(bsc.includeVulnerabilities).
-		SetIncludeLicenses(false).
 		SetIsMultipleRootProject(true).
 		SetPrintExtendedTable(bsc.printExtendedTable)
 
@@ -166,14 +169,10 @@ func (bsc *BuildScanCommand) runBuildScanAndPrintResults(xrayManager *xray.XrayS
 		if err = resultsPrinter.PrintScanResults(); err != nil {
 			return
 		}
-	} else {
-		// Print two different tables for violations and vulnerabilities (if needed)
-
+	} else if !noFailBuildPolicy {
 		// If "No Xray Fail build policy...." error received, no need to print violations
-		if !noFailBuildPolicy {
-			if err = resultsPrinter.PrintScanResults(); err != nil {
-				return false, err
-			}
+		if err = resultsPrinter.PrintScanResults(); err != nil {
+			return false, err
 		}
 	}
 	err = bsc.recordResults(cmdResults, params)

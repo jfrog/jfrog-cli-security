@@ -1,0 +1,98 @@
+name: "Install and Setup Dependencies"
+description: "Install needed dependencies for this repository like Go, Node, Java, Python, etc."
+
+inputs:
+  install-swift:
+    description: "Set to 'true' to install Swift. warning: the install-swift actions are flaky and may fail on some platforms."
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    # Install dependencies
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24.x
+    # - name: Setup Go with cache
+    #   uses: jfrog/.github/actions/install-go-with-cache@main
+
+    - name: install ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.3.0
+    - name: Install cocoapods
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+      run: gem install cocoapods
+
+    - name: Install npm
+      uses: actions/setup-node@v4
+      with:
+        node-version: "16"
+    - name: Setup Pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
+
+    - name: Install Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: "11"
+        distribution: "adopt"
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 7.6
+
+    - name: Install NuGet
+      uses: nuget/setup-nuget@v2
+      with:
+        nuget-version: 6.11.0
+    - name: Install dotnet
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '6.x'
+    - name: Install Mono on Linux
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apt-transport-https dirmngr gnupg ca-certificates
+        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
+        echo "deb https://download.mono-project.com/repo/ubuntu stable-focal main" | sudo tee /etc/apt/sources.list.d/mono-official-stable.list
+        sudo apt-get update
+        sudo apt-get install -y mono-complete
+
+      if: runner.os == 'Linux'
+      shell: 'bash'
+    
+    - name: Setup Python3
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Setup Pipenv
+      run: python -m pip install pipenv
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Poetry
+      run: python -m pip install poetry
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+    - name: Setup Conan
+      run: |
+        python -m pip install conan
+        conan profile detect
+      shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+
+    - name: Install Swift on Linux
+      uses: swift-actions/setup-swift@v2
+      if: ${{ inputs.install-swift == 'true' && runner.os == 'Linux'}}
+
+    - name: Install Swift on MacOS
+      run: brew install swift
+      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
+      if: ${{ inputs.install-swift == 'true' && runner.os == 'macOS'}}
+
+    - name: Install Swift on Windows
+      uses: compnerd/gha-setup-swift@v0.3.0
+      with:
+        branch: swift-6.1-release
+        tag: 6.1-RELEASE
+      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows'}}

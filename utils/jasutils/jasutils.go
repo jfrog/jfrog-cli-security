@@ -3,6 +3,7 @@ package jasutils
 import (
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/gookit/color"
 	"github.com/jfrog/jfrog-cli-security/utils"
 )
@@ -66,7 +67,7 @@ const (
 	NotScanned                ApplicabilityStatus = ""
 )
 
-const SastFingerprintKey = "precise_sink_and_sink_function"
+const SastFingerprintKey = "significant_full_path"
 
 func (as ApplicabilityStatus) String() string {
 	return string(as)
@@ -148,4 +149,19 @@ func ConvertApplicableToScore(applicability string) int {
 		return level
 	}
 	return -1
+}
+
+func ApplicabilityStatusToImpactAnalysisState(status ApplicabilityStatus) *cyclonedx.ImpactAnalysisState {
+	switch status {
+	case Applicable:
+		val := cyclonedx.IASExploitable
+		return &val
+	case NotApplicable:
+		val := cyclonedx.IASNotAffected
+		return &val
+	default:
+		// For all other statuses, there is no specific impact analysis state so we return nil
+		// This includes ApplicabilityUndetermined, NotCovered, MissingContext, and NotScanned
+		return nil
+	}
 }

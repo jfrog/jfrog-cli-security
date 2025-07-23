@@ -2,43 +2,51 @@ package output
 
 import (
 	"fmt"
-	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
-	coreUtils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/formats"
-	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
-	"github.com/jfrog/jfrog-cli-security/utils/validations"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/artifactory/utils/commandsummary"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	coreUtils "github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	coreTests "github.com/jfrog/jfrog-cli-core/v2/utils/tests"
+	"github.com/jfrog/jfrog-cli-security/tests/validations"
+	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	clientTests "github.com/jfrog/jfrog-client-go/utils/tests"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
 	summaryExpectedContentDir = filepath.Join("..", "..", "..", "tests", "testdata", "output", "jobSummary")
+)
 
-	securityScaResults = formats.ResultSummary{
+func getTestScaSecurityScanResultSummary() formats.ResultSummary {
+	return formats.ResultSummary{
 		"Critical": map[string]int{jasutils.Applicable.String(): 2, jasutils.NotApplicable.String(): 2, jasutils.NotCovered.String(): 3, jasutils.ApplicabilityUndetermined.String(): 1},
 		"High":     map[string]int{jasutils.Applicable.String(): 2, jasutils.ApplicabilityUndetermined.String(): 3},
 		"Low":      map[string]int{jasutils.NotApplicable.String(): 3},
 		"Unknown":  map[string]int{jasutils.NotCovered.String(): 1},
 	}
-	violationResults = formats.ScanResultSummary{
+}
+
+func getTestViolationResults() formats.ScanResultSummary {
+	return formats.ScanResultSummary{
 		ScaResults: &formats.ScaScanResultSummary{
 			ScanIds:         []string{validations.TestScaScanId},
-			MoreInfoUrls:    []string{validations.TestMoreInfoUrl},
-			Security:        securityScaResults,
+			MoreInfoUrls:    []string{validations.TestMoreInfoUrl + "scan-descendants/master?repoId=10"},
+			Security:        getTestScaSecurityScanResultSummary(),
 			License:         formats.ResultSummary{"High": map[string]int{formats.NoStatus: 1}},
 			OperationalRisk: formats.ResultSummary{"Low": map[string]int{formats.NoStatus: 2}},
 		},
 		SecretsResults: &formats.ResultSummary{"Medium": map[string]int{formats.NoStatus: 3}},
 	}
-)
+}
 
 func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 	testCases := []struct {
@@ -58,7 +66,7 @@ func TestSaveSarifOutputOnlyForJasEntitled(t *testing.T) {
 			cleanUp := clientTests.SetEnvWithCallbackAndAssert(t, coreUtils.SummaryOutputDirPathEnv, tempDir)
 			defer cleanUp()
 
-			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), true, true, utils.GetAllSupportedScans()...))
+			assert.NoError(t, RecordSarifOutput(createDummyJasResult(testCase.isJasEntitled), &config.ServerDetails{Url: "https://url.com"}, true, true, utils.GetAllSupportedScans()...))
 			assert.Equal(t, testCase.isJasEntitled, hasFilesInDir(t, filepath.Join(tempDir, commandsummary.OutputDirName, "security", string(commandsummary.SarifReport))))
 		})
 	}
@@ -94,12 +102,12 @@ func TestSaveLoadData(t *testing.T) {
 						ScaResults: &formats.ScaScanResultSummary{
 							ScanIds:      []string{validations.TestScaScanId},
 							MoreInfoUrls: []string{validations.TestMoreInfoUrl},
-							Security:     securityScaResults,
+							Security:     getTestScaSecurityScanResultSummary(),
 						},
 					},
 					Violations: &formats.ScanViolationsSummary{
 						Watches:           []string{"watch1"},
-						ScanResultSummary: violationResults,
+						ScanResultSummary: getTestViolationResults(),
 					},
 				},
 			},
@@ -145,7 +153,7 @@ func TestSaveLoadData(t *testing.T) {
 					Target: "build-name (build-number)",
 					Violations: &formats.ScanViolationsSummary{
 						Watches:           []string{"watch"},
-						ScanResultSummary: violationResults,
+						ScanResultSummary: getTestViolationResults(),
 					},
 				},
 			},
@@ -234,6 +242,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 		index               commandsummary.Index
 		args                *ResultSummaryArgs
 		violations          bool
+		GithubEnvs          bool
 		content             []formats.ResultsSummary
 		NoExtendedView      bool
 		expectedContentPath string
@@ -341,9 +350,43 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 			}},
 		},
 		{
+			name:                "Build Scan Vulnerabilities - Github Envs",
+			index:               commandsummary.BuildScan,
+			GithubEnvs:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "build_scan_analytics_vulnerabilities.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl, BuildName: "build-name", BuildNumbers: []string{"build-number"}},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: "build-name (build-number)",
+					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
+						ScanIds:      []string{validations.TestScaScanId},
+						MoreInfoUrls: []string{validations.TestMoreInfoUrl},
+						Security:     formats.ResultSummary{"High": map[string]int{formats.NoStatus: 3}, "Medium": map[string]int{formats.NoStatus: 1}, "Unknown": map[string]int{formats.NoStatus: 20}},
+					}},
+				}},
+			}},
+		},
+		{
 			name:                "Binary Scan Vulnerabilities",
 			index:               commandsummary.BinariesScan,
 			expectedContentPath: filepath.Join(summaryExpectedContentDir, "binary_vulnerabilities.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "binary-with-issues"),
+					Vulnerabilities: &formats.ScanResultSummary{ScaResults: &formats.ScaScanResultSummary{
+						ScanIds:      []string{validations.TestScaScanId, "scan-id-2"},
+						MoreInfoUrls: []string{""},
+						Security:     formats.ResultSummary{"Critical": map[string]int{formats.NoStatus: 33}, "Low": map[string]int{formats.NoStatus: 11}},
+					}},
+				}},
+			}},
+		},
+		{
+			name:                "Binary Scan Vulnerabilities - Github Envs",
+			index:               commandsummary.BinariesScan,
+			GithubEnvs:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "binary_analytics_vulnerabilities.md"),
 			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl},
 			content: []formats.ResultsSummary{{
 				Scans: []formats.ScanSummary{{
@@ -368,27 +411,11 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 						ScaResults: &formats.ScaScanResultSummary{
 							ScanIds:      []string{validations.TestScaScanId},
 							MoreInfoUrls: []string{""},
-							Security:     securityScaResults,
+							Security:     getTestScaSecurityScanResultSummary(),
 						},
 						SecretsResults: &formats.ResultSummary{
 							"Medium": map[string]int{formats.NoStatus: 3},
 						},
-					},
-				}},
-			}},
-		},
-		{
-			name:                "Violations",
-			index:               commandsummary.DockerScan,
-			violations:          true,
-			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations.md"),
-			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl, DockerImage: "dockerImage:version"},
-			content: []formats.ResultsSummary{{
-				Scans: []formats.ScanSummary{{
-					Target: filepath.Join(wd, "image.tar"),
-					Violations: &formats.ScanViolationsSummary{
-						Watches:           []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
-						ScanResultSummary: violationResults,
 					},
 				}},
 			}},
@@ -405,7 +432,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 					Target: filepath.Join(wd, "image.tar"),
 					Violations: &formats.ScanViolationsSummary{
 						Watches:           []string{"watch1"},
-						ScanResultSummary: violationResults,
+						ScanResultSummary: getTestViolationResults(),
 					},
 				}},
 			}},
@@ -420,9 +447,53 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				}},
 			}},
 		},
+		{
+			name:                "Violations - Github Envs",
+			index:               commandsummary.DockerScan,
+			violations:          true,
+			GithubEnvs:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations_analytics.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl, DockerImage: "dockerImage:version"},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "image.tar"),
+					Violations: &formats.ScanViolationsSummary{
+						Watches:           []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
+						ScanResultSummary: getTestViolationResults(),
+					},
+				}},
+			}},
+		},
+		{
+			name:                "Violations",
+			index:               commandsummary.DockerScan,
+			violations:          true,
+			expectedContentPath: filepath.Join(summaryExpectedContentDir, "violations.md"),
+			args:                &ResultSummaryArgs{BaseJfrogUrl: validations.TestPlatformUrl, DockerImage: "dockerImage:version"},
+			content: []formats.ResultsSummary{{
+				Scans: []formats.ScanSummary{{
+					Target: filepath.Join(wd, "image.tar"),
+					Violations: &formats.ScanViolationsSummary{
+						Watches:           []string{"watch1", "watch2", "watch3", "watch4", "watch5"},
+						ScanResultSummary: getTestViolationResults(),
+					},
+				}},
+			}},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			cleanUps := []func(){}
+			if testCase.GithubEnvs {
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "some job id"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalRunIdEnv, "some-run-id"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalGitRepoEnv, "some-repo"))
+			}
+			defer func() {
+				for _, cleanUp := range cleanUps {
+					cleanUp()
+				}
+			}()
 			// Read expected content from file (or empty string expected if no file is provided)
 			expectedContent := ""
 			if testCase.expectedContentPath != "" {
@@ -443,6 +514,7 @@ func TestGenerateJobSummaryMarkdown(t *testing.T) {
 				summary, err = createDummyDynamicMarkdown(testCase.content, testCase.index, *testCase.args, testCase.violations, !testCase.NoExtendedView)
 			}
 			assert.NoError(t, err)
+			log.Info(expectedContent)
 			assert.Equal(t, expectedContent, summary)
 		})
 	}
