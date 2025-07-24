@@ -46,7 +46,7 @@ const (
 	Cocoapods Technology = "cocoapods"
 	Swift     Technology = "swift"
 	NoTech    Technology = ""
-	Gem       Technology = "gem"
+	Gem       Technology = "ruby"
 )
 const Pypi = "pypi"
 

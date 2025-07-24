@@ -533,6 +533,13 @@ func validateCurationResults(t *testing.T, testCase testCase, results map[string
 			result.totalNumberOfPackages = 0
 		}
 	}
+	// the number of packages is not deterministic for gem, as it depends on the version of the package manager.
+	if testCase.tech == techutils.Gem {
+		for key := range results {
+			result := results[key]
+			result.totalNumberOfPackages = 0
+		}
+	}
 	assert.Equal(t, testCase.expectedResp, results)
 	for _, requestDone := range testCase.expectedRequest {
 		assert.True(t, requestDone)
@@ -724,6 +731,92 @@ func getTestCasesForDoCurationAudit() []testCase {
 				},
 				},
 			},
+		},
+		{
+			name:          "gem tree - one blocked package",
+			tech:          techutils.Gem,
+			pathToProject: filepath.Join("projects", "package-managers", "gem", "curation-project"),
+
+			// This function now prepares a completely isolated environment before your code runs.
+			funcToGetGoals: func(t *testing.T) []string {
+				// Create a new, empty temporary directory for this test run only.
+				tempGemHome, err := os.MkdirTemp("", "gem-home")
+				require.NoError(t, err)
+
+				// Return a shell command that sets the GEM_HOME.
+				// Your application's subsequent 'bundle lock' will run in this clean environment.
+				return []string{"export", "GEM_HOME=" + tempGemHome}
+			},
+
+			serveResources: map[string]string{
+				"Gemfile": filepath.Join("tests", "testdata", "projects", "package-managers", "gem", "curation-project", "Gemfile"),
+			},
+
+			// Block a package that your logs confirm is being requested.
+			requestToFail: map[string]bool{
+				"/api/gems/ruby-remote/gems/activesupport-5.2.3.gem": true,
+			},
+
+			// Expect a report containing the exact blocked package.
+			expectedResp: map[string]*CurationReport{
+				"Ruby-Project": {
+					packagesStatus: []*PackageStatus{
+						{
+							Action:            "blocked",
+							ParentName:        "actionview",
+							ParentVersion:     "5.2.3",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "indirect",
+							PkgType:           "ruby",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+						{
+							Action:            "blocked",
+							ParentName:        "activesupport",
+							ParentVersion:     "5.2.3",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "direct",
+							PkgType:           "ruby",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+						{
+							Action:            "blocked",
+							ParentName:        "rails-dom-testing",
+							ParentVersion:     "2.3.0",
+							BlockedPackageUrl: "/api/gems/ruby-remote/gems/activesupport-5.2.3.gem",
+							PackageName:       "activesupport",
+							PackageVersion:    "5.2.3",
+							DepRelation:       "indirect",
+							PkgType:           "ruby",
+							BlockingReason:    "Policy violations",
+							Policy: []Policy{
+								{
+									Policy:    "pol1",
+									Condition: "cond1",
+								},
+							},
+						},
+					},
+					totalNumberOfPackages: 0, // Ignore package count for cross-platform compatibility
+				},
+			},
+			allowInsecureTls: true,
 		},
 		{
 			name:          "maven tree - one blocked package",
@@ -1030,6 +1123,59 @@ func Test_getGradleNameScopeAndVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotDownloadUrls, gotName, gotScope, gotVersion := getGradleNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo, nil)
+			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
+			assert.Equal(t, tt.wantName, gotName, "name mismatch")
+			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
+			assert.Equal(t, tt.wantVersion, gotVersion, "version mismatch")
+		})
+	}
+}
+
+func Test_getGemNameScopeAndVersion(t *testing.T) {
+	tests := []struct {
+		name             string
+		id               string
+		artiUrl          string
+		repo             string
+		wantDownloadUrls []string
+		wantName         string
+		wantScope        string
+		wantVersion      string
+	}{
+		{
+			name:             "Realistic package from example - devise",
+			id:               "rubygems://devise:4.7.1",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "test-gems-remote",
+			wantDownloadUrls: []string{"http://test.jfrog.io/artifactory/api/gems/test-gems-remote/gems/devise-4.7.1.gem"},
+			wantName:         "devise",
+			wantScope:        "",
+			wantVersion:      "4.7.1",
+		},
+		{
+			name:             "Project name extraction case",
+			id:               "rubygems://some-gem:1.0.0",
+			artiUrl:          "",
+			repo:             "",
+			wantDownloadUrls: nil,
+			wantName:         "Ruby-Project",
+			wantScope:        "",
+			wantVersion:      "",
+		},
+		{
+			name:             "Invalid format case",
+			id:               "rubygems://invalid-format",
+			artiUrl:          "http://test.jfrog.io/artifactory",
+			repo:             "test-gems-remote",
+			wantDownloadUrls: nil,
+			wantName:         "",
+			wantScope:        "",
+			wantVersion:      "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotDownloadUrls, gotName, gotScope, gotVersion := getGemNameScopeAndVersion(tt.id, tt.artiUrl, tt.repo)
 			assert.Equal(t, tt.wantDownloadUrls, gotDownloadUrls, "downloadUrls mismatch")
 			assert.Equal(t, tt.wantName, gotName, "name mismatch")
 			assert.Equal(t, tt.wantScope, gotScope, "scope mismatch")
