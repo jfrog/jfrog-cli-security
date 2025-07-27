@@ -113,6 +113,7 @@ func getRubyExecPath() (bundleExecPath string, err error) {
 		return "", fmt.Errorf("unexpected ruby version output: %s", versionStr)
 	}
 	actualVersion := fields[1]
+	log.Debug("Ruby version:", actualVersion)
 
 	// Extract just major.minor from actual version and required version
 	actualMajor, actualMinor, err := parseMajorMinor(actualVersion)

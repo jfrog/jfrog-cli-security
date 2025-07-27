@@ -29,6 +29,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/cocoapods"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/conan"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/gem"
 	_go "github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/go"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/java"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/npm"
@@ -201,6 +202,8 @@ func GetTechDependencyTree(params technologies.BuildInfoBomGeneratorParams, arti
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = pnpm.BuildDependencyTree(params)
 	case techutils.Conan:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = conan.BuildDependencyTree(params)
+	case techutils.Gem:
+		depTreeResult.FullDepTrees, uniqueDepsIds, err = gem.BuildDependencyTree(params)
 	case techutils.Yarn:
 		depTreeResult.FullDepTrees, uniqueDepsIds, err = yarn.BuildDependencyTree(params)
 	case techutils.Go:
