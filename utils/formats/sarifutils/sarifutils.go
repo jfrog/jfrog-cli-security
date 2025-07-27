@@ -298,14 +298,15 @@ func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
 
 func CopyResult(result *sarif.Result) *sarif.Result {
 	copied := &sarif.Result{
-		RuleID:       result.RuleID,
-		RuleIndex:    result.RuleIndex,
-		Kind:         result.Kind,
-		Fingerprints: result.Fingerprints,
-		CodeFlows:    copyCodeFlows(result.CodeFlows...),
-		Level:        result.Level,
-		Message:      copyMsgAttribute(result.Message),
-		Properties:   result.Properties,
+		RuleID:              result.RuleID,
+		RuleIndex:           result.RuleIndex,
+		Kind:                result.Kind,
+		Fingerprints:        result.Fingerprints,
+		CodeFlows:           copyCodeFlows(result.CodeFlows...),
+		Level:               result.Level,
+		Message:             copyMsgAttribute(result.Message),
+		Properties:          result.Properties,
+		PartialFingerprints: result.PartialFingerprints,
 	}
 	for _, location := range result.Locations {
 		copied.Locations = append(copied.Locations, CopyLocation(location))

@@ -16,12 +16,14 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 
+	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	scanGraphStrategy "github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 	"golang.org/x/exp/slices"
@@ -151,8 +153,15 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 }
 
 func (auditCmd *AuditCommand) Run() (err error) {
-	// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
-	isRecursiveScan := len(auditCmd.workingDirs) == 0
+	isRecursiveScan := false
+	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+		if len(auditCmd.workingDirs) > 1 {
+			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
+		}
+	} else {
+		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository
+		isRecursiveScan = len(auditCmd.workingDirs) == 0
+	}
 	workingDirs, err := coreutils.GetFullPathsWorkingDirs(auditCmd.workingDirs)
 	if err != nil {
 		return
@@ -171,6 +180,9 @@ func (auditCmd *AuditCommand) Run() (err error) {
 
 	auditParams := NewAuditParams().
 		SetBomGenerator(auditCmd.bomGenerator).
+		SetScaScanStrategy(auditCmd.scaScanStrategy).
+		SetCustomAnalyzerManagerBinaryPath(auditCmd.customAnalyzerManagerBinaryPath).
+		SetCustomBomGenBinaryPath(auditCmd.customBomGenBinaryPath).
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
@@ -208,7 +220,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
 	var messages []string
 	if !cmdResults.EntitledForJas {
-		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secret Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
+		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secrets Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
@@ -228,7 +240,12 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	if failBuild && auditResults.HasViolationContext() && results.CheckIfFailBuild(auditResults.GetScaScansXrayResults()) {
+	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(auditResults)
+	if err != nil {
+		return fmt.Errorf("failed to check if the build should fail: %w", err)
+	}
+
+	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
 		err = results.NewFailBuildError()
 	}
 	return
@@ -261,24 +278,51 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
-	// Initialize the BOM generator
-	buildParams, err := params.ToBuildInfoBomGenParams()
+	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return results.NewCommandResults(utils.SourceCode).AddGeneralError(fmt.Errorf("failed to create build info params: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), false)
 	}
-	if err = params.bomGenerator.WithOptions(buildinfo.WithParams(buildParams)).PrepareGenerator(); err != nil {
+	// Initialize the BOM generator
+	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
 	}
 	// Initialize the SCA scan strategy
-	scanGraphParams, err := params.ToXrayScanGraphParams()
-	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to create scan graph params: %s", err.Error()), false)
-	}
-	if err = params.scaScanStrategy.WithOptions(scanGraphStrategy.WithParams(scanGraphParams)).PrepareStrategy(); err != nil {
+	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
 		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
 	}
 	populateScanTargets(cmdResults, params)
 	return
+}
+
+func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGeneratorOption, scanOptions []scan.SbomScanOption, err error) {
+	// Bom Generators Options
+	buildParams, err := params.ToBuildInfoBomGenParams()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create build info params: %w", err)
+	}
+	bomGenOptions = []bom.SbomGeneratorOption{
+		// Build Info Bom Generator Options
+		buildinfo.WithParams(buildParams),
+		// SCANG Bom Generator Options
+		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
+		scang.WithIgnorePatterns(params.Exclusions()),
+	}
+	// Scan Strategies Options
+	scanGraphParams, err := params.ToXrayScanGraphParams()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create scan graph params: %w", err)
+	}
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get server details: %w", err)
+	}
+	scanOptions = []scan.SbomScanOption{
+		// Xray Scan Graph Strategy Options
+		scanGraphStrategy.WithParams(scanGraphParams),
+		// Catalog Enrich Strategy Options
+		enrich.WithParams(serverDetails, params.resultsContext.ProjectKey),
+	}
+	return bomGenOptions, scanOptions, nil
 }
 
 func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
@@ -336,11 +380,6 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 			// No need to generate the SBOM if we are not going to use it.
 			continue
 		}
-		targetResultsToCompare, err := getTargetResultsToCompare(cmdResults, params.ResultsToCompare(), targetResult)
-		if err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to get target results to compare: %s", err.Error()), false)
-			continue
-		}
 		bom.GenerateSbomForTarget(params.BomGenerator().WithOptions(buildinfo.WithDescriptors(targetResult.GetDescriptors())),
 			bom.SbomGeneratorParams{
 				Target:               targetResult,
@@ -348,7 +387,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 				ScanResultsOutputDir: params.scanResultsOutputDir,
 				// Diff mode - SCA
 				DiffMode:              params.DiffMode(),
-				TargetResultToCompare: targetResultsToCompare,
+				TargetResultToCompare: getTargetResultsToCompare(cmdResults, params.ResultsToCompare(), targetResult),
 			},
 		)
 	}
@@ -360,7 +399,7 @@ func populateScanTargets(cmdResults *results.SecurityCommandResults, params *Aud
 	log.Info(fmt.Sprintf("Performing scans on %d targets:\n%s", len(cmdResults.Targets), scanInfo))
 }
 
-func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults, err error) {
+func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCommandResults, targetResult *results.TargetResults) (targetResultsToCompare *results.TargetResults) {
 	if resultsToCompare == nil {
 		return
 	}
@@ -368,8 +407,10 @@ func getTargetResultsToCompare(cmdResults, resultsToCompare *results.SecurityCom
 		utils.GetRelativePath(targetResult.Target, cmdResults.GetCommonParentPath()),
 		resultsToCompare,
 	)
+	// Let's check if the target results to compare are valid.
+	// If the current target result is a new module, it will not have any previous target results to compare with.
 	if targetResultsToCompare == nil || targetResultsToCompare.ScaResults == nil || targetResultsToCompare.ScaResults.Sbom == nil {
-		err = fmt.Errorf("no target results found to compare")
+		log.Debug(fmt.Sprintf("No previous target results found to compare with for %s", targetResult.Target))
 	}
 	return
 }
@@ -531,10 +572,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		defer func() {
 			auditParallelRunner.JasWg.Done()
 		}()
-		logPrefix := clientutils.GetLogMsgPrefix(threadId, false)
 		// First download the analyzer manager if needed
-		if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-			return fmt.Errorf("%s failed to download analyzer manager: %s", logPrefix, err.Error())
+		if auditParams.customAnalyzerManagerBinaryPath == "" {
+			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
+				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
+			}
+		} else {
+			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
 		}
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
@@ -544,14 +588,15 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                 auditParallelRunner,
-				ServerDetails:          serverDetails,
-				Scanner:                scanner,
-				Module:                 appsConfigModule,
-				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:         auditParams.ScansToPerform(),
-				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:        secrets.SecretsScannerType,
+				Runner:                          auditParallelRunner,
+				ServerDetails:                   serverDetails,
+				Scanner:                         scanner,
+				CustomAnalyzerManagerBinaryPath: auditParams.customAnalyzerManagerBinaryPath,
+				Module:                          appsConfigModule,
+				ConfigProfile:                   auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:                  auditParams.ScansToPerform(),
+				SourceResultsToCompare:          scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:                 secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
@@ -568,7 +613,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				AllowPartialResults:         auditParams.AllowPartialResults(),
 			}
 			if generalError = runner.AddJasScannersTasks(params); generalError != nil {
-				_ = targetResult.AddTargetError(fmt.Errorf("%s failed to add JAS scan tasks: %s", logPrefix, generalError.Error()), auditParams.AllowPartialResults())
+				_ = targetResult.AddTargetError(fmt.Errorf("failed to add JAS scan tasks: %s", generalError.Error()), auditParams.AllowPartialResults())
 				// We assign nil to 'generalError' after handling it to prevent it to propagate further, so it will not be captured twice - once here, and once in the error handling function of createJasScansTasks
 				generalError = nil
 			}

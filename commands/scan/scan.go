@@ -248,10 +248,13 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	}
 	// We consider failing the build only when --fail=true. If a user had provided --fail=false, we don't fail the build even when fail-build rules are applied.
 	// If violation context was provided, we need to check all existing violations for fail-build rules.
-	if scanCmd.fail && scanCmd.resultsContext.HasViolationContext() {
-		if results.CheckIfFailBuild(cmdResults.GetScaScansXrayResults()) {
-			return results.NewFailBuildError()
-		}
+	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(cmdResults)
+	if err != nil {
+		return fmt.Errorf("failed to check if build should fail: %w", err)
+	}
+
+	if scanCmd.fail && scanCmd.resultsContext.HasViolationContext() && shouldFailBuildByPolicy {
+		return results.NewFailBuildError()
 	}
 	log.Info("Scan completed successfully.")
 	return nil
@@ -487,7 +490,7 @@ func (scanCmd *ScanCommand) RunBinaryScaScan(fileTarget string, cmdResults *resu
 		return
 	}
 	targetResults.ScaScanResults(scan.GetScaScansStatusCode(err, *graphScanResults), *graphScanResults)
-	targetResults.Technology = techutils.Technology(graphScanResults.ScannedPackageType)
+	targetResults.Technology = techutils.ToTechnology(graphScanResults.ScannedPackageType)
 	return
 }
 

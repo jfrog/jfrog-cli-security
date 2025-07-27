@@ -410,10 +410,6 @@ func AuditCmd(c *components.Context) error {
 		return pluginsCommon.PrintHelpAndReturnError(fmt.Sprintf("flag '--%s' cannot be used without '--%s'", flags.SecretValidation, flags.Secrets), c)
 	}
 
-	// Set dynamic command logic based on flags
-	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
-	auditCmd.SetBomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
-
 	if subScans, err := getSubScansToPreform(c); err != nil {
 		return err
 	} else if len(subScans) > 0 {
@@ -454,6 +450,12 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	if err != nil {
 		return "", "", nil, nil, err
 	}
+	// Set dynamic command logic based on flags
+	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	auditCmd.SetBomGenerator(sbomGenerator).
+		SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.ScangBinaryCustomPath))
+	auditCmd.SetScaScanStrategy(scaScanStrategy)
+	// Make sure include SBOM is only set if the output format supports it
 	includeSbom := c.GetBoolFlagValue(flags.Sbom)
 	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
 		log.Warn(fmt.Sprintf("The '--%s' flag is only supported with the 'table' or 'cyclonedx' output format. The SBOM will not be included in the output.", flags.Sbom))
@@ -469,6 +471,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		SetFixableOnly(c.GetBoolFlagValue(flags.FixableOnly)).
 		SetThirdPartyApplicabilityScan(c.GetBoolFlagValue(flags.ThirdPartyContextualAnalysis)).
 		SetScansResultsOutputDir(scansOutputDir).
+		SetCustomAnalyzerManagerBinaryPath(c.GetStringFlagValue(flags.AnalyzerManagerCustomPath)).
 		SetSkipAutoInstall(c.GetBoolFlagValue(flags.SkipAutoInstall)).
 		SetAllowPartialResults(c.GetBoolFlagValue(flags.AllowPartialResults))
 

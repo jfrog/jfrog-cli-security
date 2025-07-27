@@ -372,7 +372,7 @@ func PrintJasTable(tables formats.ResultsTables, entitledForJas bool, scanType j
 			return coreutils.PrintTable(tables.SecretsViolationsTable, "Secret Violations",
 				"✨ No violations were found ✨", false)
 		} else {
-			return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secret Detection",
+			return coreutils.PrintTable(tables.SecretsVulnerabilitiesTable, "Secrets Detection",
 				"✨ No secrets were found ✨", false)
 		}
 	case jasutils.IaC:

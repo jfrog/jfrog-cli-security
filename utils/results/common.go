@@ -20,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -52,16 +53,104 @@ func NewFailBuildError() error {
 	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
 }
 
-// In case one (or more) of the violations contains the field FailBuild set to true, CliError with exit code 3 will be returned.
-func CheckIfFailBuild(results []services.ScanResponse) bool {
-	for _, result := range results {
-		for _, violation := range result.Violations {
-			if violation.FailBuild {
+// This func iterates every violation and checks if there is a violation that should fail the build.
+// The build should be failed if there exists at least one violation in any target that holds the following conditions:
+// 1) The violation is set to fail the build by FailBuild or FailPr
+// 2) The violation has applicability status other than 'NotApplicable' OR the violation has 'NotApplicable' status and is not set to skip-non-applicable
+func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
+	for _, target := range auditResults.Targets {
+		shouldFailBuild := false
+		// We first check if JasResults exist so we can extract CA results and consider Applicability status when checking if the build should fail.
+		if target.JasResults == nil {
+			shouldFailBuild = checkIfFailBuildWithoutConsideringApplicability(target)
+		} else {
+			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
+			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
+				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
+			}
+		}
+		if shouldFailBuild {
+			// If we found a violation that should fail the build, we return true.
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
+	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
+
+	// Get new violations from the target
+	newViolations := target.ScaResults.Violations
+
+	// Here we iterate the new violation results and check if any of them should fail the build.
+	_, _, err := ForEachScanGraphViolation(
+		target.ScanTarget,
+		newViolations,
+		entitledForJas,
+		jasApplicabilityResults,
+		checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
+		nil,
+		nil)
+	if err != nil {
+		return err
+	}
+
+	// Here we iterate the deprecated violation results to check if any of them should fail the build.
+	// TODO remove this part once the DeprecatedXrayResults are completely removed and no longer in use
+	for _, result := range target.ScaResults.DeprecatedXrayResults {
+		deprecatedViolations := result.Scan.Violations
+		_, _, err = ForEachScanGraphViolation(
+			target.ScanTarget,
+			deprecatedViolations,
+			entitledForJas,
+			jasApplicabilityResults,
+			checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
+			nil,
+			nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool {
+	for _, newViolation := range target.ScaResults.Violations {
+		if newViolation.FailBuild || newViolation.FailPr {
+			return true
+		}
+	}
+
+	// TODO remove this for loop once the DeprecatedXrayResults are completely removed and no longer in use
+	for _, scanResponse := range target.GetScaScansXrayResults() {
+		for _, oldViolation := range scanResponse.Violations {
+			if oldViolation.FailBuild || oldViolation.FailPr {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild *bool) func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		if !violation.FailBuild && !violation.FailPr {
+			// If the violation is not set to fail the build we simply return
+			return nil
+		}
+		// If the violation is set to fail the build, we check if the violation has NotApplicable status and is set to skip-non-applicable.
+		// If the violation is NotApplicable and is set to skip-non-applicable, we don't fail the build.
+		// If the violation has any other status OR has NotApplicable status but is not set to skip-not-applicable, we fail the build.
+		var shouldSkip bool
+		if shouldSkip, err = shouldSkipNotApplicable(violation, applicabilityStatus); err != nil {
+			return err
+		}
+		if !shouldSkip {
+			*shouldFailBuild = true
+		}
+		return nil
+	}
 }
 
 type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
@@ -285,7 +374,7 @@ func ForEachSbomComponent(bom *cyclonedx.BOM, handler ParseSbomComponentFunc) (e
 		if err := handler(
 			component,
 			cdxutils.SearchDependencyEntry(bom.Dependencies, component.BOMRef),
-			cdxutils.GetComponentRelation(bom, component.BOMRef),
+			cdxutils.GetComponentRelation(bom, component.BOMRef, true),
 		); err != nil {
 			return err
 		}
@@ -346,8 +435,9 @@ func getDirectComponentsAndImpactPaths(target string, impactPaths [][]services.I
 
 func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPathsRows [][]formats.ComponentRow) {
 	impactPathsRows = [][]formats.ComponentRow{}
+	componentAppearances := map[string]int8{}
 	for _, parent := range cdxutils.SearchParents(affectedComponent.BOMRef, components, dependencies...) {
-		impactedPath := buildImpactPathForComponent(parent, components, dependencies...)
+		impactedPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		// Add the affected component at the end of the impact path
 		impactedPath = append(impactedPath, formats.ComponentRow{
 			Name:    affectedComponent.Name,
@@ -359,7 +449,8 @@ func BuildImpactPath(affectedComponent cyclonedx.Component, components []cyclone
 	return
 }
 
-func buildImpactPathForComponent(component cyclonedx.Component, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+func buildImpactPathForComponent(component cyclonedx.Component, componentAppearances map[string]int8, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (impactPath []formats.ComponentRow) {
+	componentAppearances[component.BOMRef]++
 	// Build the impact path for the component
 	impactPath = []formats.ComponentRow{
 		{
@@ -369,7 +460,12 @@ func buildImpactPathForComponent(component cyclonedx.Component, components []cyc
 	}
 	// Add the parent components to the impact path
 	for _, parent := range cdxutils.SearchParents(component.BOMRef, components, dependencies...) {
-		parentImpactPath := buildImpactPathForComponent(parent, components, dependencies...)
+		if componentAppearances[parent.BOMRef] > xray.MaxUniqueAppearances || parent.BOMRef == component.BOMRef {
+			// If the parent is the same as the affected component, we skip it (cyclic dependencies).
+			// If the component has already appeared too many times, skip it to avoid stack overflow.
+			continue
+		}
+		parentImpactPath := buildImpactPathForComponent(parent, componentAppearances, components, dependencies...)
 		if len(parentImpactPath) > 0 {
 			impactPath = append(parentImpactPath, impactPath...)
 		}
@@ -790,7 +886,7 @@ func ScanResultsToRuns(results []ScanResult[[]*sarif.Run]) (runs []*sarif.Run) {
 func GetIssueTechnology(responseTechnology string, targetTech techutils.Technology) techutils.Technology {
 	if responseTechnology != "" && responseTechnology != "generic" && (targetTech == "" || targetTech == "generic") {
 		// technology returned in the vulnerability/violation obj is the most specific technology
-		return techutils.Technology(responseTechnology)
+		return techutils.ToTechnology(responseTechnology)
 	}
 	// if no technology is provided, use the target technology
 	return targetTech
@@ -851,7 +947,7 @@ func ExtractCdxDependenciesCves(bom *cyclonedx.BOM) (directCves []string, indire
 			continue
 		}
 		for _, affectedComponent := range *vulnerability.Affects {
-			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref)
+			relation := cdxutils.GetComponentRelation(bom, affectedComponent.Ref, true)
 			if relation == cdxutils.TransitiveRelation {
 				indirectCvesSet.Add(vulnerability.BOMRef)
 			} else {

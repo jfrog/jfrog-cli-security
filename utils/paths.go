@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -158,6 +161,21 @@ func ToURI(path string) string {
 	}
 	// Return the string representation of the URL
 	return u.String()
+}
+
+func GetReleasesRemoteDetails(artifact, downloadPath string) (server *config.ServerDetails, fullRemotePath string, err error) {
+	var remoteRepo string
+	server, remoteRepo, err = dependencies.GetRemoteDetails(coreutils.ReleasesRemoteEnv)
+	if err != nil {
+		return
+	}
+	if remoteRepo != "" {
+		fullRemotePath = path.Join(remoteRepo, "artifactory", downloadPath)
+		return
+	}
+	log.Debug(fmt.Sprintf("'"+coreutils.ReleasesRemoteEnv+"' environment variable is not configured. The %s will be downloaded directly from releases.jfrog.io if needed.", artifact))
+	// If not configured to download through a remote repository in Artifactory, download from releases.jfrog.io.
+	return &config.ServerDetails{ArtifactoryUrl: coreutils.JfrogReleasesUrl}, downloadPath, nil
 }
 
 func GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID string) string {
