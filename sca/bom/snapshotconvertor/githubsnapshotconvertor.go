@@ -77,11 +77,12 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 		for _, component := range componentsList {
 			var relationship string
 			bomRelationship := cdxutils.GetComponentRelation(bom, component.BOMRef, false)
-			if bomRelationship == cdxutils.RootRelation {
+			switch bomRelationship {
+			case cdxutils.RootRelation:
 				continue
-			} else if bomRelationship == cdxutils.DirectRelation {
+			case cdxutils.DirectRelation:
 				relationship = directDependency
-			} else {
+			default:
 				relationship = indirectDependency
 			}
 
