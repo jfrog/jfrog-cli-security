@@ -130,6 +130,7 @@ require (
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
-// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
+// attiasas:fix_project_dep_source_detection
+replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250728113829-b425a31974b0
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
