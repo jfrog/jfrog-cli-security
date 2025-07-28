@@ -1,8 +1,9 @@
 package snapshotconvertor
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 const (
@@ -96,7 +96,6 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 		manifests[descriptorRelativePath] = manifest
 	}
 	snapshot.Manifests = manifests
-	log.Debug(fmt.Sprintf("Sent Snapshot:/n%v", snapshot))
 	return snapshot, nil
 }
 
@@ -105,4 +104,13 @@ func ensureFullRef(branchName string) string {
 		return branchName
 	}
 	return "refs/heads/" + branchName
+}
+
+func GetSnapshotJson(snapshot *vcsclient.SbomSnapshot) string {
+	snapshotString, err := json.Marshal(snapshot)
+	if err != nil {
+		log.Debug(err)
+		return ""
+	}
+	return string(snapshotString)
 }
