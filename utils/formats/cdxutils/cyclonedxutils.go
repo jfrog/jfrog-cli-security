@@ -664,3 +664,50 @@ func SearchForServiceByName(bom *cyclonedx.BOM, serviceName string) *cyclonedx.S
 	}
 	return nil
 }
+
+func AppendComponents(bom *cyclonedx.BOM, components *[]cyclonedx.Component) {
+	if bom == nil || components == nil || len(*components) == 0 {
+		return
+	}
+	if bom.Components == nil {
+		bom.Components = &[]cyclonedx.Component{}
+	}
+	for _, component := range *components {
+		if SearchComponentByRef(bom.Components, component.BOMRef) != nil {
+			// The component already exists, skip it
+			continue
+		}
+		*bom.Components = append(*bom.Components, component)
+	}
+}
+
+func AppendDependencies(bom *cyclonedx.BOM, dependencies *[]cyclonedx.Dependency) {
+	if bom == nil || dependencies == nil || len(*dependencies) == 0 {
+		return
+	}
+	if bom.Dependencies == nil {
+		bom.Dependencies = &[]cyclonedx.Dependency{}
+	}
+	for _, dependency := range *dependencies {
+		if dependency.Dependencies == nil || len(*dependency.Dependencies) == 0 {
+			// The dependency entry has no dependencies, skip it
+			continue
+		}
+		existingDependency := SearchDependencyEntry(bom.Dependencies, dependency.Ref)
+		if existingDependency == nil {
+			// The dependency does not exist, add it to the BOM
+			*bom.Dependencies = append(*bom.Dependencies, dependency)
+			return
+		}
+		// If the dependency already exists, we need to update its dependencies
+		for _, depRef := range *dependency.Dependencies {
+			if !slices.Contains(*existingDependency.Dependencies, depRef) {
+				// The dependency reference does not exist in the existing dependency, add it
+				if existingDependency.Dependencies == nil {
+					existingDependency.Dependencies = &[]string{}
+				}
+				*existingDependency.Dependencies = append(*existingDependency.Dependencies, depRef)
+			}
+		}
+	}
+}
