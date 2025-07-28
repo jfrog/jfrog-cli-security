@@ -2,11 +2,15 @@ package snapshotconvertor
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/froggit-go/vcsclient"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
-	"path/filepath"
-	"time"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 const (
@@ -25,7 +29,7 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 	snapshot := &vcsclient.SbomSnapshot{
 		Version: snapshotVersion,
 		Sha:     commitSha,
-		Ref:     gitRef,
+		Ref:     ensureFullRef(gitRef),
 		Job: &vcsclient.JobInfo{
 			ID:         jobId,
 			Correlator: jobCorrelator,
@@ -92,5 +96,13 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 		manifests[descriptorRelativePath] = manifest
 	}
 	snapshot.Manifests = manifests
+	log.Debug(fmt.Sprintf("Sent Snapshot:/n%v", snapshot))
 	return snapshot, nil
+}
+
+func ensureFullRef(branchName string) string {
+	if strings.HasPrefix(branchName, "refs/") {
+		return branchName
+	}
+	return "refs/heads/" + branchName
 }
