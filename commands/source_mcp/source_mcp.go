@@ -46,14 +46,6 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 	command := exec.Command(am_path, allArgs...)
 	command.Env = utils.ToCommandEnvVars(env)
 
-	defer func() {
-		if command != nil && !command.ProcessState.Exited() {
-			if _error := command.Process.Kill(); _error != nil {
-				log.Error(fmt.Sprintf("failed to kill process: %s", _error.Error()))
-			}
-		}
-	}()
-
 	stdin, _error := command.StdinPipe()
 	if _error != nil {
 		log.Error(fmt.Sprintf("Error creating MCPService stdin pipe: %v", _error))
@@ -85,24 +77,22 @@ func RunAmMcpWithPipes(env map[string]string, cmd string, input_pipe io.Reader, 
 	}
 
 	if timeout > 0 {
+		waitCh := make(chan error, 1)
 		go func() {
-			time.Sleep(time.Duration(timeout) * time.Second)
-			// closing the pipe required prior to killing the process
-			// according to MCP documentation
-			// https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle
-			err := stdin.Close()
-			if err != nil {
-				log.Error(fmt.Sprintf("Error closing MCPService stdin pipe: %v", err))
-			}
-
-			err = command.Process.Kill()
-			if err != nil {
-				log.Error(fmt.Sprintf("Error killing MCPService subprocess: %v", err))
-			}
+			waitCh <- command.Wait()
 		}()
+		select {
+		case _error = <-waitCh:
+		case <-time.After(time.Duration(timeout) * time.Second):
+			log.Warn("Timeout reached")
+
+			return nil
+		}
+	} else {
+		_error = command.Wait()
 	}
 
-	if _error := command.Wait(); _error != nil {
+	if _error != nil {
 		log.Error(fmt.Sprintf("Error waiting for MCPService subprocess: %v", _error))
 		return _error
 	}
