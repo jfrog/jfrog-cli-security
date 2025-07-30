@@ -58,7 +58,7 @@ func TestCalculateUniqueDeps(t *testing.T) {
 		"1": {Name: "zlib", Version: "1.3.1"},
 		"2": {Name: "openssl", Version: "3.0.9"},
 		"3": {Name: "meson", Version: "1.4.1"},
-		"4": {Name: "ninja", Version: "1.13.0"},
+		"4": {Name: "ninja", Version: "1.13.1"},
 		"5": {Name: "openssl", Version: "3.0.9"}, // duplicate, should be removed
 	}
 
