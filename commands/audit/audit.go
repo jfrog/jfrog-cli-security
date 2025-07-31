@@ -465,12 +465,15 @@ func getRequestedDescriptors(params *AuditParams) map[techutils.Technology][]str
 
 func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditParams *AuditParams) {
 	var jasScanner *jas.JasScanner
-	var generalJasScanErr error
+	//var generalJasScanErr error
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
-	// Add the scans to the parallel runner
-	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
-	}
+	/*
+		// Add the scans to the parallel runner
+		if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
+		}
+
+	*/
 	if generalScaScanError := addScaScansToRunner(auditParallelRunner, auditParams, cmdResults); generalScaScanError != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during SCA scan process. SCA scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalScaScanError.Error()), auditParams.AllowPartialResults())
 	}

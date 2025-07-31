@@ -1,9 +1,7 @@
 package snapshotconvertor
 
 import (
-	"encoding/json"
 	"errors"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -39,8 +37,7 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 			Version: detectorVersion,
 			Url:     detectorUrl,
 		},
-		Scanned:   scanTime,
-		Manifests: nil,
+		Scanned: scanTime,
 	}
 
 	if bom.Components == nil {
@@ -68,9 +65,8 @@ func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanT
 	manifests := make(map[string]*vcsclient.Manifest)
 	for descriptorRelativePath, componentsList := range descriptorToComponents {
 		manifest := &vcsclient.Manifest{
-			Name:     filepath.Base(descriptorRelativePath),
-			File:     &vcsclient.FileInfo{SourceLocation: descriptorRelativePath},
-			Resolved: nil,
+			Name: filepath.Base(descriptorRelativePath),
+			File: &vcsclient.FileInfo{SourceLocation: descriptorRelativePath},
 		}
 
 		resolvedDependencies := make(map[string]*vcsclient.ResolvedDependency)
@@ -105,13 +101,4 @@ func ensureFullRef(branchName string) string {
 		return branchName
 	}
 	return "refs/heads/" + branchName
-}
-
-func GetSnapshotJson(snapshot *vcsclient.SbomSnapshot) string {
-	snapshotString, err := json.Marshal(snapshot)
-	if err != nil {
-		log.Debug(err)
-		return ""
-	}
-	return string(snapshotString)
 }
