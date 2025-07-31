@@ -81,7 +81,10 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
 
 	// Get new violations from the target
-	newViolations := target.ScaResults.Violations
+	var newViolations []services.Violation
+	if target.ScaResults != nil {
+		newViolations = target.ScaResults.Violations
+	}
 
 	// Here we iterate the new violation results and check if any of them should fail the build.
 	_, _, err := ForEachScanGraphViolation(
@@ -98,18 +101,20 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 
 	// Here we iterate the deprecated violation results to check if any of them should fail the build.
 	// TODO remove this part once the DeprecatedXrayResults are completely removed and no longer in use
-	for _, result := range target.ScaResults.DeprecatedXrayResults {
-		deprecatedViolations := result.Scan.Violations
-		_, _, err = ForEachScanGraphViolation(
-			target.ScanTarget,
-			deprecatedViolations,
-			entitledForJas,
-			jasApplicabilityResults,
-			checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
-			nil,
-			nil)
-		if err != nil {
-			return err
+	if target.ScaResults != nil {
+		for _, result := range target.ScaResults.DeprecatedXrayResults {
+			deprecatedViolations := result.Scan.Violations
+			_, _, err = ForEachScanGraphViolation(
+				target.ScanTarget,
+				deprecatedViolations,
+				entitledForJas,
+				jasApplicabilityResults,
+				checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
+				nil,
+				nil)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
