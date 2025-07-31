@@ -12,11 +12,8 @@ import (
 )
 
 const (
-	directDependency     = "Direct"
-	indirectDependency   = "Indirect"
-	GithubJobEnvVar      = "GITHUB_JOB"
-	GithubWorkflowEnvVar = "GITHUB_WORKFLOW"
-	GithubShaEnvVar      = "GITHUB_SHA"
+	directDependency   = "Direct"
+	indirectDependency = "Indirect"
 )
 
 func CreateGithubSnapshotFromSbom(bom *cyclonedx.BOM, snapshotVersion int, scanTime time.Time, jobId, jobCorrelator, commitSha, gitRef, detectorName, detectorVersion, detectorUrl string) (*vcsclient.SbomSnapshot, error) {
