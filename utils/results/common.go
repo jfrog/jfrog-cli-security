@@ -1050,7 +1050,7 @@ func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Comp
 		bom.Components = nil
 	}
 	if len(*bom.Dependencies) == 0 {
-		dependencies = nil
+		bom.Dependencies = nil
 	}
 	return bom.Components, bom.Dependencies
 }
