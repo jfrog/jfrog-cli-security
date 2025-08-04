@@ -38,12 +38,12 @@
                 "package_type": "unknown",
                 "languages": [],
                 "settings": {
-                    "os": "Macos",
-                    "arch": "armv8",
-                    "compiler": "apple-clang",
+                    "os": "Linux",
+                    "arch": "x86_64",
+                    "compiler": "gcc",
                     "compiler.cppstd": "gnu17",
-                    "compiler.libcxx": "libc++",
-                    "compiler.version": "15",
+                    "compiler.libcxx": "libstdc++11",
+                    "compiler.version": "13",
                     "build_type": "Release"
                 },
                 "options": {},
@@ -145,8 +145,8 @@
                         "visible": true
                     },
                     "4": {
-                        "ref": "ninja/1.13.0",
-                        "require": "ninja/1.13.0",
+                        "ref": "ninja/1.13.1",
+                        "require": "ninja/1.13.1",
                         "run": true,
                         "libs": false,
                         "skip": false,
@@ -168,7 +168,7 @@
                 "ref": "zlib/1.3.1#b8bc2603263cf7eccbd6e17e66b0ed76",
                 "id": "1",
                 "recipe": "Downloaded",
-                "package_id": "2ee39e692ca4177b4b689b15bc1f2cfdf8f83706",
+                "package_id": "c81087b06d1a5beef0ad711fc32d45f7a425a8f3",
                 "prev": null,
                 "rrev": "b8bc2603263cf7eccbd6e17e66b0ed76",
                 "rrev_timestamp": 1733936244.862,
@@ -207,10 +207,10 @@
                 "package_type": "static-library",
                 "languages": [],
                 "settings": {
-                    "os": "Macos",
-                    "arch": "armv8",
-                    "compiler": "apple-clang",
-                    "compiler.version": "15",
+                    "os": "Linux",
+                    "arch": "x86_64",
+                    "compiler": "gcc",
+                    "compiler.version": "13",
                     "build_type": "Release"
                 },
                 "options": {
@@ -230,7 +230,7 @@
                 "generators": [],
                 "python_requires": null,
                 "system_requires": {},
-                "recipe_folder": "/Users/runner/.conan2/p/zlib204752602052d/e",
+                "recipe_folder": "/home/runner/.conan2/p/zlib204752602052d/e",
                 "source_folder": null,
                 "build_folder": null,
                 "generators_folder": null,
@@ -275,10 +275,10 @@
                 "label": "zlib/1.3.1",
                 "info": {
                     "settings": {
-                        "os": "Macos",
-                        "arch": "armv8",
-                        "compiler": "apple-clang",
-                        "compiler.version": "15",
+                        "os": "Linux",
+                        "arch": "x86_64",
+                        "compiler": "gcc",
+                        "compiler.version": "13",
                         "build_type": "Release"
                     },
                     "options": {
@@ -287,6 +287,26 @@
                     }
                 },
                 "vendor": false,
+                "conandata": {
+                    "patches": {
+                        "1.3.1": [
+                            {
+                                "patch_description": "separate static/shared builds, disable debug suffix",
+                                "patch_file": "patches/1.3.1/0001-fix-cmake.patch",
+                                "patch_type": "conan"
+                            }
+                        ]
+                    },
+                    "sources": {
+                        "1.3.1": {
+                            "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+                            "url": [
+                                "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+                                "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz"
+                            ]
+                        }
+                    }
+                },
                 "dependencies": {},
                 "context": "host",
                 "test": false
@@ -295,7 +315,7 @@
                 "ref": "openssl/3.0.9#c0aed0c748042543804c1068b15af8be",
                 "id": "2",
                 "recipe": "Downloaded",
-                "package_id": "bb22dd70a36da0d452f8ae7226a0439ed043fb4b",
+                "package_id": "94f24364087b7be36d5b2e58ff0896f87a2e3320",
                 "prev": null,
                 "rrev": "c0aed0c748042543804c1068b15af8be",
                 "rrev_timestamp": 1696808387.467,
@@ -394,10 +414,10 @@
                 "package_type": "static-library",
                 "languages": [],
                 "settings": {
-                    "os": "Macos",
-                    "arch": "armv8",
-                    "compiler": "apple-clang",
-                    "compiler.version": "15",
+                    "os": "Linux",
+                    "arch": "x86_64",
+                    "compiler": "gcc",
+                    "compiler.version": "13",
                     "build_type": "Release"
                 },
                 "options": {
@@ -697,7 +717,7 @@
                 "generators": [],
                 "python_requires": null,
                 "system_requires": {},
-                "recipe_folder": "/Users/runner/.conan2/p/opensd7bdf135944e1/e",
+                "recipe_folder": "/home/runner/.conan2/p/opensd7bdf135944e1/e",
                 "source_folder": null,
                 "build_folder": null,
                 "generators_folder": null,
@@ -742,10 +762,10 @@
                 "label": "openssl/3.0.9",
                 "info": {
                     "settings": {
-                        "os": "Macos",
-                        "arch": "armv8",
-                        "compiler": "apple-clang",
-                        "compiler.version": "15",
+                        "os": "Linux",
+                        "arch": "x86_64",
+                        "compiler": "gcc",
+                        "compiler.version": "13",
                         "build_type": "Release"
                     },
                     "options": {
@@ -813,6 +833,17 @@
                     ]
                 },
                 "vendor": false,
+                "conandata": {
+                    "sources": {
+                        "3.0.9": {
+                            "sha256": "eb1ab04781474360f77c318ab89d8c5a03abc38e63d65a603cabbf1b00a1dc90",
+                            "url": [
+                                "https://www.openssl.org/source/openssl-3.0.9.tar.gz",
+                                "https://github.com/openssl/openssl/releases/download/openssl-3.0.9/openssl-3.0.9.tar.gz"
+                            ]
+                        }
+                    }
+                },
                 "dependencies": {
                     "1": {
                         "ref": "zlib/1.3.1",
@@ -879,7 +910,7 @@
                 "generators": [],
                 "python_requires": null,
                 "system_requires": {},
-                "recipe_folder": "/Users/runner/.conan2/p/meson050f2398829b1/e",
+                "recipe_folder": "/home/runner/.conan2/p/meson050f2398829b1/e",
                 "source_folder": null,
                 "build_folder": null,
                 "generators_folder": null,
@@ -924,9 +955,17 @@
                 "label": "meson/1.4.1",
                 "info": {},
                 "vendor": false,
+                "conandata": {
+                    "sources": {
+                        "1.4.1": {
+                            "sha256": "a7efc72ecb873c5a62031ade1921a7177b67cfdcb2e9410a7ab023f9e8192f4b",
+                            "url": "https://github.com/mesonbuild/meson/archive/1.4.1.tar.gz"
+                        }
+                    }
+                },
                 "dependencies": {
                     "4": {
-                        "ref": "ninja/1.13.0",
+                        "ref": "ninja/1.13.1",
                         "require": "ninja/[>=1.10.2 <2]",
                         "run": true,
                         "libs": false,
@@ -946,14 +985,14 @@
                 "test": false
             },
             "4": {
-                "ref": "ninja/1.13.0#53ff096207a5599ced46a633271b3cef",
+                "ref": "ninja/1.13.1#294f8721dbcde145674f7ba44994700e",
                 "id": "4",
                 "recipe": "Downloaded",
-                "package_id": "617cae191537b47386c088e07b1822d8606b7e67",
-                "prev": "d9d83aca0e498f749bf610c65d0c92f4",
-                "rrev": "53ff096207a5599ced46a633271b3cef",
-                "rrev_timestamp": 1751046277.036,
-                "prev_timestamp": 1751046315.949,
+                "package_id": "3593751651824fb813502c69c971267624ced41a",
+                "prev": "6411b2345296c61c302bf2a6501bb5d9",
+                "rrev": "294f8721dbcde145674f7ba44994700e",
+                "rrev_timestamp": 1753400352.374,
+                "prev_timestamp": 1753400426.762,
                 "remote": "conancenter",
                 "binary_remote": "conancenter",
                 "build_id": null,
@@ -977,7 +1016,7 @@
                 "win_bash_run": null,
                 "default_options": null,
                 "options_description": null,
-                "version": "1.13.0",
+                "version": "1.13.1",
                 "topics": [
                     "ninja",
                     "build"
@@ -985,12 +1024,12 @@
                 "package_type": "application",
                 "languages": [],
                 "settings": {
-                    "os": "Macos",
-                    "arch": "armv8",
-                    "compiler": "apple-clang",
+                    "os": "Linux",
+                    "arch": "x86_64",
+                    "compiler": "gcc",
                     "compiler.cppstd": "gnu17",
-                    "compiler.libcxx": "libc++",
-                    "compiler.version": "15",
+                    "compiler.libcxx": "libstdc++11",
+                    "compiler.version": "13",
                     "build_type": "Release"
                 },
                 "options": {},
@@ -998,7 +1037,7 @@
                 "generators": [],
                 "python_requires": null,
                 "system_requires": {},
-                "recipe_folder": "/Users/runner/.conan2/p/ninja292fb94733882/e",
+                "recipe_folder": "/home/runner/.conan2/p/ninja9b834eeed06df/e",
                 "source_folder": null,
                 "build_folder": null,
                 "generators_folder": null,
@@ -1040,15 +1079,23 @@
                     }
                 },
                 "conf_info": {},
-                "label": "ninja/1.13.0",
+                "label": "ninja/1.13.1",
                 "info": {
                     "settings": {
-                        "os": "Macos",
-                        "arch": "armv8",
+                        "os": "Linux",
+                        "arch": "x86_64",
                         "build_type": "Release"
                     }
                 },
                 "vendor": false,
+                "conandata": {
+                    "sources": {
+                        "1.13.1": {
+                            "sha256": "f0055ad0369bf2e372955ba55128d000cfcc21777057806015b45e4accbebf23",
+                            "url": "https://github.com/ninja-build/ninja/archive/v1.13.1.tar.gz"
+                        }
+                    }
+                },
                 "dependencies": {},
                 "context": "host",
                 "test": false
@@ -1059,7 +1106,7 @@
         },
         "overrides": {},
         "resolved_ranges": {
-            "ninja/[>=1.10.2 <2]": "ninja/1.13.0"
+            "ninja/[>=1.10.2 <2]": "ninja/1.13.1"
         },
         "replaced_requires": {},
         "error": null

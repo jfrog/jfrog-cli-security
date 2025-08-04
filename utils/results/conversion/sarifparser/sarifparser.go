@@ -26,10 +26,6 @@ import (
 )
 
 const (
-	CurrentWorkflowNameEnvVar      = "GITHUB_WORKFLOW"
-	CurrentWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
-	CurrentWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
-
 	fixedVersionSarifPropertyKey  = "fixedVersion"
 	jfrogFingerprintAlgorithmName = "jfrogFingerprintHash"
 	MissingCveScore               = "0"
@@ -851,7 +847,7 @@ func getDockerfileLocationIfExists(run *sarif.Run) string {
 			return location
 		}
 	}
-	if workspace := os.Getenv(CurrentWorkflowWorkspaceEnvVar); workspace != "" {
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
 		if exists, err := fileutils.IsFileExists(filepath.Join(workspace, "Dockerfile"), false); err == nil && exists {
 			return filepath.Join(workspace, "Dockerfile")
 		}
@@ -863,7 +859,7 @@ func getGithubWorkflowsDirIfExists() string {
 	if exists, err := fileutils.IsDirExists(GithubBaseWorkflowDir, false); err == nil && exists {
 		return GithubBaseWorkflowDir
 	}
-	if workspace := os.Getenv(CurrentWorkflowWorkspaceEnvVar); workspace != "" {
+	if workspace := os.Getenv(utils.CurrentGithubWorkflowWorkspaceEnvVar); workspace != "" {
 		if exists, err := fileutils.IsDirExists(filepath.Join(workspace, GithubBaseWorkflowDir), false); err == nil && exists {
 			return filepath.Join(workspace, GithubBaseWorkflowDir)
 		}
@@ -872,7 +868,7 @@ func getGithubWorkflowsDirIfExists() string {
 }
 
 func getWorkflowFileLocationIfExists() (location string) {
-	workflowName := os.Getenv(CurrentWorkflowNameEnvVar)
+	workflowName := os.Getenv(utils.CurrentGithubWorkflowNameEnvVar)
 	if workflowName == "" {
 		return
 	}
@@ -922,8 +918,8 @@ func getBaseBinaryDescriptionMarkdown(commandType utils.CommandType, target resu
 	if workflowLocation := getWorkflowFileLocationIfExists(); workflowLocation != "" {
 		content += fmt.Sprintf("\nGithub Actions Workflow: %s", workflowLocation)
 	}
-	if os.Getenv(CurrentWorkflowRunNumberEnvVar) != "" {
-		content += fmt.Sprintf("\nRun: %s", os.Getenv(CurrentWorkflowRunNumberEnvVar))
+	if os.Getenv(utils.CurrentGithubWorkflowRunNumberEnvVar) != "" {
+		content += fmt.Sprintf("\nRun: %s", os.Getenv(utils.CurrentGithubWorkflowRunNumberEnvVar))
 	}
 	// If is docker image, add the image tag
 	if commandType == utils.DockerImage {
