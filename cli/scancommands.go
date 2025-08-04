@@ -33,7 +33,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
 
@@ -635,21 +634,6 @@ func getCurationCommand(c *components.Context) (*curation.CurationAuditCommand, 
 		SetNpmScope(c.GetStringFlagValue(flags.DepType)).
 		SetPipRequirementsFile(c.GetStringFlagValue(flags.RequirementsFile))
 	return curationAuditCommand, nil
-}
-
-func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
-	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
-	if scansOutputDir == "" {
-		return "", nil
-	}
-	exists, err := fileutils.IsDirExists(scansOutputDir, false)
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
-	}
-	return scansOutputDir, nil
 }
 
 func DockerScanMockCommand() components.Command {

@@ -182,7 +182,7 @@ var commandFlags = map[string][]string{
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable,
+		Licenses, OutputFormat, ExtendedTable, OutputDir,
 		// Scan Logic params
 		StaticSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
 	},

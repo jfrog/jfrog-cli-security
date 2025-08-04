@@ -13,6 +13,7 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
@@ -116,4 +117,19 @@ func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomSca
 		scanStrategy = enrich.NewEnrichScanStrategy()
 	}
 	return bomGenerator, scanStrategy
+}
+
+func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
+	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
+	if scansOutputDir == "" {
+		return "", nil
+	}
+	exists, err := fileutils.IsDirExists(scansOutputDir, false)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
+	}
+	return scansOutputDir, nil
 }

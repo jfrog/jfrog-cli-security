@@ -10,6 +10,7 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
@@ -26,10 +27,13 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
+	// Properties for Git context
+	jasIssueGitContextProperty = "jfrog:git:context"
 )
 
 type CmdResultsCycloneDxConverter struct {
 	entitledForJas bool
+	gitContext     *xscServices.XscGitInfoContext
 	xrayVersion    string
 
 	targetsComponent map[string]cyclonedx.Component
@@ -46,11 +50,23 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
+	// If git context is provided, add it to the metadata component
+	if bom.Metadata.Component != nil && cdc.gitContext != nil {
+		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
+			log.Warn("Failed to serialize git context to JSON: %v", err)
+		} else {
+			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
+				Name:  jasIssueGitContextProperty,
+				Value: gitContextStr,
+				})
+			}
+		}
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
 	cdc.entitledForJas = entitledForJas
+	cdc.gitContext = gitContext
 	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
 	cdc.bom = cyclonedx.NewBOM()
