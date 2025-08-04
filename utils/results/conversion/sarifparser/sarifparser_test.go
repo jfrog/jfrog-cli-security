@@ -621,15 +621,15 @@ func TestPatchRunsToPassIngestionRules(t *testing.T) {
 			cleanUps := []func(){}
 			if tc.withEnvVars {
 				// Some content depends on env vars values
-				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, "workflow name"))
-				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, "123"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.CurrentGithubWorkflowNameEnvVar, "workflow name"))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.CurrentGithubWorkflowRunNumberEnvVar, "123"))
 				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalJobIdEnv, "job-id"))
 				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalRunIdEnv, "run-id"))
 				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.JfrogExternalGitRepoEnv, "repo"))
 			} else {
 				// Since some of the env vars are provided by the test in GitHub Actions, we need to clean them up before running the test
-				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowNameEnvVar, ""))
-				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, CurrentWorkflowRunNumberEnvVar, ""))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.CurrentGithubWorkflowNameEnvVar, ""))
+				cleanUps = append(cleanUps, clientTests.SetEnvWithCallbackAndAssert(t, utils.CurrentGithubWorkflowRunNumberEnvVar, ""))
 			}
 			defer func() {
 				for _, cleanUp := range cleanUps {
