@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/CycloneDX/cyclonedx-go"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -57,7 +56,7 @@ func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error
 
 func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	// Validate the file is cdx
-	if _, err = validateInputFile(ucc.fileToUpload); err != nil {
+	if err = validateInputFile(ucc.fileToUpload); err != nil {
 		return
 	}
 	// Upload the CycloneDx file to the JFrog repository
@@ -73,23 +72,22 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	return
 }
 
-func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err error) {
+func validateInputFile(cdxFilePath string) (err error) {
 	if !strings.HasSuffix(cdxFilePath, ".cdx.json") {
-		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
 	}
 	// check if the file exists
 	if exists, err := fileutils.IsFileExists(cdxFilePath, false); err != nil {
-		return nil, fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
+		return fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
 	} else if !exists {
-		return nil, fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
+		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
 	bom, err := utils.ReadSbomFromFile(cdxFilePath)
 	if err != nil || bom == nil {
-		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
 	if bom.Metadata != nil && bom.Metadata.Component != nil {
-		metadata = bom.Metadata
 		componentStr, err := utils.GetAsJsonString(bom.Metadata.Component, true, true)
 		if err == nil {
 			log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata component:\n%s", componentStr))
