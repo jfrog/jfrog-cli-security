@@ -41,6 +41,12 @@ const (
 	JfrogExternalRunIdEnv   = "JFROG_CLI_USAGE_RUN_ID"
 	JfrogExternalJobIdEnv   = "JFROG_CLI_USAGE_JOB_ID"
 	JfrogExternalGitRepoEnv = "JFROG_CLI_USAGE_GIT_REPO"
+
+	CurrentGithubWorkflowNameEnvVar      = "GITHUB_WORKFLOW"
+	CurrentGithubWorkflowRunNumberEnvVar = "GITHUB_RUN_NUMBER"
+	CurrentGithubWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
+	CurrentGithubWorkflowJobEnvVar       = "GITHUB_JOB"
+	CurrentGithubShaEnvVar               = "GITHUB_SHA"
 )
 
 var (
