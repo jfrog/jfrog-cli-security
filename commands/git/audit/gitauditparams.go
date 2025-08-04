@@ -27,7 +27,7 @@ type GitAuditParams struct {
 	// Output params
 	outputFormat  format.OutputFormat
 	extendedTable bool
-	outputDir string
+	outputDir     string
 	// Cmd information (not params, set by the cmd)
 	xrayVersion         string
 	xscVersion          string

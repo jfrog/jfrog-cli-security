@@ -50,7 +50,7 @@ func TestValidateInputFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := validateInputFile(tt.filePath)
+			err := validateInputFile(tt.filePath)
 			if (err != nil) != tt.expectError {
 				t.Errorf("validateInputFile() error = %v, expectError %v", err, tt.expectError)
 			}

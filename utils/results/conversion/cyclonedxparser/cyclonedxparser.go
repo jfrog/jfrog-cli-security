@@ -58,9 +58,9 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
 				Name:  jasIssueGitContextProperty,
 				Value: gitContextStr,
-				})
-			}
+			})
 		}
+	}
 	return
 }
 
