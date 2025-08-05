@@ -42,9 +42,6 @@ var (
 
 type CmdResultsSarifConverter struct {
 	baseJfrogUrl string
-	// Include vulnerabilities/violations in the output
-	includeVulnerabilities bool
-	hasViolationContext    bool
 	// If we are running on Github actions, we need to add/change information to the output
 	patchBinaryPaths bool
 	// Current stream parse cache information
@@ -92,8 +89,8 @@ type violationContext struct {
 	Policies []string
 }
 
-func NewCmdResultsSarifConverter(baseUrl string, includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
-	return &CmdResultsSarifConverter{baseJfrogUrl: baseUrl, includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext, patchBinaryPaths: patchBinaryPaths}
+func NewCmdResultsSarifConverter(baseUrl string, patchBinaryPaths bool) *CmdResultsSarifConverter {
+	return &CmdResultsSarifConverter{baseJfrogUrl: baseUrl, patchBinaryPaths: patchBinaryPaths}
 }
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
