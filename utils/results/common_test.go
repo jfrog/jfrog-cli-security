@@ -169,6 +169,43 @@ func TestViolationFailBuild(t *testing.T) {
 			},
 			expectedResult: true, // Should fail because second target has a violation that should fail
 		},
+		{
+			name: "no sca results - build should not fail",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						ScanTarget: ScanTarget{Target: "test-target"},
+						ScaResults: nil,
+						JasResults: &JasScansResults{
+							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
+								{
+									Scan: []*sarif.Run{
+										{
+											Tool: &sarif.Tool{
+												Driver: &sarif.ToolComponent{
+													Rules: []*sarif.ReportingDescriptor{
+														{
+															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-3333")),
+															Properties: &sarif.PropertyBag{
+																Properties: map[string]interface{}{
+																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: false,
+		},
 	}
 
 	for _, test := range tests {
