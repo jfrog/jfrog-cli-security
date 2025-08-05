@@ -68,17 +68,12 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	if err != nil {
 		return
 	}
-	scanResultsRepository := ucc.scanResultsRepository
-	if ucc.projectKey != "" && !strings.HasPrefix(scanResultsRepository, fmt.Sprintf("%s-", ucc.projectKey)) {
-		// If project key is provided, Artifactory repository key should start with the project key. (else 400 error will be returned from Artifactory)
-		scanResultsRepository = fmt.Sprintf("%s-%s", ucc.projectKey, scanResultsRepository)
-	}
 	// Upload the CycloneDx file to the JFrog repository
-	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, scanResultsRepository, ucc.projectKey); err != nil {
-		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, scanResultsRepository, err)
+	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), scanResultsRepository, ucc.fileToUpload, metadata)
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadata)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
