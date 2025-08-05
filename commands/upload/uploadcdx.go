@@ -22,6 +22,8 @@ type UploadCycloneDxCommand struct {
 
 	fileToUpload          string
 	scanResultsRepository string
+
+	projectKey string
 }
 
 func NewUploadCycloneDxCommand() *UploadCycloneDxCommand {
@@ -51,6 +53,11 @@ func (ucc *UploadCycloneDxCommand) SetServerDetails(server *config.ServerDetails
 	return ucc
 }
 
+func (ucc *UploadCycloneDxCommand) SetProjectKey(projectKey string) *UploadCycloneDxCommand {
+	ucc.projectKey = projectKey
+	return ucc
+}
+
 func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error) {
 	return ucc.serverDetails, nil
 }
@@ -62,7 +69,7 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 		return
 	}
 	// Upload the CycloneDx file to the JFrog repository
-	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository); err != nil {
+	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	// Report the URL for the scan results
@@ -99,7 +106,7 @@ func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err er
 	return
 }
 
-func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository string) (err error) {
+func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (err error) {
 	// scanResultsRepository may be the repository name and after the slash the path in the repository, we want to extract the repository name
 	repoName := strings.Split(scanResultsRepository, "/")[0]
 	if repoName == "" {
@@ -111,12 +118,12 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	}
 	// If the repository doesn't exist, create it
 	if !repoExists {
-		if err = artifactory.CreateGenericLocalRepository(repoName, serverDetails, true); err != nil {
+		if err = artifactory.CreateGenericLocalRepository(repoName, serverDetails, true, relatedProjectKey); err != nil {
 			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
 		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
-	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository)
+	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
 }
 
 func generateURLFromPath(baseUrl, repoPath, filePath string, metadata *cyclonedx.Metadata) (string, error) {
