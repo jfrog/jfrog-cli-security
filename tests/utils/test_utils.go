@@ -66,11 +66,6 @@ func ValidateXscVersion(t *testing.T, xscVersion, minVersion string) {
 	}
 }
 
-// func CleanTestsHomeEnv(home string) {
-// 	os.Unsetenv(home)
-// 	CleanFileSystem()
-// }
-
 func GetTestsXrayVersion() (version.Version, error) {
 	xrayVersion, err := configTests.XrAuth.GetVersion()
 	return *version.NewVersion(xrayVersion), err
