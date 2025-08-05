@@ -1,8 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.24.4
-
-toolchain go1.24.5
+go 1.24.5
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.2
