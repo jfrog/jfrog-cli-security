@@ -1,6 +1,7 @@
 # IDEs
 .idea
 .vscode
+.cursor
 *.iml
 __debug*
 

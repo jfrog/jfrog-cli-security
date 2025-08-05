@@ -697,7 +697,7 @@ func AppendDependencies(bom *cyclonedx.BOM, dependencies *[]cyclonedx.Dependency
 		if existingDependency == nil {
 			// The dependency does not exist, add it to the BOM
 			*bom.Dependencies = append(*bom.Dependencies, dependency)
-			return
+			continue
 		}
 		// If the dependency already exists, we need to update its dependencies
 		for _, depRef := range *dependency.Dependencies {
