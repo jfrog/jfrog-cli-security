@@ -1038,40 +1038,48 @@ func SearchTargetResultsByRelativePath(relativeTarget string, resultsToCompare *
 
 func DepsTreeToSbom(trees ...*xrayUtils.GraphNode) (components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) {
 	parsed := datastructures.MakeSet[string]()
-	components = &[]cyclonedx.Component{}
-	dependencies = &[]cyclonedx.Dependency{}
+	bom := cyclonedx.NewBOM()
+	bom.Components = &[]cyclonedx.Component{}
+	bom.Dependencies = &[]cyclonedx.Dependency{}
 	for _, root := range trees {
-		components, dependencies = getDataFromNode(root, parsed, components, dependencies)
+		rootComponents, rootDependencies := getDataFromNode(root, parsed)
+		cdxutils.AppendComponents(bom, rootComponents)
+		cdxutils.AppendDependencies(bom, rootDependencies)
 	}
-	if len(*components) == 0 {
-		components = nil
+	if len(*bom.Components) == 0 {
+		bom.Components = nil
 	}
-	if len(*dependencies) == 0 {
-		dependencies = nil
+	if len(*bom.Dependencies) == 0 {
+		bom.Dependencies = nil
 	}
-	return
+	return bom.Components, bom.Dependencies
 }
 
-func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string], components *[]cyclonedx.Component, dependencies *[]cyclonedx.Dependency) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+func getDataFromNode(node *xrayUtils.GraphNode, parsed *datastructures.Set[string]) (*[]cyclonedx.Component, *[]cyclonedx.Dependency) {
+	bom := cyclonedx.NewBOM()
+	bom.Components = &[]cyclonedx.Component{}
+	bom.Dependencies = &[]cyclonedx.Dependency{}
 	if parsed.Exists(node.Id) {
 		// The node was already parsed, no need to parse it again
-		return components, dependencies
+		return bom.Components, bom.Dependencies
 	}
 	parsed.Add(node.Id)
 	// Create a new component and add it to the sbom
-	*components = append(*components, CreateScaComponentFromXrayCompId(node.Id))
+	*bom.Components = append(*bom.Components, CreateScaComponentFromXrayCompId(node.Id))
 	if len(node.Nodes) > 0 {
 		// Create a matching dependency entry describing the direct dependencies
-		*dependencies = append(*dependencies, cyclonedx.Dependency{
+		*bom.Dependencies = append(*bom.Dependencies, cyclonedx.Dependency{
 			Ref:          techutils.XrayComponentIdToCdxComponentRef(node.Id),
 			Dependencies: getNodeDirectDependencies(node),
 		})
 	}
 	// Go through the dependencies and add them to the sbom
 	for _, dependencyNode := range node.Nodes {
-		components, dependencies = getDataFromNode(dependencyNode, parsed, components, dependencies)
+		nodeComponents, nodeDependencies := getDataFromNode(dependencyNode, parsed)
+		cdxutils.AppendComponents(bom, nodeComponents)
+		cdxutils.AppendDependencies(bom, nodeDependencies)
 	}
-	return components, dependencies
+	return bom.Components, bom.Dependencies
 }
 
 func getNodeDirectDependencies(node *xrayUtils.GraphNode) (dependencies *[]string) {
