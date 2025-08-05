@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.24.2
+go 1.24.5
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.2
@@ -11,7 +11,7 @@ require (
 	github.com/gookit/color v1.5.4
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.10.14
+	github.com/jfrog/build-info-go v1.10.15
 	github.com/jfrog/froggit-go v1.20.0
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
