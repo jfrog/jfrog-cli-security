@@ -1,6 +1,7 @@
 package formats
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -21,6 +22,7 @@ func ConvertSecurityTableRowToScanTableRow(tableRows []scaVulnerabilityOrViolati
 			directPackages:         convertToComponentScanTableRow(tableRows[i].directDependencies),
 			cves:                   tableRows[i].cves,
 			issueId:                tableRows[i].issueId,
+			isMalicious:            tableRows[i].isMalicious,
 		})
 	}
 	return
@@ -101,6 +103,7 @@ func ConvertToScaVulnerabilityOrViolationTableRow(rows []VulnerabilityOrViolatio
 			cves:                      convertToCveTableRow(rows[i].Cves),
 			issueId:                   rows[i].IssueId,
 			watch:                     rows[i].Watch,
+			isMalicious:               fmt.Sprintf("%t", rows[i].IsMalicious),
 		})
 	}
 	return

@@ -39,6 +39,7 @@ type scaVulnerabilityOrViolationTableRow struct {
 	impactedDependencyType    string                       `col-name:"Type"`
 	watch                     string                       `col-name:"Watch Name" omitempty:"true"`
 	issueId                   string                       `col-name:"Issue ID" extended:"true"`
+	isMalicious               string                       `col-name:"Is\nMalicious"`
 }
 
 // For Binary scans
@@ -54,6 +55,7 @@ type vulnerabilityScanTableRow struct {
 	fixedVersions          string                   `col-name:"Fixed\nVersions"`
 	ImpactedPackageType    string                   `col-name:"Type"`
 	issueId                string                   `col-name:"Issue ID" extended:"true"`
+	isMalicious            string                   `col-name:"Is\nMalicious"`
 }
 
 type SbomTableRow struct {
