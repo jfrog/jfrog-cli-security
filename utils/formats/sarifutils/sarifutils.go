@@ -372,7 +372,7 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	if location.PhysicalLocation != nil {
 		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
-			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithIndex(0).WithURI(GetLocationFileName(location)))
+			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithIndex(-1).WithURI(GetLocationFileName(location)))
 			copied.PhysicalLocation.WithRegion(sarif.NewRegion().
 				WithCharOffset(0).
 				WithByteOffset(0).
@@ -387,7 +387,7 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	}
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
-		logicalCopy := sarif.NewLogicalLocation().WithIndex(0).WithParentIndex(0).WithProperties(logicalLocation.Properties)
+		logicalCopy := sarif.NewLogicalLocation().WithIndex(-1).WithParentIndex(-1).WithProperties(logicalLocation.Properties)
 		if logicalLocation.Name != nil {
 			logicalCopy.WithName(*logicalLocation.Name)
 		}
