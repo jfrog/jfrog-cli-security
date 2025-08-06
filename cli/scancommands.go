@@ -365,6 +365,7 @@ func BuildScan(c *components.Context) error {
 	}
 	buildScanCmd := scan.NewBuildScanCommand().
 		SetServerDetails(serverDetails).
+		// Sarif shouldn't include the additional all-vulnerabilities info that received by adding the vuln flag
 		SetIncludeVulnerabilities(getProject(c) == "" || (format != outputFormat.Sarif && c.GetBoolFlagValue(flags.Vuln))).
 		SetFailBuild(c.GetBoolFlagValue(flags.Fail)).
 		SetBuildConfiguration(buildConfiguration).
