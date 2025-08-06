@@ -80,6 +80,9 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
 	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
 
+	if target.ScaResults == nil {
+		return nil
+	}
 	// Get new violations from the target
 	newViolations := target.ScaResults.Violations
 
