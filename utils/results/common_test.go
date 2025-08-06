@@ -177,30 +177,7 @@ func TestViolationFailBuild(t *testing.T) {
 					{
 						ScanTarget: ScanTarget{Target: "test-target"},
 						ScaResults: nil,
-						JasResults: &JasScansResults{
-							ApplicabilityScanResults: []ScanResult[[]*sarif.Run]{
-								{
-									Scan: []*sarif.Run{
-										{
-											Tool: &sarif.Tool{
-												Driver: &sarif.ToolComponent{
-													Rules: []*sarif.ReportingDescriptor{
-														{
-															ID: utils.NewStringPtr(jasutils.CveToApplicabilityRuleId("CVE-2024-3333")),
-															Properties: &sarif.PropertyBag{
-																Properties: map[string]interface{}{
-																	jasutils.ApplicabilitySarifPropertyKey: "not_applicable",
-																},
-															},
-														},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
+						JasResults: &JasScansResults{},
 					},
 				},
 			},
