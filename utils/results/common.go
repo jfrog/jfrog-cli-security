@@ -80,11 +80,11 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
 	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
 
-	// Get new violations from the target
-	var newViolations []services.Violation
-	if target.ScaResults != nil {
-		newViolations = target.ScaResults.Violations
+	if target.ScaResults == nil {
+		return nil
 	}
+	// Get new violations from the target
+	newViolations := target.ScaResults.Violations
 
 	// Here we iterate the new violation results and check if any of them should fail the build.
 	_, _, err := ForEachScanGraphViolation(
@@ -97,10 +97,6 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 		nil)
 	if err != nil {
 		return err
-	}
-
-	if target.ScaResults == nil {
-		return nil
 	}
 
 	// Here we iterate the deprecated violation results to check if any of them should fail the build.
