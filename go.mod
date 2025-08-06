@@ -12,12 +12,12 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/jfrog/build-info-go v1.10.15
-	github.com/jfrog/froggit-go v1.20.0
+	github.com/jfrog/froggit-go v1.20.1
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
 	github.com/jfrog/jfrog-cli-artifactory v0.5.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.59.3
-	github.com/jfrog/jfrog-client-go v1.54.3
+	github.com/jfrog/jfrog-cli-core/v2 v2.59.4
+	github.com/jfrog/jfrog-client-go v1.54.4
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v3 v3.1.4
 	github.com/package-url/packageurl-go v0.1.3
