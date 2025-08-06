@@ -280,10 +280,7 @@ func NewPhysicalLocationWithRegion(physicalPath string, startRow, endRow, startC
 }
 
 func NewLogicalLocation(name, kind string) *sarif.LogicalLocation {
-	return &sarif.LogicalLocation{
-		Name: &name,
-		Kind: &kind,
-	}
+	return sarif.NewLogicalLocation().WithKind(kind).WithName(name)
 }
 
 func ReadScanRunsFromFile(fileName string) (sarifRuns []*sarif.Run, err error) {
@@ -372,7 +369,7 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	if location.PhysicalLocation != nil {
 		copied.PhysicalLocation = sarif.NewPhysicalLocation()
 		if location.PhysicalLocation.ArtifactLocation != nil {
-			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithIndex(0).WithURI(GetLocationFileName(location)))
+			copied.PhysicalLocation.WithArtifactLocation(sarif.NewArtifactLocation().WithURI(GetLocationFileName(location)))
 			copied.PhysicalLocation.WithRegion(sarif.NewRegion().
 				WithCharOffset(0).
 				WithByteOffset(0).
@@ -387,7 +384,7 @@ func CopyLocation(location *sarif.Location) *sarif.Location {
 	}
 	copied.Properties = location.Properties
 	for _, logicalLocation := range location.LogicalLocations {
-		logicalCopy := sarif.NewLogicalLocation().WithIndex(0).WithParentIndex(0).WithProperties(logicalLocation.Properties)
+		logicalCopy := sarif.NewLogicalLocation().WithProperties(logicalLocation.Properties)
 		if logicalLocation.Name != nil {
 			logicalCopy.WithName(*logicalLocation.Name)
 		}

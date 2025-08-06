@@ -42,14 +42,12 @@ var (
 
 type CmdResultsSarifConverter struct {
 	baseJfrogUrl string
-	// Include vulnerabilities/violations in the output
-	includeVulnerabilities bool
-	hasViolationContext    bool
 	// If we are running on Github actions, we need to add/change information to the output
 	patchBinaryPaths bool
 	// Current stream parse cache information
 	current                    *sarif.Report
 	currentTargetConvertedRuns *currentTargetRuns
+	currentErrors              []error
 	// General information on the current command results
 	entitledForJas bool
 	xrayVersion    string
@@ -91,8 +89,8 @@ type violationContext struct {
 	Policies []string
 }
 
-func NewCmdResultsSarifConverter(baseUrl string, includeVulnerabilities, hasViolationContext, patchBinaryPaths bool) *CmdResultsSarifConverter {
-	return &CmdResultsSarifConverter{baseJfrogUrl: baseUrl, includeVulnerabilities: includeVulnerabilities, hasViolationContext: hasViolationContext, patchBinaryPaths: patchBinaryPaths}
+func NewCmdResultsSarifConverter(baseUrl string, patchBinaryPaths bool) *CmdResultsSarifConverter {
+	return &CmdResultsSarifConverter{baseJfrogUrl: baseUrl, patchBinaryPaths: patchBinaryPaths}
 }
 
 func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
@@ -124,9 +122,7 @@ func (sc *CmdResultsSarifConverter) ParseNewTargetResults(target results.ScanTar
 	sc.flush()
 	// Reset the current stream cache information
 	sc.currentTargetConvertedRuns = &currentTargetRuns{currentTarget: target}
-	if sc.hasViolationContext || sc.includeVulnerabilities {
-		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(errors))
-	}
+	sc.currentErrors = errors
 	return
 }
 
@@ -193,8 +189,11 @@ func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(target results.Scan
 }
 
 func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+	if err = sc.validateBeforeParse(); err != nil {
 		return
+	}
+	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
 	}
 	// Parse violations
 	sarifResults, sarifRules, err := PrepareSarifScaViolations(sc.currentCmdType, target, scanResponse.Scan.Violations, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
@@ -206,8 +205,11 @@ func (sc *CmdResultsSarifConverter) parseScaViolations(target results.ScanTarget
 }
 
 func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanTarget, scanResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+	if err = sc.validateBeforeParse(); err != nil {
 		return
+	}
+	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
 	}
 	sarifResults, sarifRules, err := PrepareSarifScaVulnerabilities(sc.currentCmdType, target, scanResponse.Scan.Vulnerabilities, sc.entitledForJas, results.ScanResultsToRuns(applicableScan)...)
 	if err != nil || len(sarifRules) == 0 || len(sarifResults) == 0 {
@@ -233,8 +235,11 @@ func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget,
 }
 
 func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+	if err = sc.validateBeforeParse(); err != nil {
 		return
+	}
+	if sc.currentTargetConvertedRuns.scaCurrentRun == nil {
+		sc.currentTargetConvertedRuns.scaCurrentRun = sc.createScaRun(target, len(sc.currentErrors))
 	}
 	sarifResults := []*sarif.Result{}
 	sarifRules := map[string]*sarif.ReportingDescriptor{}
