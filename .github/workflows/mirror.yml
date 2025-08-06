@@ -1,0 +1,27 @@
+name: Mirror to self-hosted GitHub
+
+on:
+  push:
+    branches:
+      - master
+      - dev
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan ${{ secrets.SELF_HOSTED_GITHUB_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Mirror repository
+      run: |
+        git clone --mirror https://github.com/jfrog/jfrog-cli-security.git
+        cd jfrog-cli-security.git
+        git remote set-url origin ${{ secrets.SELF_HOSTED_REPO_SSH_URL }}
+        git push --mirror
