@@ -119,12 +119,14 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 }
 
 func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool {
+	if target.ScaResults == nil {
+		return false
+	}
 	for _, newViolation := range target.ScaResults.Violations {
 		if newViolation.FailBuild || newViolation.FailPr {
 			return true
 		}
 	}
-
 	// TODO remove this for loop once the DeprecatedXrayResults are completely removed and no longer in use
 	for _, scanResponse := range target.GetScaScansXrayResults() {
 		for _, oldViolation := range scanResponse.Violations {
