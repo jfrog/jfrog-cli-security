@@ -30,6 +30,7 @@ const (
 	High     Severity = "High"
 	Medium   Severity = "Medium"
 	Low      Severity = "Low"
+	Information Severity = "Information"
 	Unknown  Severity = "Unknown"
 )
 
@@ -47,6 +48,8 @@ func getSeverityEmojiIcon(severity Severity) string {
 		return "🟠"
 	case Low:
 		return "🟡"
+	case Information:
+		return "ℹ️"
 	default:
 		return "⚪️"
 	}
@@ -110,38 +113,45 @@ func (sd SeverityDetails) ToDetails(severity Severity, pretty bool) formats.Seve
 
 var Severities = map[Severity]map[jasutils.ApplicabilityStatus]*SeverityDetails{
 	Critical: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 25, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 24, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 23, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 22, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
-		jasutils.NotApplicable:             &SeverityDetails{Priority: 5, Score: MaxCveScore, Emoji: "💀", style: color.New(color.Gray)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 30, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 29, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 28, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 27, Score: MaxCveScore, Emoji: "💀", style: color.New(color.BgLightRed, color.LightWhite)},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 6, Score: MaxCveScore, Emoji: "💀", style: color.New(color.Gray)},
 	},
 	High: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 21, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 20, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 19, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 18, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
-		jasutils.NotApplicable:             &SeverityDetails{Priority: 4, Score: 8.9, Emoji: "🔥", style: color.New(color.Gray)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 26, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 25, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 24, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 23, Score: 8.9, Emoji: "🔥", style: color.New(color.Red)},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 5, Score: 8.9, Emoji: "🔥", style: color.New(color.Gray)},
 	},
 	Medium: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 17, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 16, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 15, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 14, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
-		jasutils.NotApplicable:             &SeverityDetails{Priority: 3, Score: 6.9, Emoji: "🎃", style: color.New(color.Gray)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 22, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 21, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 20, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 19, Score: 6.9, Emoji: "🎃", style: color.New(color.Yellow)},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 4, Score: 6.9, Emoji: "🎃", style: color.New(color.Gray)},
 	},
 	Low: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 13, Score: 3.9, Emoji: "👻"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 12, Score: 3.9, Emoji: "👻"},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 11, Score: 3.9, Emoji: "👻"},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 10, Score: 3.9, Emoji: "👻"},
-		jasutils.NotApplicable:             &SeverityDetails{Priority: 2, Score: 3.9, Emoji: "👻", style: color.New(color.Gray)},
+		jasutils.Applicable:                &SeverityDetails{Priority: 18, Score: 3.9, Emoji: "👻"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 17, Score: 3.9, Emoji: "👻"},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 16, Score: 3.9, Emoji: "👻"},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 15, Score: 3.9, Emoji: "👻"},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 3, Score: 3.9, Emoji: "👻", style: color.New(color.Gray)},
+	},
+	Information: {
+		jasutils.Applicable:                &SeverityDetails{Priority: 14, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 13, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 12, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 11, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Blue)},
+		jasutils.NotApplicable:             &SeverityDetails{Priority: 2, Score: MinCveScore, Emoji: "ℹ️", style: color.New(color.Gray)},
 	},
 	Unknown: {
-		jasutils.Applicable:                &SeverityDetails{Priority: 9, Score: MinCveScore, Emoji: "😐"},
-		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 8, Score: MinCveScore, Emoji: "😐"},
-		jasutils.MissingContext:            &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
-		jasutils.NotCovered:                &SeverityDetails{Priority: 6, Score: MinCveScore, Emoji: "😐"},
+		jasutils.Applicable:                &SeverityDetails{Priority: 10, Score: MinCveScore, Emoji: "😐"},
+		jasutils.ApplicabilityUndetermined: &SeverityDetails{Priority: 9, Score: MinCveScore, Emoji: "😐"},
+		jasutils.MissingContext:            &SeverityDetails{Priority: 8, Score: MinCveScore, Emoji: "😐"},
+		jasutils.NotCovered:                &SeverityDetails{Priority: 7, Score: MinCveScore, Emoji: "😐"},
 		jasutils.NotApplicable:             &SeverityDetails{Priority: 1, Score: MinCveScore, Emoji: "😐", style: color.New(color.Gray)},
 	},
 }
@@ -174,6 +184,8 @@ func ParseToSeverity(severity string) (parsed Severity, err error) {
 		parsed = Medium
 	case Low.String():
 		parsed = Low
+	case Information.String():
+		parsed = Information
 	case Unknown.String():
 		parsed = Unknown
 	default:
@@ -306,6 +318,8 @@ func SeverityToSarifSeverityLevel(severity Severity) SarifSeverityLevel {
 		return LevelWarning
 	case Low:
 		return LevelNote
+	case Information:
+		return LevelInfo
 	default:
 		return LevelNone
 	}
@@ -317,6 +331,8 @@ func sarifSeverityLevelToSeverity(level SarifSeverityLevel) Severity {
 		return High
 	case LevelNote:
 		return Low
+	case LevelInfo:
+		return Information
 	case LevelNone:
 		return Unknown
 	default:
@@ -335,6 +351,8 @@ func SeverityToCycloneDxSeverity(severity Severity) cyclonedx.Severity {
 		return cyclonedx.SeverityMedium
 	case Low:
 		return cyclonedx.SeverityLow
+	case Information:
+		return cyclonedx.SeverityInfo
 	default:
 		return cyclonedx.SeverityUnknown
 	}
@@ -350,6 +368,8 @@ func CycloneDxSeverityToSeverity(severity cyclonedx.Severity) Severity {
 		return Medium
 	case cyclonedx.SeverityLow:
 		return Low
+	case cyclonedx.SeverityInfo:
+		return Information
 	default:
 		return Unknown
 	}
