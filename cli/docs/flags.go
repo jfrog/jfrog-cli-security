@@ -189,7 +189,7 @@ var commandFlags = map[string][]string{
 		NewSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
 	},
 	CurationAudit: {
-		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls,
+		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit,
 	},
 	GitCountContributors: {
 		InputFile, ScmType, ScmApiUrl, Token, Owner, RepoName, Months, DetailedSummary, InsecureTls,
