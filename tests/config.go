@@ -95,7 +95,11 @@ func getTestContainerDefaultValue(jfrogUrl string) string {
 		return os.Getenv(TestJfrogContainerEnvVar)
 	}
 	// remove protocol and trailing slash from the JFrog URL
-	parsedUrl, _ := url.Parse(jfrogUrl)
+	parsedUrl, err := url.Parse(jfrogUrl)
+	if err != nil {
+		log.Error("Failed to parse JFrog URL:", err)
+		return "localhost:8084"
+	}
 	return parsedUrl.Host
 }
 
