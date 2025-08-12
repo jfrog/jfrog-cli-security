@@ -49,6 +49,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 		resolveRepoName string
 		cacheRepoName   string
 		projectType     project.ProjectType
+		skipMsg         string
 	}{
 		{
 			testProjectPath: []string{"npm", "npm-no-lock"},
@@ -85,6 +86,7 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 			resolveRepoName: securityTests.MvnVirtualRepo,
 			cacheRepoName:   securityTests.MvnRemoteRepo,
 			projectType:     project.Maven,
+			skipMsg:         "Snapshot repository is blocked by JPD, pending fix",
 		},
 		{
 			testProjectPath: []string{"go", "simple-project"},
@@ -115,6 +117,9 @@ func TestDependencyResolutionFromArtifactory(t *testing.T) {
 	defer securityTestUtils.CleanTestsHomeEnv()
 
 	for _, testCase := range testCases {
+		if testCase.skipMsg != "" {
+			securityIntegrationTestUtils.SkipTestIfDurationNotPassed(t, "12-08-2025", 30, testCase.skipMsg)
+		}
 		t.Run(testCase.projectType.String(), func(t *testing.T) {
 			testSingleTechDependencyResolution(t, testCase.testProjectPath, testCase.resolveRepoName, testCase.cacheRepoName, testCase.projectType)
 		})
