@@ -93,7 +93,11 @@ func printMessages(messages []string) {
 }
 
 func printMessage(message string) {
-	log.Output("💬" + message)
+	icon := "*"
+	if isPrettyOutputSupported() {
+		icon = "💬"
+	}
+	log.Output(icon + " " + message)
 }
 
 func isPrettyOutputSupported() bool {
@@ -277,7 +281,7 @@ func (rw *ResultsWriter) printJasTablesIfNeeded(tableContent formats.ResultsTabl
 	if !utils.IsScanRequested(rw.commandResults.CmdType, subScan, rw.subScansPerformed...) {
 		return
 	}
-	if rw.showViolations || rw.commandResults.HasViolationContext() {
+	if (rw.showViolations || rw.commandResults.HasViolationContext()) && len(rw.commandResults.ResultContext.GitRepoHttpsCloneUrl) > 0 {
 		if err = PrintJasTable(tableContent, rw.commandResults.EntitledForJas, scanType, true); err != nil {
 			return
 		}
