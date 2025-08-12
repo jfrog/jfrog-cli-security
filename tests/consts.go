@@ -91,8 +91,7 @@ var reposConfigMap = map[*string]string{
 	&YarnRemoteRepo:         YarnRemoteRepositoryConfig,
 	&GradleRemoteRepo:       GradleRemoteRepositoryConfig,
 	&MvnRemoteRepo:          MavenRemoteRepositoryConfig,
-	// Remove when repository is changed in config
-	// &MvnRemoteSnapshotsRepo: MavenRemoteSnapshotsRepositoryConfig,
+	&MvnRemoteSnapshotsRepo: MavenRemoteSnapshotsRepositoryConfig,
 	&MvnVirtualRepo:         MavenVirtualRepositoryConfig,
 	&GoVirtualRepo:          GoVirtualRepositoryConfig,
 	&GoRemoteRepo:           GoRemoteRepositoryConfig,
@@ -117,7 +116,18 @@ func getTestResourcesPath(basePath string) string {
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
 		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
-		TestArtifactory: {&NpmRemoteRepo, &NugetRemoteRepo, &YarnRemoteRepo, &GradleRemoteRepo, &MvnRemoteRepo, &MvnRemoteSnapshotsRepo, &GoRepo, &GoRemoteRepo, &PypiRemoteRepo},
+		TestArtifactory: {
+			&NpmRemoteRepo,
+			&NugetRemoteRepo,
+			&YarnRemoteRepo,
+			&GradleRemoteRepo,
+			&MvnRemoteRepo,
+			// Remove when repository is changed in config
+			// &MvnRemoteSnapshotsRepo,
+			&GoRepo,
+			&GoRemoteRepo,
+			&PypiRemoteRepo,
+		},
 	}
 	return getNeededRepositories(nonVirtualReposMap)
 }
