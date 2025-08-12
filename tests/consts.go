@@ -115,7 +115,7 @@ func getTestResourcesPath(basePath string) string {
 // Return local and remote repositories for the test suites, respectfully
 func GetNonVirtualRepositories() map[*string]string {
 	nonVirtualReposMap := map[*bool][]*string{
-		TestDockerScan:  {&DockerLocalRepo, &DockerRemoteRepo},
+		TestDockerScan: {&DockerLocalRepo, &DockerRemoteRepo},
 		TestArtifactory: {
 			&NpmRemoteRepo,
 			&NugetRemoteRepo,
