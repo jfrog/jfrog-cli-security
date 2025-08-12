@@ -122,8 +122,7 @@ func GetNonVirtualRepositories() map[*string]string {
 			&YarnRemoteRepo,
 			&GradleRemoteRepo,
 			&MvnRemoteRepo,
-			// Remove when repository is changed in config
-			// &MvnRemoteSnapshotsRepo,
+			&MvnRemoteSnapshotsRepo,
 			&GoRepo,
 			&GoRemoteRepo,
 			&PypiRemoteRepo,
