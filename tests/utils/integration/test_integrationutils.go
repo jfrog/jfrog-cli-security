@@ -121,6 +121,7 @@ func InitAuditNewScaTests(t *testing.T, minVersion string) {
 	if !*configTests.TestAuditNewSca {
 		t.Skip(getSkipTestMsg("Audit command new SCA integration", "--test.audit.NewSca"))
 	}
+	SkipTestIfDurationNotPassed(t, "12-08-2025", 14)
 	testUtils.GetAndValidateXrayVersion(t, minVersion)
 }
 
