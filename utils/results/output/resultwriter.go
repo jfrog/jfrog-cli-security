@@ -35,6 +35,8 @@ type ResultsWriter struct {
 	subScansPerformed []utils.SubScanType
 	// Messages - Option array of messages, to be displayed if the format is Table
 	messages []string
+	// TableNotes - Option array of notes, to be displayed if the format is Table at the end of the tables.
+	tableNotes []string
 	// OutputDir - The output directory to save the raw results.
 	outputDir string
 }
@@ -80,6 +82,11 @@ func (rw *ResultsWriter) SetPrintExtendedTable(extendedTable bool) *ResultsWrite
 
 func (rw *ResultsWriter) SetExtraMessages(messages []string) *ResultsWriter {
 	rw.messages = messages
+	return rw
+}
+
+func (rw *ResultsWriter) SetTableNotes(tableNotes []string) *ResultsWriter {
+	rw.tableNotes = tableNotes
 	return rw
 }
 
@@ -249,7 +256,13 @@ func (rw *ResultsWriter) printTables() (err error) {
 	if err = rw.printJasTablesIfNeeded(tableContent, utils.IacScan, jasutils.IaC); err != nil {
 		return
 	}
-	return rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast)
+	if err = rw.printJasTablesIfNeeded(tableContent, utils.SastScan, jasutils.Sast); err != nil {
+		return
+	}
+	if len(rw.tableNotes) > 0 {
+		printMessages(rw.tableNotes)
+	}
+	return
 }
 
 func (rw *ResultsWriter) printScaTablesIfNeeded(tableContent formats.ResultsTables) (err error) {
