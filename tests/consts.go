@@ -91,7 +91,8 @@ var reposConfigMap = map[*string]string{
 	&YarnRemoteRepo:         YarnRemoteRepositoryConfig,
 	&GradleRemoteRepo:       GradleRemoteRepositoryConfig,
 	&MvnRemoteRepo:          MavenRemoteRepositoryConfig,
-	&MvnRemoteSnapshotsRepo: MavenRemoteSnapshotsRepositoryConfig,
+	// Remove when repository is changed in config
+	// &MvnRemoteSnapshotsRepo: MavenRemoteSnapshotsRepositoryConfig,
 	&MvnVirtualRepo:         MavenVirtualRepositoryConfig,
 	&GoVirtualRepo:          GoVirtualRepositoryConfig,
 	&GoRemoteRepo:           GoRemoteRepositoryConfig,
