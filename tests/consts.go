@@ -150,7 +150,9 @@ func getNeededRepositories(reposMap map[*bool][]*string) map[*string]string {
 	for needed, testRepos := range reposMap {
 		if *needed {
 			for _, repo := range testRepos {
-				reposToCreate[repo] = reposConfigMap[repo]
+				if reposConfigMap[repo] != "" {
+					reposToCreate[repo] = reposConfigMap[repo]
+				}
 			}
 		}
 	}
