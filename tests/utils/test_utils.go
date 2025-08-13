@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
@@ -18,12 +19,14 @@ import (
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-security/jas"
 
+	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	clientUtils "github.com/jfrog/jfrog-client-go/utils"
-	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jfrog/gofrog/version"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/xray"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	configTests "github.com/jfrog/jfrog-cli-security/tests"
 	"github.com/stretchr/testify/assert"
 
@@ -232,10 +235,10 @@ func ChangeWDWithCallback(t *testing.T, newPath string) func() {
 	}
 }
 
-func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.IgnoreFilters) func() {
+func CreateTestIgnoreRules(t *testing.T, description string, filters xrayApi.IgnoreFilters) func() {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
-	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayUtils.IgnoreRuleParams{
+	ignoreRuleId, err := xrayManager.CreateIgnoreRule(xrayApi.IgnoreRuleParams{
 		// expired in one day
 		Notes:         description,
 		ExpiresAt:     time.Now().AddDate(0, 0, 1),
@@ -247,13 +250,13 @@ func CreateTestIgnoreRules(t *testing.T, description string, filters xrayUtils.I
 	}
 }
 
-func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.PolicyRule) (string, func()) {
+func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayApi.PolicyRule) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default security policy.
-	policyParams := xrayUtils.PolicyParams{
+	policyParams := xrayApi.PolicyParams{
 		Name:  fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
-		Type:  xrayUtils.Security,
+		Type:  xrayApi.Security,
 		Rules: rules,
 	}
 	if !assert.NoError(t, xrayManager.CreatePolicy(policyParams)) {
@@ -264,50 +267,50 @@ func CreateSecurityPolicy(t *testing.T, policyName string, rules ...xrayUtils.Po
 	}
 }
 
-func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayUtils.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
+func CreateTestSecurityPolicy(t *testing.T, policyName string, severity xrayApi.Severity, failBuild bool, skipNotApplicable bool) (string, func()) {
 	return CreateSecurityPolicy(t, policyName,
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "sca_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
+			Criteria: *xrayApi.CreateSeverityPolicyCriteria(severity, skipNotApplicable),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 1,
 		},
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "exposers_rule",
-			Criteria: *xrayUtils.CreateExposuresPolicyCriteria(severity, true, true, true, true),
+			Criteria: *xrayApi.CreateExposuresPolicyCriteria(severity, true, true, true, true),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 2,
 		},
-		xrayUtils.PolicyRule{
+		xrayApi.PolicyRule{
 			Name:     "sast_rule",
-			Criteria: *xrayUtils.CreateSastPolicyCriteria(severity),
+			Criteria: *xrayApi.CreateSastPolicyCriteria(severity),
 			Actions:  getBuildFailAction(failBuild),
 			Priority: 3,
 		},
 	)
 }
 
-func getBuildFailAction(failBuild bool) *xrayUtils.PolicyAction {
+func getBuildFailAction(failBuild bool) *xrayApi.PolicyAction {
 	if failBuild {
-		return &xrayUtils.PolicyAction{
+		return &xrayApi.PolicyAction{
 			FailBuild: clientUtils.Pointer(true),
 		}
 	}
 	return nil
 }
 
-func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams) (string, func()) {
+func createTestWatch(t *testing.T, policyName, watchName string, assignParams func(watchParams xrayApi.WatchParams) xrayApi.WatchParams) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default watch.
-	watchParams := assignParams(xrayUtils.NewWatchParams())
+	watchParams := assignParams(xrayApi.NewWatchParams())
 	watchParams.Name = fmt.Sprintf("%s-%s-%s", watchName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10))
 	watchParams.Active = true
 	// Assign the policy to the watch.
-	watchParams.Policies = []xrayUtils.AssignedPolicy{
+	watchParams.Policies = []xrayApi.AssignedPolicy{
 		{
 			Name: policyName,
-			Type: string(xrayUtils.Security),
+			Type: string(xrayApi.Security),
 		},
 	}
 	assert.NoError(t, xrayManager.CreateWatch(watchParams))
@@ -318,40 +321,40 @@ func createTestWatch(t *testing.T, policyName, watchName string, assignParams fu
 
 // If gitResources is empty, the watch will be created with all builds.
 func CreateWatchForTests(t *testing.T, policyName, watchName string, gitResources ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		if len(gitResources) > 0 {
 			watchParams.GitRepositories.Resources = gitResources
 		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+			watchParams.Builds.Type = xrayApi.WatchBuildAll
 		}
 		return watchParams
 	})
 }
 
 func CreateTestProjectKeyWatch(t *testing.T, policyName, watchName, projectKey string, gitResources ...string) (string, func()) {
-	return createTestWatch(t, policyName, watchName, func(watchParams xrayUtils.WatchParams) xrayUtils.WatchParams {
+	return createTestWatch(t, policyName, watchName, func(watchParams xrayApi.WatchParams) xrayApi.WatchParams {
 		watchParams.ProjectKey = projectKey
 		if len(gitResources) > 0 {
 			watchParams.GitRepositories.Resources = gitResources
 		} else {
-			watchParams.Builds.Type = xrayUtils.WatchBuildAll
+			watchParams.Builds.Type = xrayApi.WatchBuildAll
 		}
 		return watchParams
 	})
 }
 
-func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayUtils.Severity) (string, func()) {
+func CreateTestPolicyAndWatch(t *testing.T, policyName, watchName string, severity xrayApi.Severity) (string, func()) {
 	xrayManager, err := xray.CreateXrayServiceManager(configTests.XrDetails)
 	require.NoError(t, err)
 	// Create new default policy.
-	policyParams := xrayUtils.PolicyParams{
+	policyParams := xrayApi.PolicyParams{
 		Name: fmt.Sprintf("%s-%s-%s", policyName, *configTests.CiRunId, strconv.FormatInt(time.Now().Unix(), 10)),
-		Type: xrayUtils.Security,
-		Rules: []xrayUtils.PolicyRule{{
+		Type: xrayApi.Security,
+		Rules: []xrayApi.PolicyRule{{
 			Name:     "sec_rule",
-			Criteria: *xrayUtils.CreateSeverityPolicyCriteria(severity, false),
+			Criteria: *xrayApi.CreateSeverityPolicyCriteria(severity, false),
 			Priority: 1,
-			Actions: &xrayUtils.PolicyAction{
+			Actions: &xrayApi.PolicyAction{
 				FailBuild: clientUtils.Pointer(true),
 			},
 		}},
@@ -425,4 +428,13 @@ func PrepareAnalyzerManagerResource() (err error) {
 	}
 	// Download the analyzer manager binary if it doesn't exist to current JFrog Home.
 	return jas.DownloadAnalyzerManagerIfNeeded(0)
+}
+
+func PrepareIndexerResource(details *config.ServerDetails) (err error) {
+	manager, version, err := xrayUtils.CreateXrayServiceManagerAndGetVersion(details)
+	if err != nil {
+		return fmt.Errorf("failed to create Xray service manager: %w", err)
+	}
+	_, err = indexer.DownloadIndexerIfNeeded(manager, version)
+	return err
 }

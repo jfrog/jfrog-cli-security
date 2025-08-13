@@ -503,7 +503,7 @@ func InitTestHomeResources() (cleanUp func()) {
 	}
 	// Prepare resources for commands in JFrog Home.
 	// If TestJfrogHomeResourcesPath is used, it will have all the resources needed for the tests. and nothing will be downloaded.
-	if err = PrepareJfrogHomeResources(); err != nil {
+	if err = PrepareJfrogHomeResources(configTests.XrDetails); err != nil {
 		log.Error(fmt.Sprintf("Failed to prepare JFrog Home resources: %s", err.Error()))
 		os.Exit(1)
 	}
@@ -519,8 +519,16 @@ func InitTestHomeResources() (cleanUp func()) {
 	}
 }
 
-func PrepareJfrogHomeResources() (err error) {
-	return testUtils.PrepareAnalyzerManagerResource()
+func PrepareJfrogHomeResources(details *config.ServerDetails) (err error) {
+	// Prepare the Analyzer Manager resource.
+	if err = testUtils.PrepareAnalyzerManagerResource(); err != nil {
+		return fmt.Errorf("failed to prepare analyzer manager resource: %w", err)
+	}
+	// Prepare the Xray Indexer resource.
+	if err = testUtils.PrepareIndexerResource(details); err != nil {
+		return fmt.Errorf("failed to prepare Xray Indexer resource: %w", err)
+	}
+	return
 }
 
 func CleanFileSystem() {
