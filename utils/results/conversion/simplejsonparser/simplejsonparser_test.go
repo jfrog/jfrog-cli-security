@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
+	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 )
 
@@ -122,10 +123,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 				{
 					Summary: "Summary 1",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "High",
-							SeverityNumValue: 9,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.High, jasutils.Applicable, false),
 						ImpactedDependencyName:    "Dependency 1",
 						ImpactedDependencyVersion: "1.0.0",
 					},
@@ -134,10 +132,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 				{
 					Summary: "Summary 2",
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 12,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.Applicable, false),
 						ImpactedDependencyName:    "Dependency 2",
 						ImpactedDependencyVersion: "2.0.0",
 					},
@@ -145,10 +140,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 				},
 				{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Medium",
-							SeverityNumValue: 6,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Medium, jasutils.NotApplicable, false),
 						ImpactedDependencyName:    "Dependency 3",
 						ImpactedDependencyVersion: "3.0.0",
 					},
@@ -163,10 +155,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 			rows: []formats.VulnerabilityOrViolationRow{
 				{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 12,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.Applicable, false),
 						ImpactedDependencyName:    "Dependency 1",
 						ImpactedDependencyVersion: "1.0.0",
 					},
@@ -175,10 +164,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 				},
 				{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 12,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.Applicable, false),
 						ImpactedDependencyName:    "Dependency 2",
 						ImpactedDependencyVersion: "2.0.0",
 					},
@@ -193,10 +179,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 			rows: []formats.VulnerabilityOrViolationRow{
 				{
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 13,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.Applicable, false),
 						ImpactedDependencyName:    "Dependency 1",
 						ImpactedDependencyVersion: "1.0.0",
 					},
@@ -208,10 +191,7 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 					Summary:    "Summary 2",
 					Applicable: jasutils.NotApplicable.String(),
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 11,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.NotApplicable, false),
 						ImpactedDependencyName:    "Dependency 2",
 						ImpactedDependencyVersion: "2.0.0",
 					},
@@ -220,16 +200,62 @@ func TestSortVulnerabilityOrViolationRows(t *testing.T) {
 					Summary:    "Summary 3",
 					Applicable: jasutils.ApplicabilityUndetermined.String(),
 					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
-						SeverityDetails: formats.SeverityDetails{
-							Severity:         "Critical",
-							SeverityNumValue: 12,
-						},
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.ApplicabilityUndetermined, false),
 						ImpactedDependencyName:    "Dependency 3",
 						ImpactedDependencyVersion: "2.0.0",
 					},
 				},
 			},
 			expectedOrder: []string{"Dependency 1", "Dependency 3", "Dependency 2"},
+		},
+		{
+			name: "Sort by severity with multiple severity values and different applicability",
+			rows: []formats.VulnerabilityOrViolationRow{
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Low, jasutils.Applicable, false),
+						ImpactedDependencyName:    "Dependency 1",
+						ImpactedDependencyVersion: "1.0.0",
+					},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.High, jasutils.NotApplicable, false),
+						ImpactedDependencyName:    "Dependency 2",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+				{
+					Applicable: jasutils.ApplicabilityUndetermined.String(),
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Information, jasutils.NotCovered, false),
+						ImpactedDependencyName:    "Dependency 3",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Low, jasutils.NotCovered, false),
+						ImpactedDependencyName:    "Dependency 4",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Unknown, jasutils.ApplicabilityUndetermined, false),
+						ImpactedDependencyName:    "Dependency 5",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+				{
+					ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
+						SeverityDetails:           severityutils.GetAsDetails(severityutils.Critical, jasutils.Applicable, false),
+						ImpactedDependencyName:    "Dependency 6",
+						ImpactedDependencyVersion: "2.0.0",
+					},
+				},
+			},
+			expectedOrder: []string{"Dependency 6", "Dependency 1", "Dependency 4", "Dependency 3", "Dependency 5", "Dependency 2"},
 		},
 	}
 

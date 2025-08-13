@@ -26,12 +26,12 @@ const (
 )
 
 const (
-	Critical Severity = "Critical"
-	High     Severity = "High"
-	Medium   Severity = "Medium"
-	Low      Severity = "Low"
+	Critical    Severity = "Critical"
+	High        Severity = "High"
+	Medium      Severity = "Medium"
+	Low         Severity = "Low"
 	Information Severity = "Information"
-	Unknown  Severity = "Unknown"
+	Unknown     Severity = "Unknown"
 )
 
 func GetSeverityIcon(severity Severity) string {
@@ -51,7 +51,7 @@ func getSeverityEmojiIcon(severity Severity) string {
 	case Information:
 		return "ℹ️"
 	default:
-		return "⚪️"
+		return "❓"
 	}
 }
 
