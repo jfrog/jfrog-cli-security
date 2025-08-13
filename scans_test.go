@@ -269,35 +269,37 @@ func runDockerScan(t *testing.T, testCli *coreTests.JfrogCli, imageName, watchNa
 	imageTag := path.Join(*securityTests.ContainerRegistry, securityTests.DockerVirtualRepo, imageName)
 	dockerPullCommand := container.NewPullCommand(containerUtils.DockerClient)
 	dockerPullCommand.SetCmdParams([]string{"pull", imageTag}).SetImageTag(imageTag).SetRepo(securityTests.DockerVirtualRepo).SetServerDetails(securityTests.XrDetails).SetBuildConfiguration(new(build.BuildConfiguration))
-	if assert.NoError(t, dockerPullCommand.Run()) {
-		defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
-		// Run docker scan on image
-		cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
+	if !assert.NoError(t, dockerPullCommand.Run()) {
+		return
+	}
+	defer commonTests.DeleteTestImage(t, imageTag, containerUtils.DockerClient)
+	cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
+	defer cleanUp()
+	// Run docker scan on image
+	cmdArgs := []string{"docker", "scan", imageTag, "--server-id=default", "--licenses", "--fail=false", "--min-severity=low", "--fixable-only"}
+	if validateSecrets {
+		cmdArgs = append(cmdArgs, "--validate-secrets", "--format=simple-json")
+	} else {
+		cmdArgs = append(cmdArgs, "--format=json")
+	}
+	if watchName != "" {
+		cmdArgs = append(cmdArgs, "--watches="+watchName, "--vuln")
+	}
+	output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
+	if assert.NotEmpty(t, output) {
 		if validateSecrets {
-			cmdArgs = append(cmdArgs, "--validate-secrets", "--format=simple-json")
+			validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+				Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: minInactives}},
+			})
 		} else {
-			cmdArgs = append(cmdArgs, "--format=json")
-		}
-		cleanUp := integration.UseTestHomeWithDefaultXrayConfig(t)
-		defer cleanUp()
-		output := testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
-		if assert.NotEmpty(t, output) {
-			if validateSecrets {
-				validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
-					Vulnerabilities: &validations.VulnerabilityCount{ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{Inactive: minInactives}},
-				})
-			} else {
-				validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: minVulnerabilities, Licenses: minLicenses}})
+			validationParams := validations.ValidationParams{
+				Total: &validations.TotalCount{
+					Vulnerabilities: minVulnerabilities,
+					Licenses:        minLicenses,
+					Violations:      minViolations,
+				},
 			}
-		}
-		// Run docker scan on image with watch
-		if watchName == "" {
-			return
-		}
-		cmdArgs = append(cmdArgs, "--watches="+watchName)
-		output = testCli.WithoutCredentials().RunCliCmdWithOutput(t, cmdArgs...)
-		if assert.NotEmpty(t, output) {
-			validations.VerifyJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Violations: minViolations}})
+			validations.VerifyJsonResults(t, output, validationParams)
 		}
 	}
 }

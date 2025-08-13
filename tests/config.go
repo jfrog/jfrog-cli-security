@@ -2,6 +2,7 @@ package tests
 
 import (
 	"flag"
+	"net/url"
 	"os"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
@@ -89,6 +90,19 @@ func getTestPasswordDefaultValue() string {
 	return "password"
 }
 
+func getTestContainerDefaultValue(jfrogUrl string) string {
+	if os.Getenv(TestJfrogContainerEnvVar) != "" {
+		return os.Getenv(TestJfrogContainerEnvVar)
+	}
+	// remove protocol and trailing slash from the JFrog URL
+	parsedUrl, err := url.Parse(jfrogUrl)
+	if err != nil {
+		log.Error("Failed to parse JFrog URL:", err)
+		return "localhost:8084"
+	}
+	return parsedUrl.Host
+}
+
 func init() {
 	TestUnit = flag.Bool("test.unit", false, "Run unit tests")
 	TestArtifactory = flag.Bool("test.artifactory", false, "Run Artifactory integration tests")
@@ -118,7 +132,7 @@ func init() {
 
 	JfrogSshKeyPath = flag.String("jfrog.sshKeyPath", "", "Ssh key file path")
 	JfrogSshPassphrase = flag.String("jfrog.sshPassphrase", "", "Ssh key passphrase")
-	ContainerRegistry = flag.String("test.containerRegistry", "localhost:8084", "Container registry")
+	ContainerRegistry = flag.String("test.containerRegistry", getTestContainerDefaultValue(*JfrogUrl), "Container registry")
 	CiRunId = flag.String("ci.runId", "", "A unique identifier used as a suffix to create repositories and builds in the tests")
 	JfrogTestProjectKey = flag.String("jfrog.projectKey", os.Getenv(TestJfrogPlatformProjectKeyEnvVar), "Project key used for tests")
 }

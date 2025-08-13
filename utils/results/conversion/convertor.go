@@ -85,7 +85,7 @@ func (c *CommandResultsConvertor) ConvertToSimpleJson(cmdResults *results.Securi
 }
 
 func (c *CommandResultsConvertor) ConvertToSarif(cmdResults *results.SecurityCommandResults) (sarifReport *sarif.Report, err error) {
-	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.PlatformUrl, c.Params.IncludeVulnerabilities, c.Params.HasViolationContext, c.Params.PatchBinaryPaths)
+	parser := sarifparser.NewCmdResultsSarifConverter(c.Params.PlatformUrl, c.Params.PatchBinaryPaths)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 

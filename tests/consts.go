@@ -17,6 +17,7 @@ const (
 	TestJfrogTokenEnvVar                   = "JFROG_SECURITY_CLI_TESTS_JFROG_ACCESS_TOKEN"
 	TestJfrogUserEnvVar                    = "JFROG_SECURITY_CLI_TESTS_JFROG_USER"
 	TestJfrogPasswordEnvVar                = "JFROG_SECURITY_CLI_TESTS_JFROG_PASSWORD"
+	TestJfrogContainerEnvVar          = "JFROG_SECURITY_CLI_TESTS_JFROG_CONTAINER"
 	TestJfrogPlatformProjectKeyEnvVar      = "JFROG_SECURITY_CLI_TESTS_JFROG_PLATFORM_PROJECT_KEY"
 	TestJfrogLocalAnalyzerManagerDirEnvVar = "JFROG_SECURITY_CLI_TESTS_JFROG_LOCAL_ANALYZER_MANAGER_DIR"
 
