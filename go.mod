@@ -19,7 +19,7 @@ require (
 	github.com/jfrog/jfrog-cli-core/v2 v2.59.4
 	github.com/jfrog/jfrog-client-go v1.54.4
 	github.com/magiconair/properties v1.8.9
-	github.com/owenrumney/go-sarif/v3 v3.1.4
+	github.com/owenrumney/go-sarif/v3 v3.2.1
 	github.com/package-url/packageurl-go v0.1.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
