@@ -222,10 +222,15 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	if !cmdResults.EntitledForJas {
 		messages = []string{coreutils.PrintTitle("The ‘jf audit’ command also supports JFrog Advanced Security features, such as 'Contextual Analysis', 'Secrets Detection', 'IaC Scan' and ‘SAST’.\nThis feature isn't enabled on your system. Read more - ") + coreutils.PrintLink(utils.JasInfoURL)}
 	}
+	var tableNotes []string
+	if cmdResults.EntitledForJas && cmdResults.HasViolationContext() && len(cmdResults.ResultContext.GitRepoHttpsCloneUrl) == 0 {
+		tableNotes = []string{"Note: The following types of violations are NOT supported by this audit:\n- Secrets\n- Infrastructure as Code (IaC)\n- Static Application Security Testing (SAST)"}
+	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(auditCmd.OutputFormat()).
 		SetOutputDir(auditCmd.scanResultsOutputDir).
 		SetPrintExtendedTable(auditCmd.PrintExtendedTable).
+		SetTableNotes(tableNotes).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(auditCmd.ScansToPerform())
 }
