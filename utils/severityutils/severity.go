@@ -51,7 +51,7 @@ func getSeverityEmojiIcon(severity Severity) string {
 	case Information:
 		return "ℹ️"
 	default:
-		return "❓"
+		return "❔"
 	}
 }
 
