@@ -961,3 +961,114 @@ func TestXrayComponentIdToCdxComponentRef(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkspaceAwareTechnologyDetection(t *testing.T) {
+	// Create a temporary directory structure for testing
+	tempDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tempDir), "Couldn't remove temp dir")
+	}()
+	// Create workspace root
+	workspaceRoot := tempDir
+	rootPackageJson := `{
+		"name": "workspace-root",
+		"workspaces": ["packages/*", "plugins/*"]
+	}`
+	assert.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte(rootPackageJson), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "yarn.lock"), []byte("# yarn.lock"), 0644))
+
+	// Create packages
+	packagesDir := filepath.Join(workspaceRoot, "packages")
+	assert.NoError(t, os.MkdirAll(packagesDir, 0755))
+
+	appDir := filepath.Join(packagesDir, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0755))
+	appPackageJson := `{"name": "@workspace/app", "version": "1.0.0"}`
+	assert.NoError(t, os.WriteFile(filepath.Join(appDir, "package.json"), []byte(appPackageJson), 0644))
+
+	backendDir := filepath.Join(packagesDir, "backend")
+	assert.NoError(t, os.MkdirAll(backendDir, 0755))
+	backendPackageJson := `{"name": "@workspace/backend", "version": "1.0.0"}`
+	assert.NoError(t, os.WriteFile(filepath.Join(backendDir, "package.json"), []byte(backendPackageJson), 0644))
+
+	// Create plugins
+	pluginsDir := filepath.Join(workspaceRoot, "plugins")
+	assert.NoError(t, os.MkdirAll(pluginsDir, 0755))
+
+	catalogDir := filepath.Join(pluginsDir, "catalog")
+	assert.NoError(t, os.MkdirAll(catalogDir, 0755))
+	catalogPackageJson := `{"name": "@workspace/catalog", "version": "1.0.0"}`
+	assert.NoError(t, os.WriteFile(filepath.Join(catalogDir, "package.json"), []byte(catalogPackageJson), 0644))
+
+	// Test technology detection
+	technologiesDetected, err := DetectTechnologiesDescriptors(workspaceRoot, true, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+
+	// Verify that workspace root is detected as yarn
+	assert.Contains(t, technologiesDetected, Yarn, "Workspace root should be detected as yarn")
+	yarnDirs := technologiesDetected[Yarn]
+	assert.Contains(t, yarnDirs, workspaceRoot, "Workspace root should be in yarn directories")
+
+	// Verify that workspace packages are also detected as yarn (not npm)
+	assert.Contains(t, yarnDirs, appDir, "App package should inherit yarn technology")
+	assert.Contains(t, yarnDirs, backendDir, "Backend package should inherit yarn technology")
+	assert.Contains(t, yarnDirs, catalogDir, "Catalog package should inherit yarn technology")
+
+	// Verify that npm is not detected for workspace packages
+	if npmDirs, exists := technologiesDetected[Npm]; exists {
+		assert.NotContains(t, npmDirs, appDir, "App package should not be detected as npm")
+		assert.NotContains(t, npmDirs, backendDir, "Backend package should not be detected as npm")
+		assert.NotContains(t, npmDirs, catalogDir, "Catalog package should not be detected as npm")
+	}
+
+	// Verify the expected structure
+	expectedYarnDirs := []string{workspaceRoot, appDir, backendDir, catalogDir}
+	for _, expectedDir := range expectedYarnDirs {
+		assert.Contains(t, yarnDirs, expectedDir, fmt.Sprintf("Directory %s should be detected as yarn", expectedDir))
+	}
+
+	t.Logf("Detected technologies: %v", maps.Keys(technologiesDetected))
+	t.Logf("Yarn directories: %v", maps.Keys(yarnDirs))
+}
+
+func TestWorkspaceAwareTechnologyDetectionWithNpmWorkspace(t *testing.T) {
+	// Create a temporary directory structure for npm workspace testing
+	tempDir, err := fileutils.CreateTempDir()
+	assert.NoError(t, err, "Couldn't create temp dir")
+	defer func() {
+		assert.NoError(t, fileutils.RemoveTempDir(tempDir), "Couldn't remove temp dir")
+	}()
+	// Create workspace root
+	workspaceRoot := tempDir
+	rootPackageJson := `{
+		"name": "npm-workspace-root",
+		"workspaces": ["packages/*"]
+	}`
+	assert.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package.json"), []byte(rootPackageJson), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(workspaceRoot, "package-lock.json"), []byte("{}"), 0644))
+
+	// Create packages
+	packagesDir := filepath.Join(workspaceRoot, "packages")
+	assert.NoError(t, os.MkdirAll(packagesDir, 0755))
+
+	appDir := filepath.Join(packagesDir, "app")
+	assert.NoError(t, os.MkdirAll(appDir, 0755))
+	appPackageJson := `{"name": "@workspace/app", "version": "1.0.0"}`
+	assert.NoError(t, os.WriteFile(filepath.Join(appDir, "package.json"), []byte(appPackageJson), 0644))
+
+	// Test technology detection
+	technologiesDetected, err := DetectTechnologiesDescriptors(workspaceRoot, true, []string{}, map[Technology][]string{}, "")
+	assert.NoError(t, err)
+
+	// Verify that workspace root is detected as npm
+	assert.Contains(t, technologiesDetected, Npm, "Workspace root should be detected as npm")
+	npmDirs := technologiesDetected[Npm]
+	assert.Contains(t, npmDirs, workspaceRoot, "Workspace root should be in npm directories")
+
+	// Verify that workspace packages are also detected as npm (inheritance)
+	assert.Contains(t, npmDirs, appDir, "App package should inherit npm technology")
+
+	t.Logf("Detected technologies: %v", maps.Keys(technologiesDetected))
+	t.Logf("Npm directories: %v", maps.Keys(npmDirs))
+}

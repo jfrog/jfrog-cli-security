@@ -48,6 +48,8 @@ type AuditParams interface {
 	AllowPartialResults() bool
 	GetXrayVersion() string
 	GetConfigProfile() *xscservices.ConfigProfile
+	Threads() int
+	WorkingDirs() []string
 }
 
 type AuditBasicParams struct {
@@ -328,4 +330,16 @@ func (abp *AuditBasicParams) SetConfigProfile(profile *xscservices.ConfigProfile
 
 func (abp *AuditBasicParams) GetConfigProfile() *xscservices.ConfigProfile {
 	return abp.configProfile
+}
+
+// Threads returns the number of threads
+func (abp *AuditBasicParams) Threads() int {
+	// Default implementation returns 0, which means use default threading
+	return 0
+}
+
+// WorkingDirs returns the working directories
+func (abp *AuditBasicParams) WorkingDirs() []string {
+	// Default implementation returns empty slice
+	return []string{}
 }

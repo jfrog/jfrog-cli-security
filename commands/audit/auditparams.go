@@ -156,6 +156,10 @@ func (params *AuditParams) SetThreads(threads int) *AuditParams {
 	return params
 }
 
+func (params *AuditParams) Threads() int {
+	return params.threads
+}
+
 func (params *AuditParams) SetResultsContext(resultsContext results.ResultContext) *AuditParams {
 	params.resultsContext = resultsContext
 	return params

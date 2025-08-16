@@ -428,6 +428,9 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 		}
 		// Detect descriptors and technologies in the requested directory.
 		techToWorkingDirs, err := techutils.DetectTechnologiesDescriptors(requestedDirectory, params.IsRecursiveScan(), params.Technologies(), getRequestedDescriptors(params), technologies.GetExcludePattern(params.GetConfigProfile(), params.IsRecursiveScan(), params.Exclusions()...))
+
+		// Apply workspace-aware technology detection with override logic
+		techToWorkingDirs = techutils.ApplyWorkspaceAwareTechnologyDetectionWithOverride(techToWorkingDirs, requestedDirectory, params.IsRecursiveScan(), params.WorkingDirs(), params.Technologies())
 		if err != nil {
 			log.Warn("Couldn't detect technologies in", requestedDirectory, "directory.", err.Error())
 			continue
