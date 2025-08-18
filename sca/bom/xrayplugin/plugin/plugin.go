@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -25,19 +24,18 @@ import (
 )
 
 const (
-	defaultScangPluginVersion     = "0.0.1"
-	scangPluginVersionEnvVariable = "JFROG_CLI_SCANG_PLUGIN_VERSION"
-	scangPluginRtRepository       = "xsc-scan-lib/v0"
-	scangZipName                  = "scang-plugin.zip"
-	scangPluginDirName            = "scang"
-	ScangPluginExecutableName     = "xray-scan-plugin"
-	pluginName                    = "scang"
+	xrayLibPluginVersionEnvVariable = "JFROG_CLI_XRAY_LIB_PLUGIN_VERSION"
+	defaultXrayLibPluginVersion     = "0.0.3-14"
 
-	scangPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
+	xrayLibPluginRtRepository   = "xray-scan-lib"
+	XrayLibPluginExecutableName = "xray-scan-plugin"
+
+	pluginName                  = "scang"
+	xrayLibPluginMagicCookieKey = "SCANG_PLUGIN_MAGIC_COOKIE"
 )
 
 // Injected at build so needs to be variable
-var ScangMagicCookie = "scang-plugin-v1"
+var xrayLibMagicCookie = "scang-plugin-v1"
 
 // Implementation of plugin
 type Plugin struct {
@@ -47,8 +45,8 @@ type Plugin struct {
 
 var PluginHandshakeConfig = goplugin.HandshakeConfig{
 	ProtocolVersion:  1,
-	MagicCookieKey:   scangPluginMagicCookieKey,
-	MagicCookieValue: ScangMagicCookie,
+	MagicCookieKey:   xrayLibPluginMagicCookieKey,
+	MagicCookieValue: xrayLibMagicCookie,
 }
 
 type Scanner interface {
@@ -107,7 +105,7 @@ func CreateScannerPluginClient(scangBinary string) (scanner Scanner, err error) 
 	// Assert that the plugin is of type Scanner
 	scanPlugin, ok := raw.(Scanner)
 	if !ok {
-		return nil, fmt.Errorf("plugin is not of type of SCANG plugin, expected Scanner, got %T", raw)
+		return nil, fmt.Errorf("plugin is not of type of Xray-Lib plugin, expected Scanner, got %T", raw)
 	}
 	return scanPlugin, nil
 }
@@ -151,16 +149,16 @@ func (p *Plugin) Client(broker *goplugin.MuxBroker, client *rpc.Client) (any, er
 	return &ScannerRPCClient{client: client}, nil
 }
 
-func DownloadScangPluginIfNeeded() error {
-	downloadPath, err := GetScangPluginDownloadPath()
+func DownloadXrayLibPluginIfNeeded() error {
+	downloadPath, err := GetXrayLibPluginDownloadPath()
 	if err != nil {
 		return err
 	}
-	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("SCANG plugin", downloadPath)
+	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("Xray-Scan-Lib Plugin", downloadPath)
 	if err != nil {
 		return err
 	}
-	// Check if the scang should be downloaded by comparing the checksum of the local file with the remote file
+	// Check if the xray-lib-plugin should be downloaded by comparing the checksum of the local file with the remote file
 	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
 	if err != nil {
 		return err
@@ -170,82 +168,81 @@ func DownloadScangPluginIfNeeded() error {
 	if err != nil {
 		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
 	}
-	scangPluginPath, err := getScangPathAtJfrogDependenciesDir()
+	xrayLibPluginPath, err := getXrayLibPathAtJfrogDependenciesDir()
 	if err != nil {
 		return err
 	}
-	if match, err := isLocalPluginMatchesRemote(scangPluginPath, remoteFileDetails); err != nil || match {
+	if match, err := isLocalPluginMatchesRemote(xrayLibPluginPath, remoteFileDetails); err != nil || match {
 		return err
 	}
-	log.Info("The 'SCANG Plugin' app is not cached locally. Downloading it now...")
-	// Download the scang plugin file
-	return dependencies.DownloadDependency(artDetails, remotePath, scangPluginPath, true)
+	log.Info("The 'Xray-Lib Plugin' app is not cached locally. Downloading it now...")
+	// Download the xray-lib-plugin file
+	return dependencies.DownloadDependency(artDetails, remotePath, xrayLibPluginPath, true)
 }
 
-func GetScangPluginDownloadPath() (string, error) {
+func GetXrayLibPluginDownloadPath() (string, error) {
 	osAndArc, err := coreutils.GetOSAndArc()
 	if err != nil {
 		return "", err
 	}
-	// Split the osAndArc into OS and Architecture (on '-' character).
-	tokens := strings.Split(osAndArc, "-")
-	if len(tokens) != 2 {
-		return "", fmt.Errorf("invalid OS and Architecture format: %s", osAndArc)
+	if coreutils.IsMac() {
+		// At the Releases, the plugin name convention is "darwin-<arch>" and not "mac-<arch>".
+		osAndArc = "darwin-" + osAndArc[len("mac-"):]
 	}
-	return path.Join(scangPluginRtRepository, getScangPluginVersion(), tokens[0], tokens[1], scangZipName), nil
+	return path.Join(xrayLibPluginRtRepository, fmt.Sprintf("%s-%s-%s.tar.gz", xrayLibPluginRtRepository, getXrayLibPluginVersion(), osAndArc)), nil
 }
 
-func getScangPluginVersion() string {
-	if versionEnv := os.Getenv(scangPluginVersionEnvVariable); versionEnv != "" {
+func getXrayLibPluginVersion() string {
+	if versionEnv := os.Getenv(xrayLibPluginVersionEnvVariable); versionEnv != "" {
 		return versionEnv
 	}
-	return defaultScangPluginVersion
+	return defaultXrayLibPluginVersion
 }
 
-func getScangExecutableName() string {
+func getXrayLibExecutableName() string {
 	if coreutils.IsWindows() {
-		return ScangPluginExecutableName + ".exe"
+		return XrayLibPluginExecutableName + ".exe"
 	}
-	return ScangPluginExecutableName
+	return XrayLibPluginExecutableName
 }
 
-func GetLocalScangExecutablePath() (scangPath string, err error) {
-	// Check if the scang plugin binary path is set in the PATH environment variable
-	if scangPath, err = exec.LookPath(ScangPluginExecutableName); err != nil || scangPath == "" {
-		log.Debug(fmt.Sprintf("SCANG plugin not found in system PATH: %s", err.Error()))
-	} else if scangPath != "" {
+func GetLocalXrayLibExecutablePath() (xrayLibPath string, err error) {
+	// Check if the xray-lib-plugin binary path is set in the PATH environment variable
+	if xrayLibPath, err = exec.LookPath(XrayLibPluginExecutableName); err != nil || xrayLibPath == "" {
+		log.Debug(fmt.Sprintf("Xray-Lib plugin not found in system PATH: %s", err.Error()))
+	} else if xrayLibPath != "" {
 		// If found in PATH, return the path
-		log.Debug(fmt.Sprintf("SCANG plugin found in system PATH: %s", scangPath))
-		return scangPath, nil
+		log.Debug(fmt.Sprintf("Xray-Lib plugin found in system PATH: %s", xrayLibPath))
+		return xrayLibPath, nil
 	}
 	// Check if exists in JFrog CLI directory
-	if scangPath, err = getScangPathAtJfrogDependenciesDir(); err != nil {
+	if xrayLibPath, err = getXrayLibPathAtJfrogDependenciesDir(); err != nil {
 		return
 	}
-	exists, err := fileutils.IsFileExists(scangPath, false)
+	exists, err := fileutils.IsFileExists(xrayLibPath, false)
 	if err != nil || exists {
 		return
 	}
-	return "", errors.New("SCANG plugin executable not found in JFrog CLI dependencies directory")
+	return "", errors.New("Xray-Lib plugin executable not found in JFrog CLI dependencies directory")
 }
 
-func getScangPathAtJfrogDependenciesDir() (string, error) {
+func getXrayLibPathAtJfrogDependenciesDir() (string, error) {
 	jfrogDir, err := config.GetJfrogDependenciesPath()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(jfrogDir, scangPluginDirName, getScangExecutableName()), nil
+	return filepath.Join(jfrogDir, xrayLibPluginRtRepository, getXrayLibExecutableName()), nil
 }
 
-func isLocalPluginMatchesRemote(scangPluginPath string, remoteFileDetails *fileutils.FileDetails) (match bool, err error) {
-	// Find current SCANG checksum.
-	exist, err := fileutils.IsFileExists(scangPluginPath, false)
+func isLocalPluginMatchesRemote(xrayLibPath string, remoteFileDetails *fileutils.FileDetails) (match bool, err error) {
+	// Find current Xray-Lib checksum.
+	exist, err := fileutils.IsFileExists(xrayLibPath, false)
 	if err != nil || !exist {
 		return false, err
 	}
-	sha256, err := utils.FileSha256(scangPluginPath)
+	sha256, err := utils.FileSha256(xrayLibPath)
 	if err != nil {
-		return false, fmt.Errorf("failed to calculate the local SCANG plugin checksum: %w", err)
+		return false, fmt.Errorf("failed to calculate the local Xray-Lib plugin checksum: %w", err)
 	}
 	// If the checksums are identical, there's no need to download.
 	return remoteFileDetails.Checksum.Sha256 == sha256, nil

@@ -11,7 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -101,7 +101,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
 	isRecursiveScan := true
-	if _, ok := params.bomGenerator.(*scang.ScangBomGenerator); ok {
+	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		isRecursiveScan = false
 	}
 	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)

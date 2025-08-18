@@ -449,8 +449,7 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 	}
 	// Set dynamic command logic based on flags
 	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
-	auditCmd.SetBomGenerator(sbomGenerator).
-		SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.ScangBinaryCustomPath))
+	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
 	// Make sure include SBOM is only set if the output format supports it
 	includeSbom := c.GetBoolFlagValue(flags.Sbom)

@@ -16,7 +16,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -154,7 +154,7 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func (auditCmd *AuditCommand) Run() (err error) {
 	isRecursiveScan := false
-	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
 			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
 		}
@@ -309,9 +309,9 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
-		// SCANG Bom Generator Options
-		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
-		scang.WithIgnorePatterns(params.Exclusions()),
+		// Xray-Scan-Plugin Bom Generator Options
+		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
+		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
