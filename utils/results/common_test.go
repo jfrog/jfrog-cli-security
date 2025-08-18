@@ -169,6 +169,20 @@ func TestViolationFailBuild(t *testing.T) {
 			},
 			expectedResult: true, // Should fail because second target has a violation that should fail
 		},
+		{
+			name: "no sca results - build should not fail",
+			auditResults: &SecurityCommandResults{
+				EntitledForJas: true,
+				Targets: []*TargetResults{
+					{
+						ScanTarget: ScanTarget{Target: "test-target"},
+						ScaResults: nil,
+						JasResults: &JasScansResults{},
+					},
+				},
+			},
+			expectedResult: false,
+		},
 	}
 
 	for _, test := range tests {

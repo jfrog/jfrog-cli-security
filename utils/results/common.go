@@ -80,6 +80,9 @@ func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
 func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
 	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
 
+	if target.ScaResults == nil {
+		return nil
+	}
 	// Get new violations from the target
 	newViolations := target.ScaResults.Violations
 
@@ -116,12 +119,14 @@ func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledFor
 }
 
 func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool {
+	if target.ScaResults == nil {
+		return false
+	}
 	for _, newViolation := range target.ScaResults.Violations {
 		if newViolation.FailBuild || newViolation.FailPr {
 			return true
 		}
 	}
-
 	// TODO remove this for loop once the DeprecatedXrayResults are completely removed and no longer in use
 	for _, scanResponse := range target.GetScaScansXrayResults() {
 		for _, oldViolation := range scanResponse.Violations {

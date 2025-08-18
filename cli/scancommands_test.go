@@ -2,11 +2,6 @@ package cli
 
 import (
 	"errors"
-	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
-	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
-	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
 	"net/http"
 	"os"
 	"path"
@@ -15,9 +10,16 @@ import (
 	"strings"
 	"testing"
 
+	commonCommands "github.com/jfrog/jfrog-cli-core/v2/common/commands"
+	coretests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
+	clienttestutils "github.com/jfrog/jfrog-client-go/utils/tests"
+
 	"github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/stretchr/testify/assert"
 )
@@ -150,4 +152,17 @@ func createCliConfig(t *testing.T, url string, configPath string) string {
 		SetDetails(server).SetUseBasicAuthOnly(true).SetInteractive(false)
 	assert.NoError(t, configCmd.Run())
 	return filepath.Join(configPath, "jfrog-cli.conf.v"+strconv.Itoa(coreutils.GetCliConfigVersion()))
+}
+
+func TestCurationAuditCommandFlags_UseWrapperAuditFlag(t *testing.T) {
+	// Test that the useWrapperAudit flag is included in the CurationAudit command flags
+	curationAuditFlags := flags.GetCommandFlags(flags.CurationAudit)
+	found := false
+	for _, flag := range curationAuditFlags {
+		if flag.GetName() == flags.UseWrapper {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "useWrapperAudit flag should be present in CurationAudit command flags. If this test fails, it means the flag was removed from cli/docs/flags.go")
 }

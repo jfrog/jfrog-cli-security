@@ -12,14 +12,14 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
 	github.com/jfrog/build-info-go v1.10.15
-	github.com/jfrog/froggit-go v1.20.0
+	github.com/jfrog/froggit-go v1.20.1
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.5.1
-	github.com/jfrog/jfrog-cli-core/v2 v2.59.3
-	github.com/jfrog/jfrog-client-go v1.54.3
+	github.com/jfrog/jfrog-cli-artifactory v0.6.0
+	github.com/jfrog/jfrog-cli-core/v2 v2.59.4
+	github.com/jfrog/jfrog-client-go v1.54.4
 	github.com/magiconair/properties v1.8.9
-	github.com/owenrumney/go-sarif/v3 v3.1.4
+	github.com/owenrumney/go-sarif/v3 v3.2.1
 	github.com/package-url/packageurl-go v0.1.3
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
@@ -58,7 +58,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/golang/snappy v0.0.4 // indirect
+	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-github/v62 v62.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/grokify/mogo v0.64.12 // indirect
@@ -74,7 +74,7 @@ require (
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/ktrysmt/go-bitbucket v0.9.80 // indirect
 	github.com/manifoldco/promptui v0.9.0 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-tty v0.0.3 // indirect
