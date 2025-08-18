@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/rpc"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -154,30 +152,11 @@ func DownloadXrayLibPluginIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("Xray-Scan-Lib Plugin", downloadPath)
+	xrayLibPluginDirPath, err := getXrayLibDirPathAtJfrogDependenciesDir()
 	if err != nil {
 		return err
 	}
-	// Check if the xray-lib-plugin should be downloaded by comparing the checksum of the local file with the remote file
-	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
-	if err != nil {
-		return err
-	}
-	downloadUrl := artDetails.ArtifactoryUrl + remotePath
-	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
-	if err != nil {
-		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
-	}
-	xrayLibPluginPath, err := getXrayLibPathAtJfrogDependenciesDir()
-	if err != nil {
-		return err
-	}
-	if match, err := isLocalPluginMatchesRemote(xrayLibPluginPath, remoteFileDetails); err != nil || match {
-		return err
-	}
-	log.Info("The 'Xray-Lib Plugin' app is not cached locally. Downloading it now...")
-	// Download the xray-lib-plugin file
-	return dependencies.DownloadDependency(artDetails, remotePath, xrayLibPluginPath, true)
+	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, getXrayLibExecutableName(), true, 0)
 }
 
 func GetXrayLibPluginDownloadPath() (string, error) {
@@ -216,34 +195,22 @@ func GetLocalXrayLibExecutablePath() (xrayLibPath string, err error) {
 		return xrayLibPath, nil
 	}
 	// Check if exists in JFrog CLI directory
-	if xrayLibPath, err = getXrayLibPathAtJfrogDependenciesDir(); err != nil {
+	xrayLibDir, err := getXrayLibDirPathAtJfrogDependenciesDir()
+	if err != nil {
 		return
 	}
+	xrayLibPath = filepath.Join(xrayLibDir, getXrayLibExecutableName())
 	exists, err := fileutils.IsFileExists(xrayLibPath, false)
 	if err != nil || exists {
 		return
 	}
-	return "", errors.New("Xray-Lib plugin executable not found in JFrog CLI dependencies directory")
+	return "", fmt.Errorf("Xray-Lib plugin not found at %s", xrayLibPath)
 }
 
-func getXrayLibPathAtJfrogDependenciesDir() (string, error) {
+func getXrayLibDirPathAtJfrogDependenciesDir() (string, error) {
 	jfrogDir, err := config.GetJfrogDependenciesPath()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(jfrogDir, xrayLibPluginRtRepository, getXrayLibExecutableName()), nil
-}
-
-func isLocalPluginMatchesRemote(xrayLibPath string, remoteFileDetails *fileutils.FileDetails) (match bool, err error) {
-	// Find current Xray-Lib checksum.
-	exist, err := fileutils.IsFileExists(xrayLibPath, false)
-	if err != nil || !exist {
-		return false, err
-	}
-	sha256, err := utils.FileSha256(xrayLibPath)
-	if err != nil {
-		return false, fmt.Errorf("failed to calculate the local Xray-Lib plugin checksum: %w", err)
-	}
-	// If the checksums are identical, there's no need to download.
-	return remoteFileDetails.Checksum.Sha256 == sha256, nil
+	return filepath.Join(jfrogDir, XrayLibPluginExecutableName), nil
 }

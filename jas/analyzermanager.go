@@ -12,11 +12,9 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -208,46 +206,9 @@ func DownloadAnalyzerManagerIfNeeded(threadId int) error {
 	if err != nil {
 		return err
 	}
-	artDetails, remotePath, err := utils.GetReleasesRemoteDetails("Analyze Manager", downloadPath)
-	if err != nil {
-		return err
-	}
-	// Check if the AnalyzerManager should be downloaded.
-	// First get the latest AnalyzerManager checksum from Artifactory.
-	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
-	if err != nil {
-		return err
-	}
-	downloadUrl := artDetails.ArtifactoryUrl + remotePath
-	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
-	if err != nil {
-		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
-	}
 	analyzerManagerDir, err := GetAnalyzerManagerDirAbsolutePath()
 	if err != nil {
 		return err
 	}
-	// Find current AnalyzerManager checksum.
-	checksumFilePath := filepath.Join(analyzerManagerDir, dependencies.ChecksumFileName)
-	exist, err := fileutils.IsFileExists(checksumFilePath, false)
-	if err != nil {
-		return err
-	}
-	if exist {
-		var sha2 []byte
-		sha2, err = fileutils.ReadFile(checksumFilePath)
-		if err != nil {
-			return err
-		}
-		// If the checksums are identical, there's no need to download.
-		if remoteFileDetails.Checksum.Sha256 == string(sha2) {
-			return nil
-		}
-	}
-	// Download & unzip the analyzer manager files
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + "The 'Analyzer Manager' app is not cached locally. Downloading it now...")
-	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(analyzerManagerDir, AnalyzerManagerZipName), true); err != nil {
-		return err
-	}
-	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+	return utils.DownloadResourceFromPlatformIfNeeded("Analyzer Manager", downloadPath, analyzerManagerDir, AnalyzerManagerZipName, true, threadId)
 }
