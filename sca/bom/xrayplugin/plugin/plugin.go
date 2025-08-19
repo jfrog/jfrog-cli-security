@@ -156,10 +156,10 @@ func DownloadXrayLibPluginIfNeeded() error {
 	if err != nil {
 		return err
 	}
-	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, getXrayLibExecutableName(), true, 0)
+	return utils.DownloadResourceFromPlatformIfNeeded("Xray-Lib Plugin", downloadPath, xrayLibPluginDirPath, path.Base(downloadPath), true, 0)
 }
 
-func GetXrayLibPluginDownloadPath() (string, error) {
+func getXrayLibPluginFullName() (string, error) {
 	osAndArc, err := coreutils.GetOSAndArc()
 	if err != nil {
 		return "", err
@@ -168,7 +168,15 @@ func GetXrayLibPluginDownloadPath() (string, error) {
 		// At the Releases, the plugin name convention is "darwin-<arch>" and not "mac-<arch>".
 		osAndArc = "darwin-" + osAndArc[len("mac-"):]
 	}
-	return path.Join(xrayLibPluginRtRepository, fmt.Sprintf("%s-%s-%s.tar.gz", xrayLibPluginRtRepository, getXrayLibPluginVersion(), osAndArc)), nil
+	return fmt.Sprintf("%s-%s-%s", xrayLibPluginRtRepository, getXrayLibPluginVersion(), osAndArc), nil
+}
+
+func GetXrayLibPluginDownloadPath() (string, error) {
+	fullName, err := getXrayLibPluginFullName()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(xrayLibPluginRtRepository, fmt.Sprintf("%s.tar.gz", fullName)), nil
 }
 
 func getXrayLibPluginVersion() string {
@@ -199,7 +207,11 @@ func GetLocalXrayLibExecutablePath() (xrayLibPath string, err error) {
 	if err != nil {
 		return
 	}
-	xrayLibPath = filepath.Join(xrayLibDir, getXrayLibExecutableName())
+	libFullName, err := getXrayLibPluginFullName()
+	if err != nil {
+		return "", err
+	}
+	xrayLibPath = filepath.Join(xrayLibDir, libFullName, getXrayLibExecutableName())
 	exists, err := fileutils.IsFileExists(xrayLibPath, false)
 	if err != nil || exists {
 		return
