@@ -1,6 +1,6 @@
 module github.com/jfrog/jfrog-cli-security
 
-go 1.24.5
+go 1.24.6
 
 require (
 	github.com/CycloneDX/cyclonedx-go v0.9.2
@@ -11,13 +11,13 @@ require (
 	github.com/gookit/color v1.5.4
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-plugin v1.6.3
-	github.com/jfrog/build-info-go v1.10.15
-	github.com/jfrog/froggit-go v1.20.1
+	github.com/jfrog/build-info-go v1.10.16
+	github.com/jfrog/froggit-go v1.20.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.6.0
-	github.com/jfrog/jfrog-cli-core/v2 v2.59.4
-	github.com/jfrog/jfrog-client-go v1.54.4
+	github.com/jfrog/jfrog-cli-artifactory v0.6.2
+	github.com/jfrog/jfrog-cli-core/v2 v2.59.5
+	github.com/jfrog/jfrog-client-go v1.54.5
 	github.com/magiconair/properties v1.8.9
 	github.com/owenrumney/go-sarif/v3 v3.2.1
 	github.com/package-url/packageurl-go v0.1.3
@@ -59,7 +59,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/google/go-github/v62 v62.0.0 // indirect
+	github.com/google/go-github/v74 v74.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/grokify/mogo v0.64.12 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
