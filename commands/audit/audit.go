@@ -455,9 +455,8 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			}
 		}
 	}
-	// If no scan targets were detected, we should proceed with the scan.
-	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		// add the root directory as a target for JAS scans.
+	// If no scan targets were detected, we should still proceed with the scans.
+	if len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
 		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
 	}
 }
