@@ -286,17 +286,17 @@ func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResu
 	}
 	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
 	// Initialize the BOM generator
 	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
-	}
-	// Initialize the SCA scan strategy
-	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
 	}
 	populateScanTargets(cmdResults, params)
+	// Initialize the SCA scan strategy
+	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), params.AllowPartialResults())
+	}
 	return
 }
 
