@@ -27,8 +27,6 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
-	// Properties for Git context
-	jasIssueGitContextProperty = "jfrog:git:context"
 )
 
 type CmdResultsCycloneDxConverter struct {
@@ -50,17 +48,6 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
-	// If git context is provided, add it to the metadata component
-	if bom.Metadata.Component != nil && cdc.gitContext != nil {
-		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
-			log.Warn("Failed to serialize git context to JSON: %v", err)
-		} else {
-			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
-				Name:  jasIssueGitContextProperty,
-				Value: gitContextStr,
-			})
-		}
-	}
 	return
 }
 

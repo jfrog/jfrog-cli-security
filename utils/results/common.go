@@ -1395,7 +1395,7 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 		if vulnerability.ExtendedInformation != nil {
 			extendedInformation = vulnerability.ExtendedInformation.FullDescription
 		}
-		for i := 0; i < len(cveIds); i++ {
+		for i := range cveIds {
 			params := cdxutils.CdxVulnerabilityParams{
 				Ref:         cveIds[i],
 				Ratings:     ratings[i],

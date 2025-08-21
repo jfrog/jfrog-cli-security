@@ -834,7 +834,7 @@ func TestAuditOnEmptyProject(t *testing.T) {
 
 	output := securityTests.PlatformCli.WithoutCredentials().RunCliCmdWithOutput(t, "audit", "--format="+string(format.SimpleJson))
 	// No issues should be found in an empty project
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{ExactResultsMatch: true})
 }
 
 // xray-url only - the following tests check the case of adding "xray-url", instead of "url", which is the more common one
@@ -847,10 +847,13 @@ func TestXrayAuditNotEntitledForJasWithXrayUrl(t *testing.T) {
 		Threads: 3,
 		Format:  format.SimpleJson,
 	})
-	// Verify that scan results are printed
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{Total: &validations.TotalCount{Vulnerabilities: 8}})
-	// Verify that JAS results are not printed
-	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{})
+	// Verify that scan results are printed and that JAS results are not printed
+	validations.VerifySimpleJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 8},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan: &validations.ScanCount{Sca: 8, Sast: 0, Iac: 0, Secrets: 0},
+		},
+	})
 }
 
 func TestXrayAuditJasSimpleJsonWithXrayUrl(t *testing.T) {
