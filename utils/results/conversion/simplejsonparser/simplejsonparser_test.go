@@ -426,7 +426,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := PrepareSimpleJsonVulnerabilities(tc.target, services.ScanResponse{Vulnerabilities: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
+			out, err := PrepareSimpleJsonVulnerabilities(tc.target, []string{}, services.ScanResponse{Vulnerabilities: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedOutput, out)
 		})
@@ -647,7 +647,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, services.ScanResponse{Violations: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
+			securityOutput, licenseOutput, operationalRiskOutput, err := PrepareSimpleJsonViolations(tc.target, []string{}, services.ScanResponse{Violations: tc.input}, false, tc.entitledForJas, tc.applicabilityRuns...)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expectedSecurityOutput, securityOutput)
 			assert.ElementsMatch(t, tc.expectedLicenseOutput, licenseOutput)
