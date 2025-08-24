@@ -41,7 +41,7 @@ func setupIntegrationTests() {
 	integrationUtils.InitTestCliDetails(cli.GetJfrogCliSecurityApp())
 	integrationUtils.AuthenticateArtifactory()
 	integrationUtils.AuthenticateXsc()
-	// integrationUtils.CreateRequiredRepositories()
+	integrationUtils.CreateRequiredRepositories()
 }
 
 func tearDownIntegrationTests() {
