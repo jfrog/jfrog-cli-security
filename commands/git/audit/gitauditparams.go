@@ -14,7 +14,7 @@ import (
 
 type GitAuditParams struct {
 	// Git Params
-	gitContext services.XscGitInfoContext
+	source services.XscGitInfoContext
 	// Connection params
 	serverDetails *config.ServerDetails
 	// Violations params
