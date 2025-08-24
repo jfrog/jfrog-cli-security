@@ -6,6 +6,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/cyclonedxparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/sarifparser"
@@ -74,8 +75,8 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Get() (T, error)
 }
 
-func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cyclonedx.BOM, err error) {
-	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter()
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cdxutils.BOMWithSAST, err error) {
+	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter(false)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }
 
