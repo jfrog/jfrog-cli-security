@@ -16,6 +16,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	xrayApi "github.com/jfrog/jfrog-client-go/xray/services/utils"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -28,6 +29,7 @@ type SecurityCommandResults struct {
 	SecretValidation bool              `json:"secret_validation,omitempty"`
 	CmdType          utils.CommandType `json:"command_type"`
 	ResultContext    ResultContext     `json:"result_context,omitempty"`
+	GitContext       *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
 	StartTime        time.Time         `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
@@ -174,6 +176,11 @@ func (r *SecurityCommandResults) SetMultiScanId(multiScanId string) *SecurityCom
 
 func (r *SecurityCommandResults) SetResultsContext(context ResultContext) *SecurityCommandResults {
 	r.ResultContext = context
+	return r
+}
+
+func (r *SecurityCommandResults) SetGitContext(gitContext *xscServices.XscGitInfoContext) *SecurityCommandResults {
+	r.GitContext = gitContext
 	return r
 }
 
