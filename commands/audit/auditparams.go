@@ -19,7 +19,7 @@ import (
 type AuditParams struct {
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
-	gitContext *xscServices.XscGitInfoContext
+	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
 	installFunc       func(tech string) error
 	fixableOnly       bool

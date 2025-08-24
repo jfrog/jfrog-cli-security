@@ -23,14 +23,14 @@ import (
 // SecurityCommandResults is a struct that holds the results of a security scan/audit command.
 type SecurityCommandResults struct {
 	// General fields describing the command metadata
-	XrayVersion      string            `json:"xray_version"`
-	XscVersion       string            `json:"xsc_version,omitempty"`
-	EntitledForJas   bool              `json:"jas_entitled"`
-	SecretValidation bool              `json:"secret_validation,omitempty"`
-	CmdType          utils.CommandType `json:"command_type"`
-	ResultContext    ResultContext     `json:"result_context,omitempty"`
+	XrayVersion      string                         `json:"xray_version"`
+	XscVersion       string                         `json:"xsc_version,omitempty"`
+	EntitledForJas   bool                           `json:"jas_entitled"`
+	SecretValidation bool                           `json:"secret_validation,omitempty"`
+	CmdType          utils.CommandType              `json:"command_type"`
+	ResultContext    ResultContext                  `json:"result_context,omitempty"`
 	GitContext       *xscServices.XscGitInfoContext `json:"git_context,omitempty"`
-	StartTime        time.Time         `json:"start_time"`
+	StartTime        time.Time                      `json:"start_time"`
 	// MultiScanId is a unique identifier that is used to group multiple scans together.
 	MultiScanId string `json:"multi_scan_id,omitempty"`
 	// Results for each target in the command
