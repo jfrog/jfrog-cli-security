@@ -294,7 +294,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-A",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
@@ -309,7 +309,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -324,7 +324,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -364,7 +364,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-A",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
@@ -386,7 +386,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -415,7 +415,7 @@ func TestPrepareSimpleJsonVulnerabilities(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -463,7 +463,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-A",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
@@ -481,7 +481,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -499,7 +499,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -515,7 +515,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						ImpactedDependencyDetails: formats.ImpactedDependencyDetails{
 							SeverityDetails:        formats.SeverityDetails{Severity: "Low", SeverityNumValue: 10},
 							ImpactedDependencyName: "component-B",
-							Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: "target/descriptor.json"}}},
+							Components:             []formats.ComponentRow{{Name: "component-B", Location: &formats.Location{File: filepath.Join("target", "descriptor.json")}}},
 						},
 					},
 					ViolationContext: formats.ViolationContext{
@@ -557,7 +557,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-A",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-A"}}},
@@ -582,7 +582,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -614,7 +614,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 						// Direct
 						Components: []formats.ComponentRow{{
 							Name:     "component-B",
-							Location: &formats.Location{File: "target/descriptor.json"},
+							Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 						}},
 					},
 					ImpactPaths: [][]formats.ComponentRow{{{Name: "root"}, {Name: "component-B"}}},
@@ -633,7 +633,7 @@ func TestPrepareSimpleJsonViolations(t *testing.T) {
 							// Direct
 							Components: []formats.ComponentRow{{
 								Name:     "component-B",
-								Location: &formats.Location{File: "target/descriptor.json"},
+								Location: &formats.Location{File: filepath.Join("target", "descriptor.json")},
 							}},
 						},
 					},
