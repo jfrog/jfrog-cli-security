@@ -890,6 +890,28 @@ func TestXrayAuditJasSimpleJsonWithCustomExclusions(t *testing.T) {
 	})
 }
 
+func TestXrayAuditGemJson(t *testing.T) {
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayAuditGem(t, string(format.Json))
+	validations.VerifyJsonResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 1},
+	})
+}
+
+func TestXrayAuditGemCycloneDx(t *testing.T) {
+	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
+	output := testXrayAuditGem(t, string(format.CycloneDx))
+	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
+		Total: &validations.TotalCount{Vulnerabilities: 1},
+	})
+}
+
+func testXrayAuditGem(t *testing.T, format string) string {
+	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gem", "audit-gem"))
+	defer cleanUp()
+	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format="+format)
+}
+
 // New Sca
 
 func testAuditCommandNewSca(t *testing.T, project string, params auditCommandTestParams) string {
@@ -1022,54 +1044,35 @@ func TestAuditNewScaCycloneDxPoetry(t *testing.T) {
 }
 
 func TestAuditNewScaCycloneDxNuget(t *testing.T) {
-	// TODO: change proj ** Not supported with .sln, .csproj files
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "multi"), auditCommandTestParams{
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "nuget", "single4.0"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{},
-		SbomComponents:    &validations.SbomCount{},
-		Vulnerabilities:   &validations.VulnerabilityCount{},
+		Total:          &validations.TotalCount{Vulnerabilities: 1, BomComponents: 2 /*components*/ + 1 /*root*/, Licenses: 1},
+		SbomComponents: &validations.SbomCount{Root: 1, Direct: 2},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 1},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 1},
+		},
 	})
 }
 
 func TestAuditNewScaCycloneDxPipenv(t *testing.T) {
-	// TODO: needs pip lock - ** issue in sbom generation **, nothing is generated
 	integration.InitAuditNewScaTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-project"), auditCommandTestParams{
+	output := testAuditCommandNewSca(t, filepath.Join("package-managers", "python", "pipenv", "pipenv-lock"), auditCommandTestParams{
 		WithSbom: true,
 		Threads:  3,
 		Format:   format.CycloneDx,
 	})
 	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		ExactResultsMatch: true,
-		Total:             &validations.TotalCount{},
-		SbomComponents:    &validations.SbomCount{},
-		Vulnerabilities:   &validations.VulnerabilityCount{},
+		Total:          &validations.TotalCount{Vulnerabilities: 8, BomComponents: 4 /* components */ + 1 /* root */, Licenses: 1},
+		SbomComponents: &validations.SbomCount{Root: 1, Direct: 4},
+		Vulnerabilities: &validations.VulnerabilityCount{
+			ValidateScan:                &validations.ScanCount{Sca: 8},
+			ValidateApplicabilityStatus: &validations.ApplicabilityStatusCount{NotCovered: 4, NotApplicable: 4},
+		},
 	})
-}
-func TestXrayAuditGemJson(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditGem(t, string(format.Json))
-	validations.VerifyJsonResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 1},
-	})
-}
-
-func TestXrayAuditGemCycloneDx(t *testing.T) {
-	integration.InitAuditGeneralTests(t, scangraph.GraphScanMinXrayVersion)
-	output := testXrayAuditGem(t, string(format.CycloneDx))
-	validations.VerifyCycloneDxResults(t, output, validations.ValidationParams{
-		Total: &validations.TotalCount{Vulnerabilities: 1},
-	})
-}
-
-func testXrayAuditGem(t *testing.T, format string) string {
-	_, cleanUp := securityTestUtils.CreateTestProjectEnvAndChdir(t, filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "projects", "package-managers", "gem", "audit-gem"))
-	defer cleanUp()
-	return securityTests.PlatformCli.RunCliCmdWithOutput(t, "audit", "--format="+format)
 }
