@@ -27,10 +27,13 @@ const (
 	// Properties for secret validation
 	secretValidationPropertyTemplate         = "jfrog:secret-validation:status:" + results.LocationIdTemplate
 	secretValidationMetadataPropertyTemplate = "jfrog:secret-validation:metadata:" + results.LocationIdTemplate
+	// Git context property
+	jasIssueGitContextProperty = "jfrog:git:context"
 )
 
 type CmdResultsCycloneDxConverter struct {
 	entitledForJas bool
+	gitContext     *xscServices.XscGitInfoContext
 	xrayVersion    string
 
 	targetsComponent map[string]cyclonedx.Component
@@ -47,11 +50,23 @@ func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cyclonedx.BOM, err error) {
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
+	// Append git context to the BOM metadata if exists
+	if cdc.gitContext != nil {
+		if gitContextStr, err := utils.GetAsJsonString(cdc.gitContext, true, true); err != nil {
+			log.Warn("Failed to serialize git context to JSON: %v", err)
+		} else {
+			bom.Metadata.Component.Properties = cdxutils.AppendProperties(bom.Metadata.Component.Properties, cyclonedx.Property{
+				Name:  jasIssueGitContextProperty,
+				Value: gitContextStr,
+			})
+		}
+	}
 	return
 }
 
 func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
 	cdc.entitledForJas = entitledForJas
+	cdc.gitContext = gitContext
 	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
 	cdc.bom = cyclonedx.NewBOM()
