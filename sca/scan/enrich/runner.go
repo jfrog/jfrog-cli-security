@@ -7,7 +7,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
-	// "github.com/jfrog/jfrog-client-go/utils/log"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
@@ -40,15 +40,15 @@ func (ess *EnrichScanStrategy) WithOptions(options ...scan.SbomScanOption) scan.
 }
 
 func (ess *EnrichScanStrategy) PrepareStrategy() (err error) {
-	// catalogManager, err := catalog.CreateCatalogServiceManager(ess.serverDetails, catalog.WithScopedProjectKey(ess.projectKey))
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create catalog service manager: %w", err)
-	// }
-	// catalogVersion, err := catalogManager.GetVersion()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get catalog version: %w", err)
-	// }
-	// log.Debug(fmt.Sprintf("Catalog version: %s", catalogVersion))
+	catalogManager, err := catalog.CreateCatalogServiceManager(ess.serverDetails, catalog.WithScopedProjectKey(ess.projectKey))
+	if err != nil {
+		return fmt.Errorf("failed to create catalog service manager: %w", err)
+	}
+	catalogVersion, err := catalogManager.GetVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get catalog version: %w", err)
+	}
+	log.Debug(fmt.Sprintf("Catalog version: %s", catalogVersion))
 	return
 }
 

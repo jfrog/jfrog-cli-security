@@ -91,8 +91,6 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	)
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
-	// Source control params
-	auditParams.SetGitContext(&params.gitContext)
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params

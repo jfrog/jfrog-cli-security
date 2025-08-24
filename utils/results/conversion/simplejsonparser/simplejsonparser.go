@@ -13,7 +13,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -45,7 +44,7 @@ func (sjc *CmdResultsSimpleJsonConverter) Get() (formats.SimpleJsonResults, erro
 	return *sjc.current, nil
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) Reset(_ utils.CommandType, multiScanId, _ string, entitledForJas, multipleTargets bool, generalError error) (err error) {
 	sjc.current = &formats.SimpleJsonResults{MultiScanId: multiScanId}
 	sjc.entitledForJas = entitledForJas
 	sjc.multipleRoots = multipleTargets

@@ -10,7 +10,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -38,7 +37,7 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	return *sc.current, nil
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, _ error) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ error) (err error) {
 	sc.current = &formats.ResultsSummary{}
 	sc.entitledForJas = entitledForJas
 	return

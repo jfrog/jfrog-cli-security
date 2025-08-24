@@ -15,7 +15,6 @@ import (
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
-	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type CmdResultsTableConverter struct {
@@ -52,8 +51,8 @@ func (tc *CmdResultsTableConverter) Get() (formats.ResultsTables, error) {
 	}, nil
 }
 
-func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) (err error) {
-	return tc.simpleJsonConvertor.Reset(cmdType, multiScanId, xrayVersion, entitledForJas, multipleTargets, gitContext, generalError)
+func (tc *CmdResultsTableConverter) Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) (err error) {
+	return tc.simpleJsonConvertor.Reset(cmdType, multiScanId, xrayVersion, entitledForJas, multipleTargets, generalError)
 }
 
 func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTarget, errors ...error) (err error) {
