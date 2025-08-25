@@ -214,7 +214,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		}
 	}
 
-	return ProcessResultsAndOutput(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
+	return OutputResultsAndCmdError(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
 }
 
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
@@ -235,7 +235,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 		SetSubScansPerformed(auditCmd.ScansToPerform())
 }
 
-func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
+func OutputResultsAndCmdError(auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
 	if err = outputWriter.PrintScanResults(); err != nil {
 		// Error printing the results, return the error and the scan results errors.
 		return errors.Join(err, auditResults.GetErrors())
@@ -249,7 +249,6 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 	if err != nil {
 		return fmt.Errorf("failed to check if the build should fail: %w", err)
 	}
-
 	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
 		err = results.NewFailBuildError()
 	}
@@ -265,67 +264,33 @@ func (auditCmd *AuditCommand) CommandName() string {
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
 	// Prepare the command for the scan.
-	if auditParams.Progress() != nil {
-		auditParams.Progress().SetHeadlineMsg("Preparing to scan")
-	}
 	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
 		return
 	}
 	// Run Scanners
-	if auditParams.Progress() != nil {
-		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
-	}
-	runParallelAuditScans(cmdResults, auditParams)
-	// Check if static flow is enabled
-	if auditParams.rtResultRepository == "" || !getIsNewFlow(auditParams) {
-		// Not new flow, return the results after the scan
-		log.Debug(fmt.Sprintf("Skipping upload of scan results to Artifactory, rtResultRepository is not set (%s) or not new flow", auditParams.rtResultRepository))
+	if runParallelAuditScans(cmdResults, auditParams); cmdResults.GeneralError != nil {
 		return
 	}
-	if auditParams.remediationService {
-		// Handle remediation service
-		if auditParams.Progress() != nil {
-			auditParams.Progress().SetHeadlineMsg("Fetching remediation information")
-		}
-		if err := enrichWithRemediations(cmdResults, auditParams); err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch remediation information: %s", err.Error()), auditParams.AllowPartialResults())
-			return
-		}
-	}
-	// Upload results to Artifactory, continue to remediation and violations fetching only if the upload was successful.
-	if auditParams.Progress() != nil {
-		auditParams.Progress().SetHeadlineMsg("Uploading scan results to platform")
-	}
-	if _, err := uploadCdxResults(auditParams, cmdResults); err != nil {
-		log.Debug(fmt.Sprintf("Skipping upload of scan results to Artifactory, failed to upload: %s", err.Error()))
-		return
-	}
-	// Violations fetching
-	if cmdResults.HasViolationContext() {
-		if auditParams.Progress() != nil {
-			auditParams.Progress().SetHeadlineMsg("Fetching violations")
-		}
-		if err := fetchJasViolations(cmdResults, auditParams); err != nil {
-			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), auditParams.AllowPartialResults())
-			return
-		}
-	}
-	return
+	// Process the scan results and run additional steps if needed.
+	return processScanResults(auditParams, cmdResults)
 }
 
 func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("failed to get server details: %s", err.Error()), false)
+		err = fmt.Errorf("failed to get server details: %s", err.Error())
 		return
 	}
 	if err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
-		cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
 	}
 	return
 }
 
 func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	if params.Progress() != nil {
+		params.Progress().SetHeadlineMsg("Preparing to scan")
+	}
 	// Initialize Results struct
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
@@ -518,6 +483,9 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	var jasScanner *jas.JasScanner
 	var generalJasScanErr error
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	if auditParams.Progress() != nil {
+		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
+	}
 	// Add the scans to the parallel runner
 	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
@@ -543,6 +511,11 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
+	// TODO: remove "isNewFlow" once the new flow is fully implemented.
+	isNewFlow := true
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
+		isNewFlow = false
+	}
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
@@ -553,21 +526,12 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			ResultsOutputDir:    auditParams.scanResultsOutputDir,
 			Runner:              auditParallelRunner,
 			// TODO: remove this field once the new flow is fully implemented.
-			IsNewFlow: getIsNewFlow(auditParams),
+			IsNewFlow: isNewFlow,
 		}); err != nil {
 			generalError = errors.Join(generalError, fmt.Errorf("failed to run SCA scan for target %s: %s", targetResult.Target, err.Error()))
 		}
 	}
 	return
-}
-
-// TODO: remove "isNewFlow" once the new flow is fully implemented.
-func getIsNewFlow(auditParams *AuditParams) bool {
-	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
-		isNewFlow = false
-	}
-	return isNewFlow
 }
 
 func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {
@@ -675,4 +639,38 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func processScanResults(params *AuditParams, cmdResults *results.SecurityCommandResults) *results.SecurityCommandResults {
+	// In new flow we get remediation from Xray service
+	if params.remediationService {
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Fetching remediation information")
+		}
+		if err := enrichWithRemediations(cmdResults, params); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich scan results with remediation: %s", err.Error()), params.AllowPartialResults())
+		}
+	}
+	// Upload results to Artifactory (should be the last step not including violations fetching so the uploaded results will include everything else).
+	if params.uploadCdxResults {
+		if params.rtResultRepository == "" {
+			return cmdResults.AddGeneralError(errors.New("Results repository was not provided, can't upload scan results to Artifactory"), false)
+		}
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
+		}
+		if _, err := uploadCdxResults(params, cmdResults); err != nil {
+			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		}
+	}
+	// Violations fetching
+	if cmdResults.HasViolationContext() {
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Fetching violations")
+		}
+		if err := fetchJasViolations(cmdResults, params); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), params.AllowPartialResults())
+		}
+	}
+	return cmdResults
 }
