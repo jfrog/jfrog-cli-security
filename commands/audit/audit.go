@@ -282,20 +282,46 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		log.Debug(fmt.Sprintf("Skipping upload of scan results to Artifactory, rtResultRepository is not set (%s) or not new flow", auditParams.rtResultRepository))
 		return
 	}
+	if auditParams.remediationService {
+		// Handle remediation service
+		if auditParams.Progress() != nil {
+			auditParams.Progress().SetHeadlineMsg("Fetching remediation information")
+		}
+		if err := enrichWithRemediations(cmdResults, auditParams); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch remediation information: %s", err.Error()), auditParams.AllowPartialResults())
+			return
+		}
+	}
 	// Upload results to Artifactory, continue to remediation and violations fetching only if the upload was successful.
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Uploading scan results to platform")
 	}
+	if _, err := uploadCdxResults(auditParams, cmdResults); err != nil {
+		log.Debug(fmt.Sprintf("Skipping upload of scan results to Artifactory, failed to upload: %s", err.Error()))
+		return
+	}
+	// Violations fetching
+	if cmdResults.HasViolationContext() {
+		if auditParams.Progress() != nil {
+			auditParams.Progress().SetHeadlineMsg("Fetching violations")
+		}
+		if err := fetchJasViolations(cmdResults, auditParams); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), auditParams.AllowPartialResults())
+			return
+		}
+	}
+	return
+}
+
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
 	serverDetails, err := auditParams.ServerDetails()
 	if err != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("failed to get server details: %s", err.Error()), false)
 		return
 	}
-	if err := output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
+	if err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
-		return
 	}
-	log.Debug("Scan results were successfully uploaded to Artifactory.")
 	return
 }
 
