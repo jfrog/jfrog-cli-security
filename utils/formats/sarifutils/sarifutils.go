@@ -337,28 +337,28 @@ func copyMsgAttribute(attr *sarif.Message) *sarif.Message {
 	if attr == nil {
 		return nil
 	}
-	copy := sarif.NewMessage()
+	copiedMsg := sarif.NewMessage()
 	if attr.Text != nil {
-		copy.WithText(*attr.Text)
+		copiedMsg.WithText(*attr.Text)
 	}
 	if attr.Markdown != nil {
-		copy.WithMarkdown(*attr.Markdown)
+		copiedMsg.WithMarkdown(*attr.Markdown)
 	}
-	return copy
+	return copiedMsg
 }
 
 func copyMultiMsgAttribute(attr *sarif.MultiformatMessageString) *sarif.MultiformatMessageString {
 	if attr == nil {
 		return nil
 	}
-	copy := sarif.NewMultiformatMessageString()
+	copiedMultiMsgAttr := sarif.NewMultiformatMessageString()
 	if attr.Text != nil {
-		copy.WithText(*attr.Text)
+		copiedMultiMsgAttr.WithText(*attr.Text)
 	}
 	if attr.Markdown != nil {
-		copy.WithMarkdown(*attr.Markdown)
+		copiedMultiMsgAttr.WithMarkdown(*attr.Markdown)
 	}
-	return copy
+	return copiedMultiMsgAttr
 }
 
 func copyStrAttribute(attr *string) *string {
