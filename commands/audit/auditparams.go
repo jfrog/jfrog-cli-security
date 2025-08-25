@@ -34,7 +34,10 @@ type AuditParams struct {
 	bomGenerator                    bom.SbomGenerator
 	customBomGenBinaryPath          string
 	scaScanStrategy                 scan.SbomScanStrategy
+	uploadCdxResults                bool
 	rtResultRepository              string
+	remediationService              bool
+	policyEnforcer                  bool
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string

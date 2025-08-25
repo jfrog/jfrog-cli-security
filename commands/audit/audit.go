@@ -276,6 +276,7 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	runParallelAuditScans(cmdResults, auditParams)
+	// Check if static flow is enabled
 	if auditParams.rtResultRepository == "" || !getIsNewFlow(auditParams) {
 		// Not new flow, return the results after the scan
 		log.Debug(fmt.Sprintf("Skipping upload of scan results to Artifactory, rtResultRepository is not set (%s) or not new flow", auditParams.rtResultRepository))
