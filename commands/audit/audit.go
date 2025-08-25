@@ -276,7 +276,8 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	runParallelAuditScans(cmdResults, auditParams)
-	if auditParams.rtResultRepository == "" {
+	if !getIsNewFlow(auditParams) {
+		// Not new flow, return the results after the scan
 		return
 	}
 	// Upload results to Artifactory, continue to remediation and violations fetching only if the upload was successful.
