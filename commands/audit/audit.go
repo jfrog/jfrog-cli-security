@@ -264,17 +264,35 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	// Prepare the command for the scan.
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Preparing to scan")
 	}
-	// Prepare the command for the scan.
 	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
 		return
 	}
+	// Run Scanners
 	if auditParams.Progress() != nil {
 		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
 	}
 	runParallelAuditScans(cmdResults, auditParams)
+	if auditParams.rtResultRepository == "" {
+		return
+	}
+	// Upload results to Artifactory, continue to remediation and violations fetching only if the upload was successful.
+	if auditParams.Progress() != nil {
+		auditParams.Progress().SetHeadlineMsg("Uploading scan results to platform")
+	}
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		cmdResults.AddGeneralError(fmt.Errorf("failed to get server details: %s", err.Error()), false)
+		return
+	}
+	if err := output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
+		cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		return
+	}
+	log.Debug("Scan results were successfully uploaded to Artifactory.")
 	return
 }
 
@@ -496,11 +514,6 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 		log.Debug("Diff scan - calculated components for target, skipping scan part")
 		return
 	}
-	// TODO: remove "isNewFlow" once the new flow is fully implemented.
-	isNewFlow := true
-	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
-		isNewFlow = false
-	}
 	// Perform SCA scans
 	for _, targetResult := range scanResults.Targets {
 		if err := scan.RunScaScan(auditParams.scaScanStrategy, scan.ScaScanParams{
@@ -511,12 +524,21 @@ func addScaScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, audi
 			ResultsOutputDir:    auditParams.scanResultsOutputDir,
 			Runner:              auditParallelRunner,
 			// TODO: remove this field once the new flow is fully implemented.
-			IsNewFlow: isNewFlow,
+			IsNewFlow: getIsNewFlow(auditParams),
 		}); err != nil {
 			generalError = errors.Join(generalError, fmt.Errorf("failed to run SCA scan for target %s: %s", targetResult.Target, err.Error()))
 		}
 	}
 	return
+}
+
+// TODO: remove "isNewFlow" once the new flow is fully implemented.
+func getIsNewFlow(auditParams *AuditParams) bool {
+	isNewFlow := true
+	if _, ok := auditParams.scaScanStrategy.(*scanGraphStrategy.ScanGraphStrategy); ok {
+		isNewFlow = false
+	}
+	return isNewFlow
 }
 
 func addJasScansToRunner(auditParallelRunner *utils.SecurityParallelRunner, auditParams *AuditParams, scanResults *results.SecurityCommandResults) (jasScanner *jas.JasScanner, generalError error) {

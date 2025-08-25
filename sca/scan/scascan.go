@@ -206,5 +206,6 @@ func dumpEnrichedCdxToFileIfNeeded(content *cyclonedx.BOM, scanResultsOutputDir 
 	if scanResultsOutputDir == "" {
 		return
 	}
-	return utils.DumpCdxContentToFile(content, scanResultsOutputDir, scanType.String(), threadId)
+	_, err = utils.DumpCdxContentToFile(content, scanResultsOutputDir, scanType.String(), threadId)
+	return
 }
