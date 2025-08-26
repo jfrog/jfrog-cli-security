@@ -7,7 +7,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 )
 
-func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults) (err error) {
+func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepository string, cmdResults *results.SecurityCommandResults) (artifactPath string, err error) {
 	cdxResults, err := conversion.NewCommandResultsConvertor(conversion.ResultConvertParams{
 		IncludeSbom:            true,
 		IncludeVulnerabilities: true,
@@ -21,7 +21,7 @@ func UploadCommandResults(serverDetails *config.ServerDetails, rtResultRepositor
 		SetServerDetails(serverDetails).
 		SetUploadRepository(rtResultRepository).
 		SetProjectKey(cmdResults.ResultContext.ProjectKey)
-	if err = uploadCmd.Run(); err != nil {
+	if artifactPath, err = uploadCmd.Upload(); err != nil {
 		return
 	}
 	return
