@@ -24,10 +24,10 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
 
 	flags "github.com/jfrog/jfrog-cli-security/cli/docs"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/policy"
-	"github.com/jfrog/jfrog-cli-security/utils/policy/enforcer"
-	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 	"github.com/jfrog/jfrog-cli-security/utils/xsc"
 )
 
@@ -116,7 +116,7 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 func getScanDynamicLogic(c *components.Context) (bomGenerator bom.SbomGenerator, scanStrategy scan.SbomScanStrategy, violationGenerator policy.ViolationGenerator, uploadResults, remediationService bool) {
 	bomGenerator = buildinfo.NewBuildInfoBomGenerator()
 	scanStrategy = scangraph.NewScanGraphStrategy()
-	violationGenerator = individual.NewDeprecatedViolationGenerator()
+	violationGenerator = local.NewDeprecatedViolationGenerator()
 	// New flow - static SCA scan
 	if c.GetBoolFlagValue(flags.StaticSca) {
 		bomGenerator = xrayplugin.NewXrayLibBomGenerator()

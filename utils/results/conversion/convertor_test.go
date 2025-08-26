@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -260,7 +261,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: policy.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-39249",
 				}},
@@ -281,7 +282,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
 			},
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: policy.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2018-3721",
 				}},
@@ -301,7 +302,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				IssueId:   "XRAY-72918",
 			},
 			{
-				ViolationType: utils.ViolationTypeLicense.String(),
+				ViolationType: policy.ViolationTypeLicense.String(),
 				LicenseKey:    "MIT",
 				LicenseName:   "MIT full name",
 				Severity:      severityutils.High.String(),
@@ -507,7 +508,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: utils.ViolationTypeSecurity.String(),
+				ViolationType: policy.ViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-6119",
 				}},

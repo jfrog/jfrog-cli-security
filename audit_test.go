@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
-	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
@@ -702,7 +702,7 @@ func getNoJasAuditMockCommand() components.Command {
 			auditCmd.SetUseJas(false)
 			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
 			auditCmd.SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
-			auditCmd.SetViolationGenerator(individual.NewDeprecatedViolationGenerator())
+			auditCmd.SetViolationGenerator(local.NewDeprecatedViolationGenerator())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}

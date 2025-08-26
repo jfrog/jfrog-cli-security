@@ -58,15 +58,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
-	ScaScan                      SubScanType        = "sca"
-	IacScan                      SubScanType        = "iac"
-	SastScan                     SubScanType        = "sast"
-	SecretsScan                  SubScanType        = "secrets"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -82,12 +79,6 @@ func (subScan SubScanType) ToTextString() string {
 		return text
 	}
 	return string(subScan)
-}
-
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
 }
 
 type SubScanType string

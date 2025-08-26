@@ -5,10 +5,10 @@ import (
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -36,12 +36,12 @@ type GitAuditParams struct {
 	multiScanId         string
 	startTime           time.Time
 	// Dynamic logic params
-	bomGenerator        bom.SbomGenerator
-	scaScanStrategy     scan.SbomScanStrategy
-	violationGenerator   policy.ViolationGenerator
-	uploadResults       bool
-	rtResultRepository  string
-	remediationService  bool
+	bomGenerator       bom.SbomGenerator
+	scaScanStrategy    scan.SbomScanStrategy
+	violationGenerator policy.ViolationGenerator
+	uploadResults      bool
+	rtResultRepository string
+	remediationService bool
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -137,7 +137,6 @@ func (gap *GitAuditParams) SetOutputDir(outputDir string) *GitAuditParams {
 	gap.outputDir = outputDir
 	return gap
 }
-
 
 func (gap *GitAuditParams) SetViolationGenerator(violationGenerator policy.ViolationGenerator) *GitAuditParams {
 	gap.violationGenerator = violationGenerator

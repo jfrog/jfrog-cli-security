@@ -13,13 +13,14 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -246,12 +247,12 @@ func OutputResultsAndCmdError(auditResults *results.SecurityCommandResults, outp
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(auditResults)
+	shouldFailBuildByPolicy, err := policy.CheckIfFailBuild(auditResults)
 	if err != nil {
 		return fmt.Errorf("failed to check if the build should fail: %w", err)
 	}
 	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
-		err = results.NewFailBuildError()
+		err = policy.NewFailBuildError()
 	}
 	return
 }
@@ -697,13 +698,8 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 	if err != nil {
 		return fmt.Errorf("failed to get server details: %s", err.Error())
 	}
-	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
-	if err != nil {
-		return fmt.Errorf("failed to create Xray services manager: %s", err.Error())
-	}
 	generator := auditParams.ViolationGenerator().WithOptions(
-		xsc.WithXrayManager(xrayManager),
-		xsc.WithUploadPath(uploadPath),
+		enforcer.WithParams(serverDetails, auditParams.rtResultRepository, uploadPath),
 	)
 	// Fetch violations from Xray
 	if err = policy.FetchGeneratedViolations(generator, cmdResults); err != nil {

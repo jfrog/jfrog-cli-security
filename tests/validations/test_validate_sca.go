@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-client-go/xray/services"
 	"github.com/stretchr/testify/assert"
 )
@@ -46,11 +46,11 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 		licenses += len(result.Licenses)
 		for _, violation := range result.Violations {
 			switch violation.ViolationType {
-			case utils.ViolationTypeSecurity.String():
+			case policy.ViolationTypeSecurity.String():
 				securityViolations += 1
-			case utils.ViolationTypeLicense.String():
+			case policy.ViolationTypeLicense.String():
 				licenseViolations += 1
-			case utils.ViolationTypeOperationalRisk.String():
+			case policy.ViolationTypeOperationalRisk.String():
 				operationalViolations += 1
 			}
 		}

@@ -32,7 +32,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
-	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
@@ -283,7 +282,6 @@ func ScanCmd(c *components.Context) error {
 	scanCmd := scan.NewScanCommand().
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(individual.NewDeprecatedViolationGenerator()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -704,7 +702,6 @@ func DockerScan(c *components.Context, image string) error {
 	containerScanCommand.SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
-		SetViolationGenerator(individual.NewDeprecatedViolationGenerator()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
