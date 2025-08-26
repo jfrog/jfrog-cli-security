@@ -32,6 +32,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
 	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
+	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/urfave/cli"
@@ -282,6 +283,7 @@ func ScanCmd(c *components.Context) error {
 	scanCmd := scan.NewScanCommand().
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetViolationGenerator(individual.NewDeprecatedViolationGenerator()).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).
 		SetServerDetails(serverDetails).
@@ -448,9 +450,12 @@ func CreateAuditCmd(c *components.Context) (string, string, *coreConfig.ServerDe
 		return "", "", nil, nil, err
 	}
 	// Set dynamic command logic based on flags
-	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, remediationService := getScanDynamicLogic(c)
 	auditCmd.SetBomGenerator(sbomGenerator).SetCustomBomGenBinaryPath(c.GetStringFlagValue(flags.XrayLibPluginBinaryCustomPath))
 	auditCmd.SetScaScanStrategy(scaScanStrategy)
+	auditCmd.SetViolationGenerator(violationGenerator)
+	auditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRepoPath))
+	auditCmd.SetRemediationService(remediationService)
 	// Make sure include SBOM is only set if the output format supports it
 	includeSbom := c.GetBoolFlagValue(flags.Sbom)
 	if includeSbom && format != outputFormat.Table && format != outputFormat.CycloneDx {
@@ -699,6 +704,7 @@ func DockerScan(c *components.Context, image string) error {
 	containerScanCommand.SetImageTag(image).
 		SetBomGenerator(indexer.NewIndexerBomGenerator()).
 		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetViolationGenerator(individual.NewDeprecatedViolationGenerator()).
 		SetServerDetails(serverDetails).
 		SetXrayVersion(xrayVersion).
 		SetXscVersion(xscVersion).

@@ -8,6 +8,10 @@ import (
 type PolicyEnforcerViolationGenerator struct {
 }
 
+func NewPolicyEnforcerViolationGenerator() *PolicyEnforcerViolationGenerator {
+	return &PolicyEnforcerViolationGenerator{}
+}
+
 func (p PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *results.SecurityCommandResults) (convertedViolations []services.XrayViolation, err error) {
 	convertedViolations = []services.XrayViolation{}
 	// Get with API

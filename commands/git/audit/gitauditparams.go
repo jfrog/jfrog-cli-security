@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 )
@@ -34,8 +35,13 @@ type GitAuditParams struct {
 	repositoryLocalPath string
 	multiScanId         string
 	startTime           time.Time
+	// Dynamic logic params
 	bomGenerator        bom.SbomGenerator
 	scaScanStrategy     scan.SbomScanStrategy
+	violationGenerator   policy.ViolationGenerator
+	uploadResults       bool
+	rtResultRepository  string
+	remediationService  bool
 }
 
 func NewGitAuditParams() *GitAuditParams {
@@ -130,4 +136,41 @@ func (gap *GitAuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrat
 func (gap *GitAuditParams) SetOutputDir(outputDir string) *GitAuditParams {
 	gap.outputDir = outputDir
 	return gap
+}
+
+
+func (gap *GitAuditParams) SetViolationGenerator(violationGenerator policy.ViolationGenerator) *GitAuditParams {
+	gap.violationGenerator = violationGenerator
+	return gap
+}
+
+func (gap *GitAuditParams) ViolationGenerator() policy.ViolationGenerator {
+	return gap.violationGenerator
+}
+
+func (gap *GitAuditParams) SetUploadCdxResults(uploadCdxResults bool) *GitAuditParams {
+	gap.uploadResults = uploadCdxResults
+	return gap
+}
+
+func (gap *GitAuditParams) UploadCdxResults() bool {
+	return gap.uploadResults
+}
+
+func (gap *GitAuditParams) SetRtResultRepository(rtResultRepository string) *GitAuditParams {
+	gap.rtResultRepository = rtResultRepository
+	return gap
+}
+
+func (gap *GitAuditParams) RtResultRepository() string {
+	return gap.rtResultRepository
+}
+
+func (gap *GitAuditParams) SetRemediationService(remediationService bool) *GitAuditParams {
+	gap.remediationService = remediationService
+	return gap
+}
+
+func (gap *GitAuditParams) RemediationService() bool {
+	return gap.remediationService
 }

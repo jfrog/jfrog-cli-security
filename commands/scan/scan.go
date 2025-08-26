@@ -20,6 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
+	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -248,13 +249,13 @@ func (scanCmd *ScanCommand) RunAndRecordResults(cmdType utils.CommandType, recor
 	}
 	// We consider failing the build only when --fail=true. If a user had provided --fail=false, we don't fail the build even when fail-build rules are applied.
 	// If violation context was provided, we need to check all existing violations for fail-build rules.
-	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(cmdResults)
+	shouldFailBuildByPolicy, err := policy.CheckIfFailBuild(cmdResults)
 	if err != nil {
 		return fmt.Errorf("failed to check if build should fail: %w", err)
 	}
 
 	if scanCmd.fail && scanCmd.resultsContext.HasViolationContext() && shouldFailBuildByPolicy {
-		return results.NewFailBuildError()
+		return policy.NewFailBuildError()
 	}
 	log.Info("Scan completed successfully.")
 	return nil

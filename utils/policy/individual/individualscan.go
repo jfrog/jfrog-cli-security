@@ -10,6 +10,10 @@ import (
 type DeprecatedViolationGenerator struct {
 }
 
+func NewDeprecatedViolationGenerator() *DeprecatedViolationGenerator {
+	return &DeprecatedViolationGenerator{}
+}
+
 func (d DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.SecurityCommandResults) (convertedViolations []services.XrayViolation, err error) {
 	convertedViolations = []services.XrayViolation{}
 	// Convert from cmdResults to services.XrayViolation

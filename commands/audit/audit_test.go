@@ -22,6 +22,7 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -621,6 +622,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			auditParams := NewAuditParams().
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
 				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(individual.NewDeprecatedViolationGenerator()).
 				SetWorkingDirs([]string{tempDirPath}).
 				SetMultiScanId(validations.TestMsi).
 				SetGraphBasicParams(auditBasicParams).
@@ -679,7 +681,8 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 		SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 		SetScansResultsOutputDir(outputDirPath).
 		SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-		SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+		SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+		SetViolationGenerator(individual.NewDeprecatedViolationGenerator())
 	auditParams.SetIsRecursiveScan(true)
 
 	auditResults := RunAudit(auditParams)
@@ -817,7 +820,8 @@ func TestAuditWithPartialResults(t *testing.T) {
 				SetGraphBasicParams(auditBasicParams).
 				SetResultsContext(results.ResultContext{IncludeVulnerabilities: true}).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(individual.NewDeprecatedViolationGenerator())
 			auditParams.SetIsRecursiveScan(true)
 
 			auditResults := RunAudit(auditParams)
@@ -1029,7 +1033,8 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 				SetDiffMode(true).
 				SetResultsToCompare(tc.resultsToCompare).
 				SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).
-				SetScaScanStrategy(scangraph.NewScanGraphStrategy())
+				SetScaScanStrategy(scangraph.NewScanGraphStrategy()).
+				SetViolationGenerator(individual.NewDeprecatedViolationGenerator())
 
 			auditResults := RunAudit(auditParams)
 			assert.NoError(t, auditResults.GetErrors())

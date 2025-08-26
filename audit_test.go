@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
+	"github.com/jfrog/jfrog-cli-security/utils/policy/individual"
 
 	"github.com/jfrog/jfrog-cli-core/v2/plugins/components"
 
@@ -699,7 +700,9 @@ func getNoJasAuditMockCommand() components.Command {
 			}
 			// Disable Jas for this test
 			auditCmd.SetUseJas(false)
-			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator()).SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
+			auditCmd.SetBomGenerator(buildinfo.NewBuildInfoBomGenerator())
+			auditCmd.SetScaScanStrategy(scangraphstrategy.NewScanGraphStrategy())
+			auditCmd.SetViolationGenerator(individual.NewDeprecatedViolationGenerator())
 			return progressbar.ExecWithProgress(auditCmd)
 		},
 	}

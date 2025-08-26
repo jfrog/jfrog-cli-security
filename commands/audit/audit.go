@@ -19,6 +19,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -273,18 +274,6 @@ func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResu
 	}
 	// Process the scan results and run additional steps if needed.
 	return processScanResults(auditParams, cmdResults)
-}
-
-func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
-	serverDetails, err := auditParams.ServerDetails()
-	if err != nil {
-		err = fmt.Errorf("failed to get server details: %s", err.Error())
-		return
-	}
-	if err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
-		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
-	}
-	return
 }
 
 func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
@@ -647,11 +636,13 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Fetching remediation information")
 		}
-		if err := enrichWithRemediations(cmdResults, params); err != nil {
+		if err := enrichWithRemediation(cmdResults, params); err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich scan results with remediation: %s", err.Error()), params.AllowPartialResults())
 		}
 	}
 	// Upload results to Artifactory (should be the last step not including violations fetching so the uploaded results will include everything else).
+	var err error
+	uploadPath := ""
 	if params.uploadCdxResults {
 		if params.rtResultRepository == "" {
 			return cmdResults.AddGeneralError(errors.New("Results repository was not provided, can't upload scan results to Artifactory"), false)
@@ -659,7 +650,8 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
 		}
-		if _, err := uploadCdxResults(params, cmdResults); err != nil {
+		uploadPath, err = uploadCdxResults(params, cmdResults)
+		if err != nil {
 			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
 		}
 	}
@@ -668,9 +660,54 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Fetching violations")
 		}
-		if err := fetchJasViolations(cmdResults, params); err != nil {
+		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
 			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), params.AllowPartialResults())
 		}
 	}
 	return cmdResults
+}
+
+func enrichWithRemediation(cmdResults *results.SecurityCommandResults, params *AuditParams) (err error) {
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	_, err = xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
+	if err != nil {
+		return fmt.Errorf("failed to create Xray services manager: %s", err.Error())
+	}
+	log.Warn("Enriching scan results with remediation information is not yet implemented")
+	return
+}
+
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		err = fmt.Errorf("failed to get server details: %s", err.Error())
+		return
+	}
+	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
+		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
+	}
+	return
+}
+
+func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams) (err error) {
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		return fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	xrayManager, err := xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(auditParams.resultsContext.ProjectKey))
+	if err != nil {
+		return fmt.Errorf("failed to create Xray services manager: %s", err.Error())
+	}
+	generator := auditParams.ViolationGenerator().WithOptions(
+		xsc.WithXrayManager(xrayManager),
+		xsc.WithUploadPath(uploadPath),
+	)
+	// Fetch violations from Xray
+	if err = policy.FetchGeneratedViolations(generator, cmdResults); err != nil {
+		return fmt.Errorf("failed to fetch violations: %s", err.Error())
+	}
+	return
 }

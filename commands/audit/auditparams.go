@@ -8,6 +8,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -37,7 +38,7 @@ type AuditParams struct {
 	uploadCdxResults                bool
 	rtResultRepository              string
 	remediationService              bool
-	policyEnforcer                  bool
+	violationGenerator              policy.ViolationGenerator
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -276,3 +277,40 @@ func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Tec
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
 }
+
+func (params *AuditParams) SetViolationGenerator(violationGenerator policy.ViolationGenerator) *AuditParams {
+	params.violationGenerator = violationGenerator
+	return params
+}
+
+func (params *AuditParams) ViolationGenerator() policy.ViolationGenerator {
+	return params.violationGenerator
+}
+
+func (params *AuditParams) SetUploadCdxResults(uploadCdxResults bool) *AuditParams {
+	params.uploadCdxResults = uploadCdxResults
+	return params
+}
+
+func (params *AuditParams) UploadCdxResults() bool {
+	return params.uploadCdxResults
+}
+
+func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *AuditParams {
+	params.rtResultRepository = rtResultRepository
+	return params
+}
+
+func (params *AuditParams) RtResultRepository() string {
+	return params.rtResultRepository
+}
+
+func (params *AuditParams) SetRemediationService(remediationService bool) *AuditParams {
+	params.remediationService = remediationService
+	return params
+}
+
+func (params *AuditParams) RemediationService() bool {
+	return params.remediationService
+}
+
