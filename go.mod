@@ -19,9 +19,9 @@ require (
 	github.com/jfrog/jfrog-cli-core/v2 v2.59.5
 	github.com/jfrog/jfrog-client-go v1.54.5
 	github.com/magiconair/properties v1.8.9
-	github.com/owenrumney/go-sarif/v3 v3.2.1
+	github.com/owenrumney/go-sarif/v3 v3.2.2
 	github.com/package-url/packageurl-go v0.1.3
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	github.com/urfave/cli v1.22.16
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
