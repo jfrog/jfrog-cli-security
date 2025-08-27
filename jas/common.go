@@ -228,18 +228,12 @@ func readJasScanRunsFromFile(fileName, wd, informationUrlSuffix string, minSever
 // This function processes the Sarif runs results: update invocations, fill missing information, exclude results and adding scores to rules
 func processSarifRuns(sarifRuns []*sarif.Run, wd string, informationUrlSuffix string, minSeverity severityutils.Severity) {
 	for _, sarifRun := range sarifRuns {
-		// Jas reports has only one invocation
-		// Set the actual working directory to the invocation, not the analyzerManager directory
-		// Also used to calculate relative paths if needed with it
-		if len(sarifRun.Invocations) == 0 {
-			sarifRun.Invocations = append(sarifRun.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
-		}
-		sarifRun.Invocations[0].WorkingDirectory.WithURI(utils.ToURI(wd))
-		// Process runs values
+		fillMissingRequiredInvocationInformation(wd, sarifRun)
 		fillMissingRequiredDriverInformation(utils.BaseDocumentationURL+informationUrlSuffix, GetAnalyzerManagerVersion(), sarifRun)
+		addScoreToRunRules(sarifRun)
+		// Process results
 		sarifRun.Results = excludeSuppressResults(sarifRun.Results)
 		sarifRun.Results = excludeMinSeverityResults(sarifRun.Results, minSeverity)
-		addScoreToRunRules(sarifRun)
 	}
 }
 
@@ -259,6 +253,31 @@ func isValidVersion(version string) bool {
 	}
 	firstChar := rune(version[0])
 	return unicode.IsDigit(firstChar)
+}
+
+func fillMissingRequiredInvocationInformation(wd string, run *sarif.Run) {
+	// If no invocations are present, add an empty invocation with an empty working directory
+	if len(run.Invocations) == 0 {
+		run.Invocations = append(run.Invocations, sarif.NewInvocation().WithWorkingDirectory(sarif.NewArtifactLocation()))
+	}
+	for _, invocation := range run.Invocations {
+		// Set the actual working directory to the invocation, not the analyzerManager directory
+		// Also used to calculate relative paths if needed with it
+		invocation.WorkingDirectory.WithURI(utils.ToURI(wd))
+		// Make sure the invocation not omitted attributes are set (the lib reports them as required but spec says they are optional)
+		if len(invocation.NotificationConfigurationOverrides) == 0 {
+			invocation.NotificationConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
+		}
+		if len(invocation.RuleConfigurationOverrides) == 0 {
+			invocation.RuleConfigurationOverrides = make([]*sarif.ConfigurationOverride, 0)
+		}
+		if len(invocation.ToolConfigurationNotifications) == 0 {
+			invocation.ToolConfigurationNotifications = make([]*sarif.Notification, 0)
+		}
+		if len(invocation.ToolExecutionNotifications) == 0 {
+			invocation.ToolExecutionNotifications = make([]*sarif.Notification, 0)
+		}
+	}
 }
 
 func excludeSuppressResults(sarifResults []*sarif.Result) []*sarif.Result {
