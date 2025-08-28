@@ -13,11 +13,12 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/usage"
 
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/enrich"
 	"github.com/jfrog/jfrog-cli-security/sca/scan/scangraph"
@@ -111,9 +112,24 @@ func splitByCommaAndTrim(paramValue string) (res []string) {
 func getScanDynamicLogic(c *components.Context) (bom.SbomGenerator, scan.SbomScanStrategy) {
 	var bomGenerator bom.SbomGenerator = buildinfo.NewBuildInfoBomGenerator()
 	var scanStrategy scan.SbomScanStrategy = scangraph.NewScanGraphStrategy()
-	if c.GetBoolFlagValue("new-sca") {
-		bomGenerator = scang.NewScangBomGenerator()
+	if c.GetBoolFlagValue(flags.StaticSca) {
+		bomGenerator = xrayplugin.NewXrayLibBomGenerator()
 		scanStrategy = enrich.NewEnrichScanStrategy()
 	}
 	return bomGenerator, scanStrategy
+}
+
+func getAndValidateOutputDirExistsIfProvided(c *components.Context) (string, error) {
+	scansOutputDir := c.GetStringFlagValue(flags.OutputDir)
+	if scansOutputDir == "" {
+		return "", nil
+	}
+	exists, err := fileutils.IsDirExists(scansOutputDir, false)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", fmt.Errorf("output directory path for saving scans results was provided, but the directory doesn't exist: '%s'", scansOutputDir)
+	}
+	return scansOutputDir, nil
 }

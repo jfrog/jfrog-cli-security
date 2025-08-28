@@ -78,6 +78,11 @@ func GitAuditCmd(c *components.Context) error {
 		return err
 	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
+	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
+	if err != nil {
+		return err
+	}
+	gitAuditCmd.SetOutputDir(scansOutputDir).SetExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable))
 	// Set the dynamic logic for SBOM generation and SCA scan strategy
 	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
