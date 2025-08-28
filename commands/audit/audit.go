@@ -199,6 +199,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
 		)).
+		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)

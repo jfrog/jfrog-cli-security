@@ -12,11 +12,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
+	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
 	installFunc       func(tech string) error
 	fixableOnly       bool
@@ -43,6 +45,15 @@ func NewAuditParams() *AuditParams {
 	return &AuditParams{
 		AuditBasicParams: &AuditBasicParams{},
 	}
+}
+
+func (params *AuditParams) SetGitContext(gitContext *xscServices.XscGitInfoContext) *AuditParams {
+	params.gitContext = gitContext
+	return params
+}
+
+func (params *AuditParams) GitContext() *xscServices.XscGitInfoContext {
+	return params.gitContext
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {

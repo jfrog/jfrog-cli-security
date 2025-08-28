@@ -52,7 +52,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 		// No Error but no git info = project working tree is dirty
 		return fmt.Errorf("detected uncommitted changes in '%s'. Please commit your changes and try again", gaCmd.repositoryLocalPath)
 	}
-	gaCmd.source = *gitInfo
+	gaCmd.gitContext = *gitInfo
 	// Run the scan
 	auditResults := RunGitAudit(gaCmd.GitAuditParams)
 	// Process the results and output
@@ -83,13 +83,15 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 		params.resultsContext.Watches,
 		params.resultsContext.RepoPath,
 		params.resultsContext.ProjectKey,
-		params.source.Source.GitRepoHttpsCloneUrl,
+		params.gitContext.Source.GitRepoHttpsCloneUrl,
 		params.resultsContext.IncludeVulnerabilities,
 		params.resultsContext.IncludeLicenses,
 		false,
 	)
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
+	// Source control params
+	auditParams.SetGitContext(&params.gitContext)
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
@@ -104,7 +106,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 func RunGitAudit(params GitAuditParams) (scanResults *results.SecurityCommandResults) {
 	// Send scan started event
 	event := xsc.CreateAnalyticsEvent(services.CliProduct, services.CliEventType, params.serverDetails)
-	event.GitInfo = &params.source
+	event.GitInfo = &params.gitContext
 	event.IsGitInfoFlow = true
 	multiScanId, startTime := xsc.SendNewScanEvent(
 		params.xrayVersion,
