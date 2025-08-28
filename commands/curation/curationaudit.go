@@ -78,6 +78,10 @@ const (
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
+
+	// Curation request headers
+	waiverHeader      = "X-Artifactory-Curation-Request-Waiver"
+	waiverHeaderValue = "syn_JFrog-Curation-Client"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -490,6 +494,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		parallelRequests:     ca.parallelRequests,
 		downloadUrls:         depTreeResult.DownloadUrls,
 	}
+	// Add curation client header to all requests
+	analyzer.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 
 	rootNodes := map[string]struct{}{}
 	for _, tree := range depTreeResult.FullDepTrees {
@@ -571,7 +577,7 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 		return nil, err
 	}
 	clientDetails := rtAuth.CreateHttpClientDetails()
-	clientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = msg
+	clientDetails.Headers[waiverHeader] = msg
 	for _, pkg := range pkgs {
 		response, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
 		if err != nil {
@@ -857,7 +863,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	nc.httpClientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+	nc.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
 	if err != nil {
 		if getResp == nil {
