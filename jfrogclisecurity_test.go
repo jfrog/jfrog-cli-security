@@ -17,13 +17,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	setupIntegrationTests()
+	tearDownIntegrationTests := setupIntegrationTests()
 	result := m.Run()
 	tearDownIntegrationTests()
 	os.Exit(result)
 }
 
-func setupIntegrationTests() {
+func setupIntegrationTests() (cleanUp func()) {
 	// Disable usage report.
 	if err := os.Setenv(coreutils.ReportUsage, "false"); err != nil {
 		clientLog.Error(fmt.Sprintf("Couldn't set env: %s. Error: %s", coreutils.ReportUsage, err.Error()))
@@ -42,10 +42,14 @@ func setupIntegrationTests() {
 	integrationUtils.AuthenticateArtifactory()
 	integrationUtils.AuthenticateXsc()
 	integrationUtils.CreateRequiredRepositories()
-}
-
-func tearDownIntegrationTests() {
-	// Important - Virtual repositories must be deleted first
-	integrationUtils.DeleteRepos(configTests.CreatedVirtualRepositories)
-	integrationUtils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
+	homeResourcesCleanUp := integrationUtils.InitTestHomeResources()
+	return func() {
+		if homeResourcesCleanUp != nil {
+			homeResourcesCleanUp()
+		}
+		// Important - Virtual repositories must be deleted first
+		integrationUtils.DeleteRepos(configTests.CreatedVirtualRepositories)
+		integrationUtils.DeleteRepos(configTests.CreatedNonVirtualRepositories)
+		integrationUtils.CleanFileSystem()
+	}
 }
