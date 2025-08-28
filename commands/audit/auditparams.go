@@ -7,7 +7,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
-	xrayutils "github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -22,7 +21,7 @@ type AuditParams struct {
 	installFunc       func(tech string) error
 	fixableOnly       bool
 	minSeverityFilter severityutils.Severity
-	*xrayutils.AuditBasicParams
+	*AuditBasicParams
 	multiScanId string
 	// Include third party dependencies source code in the applicability scan.
 	thirdPartyApplicabilityScan bool
@@ -42,7 +41,7 @@ type AuditParams struct {
 
 func NewAuditParams() *AuditParams {
 	return &AuditParams{
-		AuditBasicParams: &xrayutils.AuditBasicParams{},
+		AuditBasicParams: &AuditBasicParams{},
 	}
 }
 
@@ -108,7 +107,7 @@ func (params *AuditParams) StartTime() time.Time {
 	return params.startTime
 }
 
-func (params *AuditParams) SetGraphBasicParams(gbp *xrayutils.AuditBasicParams) *AuditParams {
+func (params *AuditParams) SetGraphBasicParams(gbp *AuditBasicParams) *AuditParams {
 	params.AuditBasicParams = gbp
 	return params
 }
