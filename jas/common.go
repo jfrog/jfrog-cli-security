@@ -503,7 +503,6 @@ func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId i
 	if scanner.TempDir == "" {
 		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
 	}
-	// scannerTempDir := scanner.TempDir + "/" + scanType + "_" + strconv.FormatInt(time.Now().Unix(), 10) + "_" + strconv.Itoa(threadId)
 	scannerTempDir := filepath.Join(scanner.TempDir, fmt.Sprintf("%s_%d_%d", scanType, time.Now().Unix(), threadId))
 	err := os.MkdirAll(scannerTempDir, 0777)
 	if err != nil {
