@@ -43,7 +43,7 @@ func TestNewSastScanManagerWithFilesToCompare(t *testing.T) {
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
 	sastScanManager, err := newSastScanManager(scanner, scannerTempDir, false, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))

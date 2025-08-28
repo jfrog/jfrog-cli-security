@@ -34,6 +34,7 @@ import (
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 
+	"github.com/jfrog/jfrog-cli-security/commands/audit"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies/python"
@@ -77,6 +78,10 @@ const (
 	MinArtiNuGetSupport       = "7.93.0"
 	MinXrayPassThroughSupport = "3.92.0"
 	MinArtiGradleGemSupport   = "7.63.5"
+
+	// Curation request headers
+	waiverHeader      = "X-Artifactory-Curation-Request-Waiver"
+	waiverHeaderValue = "syn_JFrog-Curation-Client"
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -216,7 +221,7 @@ type CurationAuditCommand struct {
 	workingDirs          []string
 	OriginPath           string
 	parallelRequests     int
-	utils.AuditParams
+	audit.AuditParamsInterface
 }
 
 type CurationReport struct {
@@ -234,7 +239,7 @@ type WaiverResponse struct {
 func NewCurationAuditCommand() *CurationAuditCommand {
 	return &CurationAuditCommand{
 		extractPoliciesRegex: regexp.MustCompile(extractPoliciesRegexTemplate),
-		AuditParams:          &utils.AuditBasicParams{},
+		AuditParamsInterface: &audit.AuditBasicParams{},
 	}
 }
 
@@ -369,7 +374,7 @@ func (ca *CurationAuditCommand) doCurateAudit(results map[string]*CurationReport
 		}
 		// clear the package manager config to avoid using the same config for the next tech
 		ca.setPackageManagerConfig(nil)
-		ca.AuditParams = ca.SetDepsRepo("")
+		ca.AuditParamsInterface = ca.SetDepsRepo("")
 
 	}
 	return nil
@@ -401,30 +406,30 @@ func (ca *CurationAuditCommand) GetAuth(tech techutils.Technology) (serverDetail
 }
 
 func (ca *CurationAuditCommand) getBuildInfoParamsByTech() (technologies.BuildInfoBomGeneratorParams, error) {
-	serverDetails, err := ca.AuditParams.ServerDetails()
+	serverDetails, err := ca.ServerDetails()
 	return technologies.BuildInfoBomGeneratorParams{
-		XrayVersion:      ca.AuditParams.GetXrayVersion(),
-		ExclusionPattern: technologies.GetExcludePattern(ca.AuditParams.GetConfigProfile(), ca.AuditParams.IsRecursiveScan(), ca.AuditParams.Exclusions()...),
-		Progress:         ca.AuditParams.Progress(),
+		XrayVersion:      ca.GetXrayVersion(),
+		ExclusionPattern: technologies.GetExcludePattern(ca.GetConfigProfile(), ca.IsRecursiveScan(), ca.Exclusions()...),
+		Progress:         ca.Progress(),
 		// Artifactory Repository params
 		ServerDetails:          serverDetails,
-		DependenciesRepository: ca.AuditParams.DepsRepo(),
-		IgnoreConfigFile:       ca.AuditParams.IgnoreConfigFile(),
-		InsecureTls:            ca.AuditParams.InsecureTls(),
+		DependenciesRepository: ca.DepsRepo(),
+		IgnoreConfigFile:       ca.IgnoreConfigFile(),
+		InsecureTls:            ca.InsecureTls(),
 		// Install params
-		InstallCommandName: ca.AuditParams.InstallCommandName(),
-		Args:               ca.AuditParams.Args(),
-		InstallCommandArgs: ca.AuditParams.InstallCommandArgs(),
+		InstallCommandName: ca.InstallCommandName(),
+		Args:               ca.Args(),
+		InstallCommandArgs: ca.InstallCommandArgs(),
 		// Curation params
 		IsCurationCmd: true,
 		// Java params
 		IsMavenDepTreeInstalled: true,
-		UseWrapper:              ca.AuditParams.UseWrapper(),
+		UseWrapper:              ca.UseWrapper(),
 		// Npm params
 		NpmIgnoreNodeModules:    true,
 		NpmOverwritePackageLock: true,
 		// Python params
-		PipRequirementsFile: ca.AuditParams.PipRequirementsFile(),
+		PipRequirementsFile: ca.PipRequirementsFile(),
 	}, err
 }
 
@@ -489,6 +494,8 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		parallelRequests:     ca.parallelRequests,
 		downloadUrls:         depTreeResult.DownloadUrls,
 	}
+	// Add curation client header to all requests
+	analyzer.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 
 	rootNodes := map[string]struct{}{}
 	for _, tree := range depTreeResult.FullDepTrees {
@@ -570,7 +577,7 @@ func (ca *CurationAuditCommand) sendWaiverRequests(pkgs []*PackageStatus, msg st
 		return nil, err
 	}
 	clientDetails := rtAuth.CreateHttpClientDetails()
-	clientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = msg
+	clientDetails.Headers[waiverHeader] = msg
 	for _, pkg := range pkgs {
 		response, body, _, err := rtManager.Client().SendGet(pkg.BlockedPackageUrl, true, &clientDetails)
 		if err != nil {
@@ -856,7 +863,7 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	nc.httpClientDetails.Headers["X-Artifactory-Curation-Request-Waiver"] = "syn"
+	nc.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
 	if err != nil {
 		if getResp == nil {

@@ -484,6 +484,38 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 	}
 }
 
+func TestCurationHeaders(t *testing.T) {
+	// Test that a request actually includes the header
+	ca := &CurationAuditCommand{}
+
+	// Mock server to capture the request headers
+	var capturedHeaders http.Header
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusForbidden)
+		_, err := w.Write([]byte(`{"errors":[{"status":403,"message":"waiver-id|forbidden"}]}`))
+		assert.NoError(t, err)
+	}
+
+	mockServer, mockServerDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+	defer mockServer.Close()
+
+	// Create test package
+	pkg := &PackageStatus{
+		BlockedPackageUrl: mockServerDetails.GetArtifactoryUrl() + "/test/pkg",
+		PackageName:       "test-pkg",
+		PackageVersion:    "1.0.0",
+	}
+
+	// Make the request - this should include our header
+	_, err := ca.sendWaiverRequests([]*PackageStatus{pkg}, "test waiver", mockServerDetails)
+	assert.NoError(t, err)
+
+	// Verify the header was sent
+	assert.NotNil(t, capturedHeaders)
+	assert.Equal(t, "test waiver", capturedHeaders["X-Artifactory-Curation-Request-Waiver"][0])
+}
+
 func setCurationFlagsForTest(t *testing.T) func() {
 	callbackCurationFlag := clienttestutils.SetEnvWithCallbackAndAssert(t, utils.CurationSupportFlag, "true")
 	// Golang option to disable the use of the checksum database
@@ -511,7 +543,7 @@ func createCurationCmdAndRun(tt testCase) (cmdResults map[string]*CurationReport
 	// For tests, we use localhost http server (nuget have issues without setting insecureTls)
 	curationCmd.SetInsecureTls(true)
 	curationCmd.SetIgnoreConfigFile(tt.shouldIgnoreConfigFile)
-	curationCmd.AuditParams.SetInsecureTls(tt.allowInsecureTls)
+	curationCmd.SetInsecureTls(tt.allowInsecureTls)
 	cmdResults = map[string]*CurationReport{}
 	err = curationCmd.doCurateAudit(cmdResults)
 	return

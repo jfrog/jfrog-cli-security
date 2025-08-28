@@ -492,7 +492,7 @@ func TestGetAnalyzerManagerXscEnvVars(t *testing.T) {
 
 func TestCreateScannerTempDirectory(t *testing.T) {
 	scanner := &JasScanner{TempDir: "path"}
-	tempDir, err := CreateScannerTempDirectory(scanner, jasutils.Applicability.String())
+	tempDir, err := CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, tempDir)
 
@@ -503,7 +503,7 @@ func TestCreateScannerTempDirectory(t *testing.T) {
 
 func TestCreateScannerTempDirectory_baseDirIsEmpty(t *testing.T) {
 	scanner := &JasScanner{TempDir: ""}
-	_, err := CreateScannerTempDirectory(scanner, jasutils.Applicability.String())
+	_, err := CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), 0)
 	assert.Error(t, err)
 }
 

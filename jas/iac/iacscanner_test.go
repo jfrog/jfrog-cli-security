@@ -45,7 +45,7 @@ func TestNewIacScanManagerWithFilesToCompare(t *testing.T) {
 	defer cleanUpTempDir()
 
 	scanner.TempDir = tempDir
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.Secrets.String(), 0)
 	require.NoError(t, err)
 
 	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, sarifutils.CreateRunWithDummyResults(sarifutils.CreateDummyResult("test-markdown", "test-msg", "test-rule-id", "note")))
@@ -60,7 +60,7 @@ func TestIacScan_CreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String())
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), 0)
 	require.NoError(t, err)
 	iacScanManager, err := newIacScanManager(scanner, scannerTempDir)
 	require.NoError(t, err)

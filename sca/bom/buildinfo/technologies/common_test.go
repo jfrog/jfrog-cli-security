@@ -2,15 +2,15 @@ package technologies
 
 import (
 	"fmt"
-	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"testing"
+
+	clientservices "github.com/jfrog/jfrog-client-go/xsc/services"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/jfrog/jfrog-cli-core/v2/utils/tests"
-	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
@@ -19,61 +19,51 @@ import (
 
 func TestGetExcludePattern(t *testing.T) {
 	tests := []struct {
-		name     string
-		params   func() *utils.AuditBasicParams
-		expected string
+		name            string
+		exclusions      []string
+		isRecursiveScan bool
+		configProfile   *clientservices.ConfigProfile
+		expected        string
 	}{
 		{
-			name: "Test exclude pattern recursive",
-			params: func() *utils.AuditBasicParams {
-				param := &utils.AuditBasicParams{}
-				param.SetExclusions([]string{"exclude1", "exclude2"}).SetIsRecursiveScan(true)
-				return param
-			},
-			expected: "(^exclude1$)|(^exclude2$)",
+			name:            "Test exclude pattern recursive",
+			exclusions:      []string{"exclude1", "exclude2"},
+			isRecursiveScan: true,
+			expected:        "(^exclude1$)|(^exclude2$)",
 		},
 		{
-			name:     "Test no exclude pattern recursive",
-			params:   func() *utils.AuditBasicParams { return (&utils.AuditBasicParams{}).SetIsRecursiveScan(true) },
-			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
+			name:            "Test no exclude pattern recursive",
+			isRecursiveScan: true,
+			expected:        "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
-			name: "Test exclude pattern not recursive",
-			params: func() *utils.AuditBasicParams {
-				param := &utils.AuditBasicParams{}
-				param.SetExclusions([]string{"exclude1", "exclude2"})
-				return param
-			},
-			expected: "(^exclude1$)|(^exclude2$)",
+			name:       "Test exclude pattern not recursive",
+			exclusions: []string{"exclude1", "exclude2"},
+			expected:   "(^exclude1$)|(^exclude2$)",
 		},
 		{
 			name:     "Test no exclude pattern",
-			params:   func() *utils.AuditBasicParams { return &utils.AuditBasicParams{} },
 			expected: "(^.*\\.git.*$)|(^.*node_modules.*$)|(^.*target.*$)|(^.*venv.*$)|(^.*test.*$)|(^dist$)",
 		},
 		{
-			name: "Test exclude patterns from config profile",
-			params: func() *utils.AuditBasicParams {
-				param := &utils.AuditBasicParams{}
-				configProfile := clientservices.ConfigProfile{
-					ProfileName: "profile with sca exclusions",
-					Modules: []clientservices.Module{
-						{
-							ModuleName:   "module with sca exclusions",
-							PathFromRoot: ".",
-							ScanConfig: clientservices.ScanConfig{
-								ScaScannerConfig: clientservices.ScaScannerConfig{
-									EnableScaScan:   true,
-									ExcludePatterns: []string{"exclude3"},
-								},
+			name:       "Test exclude patterns from config profile",
+			exclusions: []string{"exclude1", "exclude2"},
+			configProfile: &clientservices.ConfigProfile{
+				ProfileName: "profile with sca exclusions",
+				Modules: []clientservices.Module{
+					{
+						ModuleName:   "module with sca exclusions",
+						PathFromRoot: ".",
+						ScanConfig: clientservices.ScanConfig{
+							ScaScannerConfig: clientservices.ScaScannerConfig{
+								EnableScaScan:   true,
+								ExcludePatterns: []string{"exclude3"},
 							},
 						},
 					},
-					IsDefault:      false,
-					IsBasicProfile: false,
-				}
-				param.SetExclusions([]string{"exclude1", "exclude2"}).SetIsRecursiveScan(true).SetConfigProfile(&configProfile)
-				return param
+				},
+				IsDefault:      false,
+				IsBasicProfile: false,
 			},
 			expected: "(^exclude1$)|(^exclude2$)|(^exclude3$)",
 		},
@@ -81,7 +71,7 @@ func TestGetExcludePattern(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := GetExcludePattern(test.params().GetConfigProfile(), test.params().IsRecursiveScan(), test.params().Exclusions()...)
+			result := GetExcludePattern(test.configProfile, test.isRecursiveScan, test.exclusions...)
 			assert.Equal(t, test.expected, result)
 		})
 	}

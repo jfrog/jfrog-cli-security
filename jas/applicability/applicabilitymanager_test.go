@@ -168,7 +168,7 @@ func TestCreateConfigFile_VerifyFileWasCreated(t *testing.T) {
 	scanner, cleanUp := jas.InitJasTest(t)
 	defer cleanUp()
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability), 0)
 	require.NoError(t, err)
 	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, []string{"issueId_1_direct_dependency", "issueId_2_direct_dependency"})
 	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)
@@ -227,7 +227,7 @@ func TestParseResults_NewApplicabilityStatuses(t *testing.T) {
 	jfrogAppsConfigForTest, err := jas.CreateJFrogAppsConfig([]string{})
 	assert.NoError(t, err)
 
-	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability))
+	scannerTempDir, err := jas.CreateScannerTempDirectory(scanner, string(jasutils.Applicability), 0)
 	require.NoError(t, err)
 	directCves, indirectCves := results.ExtractCvesFromScanResponse(jas.FakeBasicXrayResults, mockDirectDependencies)
 	applicabilityManager := newApplicabilityScanManager(directCves, indirectCves, scanner, false, ApplicabilityScannerType, scannerTempDir)

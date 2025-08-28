@@ -610,7 +610,7 @@ func TestAuditWithConfigProfile(t *testing.T) {
 			assert.NoError(t, biutils.CopyDir(testcase.testDirPath, tempDirPath, true, nil))
 
 			configProfile := testcase.configProfile
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetXrayVersion(utils.EntitlementsMinVersion).
 				SetXscVersion(services.ConfigProfileMinXscVersion).
@@ -666,7 +666,7 @@ func TestAuditWithScansOutputDir(t *testing.T) {
 	testDirPath := filepath.Join("..", "..", "tests", "testdata", "projects", "jas", "jas")
 	assert.NoError(t, biutils.CopyDir(testDirPath, tempDirPath, true, nil))
 
-	auditBasicParams := (&utils.AuditBasicParams{}).
+	auditBasicParams := (&AuditBasicParams{}).
 		SetServerDetails(serverDetails).
 		SetOutputFormat(format.Table).
 		SetXrayVersion(utils.EntitlementsMinVersion).
@@ -803,7 +803,7 @@ func TestAuditWithPartialResults(t *testing.T) {
 
 			assert.NoError(t, biutils.CopyDir(testcase.testDirPath, tempDirPath, false, nil))
 
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetOutputFormat(format.Table).
 				SetXrayVersion("3.108.0").
@@ -1014,7 +1014,7 @@ func TestAudit_DiffScanFlow(t *testing.T) {
 			mockServer, serverDetails, apiCallsCount := validations.XrayServer(t, testParams)
 			defer mockServer.Close()
 
-			auditBasicParams := (&utils.AuditBasicParams{}).
+			auditBasicParams := (&AuditBasicParams{}).
 				SetServerDetails(serverDetails).
 				SetXrayVersion(utils.EntitlementsMinVersion).
 				SetXscVersion(services.ConfigProfileMinXscVersion).

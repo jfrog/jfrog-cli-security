@@ -499,11 +499,11 @@ func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string)
 	return
 }
 
-func CreateScannerTempDirectory(scanner *JasScanner, scanType string) (string, error) {
+func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId int) (string, error) {
 	if scanner.TempDir == "" {
 		return "", errors.New("scanner temp dir cannot be created in an empty base dir")
 	}
-	scannerTempDir := scanner.TempDir + "/" + scanType + "_" + strconv.FormatInt(time.Now().Unix(), 10)
+	scannerTempDir := filepath.Join(scanner.TempDir, fmt.Sprintf("%s_%d_%d", scanType, time.Now().Unix(), threadId))
 	err := os.MkdirAll(scannerTempDir, 0777)
 	if err != nil {
 		return "", err
