@@ -245,8 +245,8 @@ func TestAddScoreToRunRules(t *testing.T) {
 	}{
 		{
 			sarifRun: sarifutils.CreateRunWithDummyResults(
-				sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", "info"),
-				sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", "info"),
+				sarifutils.CreateResultWithOneLocation("file1", 0, 0, 0, 0, "snippet", "rule1", ""),
+				sarifutils.CreateResultWithOneLocation("file2", 0, 0, 0, 0, "snippet", "rule1", ""),
 				sarifutils.CreateResultWithOneLocation("file", 0, 0, 0, 0, "snippet", "rule2", "warning"),
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
@@ -264,8 +264,8 @@ func TestAddScoreToRunRules(t *testing.T) {
 			),
 			expectedOutput: []*sarif.ReportingDescriptor{
 				sarifutils.CreateDummyRuleWithProperties("rule1", sarif.Properties{"security-severity": "0.0"}),
+				sarifutils.CreateDummyRuleWithProperties("rule3", sarif.Properties{"security-severity": "0.0"}),
 				sarifutils.CreateDummyRuleWithProperties("rule2", sarif.Properties{"security-severity": "3.9"}),
-				sarifutils.CreateDummyRuleWithProperties("rule3", sarif.Properties{"security-severity": "6.9"}),
 				sarifutils.CreateDummyRuleWithProperties("rule4", sarif.Properties{"security-severity": "6.9"}),
 				sarifutils.CreateDummyRuleWithProperties("rule5", sarif.Properties{"security-severity": "8.9"}),
 			},

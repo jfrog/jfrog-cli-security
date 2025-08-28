@@ -22,10 +22,12 @@ func TestParseSeverity(t *testing.T) {
 		{input: "hiGH", isSarifFormat: false, expectedOutput: "High", expectedError: nil},
 		{input: "Low", isSarifFormat: false, expectedOutput: "Low", expectedError: nil},
 		{input: "MedIum", isSarifFormat: false, expectedOutput: "Medium", expectedError: nil},
+		{input: "inFormation", isSarifFormat: false, expectedOutput: "Information", expectedError: nil},
+		{input: "unknown", isSarifFormat: false, expectedOutput: "Unknown", expectedError: nil},
 		// Test supported sarif level
 		{input: "error", isSarifFormat: true, expectedOutput: "High", expectedError: nil},
 		{input: "warning", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
-		{input: "info", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
+		{input: "info", isSarifFormat: true, expectedOutput: "Information", expectedError: nil},
 		{input: "note", isSarifFormat: true, expectedOutput: "Low", expectedError: nil},
 		{input: "none", isSarifFormat: true, expectedOutput: "Unknown", expectedError: nil},
 		{input: "", isSarifFormat: true, expectedOutput: "Medium", expectedError: nil},
