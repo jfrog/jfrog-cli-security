@@ -78,9 +78,17 @@ func GitAuditCmd(c *components.Context) error {
 		return err
 	}
 	gitAuditCmd.SetOutputFormat(format).SetIncludeLicenses(c.GetBoolFlagValue(flags.Licenses)).SetFailBuild(c.GetBoolFlagValue(flags.Fail))
+	scansOutputDir, err := getAndValidateOutputDirExistsIfProvided(c)
+	if err != nil {
+		return err
+	}
+	gitAuditCmd.SetOutputDir(scansOutputDir).SetExtendedTable(c.GetBoolFlagValue(flags.ExtendedTable))
 	// Set the dynamic logic for SBOM generation and SCA scan strategy
-	sbomGenerator, scaScanStrategy := getScanDynamicLogic(c)
+	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, remediationService := getScanDynamicLogic(c)
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
+	gitAuditCmd.SetViolationGenerator(violationGenerator)
+	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRepoPath))
+	gitAuditCmd.SetRemediationService(remediationService)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))
 }

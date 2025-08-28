@@ -13,10 +13,12 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/applicability"
 	"github.com/jfrog/jfrog-cli-security/jas/runner"
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
+	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
-	"github.com/jfrog/jfrog-cli-security/sca/bom/scang"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/sca/scan"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -154,7 +156,7 @@ func shouldIncludeVulnerabilities(includeVulnerabilities bool, watches []string,
 
 func (auditCmd *AuditCommand) Run() (err error) {
 	isRecursiveScan := false
-	if _, ok := auditCmd.bomGenerator.(*scang.ScangBomGenerator); ok {
+	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
 			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
 		}
@@ -214,7 +216,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		}
 	}
 
-	return ProcessResultsAndOutput(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
+	return OutputResultsAndCmdError(auditResults, auditCmd.getResultWriter(auditResults), auditCmd.Fail)
 }
 
 func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityCommandResults) *output.ResultsWriter {
@@ -235,7 +237,7 @@ func (auditCmd *AuditCommand) getResultWriter(cmdResults *results.SecurityComman
 		SetSubScansPerformed(auditCmd.ScansToPerform())
 }
 
-func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
+func OutputResultsAndCmdError(auditResults *results.SecurityCommandResults, outputWriter *output.ResultsWriter, failBuild bool) (err error) {
 	if err = outputWriter.PrintScanResults(); err != nil {
 		// Error printing the results, return the error and the scan results errors.
 		return errors.Join(err, auditResults.GetErrors())
@@ -245,13 +247,12 @@ func ProcessResultsAndOutput(auditResults *results.SecurityCommandResults, outpu
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	shouldFailBuildByPolicy, err := results.CheckIfFailBuild(auditResults)
+	shouldFailBuildByPolicy, err := policy.CheckIfFailBuild(auditResults)
 	if err != nil {
 		return fmt.Errorf("failed to check if the build should fail: %w", err)
 	}
-
 	if failBuild && auditResults.HasViolationContext() && shouldFailBuildByPolicy {
-		err = results.NewFailBuildError()
+		err = policy.NewFailBuildError()
 	}
 	return
 }
@@ -264,38 +265,39 @@ func (auditCmd *AuditCommand) CommandName() string {
 // Returns an audit Results object containing all the scan results.
 // If the current server is entitled for JAS, the advanced security results will be included in the scan results.
 func RunAudit(auditParams *AuditParams) (cmdResults *results.SecurityCommandResults) {
-	if auditParams.Progress() != nil {
-		auditParams.Progress().SetHeadlineMsg("Preparing to scan")
-	}
 	// Prepare the command for the scan.
 	if cmdResults = prepareToScan(auditParams); cmdResults.GeneralError != nil {
 		return
 	}
-	if auditParams.Progress() != nil {
-		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
+	// Run Scanners
+	if runParallelAuditScans(cmdResults, auditParams); cmdResults.GeneralError != nil {
+		return
 	}
-	runParallelAuditScans(cmdResults, auditParams)
-	return
+	// Process the scan results and run additional steps if needed.
+	return processScanResults(auditParams, cmdResults)
 }
 
 func prepareToScan(params *AuditParams) (cmdResults *results.SecurityCommandResults) {
+	if params.Progress() != nil {
+		params.Progress().SetHeadlineMsg("Preparing to scan")
+	}
 	// Initialize Results struct
 	if cmdResults = initAuditCmdResults(params); cmdResults.GeneralError != nil {
 		return
 	}
 	bomGenOptions, scanOptions, err := getScanLogicOptions(params)
 	if err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to get scan logic options: %s", err.Error()), params.AllowPartialResults())
 	}
 	// Initialize the BOM generator
 	if err = params.bomGenerator.WithOptions(bomGenOptions...).PrepareGenerator(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), false)
-	}
-	// Initialize the SCA scan strategy
-	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
-		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), false)
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the BOM generator: %s", err.Error()), params.AllowPartialResults())
 	}
 	populateScanTargets(cmdResults, params)
+	// Initialize the SCA scan strategy
+	if err = params.scaScanStrategy.WithOptions(scanOptions...).PrepareStrategy(); err != nil {
+		return cmdResults.AddGeneralError(fmt.Errorf("failed to prepare the SCA scan strategy: %s", err.Error()), params.AllowPartialResults())
+	}
 	return
 }
 
@@ -308,9 +310,9 @@ func getScanLogicOptions(params *AuditParams) (bomGenOptions []bom.SbomGenerator
 	bomGenOptions = []bom.SbomGeneratorOption{
 		// Build Info Bom Generator Options
 		buildinfo.WithParams(buildParams),
-		// SCANG Bom Generator Options
-		scang.WithBinaryPath(params.CustomBomGenBinaryPath()),
-		scang.WithIgnorePatterns(params.Exclusions()),
+		// Xray-Scan-Plugin Bom Generator Options
+		xrayplugin.WithBinaryPath(params.CustomBomGenBinaryPath()),
+		xrayplugin.WithIgnorePatterns(params.Exclusions()),
 	}
 	// Scan Strategies Options
 	scanGraphParams, err := params.ToXrayScanGraphParams()
@@ -453,9 +455,8 @@ func detectScanTargets(cmdResults *results.SecurityCommandResults, params *Audit
 			}
 		}
 	}
-	// If no scan targets were detected, we should proceed with the scan.
-	if params.IsRecursiveScan() && len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
-		// add the root directory as a target for JAS scans.
+	// If no scan targets were detected, we should still proceed with the scans.
+	if len(params.workingDirs) == 1 && len(cmdResults.Targets) == 0 {
 		cmdResults.NewScanResults(results.ScanTarget{Target: params.workingDirs[0]})
 	}
 }
@@ -472,6 +473,9 @@ func runParallelAuditScans(cmdResults *results.SecurityCommandResults, auditPara
 	var jasScanner *jas.JasScanner
 	var generalJasScanErr error
 	auditParallelRunner := utils.CreateSecurityParallelRunner(auditParams.threads)
+	if auditParams.Progress() != nil {
+		auditParams.Progress().SetHeadlineMsg("Scanning for issues")
+	}
 	// Add the scans to the parallel runner
 	if jasScanner, generalJasScanErr = addJasScansToRunner(auditParallelRunner, auditParams, cmdResults); generalJasScanErr != nil {
 		cmdResults.AddGeneralError(fmt.Errorf("error has occurred during JAS scan process. JAS scan is skipped for the following directories: %s\n%s", strings.Join(cmdResults.GetTargetsPaths(), ","), generalJasScanErr.Error()), auditParams.AllowPartialResults())
@@ -625,4 +629,81 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func processScanResults(params *AuditParams, cmdResults *results.SecurityCommandResults) *results.SecurityCommandResults {
+	// In new flow we get remediation from Xray service
+	if params.remediationService {
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Fetching remediation information")
+		}
+		if err := enrichWithRemediation(cmdResults, params); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to enrich scan results with remediation: %s", err.Error()), params.AllowPartialResults())
+		}
+	}
+	// Upload results to Artifactory (should be the last step not including violations fetching so the uploaded results will include everything else).
+	var err error
+	uploadPath := ""
+	if params.uploadCdxResults {
+		if params.rtResultRepository == "" {
+			return cmdResults.AddGeneralError(errors.New("Results repository was not provided, can't upload scan results to Artifactory"), false)
+		}
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
+		}
+		uploadPath, err = uploadCdxResults(params, cmdResults)
+		if err != nil {
+			return cmdResults.AddGeneralError(fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error()), false)
+		}
+	}
+	// Violations fetching
+	if cmdResults.HasViolationContext() {
+		if params.Progress() != nil {
+			params.Progress().SetHeadlineMsg("Fetching violations")
+		}
+		if err = fetchViolations(uploadPath, cmdResults, params); err != nil {
+			cmdResults.AddGeneralError(fmt.Errorf("failed to fetch violations: %s", err.Error()), params.AllowPartialResults())
+		}
+	}
+	return cmdResults
+}
+
+func enrichWithRemediation(cmdResults *results.SecurityCommandResults, params *AuditParams) (err error) {
+	serverDetails, err := params.ServerDetails()
+	if err != nil {
+		return fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	_, err = xrayutils.CreateXrayServiceManager(serverDetails, xrayutils.WithScopedProjectKey(params.resultsContext.ProjectKey))
+	if err != nil {
+		return fmt.Errorf("failed to create Xray services manager: %s", err.Error())
+	}
+	log.Warn("Enriching scan results with remediation information is not yet implemented")
+	return
+}
+
+func uploadCdxResults(auditParams *AuditParams, cmdResults *results.SecurityCommandResults) (uploadPath string, err error) {
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		err = fmt.Errorf("failed to get server details: %s", err.Error())
+		return
+	}
+	if uploadPath, err = output.UploadCommandResults(serverDetails, auditParams.rtResultRepository, cmdResults); err != nil {
+		err = fmt.Errorf("failed to upload scan results to Artifactory: %s", err.Error())
+	}
+	return
+}
+
+func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResults, auditParams *AuditParams) (err error) {
+	serverDetails, err := auditParams.ServerDetails()
+	if err != nil {
+		return fmt.Errorf("failed to get server details: %s", err.Error())
+	}
+	generator := auditParams.ViolationGenerator().WithOptions(
+		enforcer.WithParams(serverDetails, auditParams.rtResultRepository, uploadPath),
+	)
+	// Fetch violations from Xray
+	if err = policy.FetchGeneratedViolations(generator, cmdResults); err != nil {
+		return fmt.Errorf("failed to fetch violations: %s", err.Error())
+	}
+	return
 }

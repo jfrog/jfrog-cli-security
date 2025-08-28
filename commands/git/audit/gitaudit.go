@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -61,7 +62,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	return sourceAudit.ProcessResultsAndOutput(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
+	return sourceAudit.OutputResultsAndCmdError(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
@@ -93,11 +94,15 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
-	auditParams.SetOutputFormat(params.outputFormat)
+	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
 	// Cmd information
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
-	auditParams.SetUseJas(true).SetIsRecursiveScan(true)
+	isRecursiveScan := true
+	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		isRecursiveScan = false
+	}
+	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
 	return auditParams
 }
 
@@ -128,6 +133,7 @@ func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(gaCmd.outputFormat).
+		SetOutputDir(gaCmd.outputDir).
 		SetPrintExtendedTable(gaCmd.extendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(gaCmd.scansToPerform)

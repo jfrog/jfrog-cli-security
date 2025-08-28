@@ -1,20 +1,21 @@
 package main
 
 import (
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"path/filepath"
 	"testing"
+
+	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-security/commands/git/contributors"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	securityTests "github.com/jfrog/jfrog-cli-security/tests"
 	securityTestUtils "github.com/jfrog/jfrog-cli-security/tests/utils"
 	"github.com/jfrog/jfrog-cli-security/tests/utils/integration"
 	"github.com/jfrog/jfrog-cli-security/tests/validations"
 	securityUtils "github.com/jfrog/jfrog-cli-security/utils"
-	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/utils/tests"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -159,7 +160,7 @@ func TestGitAuditJasViolationsProjectKeySimpleJson(t *testing.T) {
 	createTestProjectRunGitAuditAndValidate(t,
 		filepath.Join(filepath.FromSlash(securityTests.GetTestResourcesPath()), "git", "projects", "issues"),
 		auditCommandTestParams{Format: format.SimpleJson, ProjectKey: *securityTests.JfrogTestProjectKey},
-		xrayVersion, xscVersion, results.NewFailBuildError().Error(),
+		xrayVersion, xscVersion, policy.NewFailBuildError().Error(),
 		validations.ValidationParams{
 			Total: &validations.TotalCount{Violations: 12},
 			// Check that we have at least one violation for each scan type. (IAC is not supported yet)

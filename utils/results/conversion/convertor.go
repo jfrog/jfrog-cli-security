@@ -2,6 +2,7 @@ package conversion
 
 import (
 	"github.com/CycloneDX/cyclonedx-go"
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
@@ -200,7 +201,7 @@ func parseDeprecatedScaResults[T interface{}](params ResultConvertParams, parser
 			}
 		} else if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
 			// If no violations were found, check if there are licenses that are not allowed
-			if scaResults.Scan.Violations = results.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
+			if scaResults.Scan.Violations = policy.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
 				if err = parser.DeprecatedParseScaIssues(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, true, scaResults); err != nil {
 					return
 				}

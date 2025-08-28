@@ -52,7 +52,7 @@ func GenerateSbomForTarget(generator SbomGenerator, params SbomGeneratorParams) 
 	if params.ScanResultsOutputDir == "" {
 		return
 	}
-	if err = utils.DumpCdxContentToFile(sbom, params.ScanResultsOutputDir, "bom", 0); err != nil {
+	if _, err = utils.DumpCdxContentToFile(sbom, params.ScanResultsOutputDir, "bom", 0); err != nil {
 		log.Warn(fmt.Sprintf("Failed to dump CycloneDX SBOM for %s: %s", params.Target.Target, err.Error()))
 	}
 }

@@ -1,7 +1,6 @@
 package results
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
@@ -30,7 +28,6 @@ import (
 )
 
 const (
-	customLicenseViolationId   = "custom_license_violation"
 	RootIndex                  = 0
 	DirectDependencyIndex      = 1
 	DirectDependencyPathLength = 2
@@ -49,123 +46,10 @@ var (
 	ErrNoTargetConvertor = fmt.Errorf("ParseNewTargetResults must be called before starting to parse issues")
 )
 
-func NewFailBuildError() error {
-	return coreutils.CliError{ExitCode: coreutils.ExitCodeVulnerableBuild, ErrorMsg: "One or more of the detected violations are configured to fail the build that including them"}
-}
-
-// This func iterates every violation and checks if there is a violation that should fail the build.
-// The build should be failed if there exists at least one violation in any target that holds the following conditions:
-// 1) The violation is set to fail the build by FailBuild or FailPr
-// 2) The violation has applicability status other than 'NotApplicable' OR the violation has 'NotApplicable' status and is not set to skip-non-applicable
-func CheckIfFailBuild(auditResults *SecurityCommandResults) (bool, error) {
-	for _, target := range auditResults.Targets {
-		shouldFailBuild := false
-		// We first check if JasResults exist so we can extract CA results and consider Applicability status when checking if the build should fail.
-		if target.JasResults == nil {
-			shouldFailBuild = checkIfFailBuildWithoutConsideringApplicability(target)
-		} else {
-			// If JasResults are not empty we check old and new violation while considering Applicability status and Skip-not-applicable policy rule.
-			if err := checkIfFailBuildConsideringApplicability(target, auditResults.EntitledForJas, &shouldFailBuild); err != nil {
-				return false, fmt.Errorf("failed to check if build should fail for target %s: %w", target.ScanTarget.Target, err)
-			}
-		}
-		if shouldFailBuild {
-			// If we found a violation that should fail the build, we return true.
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func checkIfFailBuildConsideringApplicability(target *TargetResults, entitledForJas bool, shouldFailBuild *bool) error {
-	jasApplicabilityResults := target.JasResults.GetApplicabilityScanResults()
-
-	if target.ScaResults == nil {
-		return nil
-	}
-	// Get new violations from the target
-	newViolations := target.ScaResults.Violations
-
-	// Here we iterate the new violation results and check if any of them should fail the build.
-	_, _, err := ForEachScanGraphViolation(
-		target.ScanTarget,
-		[]string{},
-		newViolations,
-		entitledForJas,
-		jasApplicabilityResults,
-		checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
-		nil,
-		nil)
-	if err != nil {
-		return err
-	}
-
-	// Here we iterate the deprecated violation results to check if any of them should fail the build.
-	// TODO remove this part once the DeprecatedXrayResults are completely removed and no longer in use
-	for _, result := range target.ScaResults.DeprecatedXrayResults {
-		deprecatedViolations := result.Scan.Violations
-		_, _, err = ForEachScanGraphViolation(
-			target.ScanTarget,
-			[]string{},
-			deprecatedViolations,
-			entitledForJas,
-			jasApplicabilityResults,
-			checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
-			nil,
-			nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func checkIfFailBuildWithoutConsideringApplicability(target *TargetResults) bool {
-	if target.ScaResults == nil {
-		return false
-	}
-	for _, newViolation := range target.ScaResults.Violations {
-		if newViolation.FailBuild || newViolation.FailPr {
-			return true
-		}
-	}
-	// TODO remove this for loop once the DeprecatedXrayResults are completely removed and no longer in use
-	for _, scanResponse := range target.GetScaScansXrayResults() {
-		for _, oldViolation := range scanResponse.Violations {
-			if oldViolation.FailBuild || oldViolation.FailPr {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild *bool) func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		if !violation.FailBuild && !violation.FailPr {
-			// If the violation is not set to fail the build we simply return
-			return nil
-		}
-		// If the violation is set to fail the build, we check if the violation has NotApplicable status and is set to skip-non-applicable.
-		// If the violation is NotApplicable and is set to skip-non-applicable, we don't fail the build.
-		// If the violation has any other status OR has NotApplicable status but is not set to skip-not-applicable, we fail the build.
-		var shouldSkip bool
-		if shouldSkip, err = shouldSkipNotApplicable(violation, applicabilityStatus); err != nil {
-			return err
-		}
-		if !shouldSkip {
-			*shouldFailBuild = true
-		}
-		return nil
-	}
-}
-
 type ParseScanGraphVulnerabilityFunc func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
-type ParseScanGraphViolationFunc func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseLicenseFunc func(license services.License, impactedPackagesId string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error
 type ParseJasIssueFunc func(run *sarif.Run, rule *sarif.ReportingDescriptor, severity severityutils.Severity, result *sarif.Result, location *sarif.Location) error
 type ParseSbomComponentFunc func(component cyclonedx.Component, relatedDependencies *cyclonedx.Dependency, relation cdxutils.ComponentRelation) error
-
 type ParseBomScaVulnerabilityFunc func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersion *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) error
 
 // Allows to iterate over the provided SARIF runs and call the provided handler for each issue to process it.
@@ -208,7 +92,7 @@ func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vuln
 		if err != nil {
 			return err
 		}
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(getBestMatch(target, descriptors), vulnerability.Components)
+		impactedPackagesIds, fixedVersions, directComponents, impactPaths, err := SplitComponents(GetBestScaEvidenceMatch(target, descriptors), vulnerability.Components)
 		if err != nil {
 			return err
 		}
@@ -222,7 +106,7 @@ func ForEachScanGraphVulnerability(target ScanTarget, descriptors []string, vuln
 }
 
 // Get the best match for the scan target in the sca results
-func getBestMatch(target ScanTarget, descriptors []string) string {
+func GetBestScaEvidenceMatch(target ScanTarget, descriptors []string) string {
 	// Get the one that it's directory is the prefix of the target and the shortest
 	// This is for multi module projects where there are multiple sca results for the same target
 	var bestMatch string
@@ -290,80 +174,6 @@ func cdxRatingToSeverity(ratings *[]cyclonedx.VulnerabilityRating) (severity sev
 		severities = append(severities, severityutils.CycloneDxSeverityToSeverity(rating.Severity))
 	}
 	return severityutils.MostSevereSeverity(severities...)
-}
-
-// Allows to iterate over the provided SCA violations and call the provided handler for each impacted component/package with a violation to process it.
-func ForEachScanGraphViolation(target ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns []*sarif.Run, securityHandler ParseScanGraphViolationFunc, licenseHandler ParseScanGraphViolationFunc, operationalRiskHandler ParseScanGraphViolationFunc) (watches []string, failBuild bool, err error) {
-	if securityHandler == nil && licenseHandler == nil && operationalRiskHandler == nil {
-		return
-	}
-	watchesSet := datastructures.MakeSet[string]()
-	for _, violation := range violations {
-		// Handle duplicates and general attributes
-		watchesSet.Add(violation.WatchName)
-		failBuild = failBuild || violation.FailBuild
-		// Prepare violation information
-		impactedPackagesIds, fixedVersions, directComponents, impactPaths, e := SplitComponents(getBestMatch(target, descriptors), violation.Components)
-		if e != nil {
-			err = errors.Join(err, e)
-			continue
-		}
-		cves, applicabilityStatus := ConvertCvesWithApplicability(violation.Cves, entitledForJas, applicabilityRuns, violation.Components)
-		severity, e := severityutils.ParseSeverity(violation.Severity, false)
-		if e != nil {
-			err = errors.Join(err, e)
-			continue
-		}
-		// Parse the violation according to its type
-		switch violation.ViolationType {
-		case utils.ViolationTypeSecurity.String():
-			if securityHandler == nil {
-				// No handler was provided for security violations
-				continue
-			}
-
-			var skipNotApplicable bool
-			if skipNotApplicable, err = shouldSkipNotApplicable(violation, applicabilityStatus); skipNotApplicable {
-				log.Debug("A non-applicable violation was found and will be removed from final results as requested by its policies")
-				continue
-			}
-
-			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-				if e := securityHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
-					err = errors.Join(err, e)
-					continue
-				}
-			}
-		case utils.ViolationTypeLicense.String():
-			if licenseHandler == nil {
-				// No handler was provided for license violations
-				continue
-			}
-			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-				if impactedPackagesName, _, _ := techutils.SplitComponentId(impactedPackagesIds[compIndex]); impactedPackagesName == "root" {
-					// No Need to output 'root' as impacted package for license since we add this as the root node for the scan
-					continue
-				}
-				if e := licenseHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
-					err = errors.Join(err, e)
-					continue
-				}
-			}
-		case utils.ViolationTypeOperationalRisk.String():
-			if operationalRiskHandler == nil {
-				// No handler was provided for operational risk violations
-				continue
-			}
-			for compIndex := 0; compIndex < len(impactedPackagesIds); compIndex++ {
-				if e := operationalRiskHandler(violation, cves, applicabilityStatus, severity, impactedPackagesIds[compIndex], fixedVersions[compIndex], directComponents[compIndex], impactPaths[compIndex]); e != nil {
-					err = errors.Join(err, e)
-					continue
-				}
-			}
-		}
-	}
-	watches = watchesSet.ToSlice()
-	return
 }
 
 // ForEachLicense allows to iterate over the provided licenses and call the provided handler for each component/package with a license to process it.
@@ -570,26 +380,6 @@ func GetCveScore(severity severityutils.Severity, applicabilityStatus jasutils.A
 	}
 	score, err := strconv.ParseFloat(cve.CvssV3, 32)
 	return float32(score), err
-}
-
-func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) (violatedLicenses []services.Violation) {
-	if len(allowedLicenses) == 0 {
-		return
-	}
-	for _, license := range licenses {
-		if !slices.Contains(allowedLicenses, license.Key) {
-			violatedLicenses = append(violatedLicenses, services.Violation{
-				LicenseKey:    license.Key,
-				LicenseName:   license.Name,
-				Severity:      severityutils.Medium.String(),
-				Components:    license.Components,
-				IssueId:       customLicenseViolationId,
-				WatchName:     fmt.Sprintf("jfrog_%s", customLicenseViolationId),
-				ViolationType: utils.ViolationTypeLicense.String(),
-			})
-		}
-	}
-	return
 }
 
 // AppendUniqueImpactPathsForMultipleRoots appends the source impact path to the target impact path while avoiding duplicates.
@@ -910,24 +700,6 @@ func GetIssueTechnology(responseTechnology string, targetTech techutils.Technolo
 	}
 	// if no technology is provided, use the target technology
 	return targetTech
-}
-
-// Checks if the violation's applicability status is NotApplicable and if all of its policies states that non-applicable CVEs should be skipped
-func shouldSkipNotApplicable(violation services.Violation, applicabilityStatus jasutils.ApplicabilityStatus) (bool, error) {
-	if applicabilityStatus != jasutils.NotApplicable {
-		return false, nil
-	}
-
-	if len(violation.Policies) == 0 {
-		return false, errors.New("a violation with no policies was provided")
-	}
-
-	for _, policy := range violation.Policies {
-		if !policy.SkipNotApplicable {
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 // This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
@@ -1410,7 +1182,7 @@ func ParseScanGraphVulnerabilityToSbom(destination *cyclonedx.BOM) ParseScanGrap
 		if vulnerability.ExtendedInformation != nil {
 			extendedInformation = vulnerability.ExtendedInformation.FullDescription
 		}
-		for i := 0; i < len(cveIds); i++ {
+		for i := range cveIds {
 			params := cdxutils.CdxVulnerabilityParams{
 				Ref:         cveIds[i],
 				Ratings:     ratings[i],

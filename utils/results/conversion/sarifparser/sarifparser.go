@@ -11,6 +11,7 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -385,7 +386,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.ForEachScanGraphViolation(
+	_, _, err := policy.ForEachScanGraphViolation(
 		target,
 		descriptors,
 		violations,
@@ -450,7 +451,7 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 	}
 }
 
-func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
+func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) policy.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
@@ -492,7 +493,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 	}
 }
 
-func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
+func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) policy.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
