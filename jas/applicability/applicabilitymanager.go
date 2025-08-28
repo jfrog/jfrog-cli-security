@@ -52,7 +52,7 @@ type ContextualAnalysisScanParams struct {
 // Parsing the analyzer manager results.
 func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasScanner) (results []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String()); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.Applicability.String(), params.ThreadId); err != nil {
 		return
 	}
 	applicabilityScanManager := newApplicabilityScanManager(params.DirectDependenciesCves, params.IndirectDependenciesCves, scanner, params.ThirdPartyContextualAnalysis, params.ScanType, scannerTempDir)
