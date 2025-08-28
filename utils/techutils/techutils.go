@@ -1,6 +1,7 @@
 package techutils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -935,4 +936,180 @@ func XrayComponentIdToPurl(xrayComponentId string) (purl string) {
 func XrayComponentIdToCdxComponentRef(xrayImpactedPackageId string) string {
 	compName, compVersion, compType := SplitComponentIdRaw(xrayImpactedPackageId)
 	return ToPackageRef(compName, compVersion, ToCdxPackageType(compType))
+}
+
+// ApplyWorkspaceAwareTechnologyDetectionWithOverride ensures workspace packages inherit the correct technology from their workspace root
+// but allows disabling workspace detection based on user flags
+func ApplyWorkspaceAwareTechnologyDetectionWithOverride(technologiesDetected map[Technology]map[string][]string, rootPath string, recursive bool, workingDirs []string, requestedTechs []string) map[Technology]map[string][]string {
+	// If user explicitly specified technologies, skip workspace inheritance
+	if len(requestedTechs) > 0 {
+		log.Debug("User specified technology flags, skipping workspace inheritance")
+		return technologiesDetected
+	}
+
+	if !recursive {
+		log.Debug("Workspace detection disabled for non-recursive scans")
+		return technologiesDetected
+	}
+	return applyWorkspaceAwareTechnologyDetection(technologiesDetected, rootPath, recursive)
+}
+
+// applyWorkspaceAwareTechnologyDetection ensures workspace packages inherit the correct technology from their workspace root
+func applyWorkspaceAwareTechnologyDetection(technologiesDetected map[Technology]map[string][]string, rootPath string, recursive bool) map[Technology]map[string][]string {
+	if !recursive {
+		// Only apply workspace logic for recursive scans
+		return technologiesDetected
+	}
+
+	// Find workspace roots and their technologies
+	workspaceRoots := findWorkspaceRoots(technologiesDetected)
+	if len(workspaceRoots) == 0 {
+		return technologiesDetected
+	}
+
+	// Apply workspace inheritance
+	result := make(map[Technology]map[string][]string)
+
+	// Copy all existing detections first
+	for tech, dirs := range technologiesDetected {
+		result[tech] = make(map[string][]string)
+		for dir, descriptors := range dirs {
+			result[tech][dir] = descriptors
+		}
+	}
+
+	// Apply workspace inheritance rules
+	for _, workspaceRoot := range workspaceRoots {
+		applyWorkspaceInheritance(result, workspaceRoot)
+	}
+
+	return result
+}
+
+// WorkspaceRoot represents a detected workspace root and its technology
+type WorkspaceRoot struct {
+	Path       string
+	Technology Technology
+}
+
+// findWorkspaceRoots identifies directories that are workspace roots
+func findWorkspaceRoots(technologiesDetected map[Technology]map[string][]string) []WorkspaceRoot {
+	var workspaceRoots []WorkspaceRoot
+
+	// Check for yarn workspaces
+	if yarnDirs, exists := technologiesDetected[Yarn]; exists {
+		for dir := range yarnDirs {
+			if isWorkspaceRoot(dir, Yarn) {
+				workspaceRoots = append(workspaceRoots, WorkspaceRoot{
+					Path:       dir,
+					Technology: Yarn,
+				})
+			}
+		}
+	}
+
+	// Check for npm workspaces
+	if npmDirs, exists := technologiesDetected[Npm]; exists {
+		for dir := range npmDirs {
+			if isWorkspaceRoot(dir, Npm) {
+				workspaceRoots = append(workspaceRoots, WorkspaceRoot{
+					Path:       dir,
+					Technology: Npm,
+				})
+			}
+		}
+	}
+
+	return workspaceRoots
+}
+
+// isWorkspaceRoot checks if a directory is a workspace root for the given technology
+func isWorkspaceRoot(dir string, tech Technology) bool {
+	packageJsonPath := filepath.Join(dir, "package.json")
+	exists, err := fileutils.IsFileExists(packageJsonPath, false)
+	if err != nil || !exists {
+		return false
+	}
+
+	// Read package.json to check for workspace configuration
+	content, err := fileutils.ReadFile(packageJsonPath)
+	if err != nil {
+		return false
+	}
+
+	var packageJson struct {
+		Workspaces interface{} `json:"workspaces"`
+	}
+
+	if err := json.Unmarshal(content, &packageJson); err != nil {
+		return false
+	}
+
+	// Check if workspaces field exists and is not null/empty
+	return packageJson.Workspaces != nil
+}
+
+// applyWorkspaceInheritance applies workspace technology inheritance rules
+func applyWorkspaceInheritance(technologiesDetected map[Technology]map[string][]string, workspaceRoot WorkspaceRoot) {
+	workspaceRootPath := workspaceRoot.Path
+	workspaceTech := workspaceRoot.Technology
+
+	log.Debug(fmt.Sprintf("Applying workspace inheritance for %s workspace at %s", workspaceTech, workspaceRootPath))
+
+	// Find all directories that should inherit the workspace technology
+	var dirsToUpdate []string
+
+	// Look for npm-detected directories that are under this workspace root
+	if npmDirs, exists := technologiesDetected[Npm]; exists {
+		for dir := range npmDirs {
+			if isUnderWorkspaceRoot(dir, workspaceRootPath) && dir != workspaceRootPath {
+				// This npm directory is under the workspace root and should inherit workspace technology
+				dirsToUpdate = append(dirsToUpdate, dir)
+			}
+		}
+	}
+
+	// Apply the inheritance
+	for _, dir := range dirsToUpdate {
+		// Remove from npm detection
+		if npmDirs, exists := technologiesDetected[Npm]; exists {
+			descriptors := npmDirs[dir]
+			delete(npmDirs, dir)
+
+			// Add to workspace technology detection
+			if technologiesDetected[workspaceTech] == nil {
+				technologiesDetected[workspaceTech] = make(map[string][]string)
+			}
+			technologiesDetected[workspaceTech][dir] = descriptors
+
+			log.Debug(fmt.Sprintf("Inherited %s technology for workspace package at %s", workspaceTech, dir))
+		}
+	}
+
+	// Clean up empty technology maps
+	if npmDirs, exists := technologiesDetected[Npm]; exists && len(npmDirs) == 0 {
+		delete(technologiesDetected, Npm)
+	}
+}
+
+// isUnderWorkspaceRoot checks if a directory is under a workspace root
+func isUnderWorkspaceRoot(dir, workspaceRoot string) bool {
+	// Normalize paths
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return false
+	}
+
+	// Check if dir is under workspaceRoot
+	rel, err := filepath.Rel(absRoot, absDir)
+	if err != nil {
+		return false
+	}
+
+	// If the relative path doesn't start with ".." then it's under the root
+	return !strings.HasPrefix(rel, "..")
 }
