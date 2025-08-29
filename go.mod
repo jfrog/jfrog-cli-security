@@ -15,7 +15,7 @@ require (
 	github.com/jfrog/froggit-go v1.20.2
 	github.com/jfrog/gofrog v1.7.6
 	github.com/jfrog/jfrog-apps-config v1.0.1
-	github.com/jfrog/jfrog-cli-artifactory v0.6.2
+	github.com/jfrog/jfrog-cli-artifactory v0.7.0
 	github.com/jfrog/jfrog-cli-core/v2 v2.59.6
 	github.com/jfrog/jfrog-client-go v1.54.6
 	github.com/magiconair/properties v1.8.9
@@ -100,7 +100,7 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spf13/viper v1.20.1 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/ulikunitz/xz v0.5.12 // indirect
+	github.com/ulikunitz/xz v0.5.14 // indirect
 	github.com/vbauerster/mpb/v8 v8.9.1 // indirect
 	github.com/xanzy/go-gitlab v0.110.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
