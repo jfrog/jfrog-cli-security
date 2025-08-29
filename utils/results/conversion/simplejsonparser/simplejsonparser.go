@@ -3,6 +3,7 @@ package simplejsonparser
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-security/utils"
@@ -344,6 +345,12 @@ func PrepareSimpleJsonVulnerabilities(target results.ScanTarget, descriptors []s
 	return vulnerabilitiesRows, err
 }
 
+// CheckIfMalicious determines if a summary indicates a malicious vulnerability/violation
+func CheckIfMalicious(summary string) bool {
+	summary = strings.ToLower(summary)
+	return strings.HasPrefix(summary, "malicious") || strings.HasPrefix(summary, "the docker image malicious")
+}
+
 func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *[]formats.VulnerabilityOrViolationRow, pretty bool) results.ParseScanGraphVulnerabilityFunc {
 	return func(vulnerability services.Vulnerability, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		impactedPackagesName, impactedPackagesVersion, impactedPackagesType := techutils.SplitComponentId(impactedPackagesId)
@@ -365,6 +372,7 @@ func addSimpleJsonVulnerability(target results.ScanTarget, vulnerabilitiesRows *
 				ImpactPaths:              impactPaths,
 				Technology:               results.GetIssueTechnology(vulnerability.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
+				IsMalicious:              CheckIfMalicious(vulnerability.Summary),
 			},
 		)
 		return nil
@@ -397,6 +405,7 @@ func addSimpleJsonSecurityViolation(target results.ScanTarget, securityViolation
 				ImpactPaths:              impactPaths,
 				Technology:               results.GetIssueTechnology(violation.Technology, target.Technology),
 				Applicable:               applicabilityStatus.ToString(pretty),
+				IsMalicious:              CheckIfMalicious(violation.Summary),
 			},
 		)
 		return nil

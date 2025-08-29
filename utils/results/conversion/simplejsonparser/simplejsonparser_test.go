@@ -758,3 +758,61 @@ func TestPrepareSimpleJsonJasIssues(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckIfMalicious(t *testing.T) {
+	testCases := []struct {
+		name     string
+		summary  string
+		expected bool
+	}{
+		{
+			name:     "Should detect malicious vulnerability",
+			summary:  "malicious package found",
+			expected: true,
+		},
+		{
+			name:     "Should detect malicious vulnerability with different case",
+			summary:  "MALICIOUS package found",
+			expected: true,
+		},
+		{
+			name:     "Should detect Docker image malicious",
+			summary:  "The Docker image malicious code detected",
+			expected: true,
+		},
+		{
+			name:     "Should detect Docker image malicious with different case",
+			summary:  "THE DOCKER IMAGE MALICIOUS code detected",
+			expected: true,
+		},
+		{
+			name:     "Should not detect when malicious is in middle",
+			summary:  "found malicious code in package",
+			expected: false,
+		},
+		{
+			name:     "Should not detect safe summary",
+			summary:  "safe package with no issues",
+			expected: false,
+		},
+		{
+			name:     "Should not detect empty summary",
+			summary:  "",
+			expected: false,
+		},
+		{
+			name:     "Should not detect summary with malicious as substring",
+			summary:  "this is not malicious",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := CheckIfMalicious(tc.summary)
+			assert.Equal(t, tc.expected, result, 
+				"CheckIfMalicious(%q) = %v, expected %v", 
+				tc.summary, result, tc.expected)
+		})
+	}
+}
