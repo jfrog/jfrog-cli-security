@@ -54,7 +54,6 @@ runs:
       with:
         dotnet-version: '6.x'
 
-
     - name: Install Mono on MacOS
       run: brew install mono
       if: runner.os == 'macOS'
