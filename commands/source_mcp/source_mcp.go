@@ -11,7 +11,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
-	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 )
@@ -139,9 +138,5 @@ func isEntitledForSourceMCP(xrayManager *xrayClient.XrayServicesManager) (entitl
 	if err != nil {
 		return
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); err != nil {
-		log.Debug(err)
-		return
-	}
-	return xrayManager.IsEntitled(mcpEntitlement)
+	return xray.IsEntitled(xrayManager, xrayVersion, mcpEntitlement)
 }
