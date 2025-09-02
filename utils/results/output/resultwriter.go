@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
@@ -179,7 +180,12 @@ func (rw *ResultsWriter) printSarif() (err error) {
 	if err != nil {
 		return
 	}
-	callback := log.SetAllowEmojiFlagWithCallback(true)
+	allowEmojis, err := strconv.ParseBool(os.Getenv(utils.IsAllowEmojis))
+	if err != nil {
+		// default value
+		allowEmojis = true
+	}
+	callback := log.SetAllowEmojiFlagWithCallback(allowEmojis)
 	log.Output(string(outputBytes))
 	callback()
 	if rw.outputDir == "" {
