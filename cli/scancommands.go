@@ -30,7 +30,6 @@ import (
 
 	"github.com/jfrog/jfrog-cli-security/commands/enrich"
 	"github.com/jfrog/jfrog-cli-security/commands/source_mcp"
-	"github.com/jfrog/jfrog-cli-security/jas"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/indexer"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -196,17 +195,12 @@ func SourceMcpCmd(c *components.Context) error {
 		return err
 	}
 
-	am_env, err := jas.GetAnalyzerManagerEnvVariables(serverDetails)
-	if err != nil {
-		return err
-	}
-
 	mcp_cmd := source_mcp.McpCommand{
-		Env:        am_env,
-		Arguments:  c.Arguments,
-		InputPipe:  os.Stdin,
-		OutputPipe: os.Stdout,
-		ErrorPipe:  os.Stderr,
+		ServerDetails: serverDetails,
+		Arguments:     c.Arguments,
+		InputPipe:     os.Stdin,
+		OutputPipe:    os.Stdout,
+		ErrorPipe:     os.Stderr,
 	}
 	return mcp_cmd.Run()
 }
