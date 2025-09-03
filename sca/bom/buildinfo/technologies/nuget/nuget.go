@@ -263,6 +263,14 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 		// If the user has specified an 'install' command, we execute the command that has been provided.
 		completeCommandArgs = append(completeCommandArgs, params.InstallCommandName)
 		completeCommandArgs = append(completeCommandArgs, params.InstallCommandArgs...)
+		
+		// For nuget restore, automatically find and use solution file if available to avoid MSBUILD0004 error
+		if params.InstallCommandName == nugetToolType && len(params.InstallCommandArgs) > 0 && params.InstallCommandArgs[0] == installCommandName {
+			solutionFile, solutionErr := findSolutionFile(wd)
+			if solutionErr == nil && solutionFile != "" {
+				completeCommandArgs = append(completeCommandArgs, solutionFile)
+			}
+		}
 	} else {
 		completeCommandArgs = append(completeCommandArgs, toolType.String(), installCommandName)
 	}
@@ -288,6 +296,22 @@ func runDotnetRestore(wd string, params technologies.BuildInfoBomGeneratorParams
 		err = errorutils.CheckErrorf("'dotnet restore' command failed: %s - %s", err.Error(), output)
 	}
 	return
+}
+
+// findSolutionFile looks for a .sln file in the given directory
+func findSolutionFile(wd string) (string, error) {
+	entries, err := os.ReadDir(wd)
+	if err != nil {
+		return "", err
+	}
+	
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sln") {
+			return entry.Name(), nil
+		}
+	}
+	
+	return "", nil // No solution file found, not an error
 }
 
 func parseNugetDependencyTree(buildInfo *entities.BuildInfo) (nodes []*xrayUtils.GraphNode, allUniqueDeps []string) {

@@ -1,4 +1,4 @@
-name: "Install and Setup Dependencies"
+name: "shift-left-runner"
 description: "Install needed dependencies for this repository like Go, Node, Java, Python, etc."
 
 inputs:
@@ -53,6 +53,12 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
+
+    - name: Install Mono on MacOS
+      run: brew install mono
+      if: runner.os == 'macOS'
+      shell: 'bash'
+
     - name: Install Mono on Linux
       run: |
         sudo apt-get update
@@ -81,18 +87,6 @@ runs:
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
 
-    - name: Install Swift on Linux
-      uses: swift-actions/setup-swift@v2
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Linux'}}
-
-    - name: Install Swift on MacOS
-      run: brew install swift
-      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'macOS'}}
-
-    - name: Install Swift on Windows
-      uses: compnerd/gha-setup-swift@v0.3.0
-      with:
-        branch: swift-6.1-release
-        tag: 6.1-RELEASE
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows'}}
+    - name: Install Swift
+      uses: SwiftyLab/setup-swift@latest
+      if: ${{ inputs.install-swift == 'true' }}
