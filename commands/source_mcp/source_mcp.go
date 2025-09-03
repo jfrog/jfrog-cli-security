@@ -12,7 +12,6 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 
 	"github.com/jfrog/jfrog-client-go/utils/log"
-	xrayClient "github.com/jfrog/jfrog-client-go/xray"
 )
 
 const (
@@ -121,11 +120,7 @@ func (mcpCmd *McpCommand) Run() (err error) {
 	if err != nil {
 		return err
 	}
-	xrayManager, err := xray.CreateXrayServiceManager(mcpCmd.ServerDetails)
-	if err != nil {
-		return err
-	}
-	if entitled, err := isEntitledForSourceMCP(xrayManager); err != nil {
+	if entitled, err := isEntitledForSourceMCP(mcpCmd.ServerDetails); err != nil {
 		return err
 	} else if !entitled {
 		return fmt.Errorf("it appears your current license doesn't include this feature.\nTo enable this functionality, an upgraded license is required. Please contact your JFrog representative for more details")
@@ -133,7 +128,11 @@ func (mcpCmd *McpCommand) Run() (err error) {
 	return mcpCmd.runWithTimeout(0, cmd, am_env)
 }
 
-func isEntitledForSourceMCP(xrayManager *xrayClient.XrayServicesManager) (entitled bool, err error) {
+func isEntitledForSourceMCP(serverDetails *config.ServerDetails) (entitled bool, err error) {
+	xrayManager, err := xray.CreateXrayServiceManager(serverDetails)
+	if err != nil {
+		return
+	}
 	xrayVersion, err := xrayManager.GetVersion()
 	if err != nil {
 		return
