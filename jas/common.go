@@ -23,6 +23,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	xrayUtils "github.com/jfrog/jfrog-cli-security/utils/xray"
 	goclientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
@@ -491,12 +492,7 @@ func GetAnalyzerManagerXscEnvVars(msi string, gitRepoUrl, projectKey string, wat
 }
 
 func IsEntitledForJas(xrayManager *xray.XrayServicesManager, xrayVersion string) (entitled bool, err error) {
-	if e := goclientutils.ValidateMinimumVersion(goclientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
-		log.Debug(e)
-		return
-	}
-	entitled, err = xrayManager.IsEntitled(ApplicabilityFeatureId)
-	return
+	return xrayUtils.IsEntitled(xrayManager, xrayVersion, ApplicabilityFeatureId)
 }
 
 func CreateScannerTempDirectory(scanner *JasScanner, scanType string, threadId int) (string, error) {

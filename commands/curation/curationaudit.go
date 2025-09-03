@@ -1140,10 +1140,5 @@ func IsEntitledForCuration(xrayManager *xrayClient.XrayServicesManager) (entitle
 	if err != nil {
 		return
 	}
-	if err = clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); err != nil {
-		log.Debug(err)
-		return
-	}
-	return xrayManager.IsEntitled("curation")
-
+	return xray.IsEntitled(xrayManager, xrayVersion, "curation")
 }

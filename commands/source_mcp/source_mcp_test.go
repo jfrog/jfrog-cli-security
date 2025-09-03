@@ -25,14 +25,14 @@ func TestRunSourceMcpHappyFlow(t *testing.T) {
 	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 
 	mcp_cmd := McpCommand{
-		Env:        am_env,
-		Arguments:  []string{scanned_path},
-		InputPipe:  &input_buffer,
-		OutputPipe: &output_buffer,
-		ErrorPipe:  &error_buffer,
+		ServerDetails: serverDetails,
+		Arguments:     []string{scanned_path},
+		InputPipe:     &input_buffer,
+		OutputPipe:    &output_buffer,
+		ErrorPipe:     &error_buffer,
 	}
 
-	err := mcp_cmd.runWithTimeout(5, "mcp-sast")
+	err := mcp_cmd.runWithTimeout(5, "mcp-sast", am_env)
 	assert.NoError(t, err) // returns error because it was terminated upon timeout
 	if !assert.Contains(t, error_buffer.String(), "Generated IR") {
 		t.Error(error_buffer.String())
@@ -57,12 +57,12 @@ func TestRunSourceMcpScannerError(t *testing.T) {
 	error_buffer := *bytes.NewBuffer(make([]byte, 0, 500))
 	am_env, _ := jas.GetAnalyzerManagerEnvVariables(scanner.ServerDetails)
 	mcp_cmd := McpCommand{
-		Env:        am_env,
-		Arguments:  []string{scanned_path},
-		InputPipe:  &input_buffer,
-		OutputPipe: &output_buffer,
-		ErrorPipe:  &error_buffer,
+		ServerDetails: serverDetails,
+		Arguments:     []string{scanned_path},
+		InputPipe:     &input_buffer,
+		OutputPipe:    &output_buffer,
+		ErrorPipe:     &error_buffer,
 	}
-	err := mcp_cmd.runWithTimeout(0, "mcp-sast1") // no such command
+	err := mcp_cmd.runWithTimeout(0, "mcp-sast1", am_env) // no such command
 	assert.ErrorContains(t, err, "exit status 99")
 }
