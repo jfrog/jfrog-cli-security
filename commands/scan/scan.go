@@ -537,6 +537,11 @@ func (scanCmd *ScanCommand) RunBinaryJasScans(cmdType utils.CommandType, msi str
 		log.Debug("Jas scanner was not created, skipping advance security scans...")
 		return
 	}
+	// Set the analyzer manager executable path.
+	if scanner.AnalyzerManager.AnalyzerManagerFullPath, err = jas.GetAnalyzerManagerExecutable(); err != nil {
+		return fmt.Errorf("failed to set analyzer manager executable path: %s", err.Error())
+	}
+	log.Debug(fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 	jasParams := runner.JasRunnerParams{
 		Runner:         jasFileProducerConsumer,
 		ServerDetails:  scanCmd.serverDetails,
