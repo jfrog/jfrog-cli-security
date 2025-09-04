@@ -342,6 +342,10 @@ func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
 	return cyclonedx.NewBOMEncoder(file, cyclonedx.BOMFileFormatJSON).SetPretty(true).Encode(bom)
 }
 
+func DumpCdxWithSastContentToFile(fileContent []byte, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+	return DumpContentToFile(fileContent, scanResultsOutputDir, filePrefix, "cdx.json", threadId)
+}
+
 func DumpJsonContentToFile(fileContent []byte, scanResultsOutputDir string, scanType string, threadId int) (err error) {
 	return DumpContentToFile(fileContent, scanResultsOutputDir, scanType, "json", threadId)
 }
