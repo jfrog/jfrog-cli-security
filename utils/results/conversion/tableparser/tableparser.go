@@ -60,8 +60,8 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(target, violations, scaResponse, applicableScan...)
+func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(target, descriptors, violations, scaResponse, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
@@ -76,8 +76,8 @@ func (tc *CmdResultsTableConverter) ParseCVEs(target results.ScanTarget, enriche
 	return tc.simpleJsonConvertor.ParseCVEs(target, enrichedSbom, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, violations, applicableScan...)
+func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseViolations(target, descriptors, violations, applicableScan...)
 }
 
 func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {

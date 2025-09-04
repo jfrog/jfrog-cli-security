@@ -12,6 +12,8 @@ import (
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
+	"github.com/jfrog/jfrog-client-go/utils/errorutils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
 )
 
@@ -50,12 +52,12 @@ func BuildDependencyTree(params technologies.BuildInfoBomGeneratorParams) (depen
 	}
 
 	// Calculate go dependencies graph
-	dependenciesGraph, err := utils.GetDependenciesGraph(currentDir)
+	dependenciesGraph, err := getDependenciesGraph(currentDir)
 	if err != nil || len(dependenciesGraph) == 0 {
 		return
 	}
 	// Calculate go dependencies list
-	dependenciesList, err := utils.GetDependenciesList(currentDir, handleCurationGoError)
+	dependenciesList, err := getDependenciesList(currentDir, handleCurationGoError)
 	if err != nil {
 		return
 	}
@@ -137,4 +139,20 @@ func getGoVersionAsDependency() (*xrayUtils.GraphNode, error) {
 	return &xrayUtils.GraphNode{
 		Id: goPackageTypeIdentifier + goVersionID,
 	}, nil
+}
+
+func getDependenciesList(projectDir string, errorFunc biutils.HandleErrorFunc) (map[string]bool, error) {
+	deps, err := biutils.GetDependenciesList(projectDir, log.Logger, errorFunc)
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	return deps, nil
+}
+
+func getDependenciesGraph(projectDir string) (map[string][]string, error) {
+	deps, err := biutils.GetDependenciesGraph(projectDir, log.Logger)
+	if err != nil {
+		return nil, errorutils.CheckError(err)
+	}
+	return deps, nil
 }
