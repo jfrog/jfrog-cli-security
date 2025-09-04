@@ -27,6 +27,7 @@ type GitAuditParams struct {
 	// Output params
 	outputFormat  format.OutputFormat
 	extendedTable bool
+	outputDir     string
 	// Cmd information (not params, set by the cmd)
 	xrayVersion         string
 	xscVersion          string
@@ -123,5 +124,10 @@ func (gap *GitAuditParams) SetSbomGenerator(generator bom.SbomGenerator) *GitAud
 
 func (gap *GitAuditParams) SetScaScanStrategy(scaScanStrategy scan.SbomScanStrategy) *GitAuditParams {
 	gap.scaScanStrategy = scaScanStrategy
+	return gap
+}
+
+func (gap *GitAuditParams) SetOutputDir(outputDir string) *GitAuditParams {
+	gap.outputDir = outputDir
 	return gap
 }

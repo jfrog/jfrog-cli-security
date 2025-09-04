@@ -625,7 +625,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			expected: []cyclonedx.Dependency{{Ref: "root", Dependencies: &[]string{"dep1", "dep2", "dep3"}}},
 		},
 		{
-			name: "SCANG - Single root dependency",
+			name: "XrayLib - Single root dependency",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{
@@ -713,7 +713,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			},
 		},
 		{
-			name: "SCANG - Multiple root dependencies",
+			name: "XrayLib - Multiple root dependencies",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{
@@ -751,7 +751,7 @@ func TestGetRootDependenciesEntries(t *testing.T) {
 			},
 		},
 		{
-			name: "SCANG - Circular dependencies",
+			name: "XrayLib - Circular dependencies",
 			bom: &cyclonedx.BOM{
 				Metadata: &cyclonedx.Metadata{
 					Component: &cyclonedx.Component{
