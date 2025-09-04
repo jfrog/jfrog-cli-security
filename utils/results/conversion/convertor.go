@@ -161,11 +161,11 @@ func parseScaResults[T interface{}](params ResultConvertParams, parser ResultsSt
 		}
 	}
 	// Parse SCA violations
-	if params.HasViolationContext && len(targetScansResults.ScaResults.Violations) > 0 {
-		if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
-			return
-		}
-	}
+	// if params.HasViolationContext && len(targetScansResults.ScaResults.Violations) > 0 {
+	// 	if err = parser.ParseViolations(targetScansResults.ScanTarget, targetScansResults.ScaResults.Descriptors, targetScansResults.ScaResults.Violations, applicableRuns...); err != nil {
+	// 		return
+	// 	}
+	// }
 	// Must be called last for cyclonedxparser to be able to attach the licenses to all the components
 	if params.IncludeLicenses && targetScansResults.ScaResults.Sbom.Components != nil {
 		dependencies := []cyclonedx.Dependency{}

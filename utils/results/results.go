@@ -100,9 +100,8 @@ type ScaScanResults struct {
 	// Sca scan results
 	DeprecatedXrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
-	Sbom           *cyclonedx.BOM       `json:"sbom,omitempty"`
-	Violations     []services.Violation `json:"violations,omitempty"`
-	ScanStatusCode int                  `json:"status_code,omitempty"`
+	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
+	ScanStatusCode int `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {
@@ -488,10 +487,9 @@ func (sr *TargetResults) ScaScanResults(errorCode int, responses ...services.Sca
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
+func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
 	// Update the existing BOM with the enriched BOM
 	sr.SetSbom(enrichedSbom)
-	sr.ScaResults.AddViolations(violations...)
 	sr.ScaResults.ScanStatusCode = errorCode
 	return sr.ScaResults
 }
@@ -522,14 +520,6 @@ func (ssr *ScaScanResults) HasFindings() bool {
 		}
 	}
 	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
-}
-
-func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
-	if ssr.Violations == nil {
-		ssr.Violations = []services.Violation{}
-	}
-	ssr.Violations = append(ssr.Violations, violations...)
-	return ssr
 }
 
 func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {

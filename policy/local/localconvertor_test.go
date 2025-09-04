@@ -15,7 +15,7 @@ import (
 )
 
 func TestViolationFailBuild(t *testing.T) {
-	components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
+	// components := map[string]services.Component{"gav://antparent:ant:1.6.5": {}}
 
 	tests := []struct {
 		name           string
@@ -61,26 +61,26 @@ func TestViolationFailBuild(t *testing.T) {
 						// First target - should not fail
 						ScanTarget: results.ScanTarget{Target: "test-target-1"},
 						ScaResults: &results.ScaScanResults{
-							Violations: []services.Violation{
-								{
-									// Violation 1: FailBuild & FailPr set to false - should not fail
-									Components:    components,
-									ViolationType: violationutils.ViolationTypeSecurity.String(),
-									FailBuild:     false,
-									FailPr:        false,
-									Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
-									Severity:      "High",
-								},
-								{
-									// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
-									Components:    components,
-									ViolationType: violationutils.ViolationTypeSecurity.String(),
-									FailBuild:     true,
-									Policies:      []services.Policy{{SkipNotApplicable: true}},
-									Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
-									Severity:      "High",
-								},
-							},
+							// Violations: []services.Violation{
+							// 	{
+							// 		// Violation 1: FailBuild & FailPr set to false - should not fail
+							// 		Components:    components,
+							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
+							// 		FailBuild:     false,
+							// 		FailPr:        false,
+							// 		Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
+							// 		Severity:      "High",
+							// 	},
+							// 	{
+							// 		// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
+							// 		Components:    components,
+							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
+							// 		FailBuild:     true,
+							// 		Policies:      []services.Policy{{SkipNotApplicable: true}},
+							// 		Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
+							// 		Severity:      "High",
+							// 	},
+							// },
 						},
 						JasResults: &results.JasScansResults{
 							ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
@@ -111,26 +111,26 @@ func TestViolationFailBuild(t *testing.T) {
 						// Second target - should fail
 						ScanTarget: results.ScanTarget{Target: "test-target-2"},
 						ScaResults: &results.ScaScanResults{
-							Violations: []services.Violation{
-								{
-									// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
-									Components:    components,
-									ViolationType: violationutils.ViolationTypeSecurity.String(),
-									FailBuild:     true,
-									Policies:      []services.Policy{{SkipNotApplicable: false}},
-									Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
-									Severity:      "High",
-								},
-								{
-									// Violation 2: FailBuild & FailPr set to false - should not fail
-									Components:    components,
-									ViolationType: violationutils.ViolationTypeSecurity.String(),
-									FailBuild:     false,
-									FailPr:        false,
-									Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
-									Severity:      "High",
-								},
-							},
+							// Violations: []services.Violation{
+							// 	{
+							// 		// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
+							// 		Components:    components,
+							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
+							// 		FailBuild:     true,
+							// 		Policies:      []services.Policy{{SkipNotApplicable: false}},
+							// 		Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
+							// 		Severity:      "High",
+							// 	},
+							// 	{
+							// 		// Violation 2: FailBuild & FailPr set to false - should not fail
+							// 		Components:    components,
+							// 		ViolationType: violationutils.ViolationTypeSecurity.String(),
+							// 		FailBuild:     false,
+							// 		FailPr:        false,
+							// 		Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
+							// 		Severity:      "High",
+							// 	},
+							// },
 						},
 						JasResults: &results.JasScansResults{
 							ApplicabilityScanResults: []results.ScanResult[[]*sarif.Run]{
@@ -208,7 +208,7 @@ func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasR
 	}
 
 	if useNewViolations {
-		target.ScaResults.Violations = []services.Violation{violation}
+		// target.ScaResults.Violations = []services.Violation{violation}
 	} else {
 		target.ScaResults.DeprecatedXrayResults = []results.ScanResult[services.ScanResponse]{
 			{

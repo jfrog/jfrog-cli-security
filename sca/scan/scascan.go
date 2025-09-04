@@ -30,8 +30,8 @@ type SbomScanStrategy interface {
 	// - ExtendedInformation (JfrogResearchInformation): ShortDescription, FullDescription, frogResearchSeverityReasons, Remediation
 	// - Binary (Docker) indexer attributes (needed for Scan Graph)
 	DeprecatedScanTask(target *cyclonedx.BOM) (services.ScanResponse, error)
-	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations. (Violations will be moved at the future to the end of command)
-	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, []services.Violation, error)
+	// Perform a Scan on the given SBOM and return the enriched CycloneDX BOM and calculated violations.
+	SbomEnrichTask(target *cyclonedx.BOM) (*cyclonedx.BOM, error)
 }
 
 type SbomScanOption func(sss SbomScanStrategy)
@@ -163,14 +163,14 @@ func scaScanTask(strategy SbomScanStrategy, params ScaScanParams) (err error) {
 		return dumpScanResponseToFileIfNeeded(scanResults, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 	}
 	// New flow: we scan the SBOM and enrich it with CVE vulnerabilities and calculate violations.
-	bomWithVulnerabilities, violations, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
+	bomWithVulnerabilities, err := strategy.SbomEnrichTask(params.ScanResults.ScaResults.Sbom)
 	// We add the results before checking for errors, so we can display the results even if an error occurred.
-	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities, violations...)
+	params.ScanResults.EnrichedSbomScanResults(GetScaScansStatusCode(err), bomWithVulnerabilities)
 	if err != nil {
 		return fmt.Errorf("failed to enrich SBOM for %s: %w", params.ScanResults.Target, err)
 	}
 	if params.ScanResults.ScaResults.Sbom.Vulnerabilities != nil {
-		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities), len(violations)))
+		log.Info(logPrefix + utils.GetScanFindingsLog(utils.ScaScan, len(*params.ScanResults.ScaResults.Sbom.Vulnerabilities), 0))
 	}
 	return dumpEnrichedCdxToFileIfNeeded(bomWithVulnerabilities, params.ResultsOutputDir, utils.ScaScan, params.ThreadId)
 }

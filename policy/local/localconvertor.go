@@ -150,27 +150,27 @@ func checkIfFailBuildConsideringApplicability(target *results.TargetResults, ent
 		return nil
 	}
 	// Get new violations from the target
-	newViolations := target.ScaResults.Violations
+	// newViolations := target.ScaResults.Violations
 
-	// Here we iterate the new violation results and check if any of them should fail the build.
-	_, _, err := ForEachScanGraphViolation(
-		target.ScanTarget,
-		[]string{},
-		newViolations,
-		entitledForJas,
-		jasApplicabilityResults,
-		checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
-		nil,
-		nil)
-	if err != nil {
-		return err
-	}
+	// // Here we iterate the new violation results and check if any of them should fail the build.
+	// _, _, err := ForEachScanGraphViolation(
+	// 	target.ScanTarget,
+	// 	[]string{},
+	// 	newViolations,
+	// 	entitledForJas,
+	// 	jasApplicabilityResults,
+	// 	checkIfShouldFailBuildAccordingToPolicy(shouldFailBuild),
+	// 	nil,
+	// 	nil)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// Here we iterate the deprecated violation results to check if any of them should fail the build.
 	// TODO remove this part once the DeprecatedXrayResults are completely removed and no longer in use
 	for _, result := range target.ScaResults.DeprecatedXrayResults {
 		deprecatedViolations := result.Scan.Violations
-		_, _, err = ForEachScanGraphViolation(
+		_, _, err := ForEachScanGraphViolation(
 			target.ScanTarget,
 			[]string{},
 			deprecatedViolations,
@@ -190,11 +190,11 @@ func checkIfFailBuildWithoutConsideringApplicability(target *results.TargetResul
 	if target.ScaResults == nil {
 		return false
 	}
-	for _, newViolation := range target.ScaResults.Violations {
-		if newViolation.FailBuild || newViolation.FailPr {
-			return true
-		}
-	}
+	// for _, newViolation := range target.ScaResults.Violations {
+	// 	if newViolation.FailBuild || newViolation.FailPr {
+	// 		return true
+	// 	}
+	// }
 	// TODO remove this for loop once the DeprecatedXrayResults are completely removed and no longer in use
 	for _, scanResponse := range target.GetScaScansXrayResults() {
 		for _, oldViolation := range scanResponse.Violations {
