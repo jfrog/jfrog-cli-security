@@ -39,7 +39,7 @@ type AuditParams struct {
 	uploadCdxResults                bool
 	rtResultRepository              string
 	remediationService              bool
-	violationGenerator              policy.ViolationGenerator
+	violationGenerator              policy.PolicyHandler
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -288,12 +288,12 @@ func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Tec
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
 }
 
-func (params *AuditParams) SetViolationGenerator(violationGenerator policy.ViolationGenerator) *AuditParams {
+func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {
 	params.violationGenerator = violationGenerator
 	return params
 }
 
-func (params *AuditParams) ViolationGenerator() policy.ViolationGenerator {
+func (params *AuditParams) ViolationGenerator() policy.PolicyHandler {
 	return params.violationGenerator
 }
 

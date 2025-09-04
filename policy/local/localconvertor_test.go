@@ -1,12 +1,14 @@
-package policy
+package local
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-client-go/xray/services"
@@ -63,7 +65,7 @@ func TestViolationFailBuild(t *testing.T) {
 								{
 									// Violation 1: FailBuild & FailPr set to false - should not fail
 									Components:    components,
-									ViolationType: ViolationTypeSecurity.String(),
+									ViolationType: violationutils.ViolationTypeSecurity.String(),
 									FailBuild:     false,
 									FailPr:        false,
 									Cves:          []services.Cve{{Id: "CVE-2024-1111"}},
@@ -72,7 +74,7 @@ func TestViolationFailBuild(t *testing.T) {
 								{
 									// Violation 2: FailBuild=true, notApplicable, skip-not-applicable - should not fail
 									Components:    components,
-									ViolationType: ViolationTypeSecurity.String(),
+									ViolationType: violationutils.ViolationTypeSecurity.String(),
 									FailBuild:     true,
 									Policies:      []services.Policy{{SkipNotApplicable: true}},
 									Cves:          []services.Cve{{Id: "CVE-2024-2222"}},
@@ -113,7 +115,7 @@ func TestViolationFailBuild(t *testing.T) {
 								{
 									// Violation 1: FailBuild=true, notApplicable, NOT skip-not-applicable - should fail
 									Components:    components,
-									ViolationType: ViolationTypeSecurity.String(),
+									ViolationType: violationutils.ViolationTypeSecurity.String(),
 									FailBuild:     true,
 									Policies:      []services.Policy{{SkipNotApplicable: false}},
 									Cves:          []services.Cve{{Id: "CVE-2024-3333"}},
@@ -122,7 +124,7 @@ func TestViolationFailBuild(t *testing.T) {
 								{
 									// Violation 2: FailBuild & FailPr set to false - should not fail
 									Components:    components,
-									ViolationType: ViolationTypeSecurity.String(),
+									ViolationType: violationutils.ViolationTypeSecurity.String(),
 									FailBuild:     false,
 									FailPr:        false,
 									Cves:          []services.Cve{{Id: "CVE-2024-4444"}},
@@ -195,7 +197,7 @@ func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasR
 
 	violation := services.Violation{
 		Components:    components,
-		ViolationType: ViolationTypeSecurity.String(),
+		ViolationType: violationutils.ViolationTypeSecurity.String(),
 		FailBuild:     true,
 		Cves:          []services.Cve{{Id: cveId}},
 		Severity:      "High",

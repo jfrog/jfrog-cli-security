@@ -15,6 +15,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/jas/secrets"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/policy/enforcer"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -251,7 +252,7 @@ func OutputResultsAndCmdError(auditResults *results.SecurityCommandResults, outp
 		return
 	}
 	// Only in case Xray's context was given (!auditCmd.IncludeVulnerabilities), and the user asked to fail the build accordingly, do so.
-	shouldFailBuildByPolicy, err := policy.CheckIfFailBuild(auditResults)
+	shouldFailBuildByPolicy, err := local.CheckIfFailBuild(auditResults)
 	if err != nil {
 		return fmt.Errorf("failed to check if the build should fail: %w", err)
 	}
@@ -651,7 +652,7 @@ func processScanResults(params *AuditParams, cmdResults *results.SecurityCommand
 	uploadPath := ""
 	if params.uploadCdxResults {
 		if params.rtResultRepository == "" {
-			return cmdResults.AddGeneralError(errors.New("Results repository was not provided, can't upload scan results to Artifactory"), false)
+			return cmdResults.AddGeneralError(errors.New("results repository was not provided, can't upload scan results to Artifactory"), false)
 		}
 		if params.Progress() != nil {
 			params.Progress().SetHeadlineMsg("Uploading scan results to platform")
@@ -704,10 +705,12 @@ func fetchViolations(uploadPath string, cmdResults *results.SecurityCommandResul
 		return fmt.Errorf("failed to get server details: %s", err.Error())
 	}
 	generator := auditParams.ViolationGenerator().WithOptions(
-		enforcer.WithParams(serverDetails, auditParams.rtResultRepository, uploadPath),
+		enforcer.WithServerDetails(serverDetails),
+		enforcer.WithProjectKey(auditParams.resultsContext.ProjectKey),
+		enforcer.WithParams(auditParams.rtResultRepository, uploadPath),
 	)
 	// Fetch violations from Xray
-	if err = policy.FetchGeneratedViolations(generator, cmdResults); err != nil {
+	if err = policy.EnrichWithGeneratedViolations(generator, cmdResults); err != nil {
 		return fmt.Errorf("failed to fetch violations: %s", err.Error())
 	}
 	return

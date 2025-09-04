@@ -3,7 +3,7 @@ package summaryparser
 import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
-	"github.com/jfrog/jfrog-cli-security/policy"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
@@ -106,7 +106,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	}
 	// Parse violations
 	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := policy.ForEachScanGraphViolation(
+	watches, failBuild, err := local.ForEachScanGraphViolation(
 		target,
 		descriptors,
 		scaResponse.Scan.Violations,
@@ -124,7 +124,7 @@ func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarg
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) policy.ParseScanGraphViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		for _, id := range getCveIds(cves, violation.IssueId) {
 			// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
@@ -140,7 +140,7 @@ func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *dat
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) policy.ParseScanGraphViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.License == nil {
 			sc.currentScan.Violations.ScaResults.License = formats.ResultSummary{}
@@ -159,7 +159,7 @@ func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *data
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) policy.ParseScanGraphViolationFunc {
+func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
 		if sc.currentScan.Violations.ScaResults.OperationalRisk == nil {
 			sc.currentScan.Violations.ScaResults.OperationalRisk = formats.ResultSummary{}

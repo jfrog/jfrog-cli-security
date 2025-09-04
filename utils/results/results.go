@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -36,6 +37,8 @@ type SecurityCommandResults struct {
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
+	// Policy violations found in the command
+	Violations []violationutils.Violation `json:"violations,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
@@ -312,6 +315,14 @@ func (r *SecurityCommandResults) HasFindings() bool {
 		}
 	}
 	return false
+}
+
+func (r *SecurityCommandResults) AddViolations(violations ...violationutils.Violation) *SecurityCommandResults {
+	if r.Violations == nil {
+		r.Violations = []violationutils.Violation{}
+	}
+	r.Violations = append(r.Violations, violations...)
+	return r
 }
 
 // --- Scan on a target ---

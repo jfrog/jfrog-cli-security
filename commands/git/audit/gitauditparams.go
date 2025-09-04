@@ -38,7 +38,7 @@ type GitAuditParams struct {
 	// Dynamic logic params
 	bomGenerator       bom.SbomGenerator
 	scaScanStrategy    scan.SbomScanStrategy
-	violationGenerator policy.ViolationGenerator
+	violationGenerator policy.PolicyHandler
 	uploadResults      bool
 	rtResultRepository string
 	remediationService bool
@@ -138,12 +138,12 @@ func (gap *GitAuditParams) SetOutputDir(outputDir string) *GitAuditParams {
 	return gap
 }
 
-func (gap *GitAuditParams) SetViolationGenerator(violationGenerator policy.ViolationGenerator) *GitAuditParams {
+func (gap *GitAuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *GitAuditParams {
 	gap.violationGenerator = violationGenerator
 	return gap
 }
 
-func (gap *GitAuditParams) ViolationGenerator() policy.ViolationGenerator {
+func (gap *GitAuditParams) ViolationGenerator() policy.PolicyHandler {
 	return gap.violationGenerator
 }
 
