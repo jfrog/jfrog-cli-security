@@ -100,15 +100,11 @@ func CreateDummyResultInPathWithPartialFingerprint(fileName string, partialFinge
 }
 
 func CreateDummyResult(markdown, msg, ruleId, level string, locations ...*sarif.Location) *sarif.Result {
-	result := &sarif.Result{
-		Message: &sarif.Message{Text: &msg, Markdown: &markdown},
-		Level:   level,
-		RuleID:  &ruleId,
-	}
+	results := sarif.NewRuleResult(ruleId).WithMessage(sarif.NewMessage().WithText(msg).WithMarkdown(markdown)).WithLevel(level)
 	if len(locations) > 0 {
-		result.Locations = locations
+		results.Locations = locations
 	}
-	return result
+	return results
 }
 
 func CreateResultWithProperties(msg, ruleId, level string, properties map[string]string, locations ...*sarif.Location) *sarif.Result {

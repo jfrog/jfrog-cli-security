@@ -74,7 +74,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseNewTargetResults(target results.Sc
 	return
 }
 
-func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results.ScanTarget, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if cdc.bom == nil {
 		return results.ErrResetConvertor
 	}
@@ -85,7 +85,7 @@ func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseScaIssues(target results
 	}
 	cdc.addXrayToolIfMissing()
 	cdc.addJasService(applicableScan)
-	return results.ForEachScanGraphVulnerability(target, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(&cdc.bom.BOM))
+	return results.ForEachScanGraphVulnerability(target, descriptors, scaResponse.Scan.Vulnerabilities, cdc.entitledForJas, results.ScanResultsToRuns(applicableScan), results.ParseScanGraphVulnerabilityToSbom(&cdc.bom.BOM))
 }
 
 func (cdc *CmdResultsCycloneDxConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
@@ -251,7 +251,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 	})
 }
 
-func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (cdc *CmdResultsCycloneDxConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	// Violations are not supported in CycloneDX
 	log.Warn("Violations are not supported in CycloneDX. Skipping violations parsing.")
 	return

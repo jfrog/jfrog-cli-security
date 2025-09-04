@@ -35,14 +35,14 @@ type IacScanManager struct {
 // Parsing the analyzer manager results.
 func RunIacScan(scanner *jas.JasScanner, module jfrogappsconfig.Module, threadId int, resultsToCompare ...*sarif.Run) (vulnerabilitiesResults []*sarif.Run, violationsResults []*sarif.Run, err error) {
 	var scannerTempDir string
-	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String()); err != nil {
+	if scannerTempDir, err = jas.CreateScannerTempDirectory(scanner, jasutils.IaC.String(), threadId); err != nil {
 		return
 	}
 	iacScanManager, err := newIacScanManager(scanner, scannerTempDir, resultsToCompare...)
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target...", utils.IacScan.ToTextString()))
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.IacScan.ToTextString(), module.SourceRoot))
 	if vulnerabilitiesResults, violationsResults, err = iacScanManager.scanner.Run(iacScanManager, module); err != nil {
 		return
 	}
