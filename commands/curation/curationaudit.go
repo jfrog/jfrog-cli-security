@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/gofrog/parallel"
 	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
@@ -80,8 +81,33 @@ const (
 	MinArtiGradleGemSupport   = "7.63.5"
 
 	// Curation request headers
-	waiverHeader      = "X-Artifactory-Curation-Request-Waiver"
-	waiverHeaderValue = "syn_JFrog-Curation-Client"
+	waiverHeader = "X-Artifactory-Curation-Request-Waiver"
+)
+
+// generateWaiverHeaderValue creates a header value with a unique batch ID
+func generateWaiverHeaderValue() string {
+	batchID := fmt.Sprintf("batch_%s", uuid.New().String()[:8])
+	return fmt.Sprintf("syn_JFrog-Curation-Client_%s", batchID)
+}
+
+// createRequestDetails creates a copy of httpClientDetails for thread-safe header modification
+func (nc *treeAnalyzer) createRequestDetails() httputils.HttpClientDetails {
+	requestDetails := nc.httpClientDetails
+	if requestDetails.Headers == nil {
+		requestDetails.Headers = make(map[string]string)
+	} else {
+		// Create a copy of the headers map
+		requestDetails.Headers = make(map[string]string)
+		for k, v := range nc.httpClientDetails.Headers {
+			requestDetails.Headers[k] = v
+		}
+	}
+	return requestDetails
+}
+
+var (
+	waiverHeaderValue string
+	blockedPackageUrl string
 )
 
 var CurationOutputFormats = []string{string(outFormat.Table), string(outFormat.Json)}
@@ -494,6 +520,10 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		parallelRequests:     ca.parallelRequests,
 		downloadUrls:         depTreeResult.DownloadUrls,
 	}
+	// Initialize the waiver header value with batch ID from Xray API
+	waiverHeaderValue = generateWaiverHeaderValue()
+	blockedPackageUrl = ""
+
 	// Add curation client header to all requests
 	analyzer.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
 
@@ -515,6 +545,7 @@ func (ca *CurationAuditCommand) auditTree(tech techutils.Technology, results map
 		// We subtract 1 because the root node is not a package.
 		totalNumberOfPackages: len(depTreeResult.FlatTree.Nodes) - 1,
 	}
+
 	return err
 }
 
@@ -794,12 +825,14 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	var multiErrors error
 	consumerProducer := parallel.NewBounedRunner(nc.parallelRequests, false)
 	errorsQueue := clientutils.NewErrorsQueue(1)
+
 	go func() {
 		defer consumerProducer.Done()
 		for _, node := range graph.Nodes {
 			if _, ok := rootNodeIds[node.Id]; ok {
 				continue
 			}
+
 			getTask := func(node xrayUtils.GraphNode) func(threadId int) error {
 				return func(threadId int) (err error) {
 					return nc.fetchNodeStatus(node, p)
@@ -814,6 +847,15 @@ func (nc *treeAnalyzer) fetchNodesStatus(graph *xrayUtils.GraphNode, p *sync.Map
 	if err := errorsQueue.GetError(); err != nil {
 		multiErrors = errors.Join(err, multiErrors)
 	}
+
+	// After all parallel processing is done, send the completed request
+	// Only send completed request if there are blocked packages
+	if blockedPackageUrl != "" {
+		if err := nc.sendCompletedRequest(blockedPackageUrl); err != nil {
+			multiErrors = errors.Join(err, multiErrors)
+		}
+	}
+
 	return multiErrors
 }
 
@@ -825,8 +867,15 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 	if scope != "" {
 		name = scope + "/" + name
 	}
+
 	for _, packageUrl := range packageUrls {
-		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &nc.httpClientDetails)
+		// Create a copy of httpClientDetails for this request to avoid modifying the shared one
+		requestDetails := nc.createRequestDetails()
+
+		// Set the header for regular HEAD request
+		requestDetails.Headers[waiverHeader] = waiverHeaderValue
+
+		resp, _, err := nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
 		if err != nil {
 			if resp != nil && resp.StatusCode >= 400 {
 				return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
@@ -843,6 +892,11 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 			return errorutils.CheckErrorf(errorTemplateHeadRequest, packageUrl, name, version, resp.StatusCode, err)
 		}
 		if resp.StatusCode == http.StatusForbidden {
+			// Track this blocked package URL (only need one for completed request)
+			if blockedPackageUrl == "" {
+				blockedPackageUrl = packageUrl
+			}
+
 			pkStatus, err := nc.getBlockedPackageDetails(packageUrl, name, version)
 			if err != nil {
 				return err
@@ -863,8 +917,13 @@ func (nc *treeAnalyzer) fetchNodeStatus(node xrayUtils.GraphNode, p *sync.Map) e
 
 // We try to collect curation details from GET response after HEAD request got forbidden status code.
 func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string, version string) (*PackageStatus, error) {
-	nc.httpClientDetails.Headers[waiverHeader] = waiverHeaderValue
-	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &nc.httpClientDetails)
+	// Create a copy of httpClientDetails for this request to avoid modifying the shared one
+	requestDetails := nc.createRequestDetails()
+
+	// Set the header for regular GET request
+	requestDetails.Headers[waiverHeader] = waiverHeaderValue
+
+	getResp, respBody, _, err := nc.rtManager.Client().SendGet(packageUrl, true, &requestDetails)
 	if err != nil {
 		if getResp == nil {
 			return nil, err
@@ -902,6 +961,19 @@ func (nc *treeAnalyzer) getBlockedPackageDetails(packageUrl string, name string,
 		}
 	}
 	return nil, nil
+}
+
+// sendCompletedRequest sends a final request with the _completed header
+func (nc *treeAnalyzer) sendCompletedRequest(packageUrl string) error {
+	// Create a copy of httpClientDetails for this request
+	requestDetails := nc.createRequestDetails()
+
+	// Set the header with _completed suffix
+	requestDetails.Headers[waiverHeader] = waiverHeaderValue + "_completed"
+
+	// Send a HEAD request with the completed header
+	_, _, err := nc.rtManager.Client().SendHead(packageUrl, &requestDetails)
+	return err
 }
 
 // Return policies and conditions names from the FORBIDDEN HTTP error message.

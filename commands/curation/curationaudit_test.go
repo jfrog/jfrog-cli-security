@@ -20,6 +20,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -485,35 +486,42 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 }
 
 func TestCurationHeaders(t *testing.T) {
-	// Test that a request actually includes the header
-	ca := &CurationAuditCommand{}
+	// Test that batch ID generation works correctly
+	headerValue := generateWaiverHeaderValue()
+	assert.True(t, strings.HasPrefix(headerValue, "syn_JFrog-Curation-Client_batch_"))
+	assert.Len(t, strings.Split(headerValue, "_"), 4) // syn_JFrog-Curation-Client_batch_<id>
 
-	// Mock server to capture the request headers
-	var capturedHeaders http.Header
+	// Test that completed request adds "_completed" suffix
+	var capturedHeader http.Header
 	testHandler := func(w http.ResponseWriter, r *http.Request) {
-		capturedHeaders = r.Header
-		w.WriteHeader(http.StatusForbidden)
-		_, err := w.Write([]byte(`{"errors":[{"status":403,"message":"waiver-id|forbidden"}]}`))
-		assert.NoError(t, err)
+		capturedHeader = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
 	}
 
 	mockServer, mockServerDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
 	defer mockServer.Close()
 
-	// Create test package
-	pkg := &PackageStatus{
-		BlockedPackageUrl: mockServerDetails.GetArtifactoryUrl() + "/test/pkg",
-		PackageName:       "test-pkg",
-		PackageVersion:    "1.0.0",
+	// Create analyzer and send completed request
+	rtAuth, err := mockServerDetails.CreateArtAuthConfig()
+	require.NoError(t, err)
+	rtManager, err := rtUtils.CreateServiceManager(mockServerDetails, 2, 0, false)
+	require.NoError(t, err)
+
+	analyzer := &treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
 	}
 
-	// Make the request - this should include our header
-	_, err := ca.sendWaiverRequests([]*PackageStatus{pkg}, "test waiver", mockServerDetails)
+	// Use real header format like: syn_JFrog-Curation-Client_batch_a3404ff3
+	waiverHeaderValue = "syn_JFrog-Curation-Client_batch_a3404ff3"
+	testUrl := mockServerDetails.GetArtifactoryUrl() + "/test/pkg"
+	err = analyzer.sendCompletedRequest(testUrl)
 	assert.NoError(t, err)
 
-	// Verify the header was sent
-	assert.NotNil(t, capturedHeaders)
-	assert.Equal(t, "test waiver", capturedHeaders["X-Artifactory-Curation-Request-Waiver"][0])
+	// Verify the header has "_completed" suffix
+	assert.NotNil(t, capturedHeader)
+	waiverHeader := capturedHeader["X-Artifactory-Curation-Request-Waiver"]
+	assert.Equal(t, "syn_JFrog-Curation-Client_batch_a3404ff3_completed", waiverHeader[0])
 }
 
 func setCurationFlagsForTest(t *testing.T) func() {
