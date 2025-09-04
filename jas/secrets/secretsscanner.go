@@ -49,7 +49,7 @@ func RunSecretsScan(scanner *jas.JasScanner, scanType SecretsScanType, module jf
 	if err != nil {
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target...", utils.SecretsScan.ToTextString()))
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.SecretsScan.ToTextString(), module.SourceRoot))
 	if vulnerabilitiesResults, violationsResults, err = secretScanManager.scanner.Run(secretScanManager, module); err != nil {
 		return
 	}
