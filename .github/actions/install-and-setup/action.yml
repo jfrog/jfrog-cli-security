@@ -55,11 +55,30 @@ runs:
       with:
         dotnet-version: '6.x'
 
-    - name: Install Mono on macOS
+    - name: Install Mono on macOS (v2024-01-04-DEBUG)
       if: runner.os == 'macOS'
       run: |
+        echo "🚀 STARTING MONO INSTALL WITH DEBUG - VERSION 2024-01-04"
         brew install mono
+        echo "🔍 DEBUG: Comprehensive MSBuild hunt after Mono install..."
+        echo "Checking common locations:"
+        ls -la /opt/homebrew/bin/msbuild* 2>/dev/null || echo "❌ No msbuild in /opt/homebrew/bin/"
+        ls -la /usr/local/bin/msbuild* 2>/dev/null || echo "❌ No msbuild in /usr/local/bin/"
+        ls -la /Library/Frameworks/Mono.framework/Versions/Current/Commands/msbuild* 2>/dev/null || echo "❌ No msbuild in Mono.framework"
+        
+        echo "🕵️ DEBUG: Searching for ANY msbuild on the system..."
+        find /opt/homebrew -name "*msbuild*" 2>/dev/null | head -10 || echo "No msbuild found in /opt/homebrew"
+        find /Library/Frameworks/Mono.framework -name "*msbuild*" 2>/dev/null | head -10 || echo "No msbuild found in Mono.framework"
+        
+        echo "🛤️ DEBUG: Checking what's in PATH that could be msbuild..."
+        which msbuild 2>/dev/null || echo "❌ No msbuild found in PATH"
+        
+        echo "📦 DEBUG: Moving any found msbuild to backup..."
+        sudo mv /opt/homebrew/bin/msbuild /opt/homebrew/bin/msbuild.mono.bak 2>/dev/null || echo "No msbuild to move in /opt/homebrew/bin/"
+        
+        echo "🛤️ DEBUG: Setting PATH to prioritize dotnet..."
         echo "PATH=/usr/local/share/dotnet:$PATH" >> $GITHUB_ENV
+        echo "✅ DEBUG: PATH updated to prioritize dotnet tools!"
       shell: bash
 
     - name: Install Mono on Linux
