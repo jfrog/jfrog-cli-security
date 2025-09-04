@@ -11,9 +11,11 @@ import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -22,6 +24,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 const (
@@ -104,7 +107,7 @@ func (sc *CmdResultsSarifConverter) Get() (*sarif.Report, error) {
 	return sarifutils.CombineMultipleRunsWithSameTool(sc.current), nil
 }
 
-func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ error) (err error) {
+func (sc *CmdResultsSarifConverter) Reset(cmdType utils.CommandType, _, xrayVersion string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
 	sc.current = sarif.NewReport()
 	// Reset the current stream general information
 	sc.currentCmdType = cmdType
@@ -175,7 +178,7 @@ func (sc *CmdResultsSarifConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if violations {
 		if err = sc.parseScaViolations(target, descriptors, scaResponse, applicableScan...); err != nil {
 			return
@@ -219,22 +222,22 @@ func (sc *CmdResultsSarifConverter) parseScaVulnerabilities(target results.ScanT
 	return
 }
 
-func (sc *CmdResultsSarifConverter) DeprecatedParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSarifConverter) DeprecatedParseLicenses(_ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
 	// Not supported in Sarif format
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
@@ -314,11 +317,11 @@ func prepareCdxVulnerabilitiesForSarif(enrichedSbom *cyclonedx.BOM, vulnerabilit
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, violations bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
@@ -326,7 +329,7 @@ func (sc *CmdResultsSarifConverter) ParseSecrets(target results.ScanTarget, viol
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violations bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
@@ -334,7 +337,7 @@ func (sc *CmdResultsSarifConverter) ParseIacs(target results.ScanTarget, violati
 	return
 }
 
-func (sc *CmdResultsSarifConverter) ParseSast(target results.ScanTarget, violations bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSarifConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || !sc.entitledForJas {
 		return
 	}
@@ -385,7 +388,7 @@ func combineJasRunsToCurrentRun(destination *sarif.Run, runs ...*sarif.Run) *sar
 func PrepareSarifScaViolations(cmdType utils.CommandType, target results.ScanTarget, descriptors []string, violations []services.Violation, entitledForJas bool, applicabilityRuns ...*sarif.Run) ([]*sarif.Result, map[string]*sarif.ReportingDescriptor, error) {
 	sarifResults := []*sarif.Result{}
 	rules := map[string]*sarif.ReportingDescriptor{}
-	_, _, err := results.ForEachScanGraphViolation(
+	_, _, err := local.ForEachScanGraphViolation(
 		target,
 		descriptors,
 		violations,
@@ -450,7 +453,7 @@ func addSarifScaVulnerability(cmdType utils.CommandType, sarifResults *[]*sarif.
 	}
 }
 
-func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
+func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) local.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {
@@ -492,7 +495,7 @@ func addSarifScaSecurityViolation(cmdType utils.CommandType, sarifResults *[]*sa
 	}
 }
 
-func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) results.ParseScanGraphViolationFunc {
+func addSarifScaLicenseViolation(cmdType utils.CommandType, sarifResults *[]*sarif.Result, rules *map[string]*sarif.ReportingDescriptor) local.ParseScanGraphViolationFunc {
 	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersions []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) error {
 		maxCveScore, err := results.FindMaxCVEScore(severity, applicabilityStatus, cves)
 		if err != nil {

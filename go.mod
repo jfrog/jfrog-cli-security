@@ -124,6 +124,9 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
+// attiasas:add_get_violations_api
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250904071955-a96c8e49903b
+
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev

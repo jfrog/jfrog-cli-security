@@ -23,6 +23,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
@@ -57,15 +58,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
-	ScaScan                      SubScanType        = "sca"
-	IacScan                      SubScanType        = "iac"
-	SastScan                     SubScanType        = "sast"
-	SecretsScan                  SubScanType        = "secrets"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -81,12 +79,6 @@ func (subScan SubScanType) ToTextString() string {
 		return text
 	}
 	return string(subScan)
-}
-
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
 }
 
 type SubScanType string
@@ -321,14 +313,14 @@ func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
 	return bom, nil
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (pathToSave string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	pathToSave = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
-	return SaveCdxContentToFile(pathToSave, bom)
+	return pathToSave, SaveCdxContentToFile(pathToSave, bom)
 }
 
 func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {
@@ -373,4 +365,60 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 		return ""
 	}
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
+}
+
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+	// Get JPD / Releases remote details to download the resource from.
+	artDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	if err != nil {
+		return err
+	}
+	// Check if the resource should be downloaded.
+	// First get the latest resource checksum from Artifactory.
+	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
+	if err != nil {
+		return err
+	}
+	downloadUrl := artDetails.ArtifactoryUrl + remotePath
+	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
+	if err != nil {
+		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
+	}
+	// Find current resource checksum.
+	checksumFilePath := filepath.Join(targetDir, dependencies.ChecksumFileName)
+	if match, err := isArtifactChecksumsMatch(remoteFileDetails, checksumFilePath, true); err != nil || match {
+		// If the checksums are identical, there's no need to download.
+		return err
+	}
+	// Download & unzip the resource files
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", resourceName))
+	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
+		return err
+	}
+	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+}
+
+func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFilePath string, contentIsTheChecksum bool) (match bool, err error) {
+	if remoteFileDetails == nil {
+		return false, fmt.Errorf("remote file details are nil for %s", localFilePath)
+	}
+	// Find current checksum.
+	if exist, err := fileutils.IsFileExists(localFilePath, false); err != nil || !exist {
+		return false, err
+	}
+	// Read the file content
+	content, err := fileutils.ReadFile(localFilePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read file %s: %w", localFilePath, err)
+	}
+	if contentIsTheChecksum {
+		// File content is the checksum value, compare the local checksum with the remote one.
+		return remoteFileDetails.Checksum.Sha256 == string(content), nil
+	}
+	// File content is the actual file, calculate the checksum and compare it with the remote one.
+	sha256, err := Sha256Hash(string(content))
+	if err != nil {
+		return false, fmt.Errorf("failed to calculate the local file checksum: %w", err)
+	}
+	return remoteFileDetails.Checksum.Sha256 == sha256, nil
 }

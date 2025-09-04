@@ -102,6 +102,7 @@ const (
 	Watches             = "watches"
 	RepoPath            = "repo-path"
 	UploadRepoPath      = "rt-" + RepoPath
+	UploadRtRepoPath    = "upload-" + UploadRepoPath
 	Licenses            = "licenses"
 	Sbom                = "sbom"
 	Fail                = "fail"
@@ -114,25 +115,25 @@ const (
 	BuildVuln           = buildPrefix + Vuln
 	ScanVuln            = scanPrefix + Vuln
 	SecretValidation    = "validate-secrets"
-	NewSca              = "new-sca"
+	StaticSca           = "static-sca"
 	scanProjectKey      = scanPrefix + Project
 	uploadProjectKey    = UploadCdx + "-" + Project
 
 	// Unique audit flags
-	auditPrefix                  = "audit-"
-	ExclusionsAudit              = auditPrefix + Exclusions
-	useWrapperAudit              = auditPrefix + UseWrapper
-	ExcludeTestDeps              = "exclude-test-deps"
-	DepType                      = "dep-type"
-	MaxTreeDepth                 = "max-tree-depth"
-	ThirdPartyContextualAnalysis = "third-party-contextual-analysis"
-	RequirementsFile             = "requirements-file"
-	WorkingDirs                  = "working-dirs"
-	OutputDir                    = "output-dir"
-	SkipAutoInstall              = "skip-auto-install"
-	AllowPartialResults          = "allow-partial-results"
-	ScangBinaryCustomPath        = "scang-binary-path"
-	AnalyzerManagerCustomPath    = "analyzer-manager-path"
+	auditPrefix                   = "audit-"
+	ExclusionsAudit               = auditPrefix + Exclusions
+	useWrapperAudit               = auditPrefix + UseWrapper
+	ExcludeTestDeps               = "exclude-test-deps"
+	DepType                       = "dep-type"
+	MaxTreeDepth                  = "max-tree-depth"
+	ThirdPartyContextualAnalysis  = "third-party-contextual-analysis"
+	RequirementsFile              = "requirements-file"
+	WorkingDirs                   = "working-dirs"
+	OutputDir                     = "output-dir"
+	SkipAutoInstall               = "skip-auto-install"
+	AllowPartialResults           = "allow-partial-results"
+	XrayLibPluginBinaryCustomPath = "xray-lib-plugin-path"
+	AnalyzerManagerCustomPath     = "analyzer-manager-path"
 
 	// Unique curation flags
 	CurationOutput = "curation-format"
@@ -170,7 +171,7 @@ var commandFlags = map[string][]string{
 		useWrapperAudit, DepType, RequirementsFile, Fail, ExtendedTable, WorkingDirs, ExclusionsAudit, Mvn, Gradle, Npm,
 		Pnpm, Yarn, Go, Swift, Cocoapods, Nuget, Pip, Pipenv, Poetry, MinSeverity, FixableOnly, ThirdPartyContextualAnalysis, Threads,
 		Sca, Iac, Sast, Secrets, WithoutCA, ScanVuln, SecretValidation, OutputDir, SkipAutoInstall, AllowPartialResults, MaxTreeDepth,
-		NewSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath, UploadRtRepoPath,
 	},
 	UploadCdx: {
 		UploadRepoPath, uploadProjectKey,
@@ -184,9 +185,9 @@ var commandFlags = map[string][]string{
 		Threads, ExclusionsAudit,
 		Sca, Iac, Sast, Secrets, WithoutCA, SecretValidation,
 		// Output params
-		Licenses, OutputFormat, ExtendedTable,
+		Licenses, OutputFormat, ExtendedTable, OutputDir, UploadRtRepoPath,
 		// Scan Logic params
-		NewSca, ScangBinaryCustomPath, AnalyzerManagerCustomPath,
+		StaticSca, XrayLibPluginBinaryCustomPath, AnalyzerManagerCustomPath,
 	},
 	CurationAudit: {
 		CurationOutput, WorkingDirs, Threads, RequirementsFile, InsecureTls, useWrapperAudit,
@@ -267,6 +268,7 @@ var flagsMap = map[string]components.Flag{
 	WorkingDirs:         components.NewStringFlag(WorkingDirs, "A comma-separated(,) list of relative working directories, to determine the audit targets locations. If flag isn't provided, a recursive scan is triggered from the root directory of the project."),
 	OutputDir:           components.NewStringFlag(OutputDir, "Target directory to save partial results to.", components.SetHiddenStrFlag()),
 	UploadRepoPath:      components.NewStringFlag(UploadRepoPath, "Artifactory repository name or path to upload the cyclonedx file to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray.", components.WithStrDefaultValue("import-cdx-scan-results")),
+	UploadRtRepoPath:    components.NewStringFlag(UploadRtRepoPath, fmt.Sprintf("Artifactory repository name or path to upload the scan results to. If no name or path are provided, a local generic repository will be created which will automatically be indexed by Xray. only relevant when using --%s", StaticSca), components.WithStrDefaultValue("cli-scan-results")),
 	SkipAutoInstall:     components.NewBoolFlag(SkipAutoInstall, "Set to true to skip auto-install of dependencies in un-built modules. Currently supported for Yarn and NPM only.", components.SetHiddenBoolFlag()),
 	AllowPartialResults: components.NewBoolFlag(AllowPartialResults, "Set to true to allow partial results and continuance of the scan in case of certain errors.", components.SetHiddenBoolFlag()),
 	ExclusionsAudit: components.NewStringFlag(
@@ -293,17 +295,17 @@ var flagsMap = map[string]components.Flag{
 		"[npm] when set, the Contextual Analysis scan also uses the code of the project dependencies to determine the applicability of the vulnerability.",
 		components.SetHiddenBoolFlag(),
 	),
-	RequirementsFile:          components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
-	AnalyzerManagerCustomPath: components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
-	ScangBinaryCustomPath:     components.NewStringFlag(ScangBinaryCustomPath, "Defines the custom path to the scang binary.", components.SetHiddenStrFlag()),
-	NewSca:                    components.NewBoolFlag(NewSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
-	CurationOutput:            components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
-	Sca:                       components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
-	Iac:                       components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
-	Sast:                      components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
-	Secrets:                   components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
-	WithoutCA:                 components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
-	SecretValidation:          components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
+	RequirementsFile:              components.NewStringFlag(RequirementsFile, "[Pip] Defines pip requirements file name. For example: 'requirements.txt'."),
+	AnalyzerManagerCustomPath:     components.NewStringFlag(AnalyzerManagerCustomPath, "Defines the custom path to the analyzer-manager binary.", components.SetHiddenStrFlag()),
+	XrayLibPluginBinaryCustomPath: components.NewStringFlag(XrayLibPluginBinaryCustomPath, "Defines the custom path to the xray-lib-plugin binary.", components.SetHiddenStrFlag()),
+	StaticSca:                     components.NewBoolFlag(StaticSca, "Set to true to use the new SCA engine which is based on lock files.", components.SetHiddenBoolFlag()),
+	CurationOutput:                components.NewStringFlag(OutputFormat, "Defines the output format of the command. Acceptable values are: table, json.", components.WithStrDefaultValue("table")),
+	Sca:                           components.NewBoolFlag(Sca, fmt.Sprintf("Selective scanners mode: Execute SCA (Software Composition Analysis) sub-scan. Use --%s to run both SCA and Contextual Analysis. Use --%s --%s to to run SCA. Can be combined with --%s, --%s, --%s.", Sca, Sca, WithoutCA, Secrets, Sast, Iac)),
+	Iac:                           components.NewBoolFlag(Iac, fmt.Sprintf("Selective scanners mode: Execute IaC sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Sast)),
+	Sast:                          components.NewBoolFlag(Sast, fmt.Sprintf("Selective scanners mode: Execute SAST sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Secrets, Iac)),
+	Secrets:                       components.NewBoolFlag(Secrets, fmt.Sprintf("Selective scanners mode: Execute Secrets sub-scan. Can be combined with --%s, --%s and --%s.", Sca, Sast, Iac)),
+	WithoutCA:                     components.NewBoolFlag(WithoutCA, fmt.Sprintf("Selective scanners mode: Disable Contextual Analysis scanner after SCA. Relevant only with --%s flag.", Sca)),
+	SecretValidation:              components.NewBoolFlag(SecretValidation, fmt.Sprintf("Selective scanners mode: Triggers token validation on found secrets. Relevant only with --%s flag.", Secrets)),
 
 	// Git flags
 	InputFile:       components.NewStringFlag(InputFile, "Path to an input file in YAML format contains multiple git providers. With this option, all other scm flags will be ignored and only git servers mentioned in the file will be examined.."),

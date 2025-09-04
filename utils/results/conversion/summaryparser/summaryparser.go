@@ -3,13 +3,16 @@ package summaryparser
 import (
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
+	"github.com/jfrog/jfrog-cli-security/policy/local"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -18,8 +21,9 @@ type CmdResultsSummaryConverter struct {
 	includeVulnerabilities bool
 	includeViolations      bool
 
-	current     *formats.ResultsSummary
-	currentScan *formats.ScanSummary
+	current       *formats.ResultsSummary
+	currentTarget results.ScanTarget
+	currentScan   *formats.ScanSummary
 }
 
 func NewCmdResultsSummaryConverter(includeVulnerabilities, hasViolationContext bool) *CmdResultsSummaryConverter {
@@ -37,7 +41,7 @@ func (sc *CmdResultsSummaryConverter) Get() (formats.ResultsSummary, error) {
 	return *sc.current, nil
 }
 
-func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ error) (err error) {
+func (sc *CmdResultsSummaryConverter) Reset(_ utils.CommandType, _, _ string, entitledForJas, _ bool, _ *xscServices.XscGitInfoContext, generalError error) (err error) {
 	sc.current = &formats.ResultsSummary{}
 	sc.entitledForJas = entitledForJas
 	return
@@ -57,6 +61,7 @@ func (sc *CmdResultsSummaryConverter) ParseNewTargetResults(target results.ScanT
 	if sc.includeViolations {
 		sc.currentScan.Violations = &formats.ScanViolationsSummary{ScanResultSummary: formats.ScanResultSummary{}}
 	}
+	sc.currentTarget = target
 	return
 }
 
@@ -71,112 +76,14 @@ func (sc *CmdResultsSummaryConverter) validateBeforeParse() (err error) {
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if violations {
-		return sc.parseScaViolations(target, descriptors, scaResponse, applicableScan...)
-	}
-	return sc.parseScaVulnerabilities(target, descriptors, scaResponse, applicableScan...)
+func (sc *CmdResultsSummaryConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	// if violations {
+	// 	return sc.parseScaViolations(descriptors, scaResponse, applicableScan...)
+	// }
+	return sc.parseScaVulnerabilities(descriptors, scaResponse, applicableScan...)
 }
 
-func (sc *CmdResultsSummaryConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
-		return
-	}
-	if sc.currentScan.Violations.ScanResultSummary.ScaResults == nil {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults = &formats.ScaScanResultSummary{}
-	}
-	// Parse general SCA results
-	if scaResponse.Scan.ScanId != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds, scaResponse.Scan.ScanId)
-	}
-	if scaResponse.Scan.XrayDataUrl != "" {
-		sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
-	}
-	if scaResponse.IsScanFailed() {
-		return
-	}
-	applicabilityRuns := []*sarif.Run{}
-	for _, scan := range applicableScan {
-		if scan.IsScanFailed() {
-			continue
-		}
-		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
-	}
-	// Parse violations
-	parsed := datastructures.MakeSet[string]()
-	watches, failBuild, err := results.ForEachScanGraphViolation(
-		target,
-		descriptors,
-		scaResponse.Scan.Violations,
-		sc.entitledForJas,
-		applicabilityRuns,
-		sc.getScaSecurityViolationHandler(parsed),
-		sc.getScaLicenseViolationHandler(parsed),
-		sc.getScaOperationalRiskViolationHandler(parsed),
-	)
-	if err != nil {
-		return
-	}
-	sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, watches...)
-	sc.currentScan.Violations.FailBuild = sc.currentScan.Violations.FailBuild || failBuild
-	return
-}
-
-func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		for _, id := range getCveIds(cves, violation.IssueId) {
-			// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
-			key := violation.WatchName + id
-			if parsed.Exists(key) {
-				continue
-			}
-			parsed.Add(key)
-			// Count the violation
-			scaSecurityHandler(sc.currentScan.Violations.ScanResultSummary.ScaResults, severity, applicabilityStatus)
-		}
-		return
-	}
-}
-
-func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		if sc.currentScan.Violations.ScaResults.License == nil {
-			sc.currentScan.Violations.ScaResults.License = formats.ResultSummary{}
-		}
-		// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
-		key := violation.WatchName + violation.IssueId
-		if parsed.Exists(key) {
-			return
-		}
-		parsed.Add(key)
-		if _, ok := sc.currentScan.Violations.ScaResults.License[severity.String()]; !ok {
-			sc.currentScan.Violations.ScaResults.License[severity.String()] = map[string]int{}
-		}
-		sc.currentScan.Violations.ScaResults.License[severity.String()][formats.NoStatus]++
-		return
-	}
-}
-
-func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) results.ParseScanGraphViolationFunc {
-	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
-		if sc.currentScan.Violations.ScaResults.OperationalRisk == nil {
-			sc.currentScan.Violations.ScaResults.OperationalRisk = formats.ResultSummary{}
-		}
-		// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
-		key := violation.WatchName + violation.IssueId
-		if parsed.Exists(key) {
-			return
-		}
-		parsed.Add(key)
-		if _, ok := sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()]; !ok {
-			sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()] = map[string]int{}
-		}
-		sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()][formats.NoStatus]++
-		return
-	}
-}
-
-func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.ScanTarget, descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -203,7 +110,7 @@ func (sc *CmdResultsSummaryConverter) parseScaVulnerabilities(target results.Sca
 	// Parse vulnerabilities
 	parsed := datastructures.MakeSet[string]()
 	err = results.ForEachScanGraphVulnerability(
-		target,
+		sc.currentTarget,
 		descriptors,
 		scaResponse.Scan.Vulnerabilities,
 		sc.entitledForJas,
@@ -252,22 +159,22 @@ func getCveIds(cves []formats.CveRow, issueId string) []string {
 	return ids
 }
 
-func (sc *CmdResultsSummaryConverter) DeprecatedParseLicenses(_ results.ScanTarget, _ results.ScanResult[services.ScanResponse]) (err error) {
+func (sc *CmdResultsSummaryConverter) DeprecatedParseLicenses(_ results.ScanResult[services.ScanResponse]) (err error) {
 	// Not supported in the summary
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	// Not supported in the summary
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
 	// Not supported in the summary
 	return
 }
 
-func (sc *CmdResultsSummaryConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Vulnerabilities == nil {
 		return
 	}
@@ -286,7 +193,7 @@ func (sc *CmdResultsSummaryConverter) ParseCVEs(target results.ScanTarget, enric
 		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
 	}
 	// Parse vulnerabilities
-	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sc.entitledForJas, applicabilityRuns, sc.getBomScaVulnerabilityHandler())
+	return results.ForEachScaBomVulnerability(sc.currentTarget, enrichedSbom.Scan, sc.entitledForJas, applicabilityRuns, sc.getBomScaVulnerabilityHandler())
 }
 
 func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.ParseBomScaVulnerabilityFunc {
@@ -306,7 +213,7 @@ func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.Pa
 	}
 }
 
-func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
 	scanResponse := results.ScanResult[services.ScanResponse]{
 		Scan: services.ScanResponse{
 			Violations: violations,
@@ -318,7 +225,7 @@ func (sc *CmdResultsSummaryConverter) ParseViolations(target results.ScanTarget,
 	return sc.parseScaViolations(target, descriptors, scanResponse, applicableScan...)
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -326,19 +233,25 @@ func (sc *CmdResultsSummaryConverter) ParseSecrets(_ results.ScanTarget, isViola
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if !isViolationsResults && sc.currentScan.Vulnerabilities.SecretsResults == nil {
+
+	if sc.currentScan.Vulnerabilities.SecretsResults == nil {
 		sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults {
-		if sc.currentScan.Violations.SecretsResults == nil {
-			sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
-		}
-		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(secrets...)...)
-	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, false))
+
+	// if !isViolationsResults && sc.currentScan.Vulnerabilities.SecretsResults == nil {
+	// 	sc.currentScan.Vulnerabilities.SecretsResults = &formats.ResultSummary{}
+	// }
+	// if isViolationsResults {
+	// 	if sc.currentScan.Violations.SecretsResults == nil {
+	// 		sc.currentScan.Violations.SecretsResults = &formats.ResultSummary{}
+	// 	}
+	// 	sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(secrets...)...)
+	// }
+	// return results.ForEachJasIssue(results.ScanResultsToRuns(secrets), sc.entitledForJas, sc.getJasHandler(jasutils.Secrets, isViolationsResults))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -346,19 +259,26 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(_ results.ScanTarget, isViolatio
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if !isViolationsResults && sc.currentScan.Vulnerabilities.IacResults == nil {
+
+	if sc.currentScan.Vulnerabilities.IacResults == nil {
 		sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults {
-		if sc.currentScan.Violations.IacResults == nil {
-			sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
-		}
-		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(iacs...)...)
-	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false))
+
+	
+	// if !isViolationsResults && sc.currentScan.Vulnerabilities.IacResults == nil {
+	// 	sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
+	// }
+	// if isViolationsResults {
+	// 	if sc.currentScan.Violations.IacResults == nil {
+	// 		sc.currentScan.Violations.IacResults = &formats.ResultSummary{}
+	// 	}
+	// 	sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(iacs...)...)
+	// }
+	// return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, isViolationsResults))
 }
 
-func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sc *CmdResultsSummaryConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sc.entitledForJas || sc.currentScan.Vulnerabilities == nil {
 		// JAS results are only supported as vulnerabilities for now
 		return
@@ -366,16 +286,23 @@ func (sc *CmdResultsSummaryConverter) ParseSast(_ results.ScanTarget, isViolatio
 	if err = sc.validateBeforeParse(); err != nil {
 		return
 	}
-	if !isViolationsResults && sc.currentScan.Vulnerabilities.SastResults == nil {
+
+	if sc.currentScan.Vulnerabilities.SastResults == nil {
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
-	if isViolationsResults {
-		if sc.currentScan.Violations.SastResults == nil {
-			sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
-		}
-		sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(sast...)...)
-	}
-	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
+	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false))
+
+
+	// if !isViolationsResults && sc.currentScan.Vulnerabilities.SastResults == nil {
+	// 	sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
+	// }
+	// if isViolationsResults {
+	// 	if sc.currentScan.Violations.SastResults == nil {
+	// 		sc.currentScan.Violations.SastResults = &formats.ResultSummary{}
+	// 	}
+	// 	sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, getJasScansWatches(sast...)...)
+	// }
+	// return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, isViolationsResults))
 }
 
 // getJasHandler returns a handler that counts the JAS results (based on severity and CA status) for each issue it handles
@@ -434,4 +361,103 @@ func getJasScansWatches(scans ...results.ScanResult[[]*sarif.Run]) (watches []st
 		}
 	}
 	return
+}
+
+
+func (sc *CmdResultsSummaryConverter) parseScaViolations(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {
+		return
+	}
+	if sc.currentScan.Violations.ScanResultSummary.ScaResults == nil {
+		sc.currentScan.Violations.ScanResultSummary.ScaResults = &formats.ScaScanResultSummary{}
+	}
+	// Parse general SCA results
+	if scaResponse.Scan.ScanId != "" {
+		sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.ScanIds, scaResponse.Scan.ScanId)
+	}
+	if scaResponse.Scan.XrayDataUrl != "" {
+		sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls = utils.UniqueUnion(sc.currentScan.Violations.ScanResultSummary.ScaResults.MoreInfoUrls, scaResponse.Scan.XrayDataUrl)
+	}
+	if scaResponse.IsScanFailed() {
+		return
+	}
+	applicabilityRuns := []*sarif.Run{}
+	for _, scan := range applicableScan {
+		if scan.IsScanFailed() {
+			continue
+		}
+		applicabilityRuns = append(applicabilityRuns, scan.Scan...)
+	}
+	// Parse violations
+	parsed := datastructures.MakeSet[string]()
+	watches, failBuild, err := local.ForEachScanGraphViolation(
+		sc.currentTarget,
+		descriptors,
+		scaResponse.Scan.Violations,
+		sc.entitledForJas,
+		applicabilityRuns,
+		sc.getScaSecurityViolationHandler(parsed),
+		sc.getScaLicenseViolationHandler(parsed),
+		sc.getScaOperationalRiskViolationHandler(parsed),
+	)
+	if err != nil {
+		return
+	}
+	sc.currentScan.Violations.Watches = utils.UniqueUnion(sc.currentScan.Violations.Watches, watches...)
+	sc.currentScan.Violations.FailBuild = sc.currentScan.Violations.FailBuild || failBuild
+	return
+}
+
+func (sc *CmdResultsSummaryConverter) getScaSecurityViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		for _, id := range getCveIds(cves, violation.IssueId) {
+			// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
+			key := violation.WatchName + id
+			if parsed.Exists(key) {
+				continue
+			}
+			parsed.Add(key)
+			// Count the violation
+			scaSecurityHandler(sc.currentScan.Violations.ScanResultSummary.ScaResults, severity, applicabilityStatus)
+		}
+		return
+	}
+}
+
+func (sc *CmdResultsSummaryConverter) getScaLicenseViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		if sc.currentScan.Violations.ScaResults.License == nil {
+			sc.currentScan.Violations.ScaResults.License = formats.ResultSummary{}
+		}
+		// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
+		key := violation.WatchName + violation.IssueId
+		if parsed.Exists(key) {
+			return
+		}
+		parsed.Add(key)
+		if _, ok := sc.currentScan.Violations.ScaResults.License[severity.String()]; !ok {
+			sc.currentScan.Violations.ScaResults.License[severity.String()] = map[string]int{}
+		}
+		sc.currentScan.Violations.ScaResults.License[severity.String()][formats.NoStatus]++
+		return
+	}
+}
+
+func (sc *CmdResultsSummaryConverter) getScaOperationalRiskViolationHandler(parsed *datastructures.Set[string]) local.ParseScanGraphViolationFunc {
+	return func(violation services.Violation, cves []formats.CveRow, applicabilityStatus jasutils.ApplicabilityStatus, severity severityutils.Severity, impactedPackagesId string, fixedVersion []string, directComponents []formats.ComponentRow, impactPaths [][]formats.ComponentRow) (err error) {
+		if sc.currentScan.Violations.ScaResults.OperationalRisk == nil {
+			sc.currentScan.Violations.ScaResults.OperationalRisk = formats.ResultSummary{}
+		}
+		// PrepareScaViolations calls the handler for each violation and impacted component pair, we want to count unique violations
+		key := violation.WatchName + violation.IssueId
+		if parsed.Exists(key) {
+			return
+		}
+		parsed.Add(key)
+		if _, ok := sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()]; !ok {
+			sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()] = map[string]int{}
+		}
+		sc.currentScan.Violations.ScaResults.OperationalRisk[severity.String()][formats.NoStatus]++
+		return
+	}
 }

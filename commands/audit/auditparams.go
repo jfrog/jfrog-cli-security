@@ -3,6 +3,7 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -12,11 +13,13 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/scangraph"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
 type AuditParams struct {
 	// Common params to all scan routines
 	resultsContext    results.ResultContext
+	gitContext        *xscServices.XscGitInfoContext
 	workingDirs       []string
 	installFunc       func(tech string) error
 	fixableOnly       bool
@@ -33,6 +36,10 @@ type AuditParams struct {
 	bomGenerator                    bom.SbomGenerator
 	customBomGenBinaryPath          string
 	scaScanStrategy                 scan.SbomScanStrategy
+	uploadCdxResults                bool
+	rtResultRepository              string
+	remediationService              bool
+	violationGenerator              policy.PolicyHandler
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -43,6 +50,15 @@ func NewAuditParams() *AuditParams {
 	return &AuditParams{
 		AuditBasicParams: &AuditBasicParams{},
 	}
+}
+
+func (params *AuditParams) SetGitContext(gitContext *xscServices.XscGitInfoContext) *AuditParams {
+	params.gitContext = gitContext
+	return params
+}
+
+func (params *AuditParams) GitContext() *xscServices.XscGitInfoContext {
+	return params.gitContext
 }
 
 func (params *AuditParams) InstallFunc() func(tech string) error {
@@ -270,4 +286,40 @@ func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Tec
 		return false
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+}
+
+func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {
+	params.violationGenerator = violationGenerator
+	return params
+}
+
+func (params *AuditParams) ViolationGenerator() policy.PolicyHandler {
+	return params.violationGenerator
+}
+
+func (params *AuditParams) SetUploadCdxResults(uploadCdxResults bool) *AuditParams {
+	params.uploadCdxResults = uploadCdxResults
+	return params
+}
+
+func (params *AuditParams) UploadCdxResults() bool {
+	return params.uploadCdxResults
+}
+
+func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *AuditParams {
+	params.rtResultRepository = rtResultRepository
+	return params
+}
+
+func (params *AuditParams) RtResultRepository() string {
+	return params.rtResultRepository
+}
+
+func (params *AuditParams) SetRemediationService(remediationService bool) *AuditParams {
+	params.remediationService = remediationService
+	return params
+}
+
+func (params *AuditParams) RemediationService() bool {
+	return params.remediationService
 }

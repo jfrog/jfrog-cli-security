@@ -20,8 +20,11 @@ type UploadCycloneDxCommand struct {
 	serverDetails *config.ServerDetails
 	progress      ioUtils.ProgressMgr
 
-	fileToUpload          string
 	scanResultsRepository string
+
+	fileToUpload    string
+	contentToUpload *cyclonedx.BOM
+	filePrefix      string
 
 	projectKey string
 }
@@ -32,6 +35,16 @@ func NewUploadCycloneDxCommand() *UploadCycloneDxCommand {
 
 func (ucc *UploadCycloneDxCommand) CommandName() string {
 	return "upload-cdx"
+}
+
+func (ucc *UploadCycloneDxCommand) SetContentToUpload(bom *cyclonedx.BOM) *UploadCycloneDxCommand {
+	ucc.contentToUpload = bom
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) SetFilePrefix(filePrefix string) *UploadCycloneDxCommand {
+	ucc.filePrefix = filePrefix
+	return ucc
 }
 
 func (ucc *UploadCycloneDxCommand) SetFileToUpload(filePath string) *UploadCycloneDxCommand {
@@ -63,17 +76,13 @@ func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error
 }
 
 func (ucc *UploadCycloneDxCommand) Run() (err error) {
-	// Validate the file is cdx
-	metadata, err := validateInputFile(ucc.fileToUpload)
-	if err != nil {
-		return
-	}
 	// Upload the CycloneDx file to the JFrog repository
-	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+	if _, err = ucc.Upload(); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
+	// TODO: Wait for SCA to finish uploading
 	// Report the URL for the scan results
-	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload, metadata)
+	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
@@ -81,23 +90,48 @@ func (ucc *UploadCycloneDxCommand) Run() (err error) {
 	return
 }
 
-func validateInputFile(cdxFilePath string) (metadata *cyclonedx.Metadata, err error) {
+func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
+	// If content to upload is provided, create a temp file and write the content to it
+	if ucc.contentToUpload != nil {
+		tempDir, err := fileutils.CreateTempDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp dir: %w", err)
+		}
+		if ucc.fileToUpload, err = utils.DumpCdxContentToFile(ucc.contentToUpload, tempDir, ucc.filePrefix, 0); err != nil {
+			return "", fmt.Errorf("failed to save CycloneDx content to file: %w", err)
+		}
+		log.Debug(fmt.Sprintf("Created temp CycloneDx file: %s", ucc.fileToUpload))
+	}
+	if ucc.fileToUpload == "" {
+		return "", fmt.Errorf("no CycloneDx file or content to upload was provided")
+	}
+	// Validate the file is cdx
+	if err = validateInputFile(ucc.fileToUpload); err != nil {
+		return
+	}
+	// Upload the CycloneDx file to the JFrog repository
+	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
+	}
+	return
+}
+
+func validateInputFile(cdxFilePath string) (err error) {
 	if !strings.HasSuffix(cdxFilePath, ".cdx.json") {
-		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM file: it must have a '.cdx.json' extension", cdxFilePath)
 	}
 	// check if the file exists
 	if exists, err := fileutils.IsFileExists(cdxFilePath, false); err != nil {
-		return nil, fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
+		return fmt.Errorf("failed to check if file %s exists: %w", cdxFilePath, err)
 	} else if !exists {
-		return nil, fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
+		return fmt.Errorf("provided path '%s' is not existing file", cdxFilePath)
 	}
 	// check if the file is a valid cdx file
 	bom, err := utils.ReadSbomFromFile(cdxFilePath)
 	if err != nil || bom == nil {
-		return nil, fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
+		return fmt.Errorf("provided file %s is not a valid CycloneDX SBOM: %w", cdxFilePath, err)
 	}
 	if bom.Metadata != nil && bom.Metadata.Component != nil {
-		metadata = bom.Metadata
 		componentStr, err := utils.GetAsJsonString(bom.Metadata.Component, true, true)
 		if err == nil {
 			log.Debug(fmt.Sprintf("found valid CycloneDX SBOM file with Metadata component:\n%s", componentStr))
@@ -126,25 +160,18 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
 }
 
-func generateURLFromPath(baseUrl, repoPath, filePath string, metadata *cyclonedx.Metadata) (string, error) {
+func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
 	artifactName := filepath.Base(filePath)
-
-	metadataComponent := artifactName
-	shaPart := ""
-	if metadata == nil || metadata.Component == nil || metadata.Component.Version == "" {
-		// Calculate SHA256
-		sha256, err := calculateFileSHA256(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to calculate sha256: %w", err)
-		}
-		if sha256 != "" {
-			shaPart = fmt.Sprintf("sha256:%s/", sha256)
-		}
-	} else {
-		metadataComponent = metadata.Component.Name
+	// Calculate SHA256
+	sha256, err := calculateFileSHA256(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to calculate sha256: %w", err)
+	}
+	if sha256 != "" {
+		sha256 = fmt.Sprintf("sha256:%s/", sha256)
 	}
 
-	packageID := fmt.Sprintf("generic://%s%s", shaPart, metadataComponent)
+	packageID := fmt.Sprintf("generic://%s%s", sha256, artifactName)
 	return utils.GetRepositoriesScansListUrlForArtifact(baseUrl, repoPath, artifactName, packageID), nil
 }
 
@@ -155,4 +182,11 @@ func calculateFileSHA256(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 	return utils.Sha256Hash(string(content))
+}
+
+func getArtifactPathInRepo(filePath string, repo string) string {
+	if !strings.HasSuffix(repo, "/") {
+		repo = repo + "/"
+	}
+	return fmt.Sprintf("%s%s", repo, filepath.Base(filePath))
 }
