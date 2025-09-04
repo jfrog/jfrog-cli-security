@@ -3,6 +3,8 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -612,7 +614,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
-				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
+				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				ScanResults:                 targetResult,
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 				AllowPartialResults:         auditParams.AllowPartialResults(),
@@ -625,4 +627,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getSignedDescriptions(currentFormat format.OutputFormat) bool {
+	allowEmojis, err := strconv.ParseBool(os.Getenv(utils.IsAllowEmojis))
+	if err != nil {
+		// default value
+		allowEmojis = true
+	}
+	return currentFormat == format.Sarif && allowEmojis
 }

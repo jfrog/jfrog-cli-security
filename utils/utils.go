@@ -47,6 +47,8 @@ const (
 	CurrentGithubWorkflowWorkspaceEnvVar = "GITHUB_WORKSPACE"
 	CurrentGithubWorkflowJobEnvVar       = "GITHUB_JOB"
 	CurrentGithubShaEnvVar               = "GITHUB_SHA"
+
+	IsAllowEmojis = "JF_ALLOW_EMOJIS"
 )
 
 var (
