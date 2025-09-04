@@ -125,8 +125,7 @@ require (
 )
 
 // attiasas:add_get_violations_api
-// attiasas:xray_artifact_status
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250820133625-1ab11bc94516
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250904071955-a96c8e49903b
 
 // replace github.com/jfrog/jfrog-client-go => github.com/jfrog/jfrog-client-go dev
 
