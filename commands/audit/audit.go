@@ -339,6 +339,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
+	cmdResults.SetGitContext(params.GitContext())
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
