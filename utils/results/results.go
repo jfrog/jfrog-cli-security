@@ -100,8 +100,8 @@ type ScaScanResults struct {
 	// Sca scan results
 	DeprecatedXrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
-	Sbom *cyclonedx.BOM `json:"sbom,omitempty"`
-	ScanStatusCode int `json:"status_code,omitempty"`
+	Sbom           *cyclonedx.BOM `json:"sbom,omitempty"`
+	ScanStatusCode int            `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {

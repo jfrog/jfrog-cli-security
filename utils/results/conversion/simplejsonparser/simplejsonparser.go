@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/sarifutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/severityutils"
@@ -68,7 +69,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -88,7 +89,7 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(target result
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -123,7 +124,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSbomLicenses(target results.ScanT
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -186,7 +187,7 @@ func toReferences(vulnerability cyclonedx.Vulnerability) (references []string) {
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -224,7 +225,7 @@ func (sjc *CmdResultsSimpleJsonConverter) parseScaVulnerabilities(target results
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(scaResponse results.ScanResult[services.ScanResponse]) (err error) {
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
@@ -239,12 +240,12 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(target results
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(_ results.ScanTarget, _ *cyclonedx.BOM) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSbom(_ *cyclonedx.BOM) (err error) {
 	// Not supported in the simple-json
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
@@ -268,7 +269,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(_ results.ScanTarget, isV
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}
@@ -292,7 +293,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(_ results.ScanTarget, isViol
 	return
 }
 
-func (sjc *CmdResultsSimpleJsonConverter) ParseSast(_ results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
+func (sjc *CmdResultsSimpleJsonConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if !sjc.entitledForJas {
 		return
 	}

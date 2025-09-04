@@ -37,7 +37,14 @@ func (d *DeprecatedViolationGenerator) GenerateViolations(cmdResults *results.Se
 	for _, target := range cmdResults.Targets {
 		// SCA violations
 		if target.ScaResults != nil {
-
+			// if !scaResults.IsScanFailed() && len(scaResults.Scan.Violations) == 0 && len(params.AllowedLicenses) > 0 {
+			// 	// If no violations were found, check if there are licenses that are not allowed
+			// 	if scaResults.Scan.Violations = policy.GetViolatedLicenses(params.AllowedLicenses, scaResults.Scan.Licenses); len(scaResults.Scan.Violations) > 0 {
+			// 		if err = parser.DeprecatedParseScaIssues(targetScansResults.ScaResults.Descriptors, scaResults); err != nil {
+			// 			return
+			// 		}
+			// 	}
+			// }
 		}
 	}
 	return
