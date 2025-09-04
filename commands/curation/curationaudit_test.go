@@ -20,6 +20,7 @@ import (
 
 	biutils "github.com/jfrog/build-info-go/utils"
 	"github.com/jfrog/gofrog/datastructures"
+	rtUtils "github.com/jfrog/jfrog-cli-core/v2/artifactory/utils"
 	coreCommonTests "github.com/jfrog/jfrog-cli-core/v2/common/tests"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
@@ -482,6 +483,45 @@ func createTempHomeDirWithConfig(t *testing.T, basePathToTests string, testCase 
 			assert.ErrorIs(t, err, os.ErrPermission)
 		}
 	}
+}
+
+func TestCurationHeaders(t *testing.T) {
+	// Test that batch ID generation works correctly
+	headerValue := generateWaiverHeaderValue()
+	assert.True(t, strings.HasPrefix(headerValue, "syn_JFrog-Curation-Client_batch_"))
+	assert.Len(t, strings.Split(headerValue, "_"), 4) // syn_JFrog-Curation-Client_batch_<id>
+
+	// Test that completed request adds "_completed" suffix
+	var capturedHeader http.Header
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		capturedHeader = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}
+
+	mockServer, mockServerDetails, _ := coreCommonTests.CreateRtRestsMockServer(t, testHandler)
+	defer mockServer.Close()
+
+	// Create analyzer and send completed request
+	rtAuth, err := mockServerDetails.CreateArtAuthConfig()
+	require.NoError(t, err)
+	rtManager, err := rtUtils.CreateServiceManager(mockServerDetails, 2, 0, false)
+	require.NoError(t, err)
+
+	analyzer := &treeAnalyzer{
+		rtManager:         rtManager,
+		httpClientDetails: rtAuth.CreateHttpClientDetails(),
+	}
+
+	// Use real header format like: syn_JFrog-Curation-Client_batch_a3404ff3
+	waiverHeaderValue = "syn_JFrog-Curation-Client_batch_a3404ff3"
+	testUrl := mockServerDetails.GetArtifactoryUrl() + "/test/pkg"
+	err = analyzer.sendCompletedRequest(testUrl)
+	assert.NoError(t, err)
+
+	// Verify the header has "_completed" suffix
+	assert.NotNil(t, capturedHeader)
+	waiverHeader := capturedHeader["X-Artifactory-Curation-Request-Waiver"]
+	assert.Equal(t, "syn_JFrog-Curation-Client_batch_a3404ff3_completed", waiverHeader[0])
 }
 
 func setCurationFlagsForTest(t *testing.T) func() {
