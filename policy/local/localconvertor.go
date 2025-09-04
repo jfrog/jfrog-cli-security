@@ -76,7 +76,7 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 		}
 		// Parse the violation according to its type
 		switch violation.ViolationType {
-		case violationutils.ViolationTypeSecurity.String():
+		case violationutils.ScaViolationTypeSecurity.String():
 			if securityHandler == nil {
 				// No handler was provided for security violations
 				continue
@@ -94,7 +94,7 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 					continue
 				}
 			}
-		case violationutils.ViolationTypeLicense.String():
+		case violationutils.ScaViolationTypeLicense.String():
 			if licenseHandler == nil {
 				// No handler was provided for license violations
 				continue
@@ -109,7 +109,7 @@ func ForEachScanGraphViolation(target results.ScanTarget, descriptors []string, 
 					continue
 				}
 			}
-		case violationutils.ViolationTypeOperationalRisk.String():
+		case violationutils.ScaViolationTypeOperationalRisk.String():
 			if operationalRiskHandler == nil {
 				// No handler was provided for operational risk violations
 				continue

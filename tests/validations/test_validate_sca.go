@@ -46,11 +46,11 @@ func ValidateScanResponseIssuesCount(t *testing.T, params ValidationParams, cont
 		licenses += len(result.Licenses)
 		for _, violation := range result.Violations {
 			switch violation.ViolationType {
-			case violationutils.ViolationTypeSecurity.String():
+			case violationutils.ScaViolationTypeSecurity.String():
 				securityViolations += 1
-			case violationutils.ViolationTypeLicense.String():
+			case violationutils.ScaViolationTypeLicense.String():
 				licenseViolations += 1
-			case violationutils.ViolationTypeOperationalRisk.String():
+			case violationutils.ScaViolationTypeOperationalRisk.String():
 				operationalViolations += 1
 			}
 		}

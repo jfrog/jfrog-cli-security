@@ -60,7 +60,7 @@ func GetViolatedLicenses(allowedLicenses []string, licenses []services.License) 
 				Components:    license.Components,
 				IssueId:       violationutils.CustomLicenseViolationId,
 				WatchName:     fmt.Sprintf("jfrog_%s", violationutils.CustomLicenseViolationId),
-				ViolationType: violationutils.ViolationTypeLicense.String(),
+				ViolationType: violationutils.ScaViolationTypeLicense.String(),
 			})
 		}
 	}

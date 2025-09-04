@@ -197,7 +197,7 @@ func createSecurityCommandResultsForFailBuildTest(useNewViolations bool, hasJasR
 
 	violation := services.Violation{
 		Components:    components,
-		ViolationType: violationutils.ViolationTypeSecurity.String(),
+		ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 		FailBuild:     true,
 		Cves:          []services.Cve{{Id: cveId}},
 		Severity:      "High",

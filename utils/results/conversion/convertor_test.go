@@ -261,7 +261,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: violationutils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-39249",
 				}},
@@ -282,7 +282,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				ExtendedInformation: &services.ExtendedInformation{JfrogResearchSeverity: "Low"},
 			},
 			{
-				ViolationType: violationutils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2018-3721",
 				}},
@@ -302,7 +302,7 @@ func getAuditTestResults(unique bool) (*results.SecurityCommandResults, validati
 				IssueId:   "XRAY-72918",
 			},
 			{
-				ViolationType: violationutils.ViolationTypeLicense.String(),
+				ViolationType: violationutils.ScaViolationTypeLicense.String(),
 				LicenseKey:    "MIT",
 				LicenseName:   "MIT full name",
 				Severity:      severityutils.High.String(),
@@ -508,7 +508,7 @@ func getDockerScanTestResults(unique bool) (*results.SecurityCommandResults, val
 		},
 		Violations: []services.Violation{
 			{
-				ViolationType: violationutils.ViolationTypeSecurity.String(),
+				ViolationType: violationutils.ScaViolationTypeSecurity.String(),
 				Cves: []services.Cve{{
 					Id: "CVE-2024-6119",
 				}},
