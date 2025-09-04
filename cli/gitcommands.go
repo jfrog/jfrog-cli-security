@@ -87,7 +87,7 @@ func GitAuditCmd(c *components.Context) error {
 	sbomGenerator, scaScanStrategy, violationGenerator, uploadResults, remediationService := getScanDynamicLogic(c)
 	gitAuditCmd.SetSbomGenerator(sbomGenerator).SetScaScanStrategy(scaScanStrategy)
 	gitAuditCmd.SetViolationGenerator(violationGenerator)
-	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRepoPath))
+	gitAuditCmd.SetUploadCdxResults(uploadResults).SetRtResultRepository(c.GetStringFlagValue(flags.UploadRtRepoPath))
 	gitAuditCmd.SetRemediationService(remediationService)
 	// Run the command with progress bar if needed, Reporting error if Xsc service is enabled
 	return reportErrorIfExists(xrayVersion, xscVersion, serverDetails, progressbar.ExecWithProgress(gitAuditCmd))

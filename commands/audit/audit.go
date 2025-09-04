@@ -185,7 +185,10 @@ func (auditCmd *AuditCommand) Run() (err error) {
 		SetScaScanStrategy(auditCmd.scaScanStrategy).
 		SetCustomAnalyzerManagerBinaryPath(auditCmd.customAnalyzerManagerBinaryPath).
 		SetCustomBomGenBinaryPath(auditCmd.customBomGenBinaryPath).
-		SetScaScanStrategy(auditCmd.scaScanStrategy).
+		SetViolationGenerator(auditCmd.violationGenerator).
+		SetRtResultRepository(auditCmd.rtResultRepository).
+		SetUploadCdxResults(auditCmd.uploadCdxResults).
+		SetRemediationService(auditCmd.remediationService).
 		SetWorkingDirs(workingDirs).
 		SetMinSeverityFilter(auditCmd.minSeverityFilter).
 		SetFixableOnly(auditCmd.fixableOnly).
@@ -341,6 +344,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
+	cmdResults.SetGitContext(params.GitContext())
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
