@@ -334,7 +334,7 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 	cmdResults.SetStartTime(scanCmd.startTime)
 	cmdResults.SetResultsContext(scanCmd.resultsContext)
 	// Send entitlement request
-	if entitledForJas, err := isEntitledForJas(xrayManager, scanCmd.xrayVersion); err != nil {
+	if entitledForJas, err := jas.IsEntitledForJas(xrayManager, scanCmd.xrayVersion); err != nil {
 		return xrayManager, cmdResults.AddGeneralError(err, false)
 	} else {
 		cmdResults.SetEntitledForJas(entitledForJas)
@@ -343,10 +343,6 @@ func (scanCmd *ScanCommand) initScanCmdResults(cmdType utils.CommandType) (xrayM
 		}
 	}
 	return
-}
-
-func isEntitledForJas(xrayManager *xrayClient.XrayServicesManager, xrayVersion string) (bool, error) {
-	return jas.IsEntitledForJas(xrayManager, xrayVersion)
 }
 
 func NewScanCommand() *ScanCommand {

@@ -1,13 +1,14 @@
-package utils
+package audit
 
 import (
 	"github.com/jfrog/jfrog-cli-core/v2/common/format"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+	"github.com/jfrog/jfrog-cli-security/utils"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	xscservices "github.com/jfrog/jfrog-client-go/xsc/services"
 )
 
-type AuditParams interface {
+type AuditParamsInterface interface {
 	DirectDependencies() *[]string
 	AppendDependenciesForApplicabilityScan(directDependencies []string) *AuditBasicParams
 	ServerDetails() (*config.ServerDetails, error)
@@ -67,7 +68,7 @@ type AuditBasicParams struct {
 	depsRepo                         string
 	installCommandName               string
 	technologies                     []string
-	scansToPerform                   []SubScanType
+	scansToPerform                   []utils.SubScanType
 	args                             []string
 	installCommandArgs               []string
 	dependenciesForApplicabilityScan []string
@@ -181,12 +182,12 @@ func (abp *AuditBasicParams) SetTechnologies(technologies []string) *AuditBasicP
 	return abp
 }
 
-func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []SubScanType) *AuditBasicParams {
+func (abp *AuditBasicParams) SetScansToPerform(scansToPerform []utils.SubScanType) *AuditBasicParams {
 	abp.scansToPerform = scansToPerform
 	return abp
 }
 
-func (abp *AuditBasicParams) ScansToPerform() []SubScanType {
+func (abp *AuditBasicParams) ScansToPerform() []utils.SubScanType {
 	return abp.scansToPerform
 }
 

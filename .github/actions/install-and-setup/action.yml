@@ -53,6 +53,12 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
+
+    - name: Install Mono on MacOS
+      run: brew install mono
+      if: runner.os == 'macOS'
+      shell: 'bash'
+
     - name: Install Mono on Linux
       run: |
         sudo apt-get update
@@ -64,7 +70,7 @@ runs:
 
       if: runner.os == 'Linux'
       shell: 'bash'
-    
+
     - name: Setup Python3
       uses: actions/setup-python@v5
       with:
