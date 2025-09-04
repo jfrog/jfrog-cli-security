@@ -26,6 +26,7 @@ type CmdResultsSimpleJsonConverter struct {
 	uniqueScaIssues bool
 	// Current stream parse cache information
 	current *formats.SimpleJsonResults
+	currentTarget results.ScanTarget
 	// General information on the current command results
 	entitledForJas bool
 	multipleRoots  bool
@@ -61,6 +62,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseNewTargetResults(target results.S
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
+	sjc.currentTarget = target
 	for _, err := range errors {
 		if err != nil {
 			sjc.current.Errors = append(sjc.current.Errors, formats.SimpleJsonError{FilePath: target.Target, ErrorMessage: err.Error()})
@@ -81,11 +83,13 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseScaIssues(descriptors [
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
-	if violations {
-		err = sjc.parseScaViolations(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
-	} else {
-		err = sjc.parseScaVulnerabilities(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
-	}
+	err = sjc.parseScaVulnerabilities(sjc.currentTarget, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
+
+	// if violations {
+	// 	err = sjc.parseScaViolations(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
+	// } else {
+	// 	err = sjc.parseScaVulnerabilities(target, descriptors, scaResponse.Scan, results.ScanResultsToRuns(applicableScan)...)
+	// }
 	return
 }
 
@@ -136,7 +140,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom results.ScanRes
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
 		}
 	}
-	return results.ForEachScaBomVulnerability(target, enrichedSbom.Scan, sjc.entitledForJas, results.ScanResultsToRuns(applicableScan),
+	return results.ForEachScaBomVulnerability(sjc.currentTarget, enrichedSbom.Scan, sjc.entitledForJas, results.ScanResultsToRuns(applicableScan),
 		func(vulnerability cyclonedx.Vulnerability, component cyclonedx.Component, fixedVersions *[]cyclonedx.AffectedVersions, applicability *formats.Applicability, severity severityutils.Severity) (e error) {
 			// Prepare the required fields for the vulnerability row
 			applicabilityStatus := jasutils.NotScanned
@@ -161,11 +165,11 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom results.ScanRes
 				FixedVersions: results.CdxToFixedVersions(fixedVersions),
 				Cves:          results.CdxVulnToCveRows(vulnerability, applicability),
 				IssueId:       vulnerability.ID,
-				Technology:    results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), target.Technology),
+				Technology:    results.GetIssueTechnology(techutils.CdxPackageTypeToXrayPackageType(compType), sjc.currentTarget.Technology),
 				Applicable:    applicabilityStatus.ToString(sjc.pretty),
 				References:    toReferences(vulnerability),
 				// TODO: implement JfrogResearchInformation conversion
-				// JfrogResearchInformation: nil,
+				JfrogResearchInformation: nil,
 				ImpactPaths: results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
 			})
 			return
@@ -191,6 +195,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations ...violatio
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
+	
 	for i := range applicableScan {
 		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
 			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
@@ -232,7 +237,7 @@ func (sjc *CmdResultsSimpleJsonConverter) DeprecatedParseLicenses(scaResponse re
 	if sjc.current.Statuses.ScaStatusCode == nil || *sjc.current.Statuses.ScaStatusCode == 0 {
 		sjc.current.Statuses.ScaStatusCode = &scaResponse.StatusCode
 	}
-	licSimpleJson, err := PrepareSimpleJsonLicenses(target, scaResponse.Scan.Licenses)
+	licSimpleJson, err := PrepareSimpleJsonLicenses(sjc.currentTarget, scaResponse.Scan.Licenses)
 	if err != nil || len(licSimpleJson) == 0 {
 		return
 	}
@@ -261,11 +266,13 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...results.ScanRe
 	if err != nil || len(secretsSimpleJson) == 0 {
 		return
 	}
-	if isViolationsResults {
-		sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, secretsSimpleJson...)
-	} else {
-		sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
-	}
+	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
+
+	// if isViolationsResults {
+	// 	sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, secretsSimpleJson...)
+	// } else {
+	// 	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)	
+	// }
 	return
 }
 
@@ -285,11 +292,13 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseIacs(iacs ...results.ScanResult[[
 	if err != nil || len(iacSimpleJson) == 0 {
 		return
 	}
-	if isViolationsResults {
-		sjc.current.IacsViolations = append(sjc.current.IacsViolations, iacSimpleJson...)
-	} else {
-		sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
-	}
+	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
+
+	// if isViolationsResults {
+	// 	sjc.current.IacsViolations = append(sjc.current.IacsViolations, iacSimpleJson...)
+	// } else {
+	// 	sjc.current.IacsVulnerabilities = append(sjc.current.IacsVulnerabilities, iacSimpleJson...)
+	// }
 	return
 }
 
@@ -309,11 +318,13 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSast(sast ...results.ScanResult[[
 	if err != nil || len(sastSimpleJson) == 0 {
 		return
 	}
-	if isViolationsResults {
-		sjc.current.SastViolations = append(sjc.current.SastViolations, sastSimpleJson...)
-	} else {
-		sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
-	}
+	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
+
+	// if isViolationsResults {
+	// 	sjc.current.SastViolations = append(sjc.current.SastViolations, sastSimpleJson...)
+	// } else {
+	// 	sjc.current.SastVulnerabilities = append(sjc.current.SastVulnerabilities, sastSimpleJson...)
+	// }
 	return
 }
 
