@@ -1,6 +1,8 @@
 package summaryparser
 
 import (
+	"errors"
+
 	"github.com/CycloneDX/cyclonedx-go"
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-security/policy/local"
@@ -214,15 +216,17 @@ func (sc *CmdResultsSummaryConverter) getBomScaVulnerabilityHandler() results.Pa
 }
 
 func (sc *CmdResultsSummaryConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
-	scanResponse := results.ScanResult[services.ScanResponse]{
-		Scan: services.ScanResponse{
-			Violations: violations,
-			// ScanId and XrayDataUrl are not supported in the summary for new flow, will be implemented after the JPD can produce the new UI
-			ScanId:      "",
-			XrayDataUrl: "",
-		},
-	}
-	return sc.parseScaViolations(target, descriptors, scanResponse, applicableScan...)
+	// scanResponse := results.ScanResult[services.ScanResponse]{
+	// 	Scan: services.ScanResponse{
+	// 		Violations: violations,
+	// 		// ScanId and XrayDataUrl are not supported in the summary for new flow, will be implemented after the JPD can produce the new UI
+	// 		ScanId:      "",
+	// 		XrayDataUrl: "",
+	// 	},
+	// }
+	// return sc.parseScaViolations(target, descriptors, scanResponse, applicableScan...)
+	// TODO: implement
+	return errors.New("not implemented")
 }
 
 func (sc *CmdResultsSummaryConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
@@ -265,7 +269,6 @@ func (sc *CmdResultsSummaryConverter) ParseIacs(iacs ...results.ScanResult[[]*sa
 	}
 	return results.ForEachJasIssue(results.ScanResultsToRuns(iacs), sc.entitledForJas, sc.getJasHandler(jasutils.IaC, false))
 
-	
 	// if !isViolationsResults && sc.currentScan.Vulnerabilities.IacResults == nil {
 	// 	sc.currentScan.Vulnerabilities.IacResults = &formats.ResultSummary{}
 	// }
@@ -291,7 +294,6 @@ func (sc *CmdResultsSummaryConverter) ParseSast(sast ...results.ScanResult[[]*sa
 		sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
 	}
 	return results.ForEachJasIssue(results.ScanResultsToRuns(sast), sc.entitledForJas, sc.getJasHandler(jasutils.Sast, false))
-
 
 	// if !isViolationsResults && sc.currentScan.Vulnerabilities.SastResults == nil {
 	// 	sc.currentScan.Vulnerabilities.SastResults = &formats.ResultSummary{}
@@ -362,7 +364,6 @@ func getJasScansWatches(scans ...results.ScanResult[[]*sarif.Run]) (watches []st
 	}
 	return
 }
-
 
 func (sc *CmdResultsSummaryConverter) parseScaViolations(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
 	if err = sc.validateBeforeParse(); err != nil || sc.currentScan.Violations == nil {

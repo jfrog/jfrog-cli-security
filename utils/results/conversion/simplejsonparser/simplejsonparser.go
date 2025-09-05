@@ -1,6 +1,7 @@
 package simplejsonparser
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 
@@ -25,7 +26,7 @@ type CmdResultsSimpleJsonConverter struct {
 	// If true, the output will contain only unique issues (ignoring the same issue in different locations)
 	uniqueScaIssues bool
 	// Current stream parse cache information
-	current *formats.SimpleJsonResults
+	current       *formats.SimpleJsonResults
 	currentTarget results.ScanTarget
 	// General information on the current command results
 	entitledForJas bool
@@ -170,7 +171,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseCVEs(enrichedSbom results.ScanRes
 				References:    toReferences(vulnerability),
 				// TODO: implement JfrogResearchInformation conversion
 				JfrogResearchInformation: nil,
-				ImpactPaths: results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
+				ImpactPaths:              results.BuildImpactPath(component, *enrichedSbom.Scan.Components, dependencies...),
 			})
 			return
 		},
@@ -195,13 +196,15 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseViolations(violations ...violatio
 	if sjc.current == nil {
 		return results.ErrResetConvertor
 	}
-	
-	for i := range applicableScan {
-		if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
-			sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
-		}
-	}
-	return sjc.parseScaViolations(target, descriptors, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
+
+	// for i := range applicableScan {
+	// 	if results.ShouldUpdateStatus(sjc.current.Statuses.ApplicabilityStatusCode, &applicableScan[i].StatusCode) {
+	// 		sjc.current.Statuses.ApplicabilityStatusCode = &applicableScan[i].StatusCode
+	// 	}
+	// }
+	// return sjc.parseScaViolations(target, descriptors, services.ScanResponse{Violations: violations}, results.ScanResultsToRuns(applicableScan)...)
+	// TODO: implement
+	return errors.New("not implemented")
 }
 
 func (sjc *CmdResultsSimpleJsonConverter) parseScaViolations(target results.ScanTarget, descriptors []string, scaResponse services.ScanResponse, applicabilityRuns ...*sarif.Run) (err error) {
@@ -271,7 +274,7 @@ func (sjc *CmdResultsSimpleJsonConverter) ParseSecrets(secrets ...results.ScanRe
 	// if isViolationsResults {
 	// 	sjc.current.SecretsViolations = append(sjc.current.SecretsViolations, secretsSimpleJson...)
 	// } else {
-	// 	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)	
+	// 	sjc.current.SecretsVulnerabilities = append(sjc.current.SecretsVulnerabilities, secretsSimpleJson...)
 	// }
 	return
 }

@@ -3,10 +3,10 @@ package violationutils
 import "github.com/jfrog/jfrog-cli-security/utils/severityutils"
 
 const (
-	ScaViolationType = "sca"
+	ScaViolationType     = "sca"
 	SecretsViolationType = "secrets"
-	IacViolationType = "iac"
-	SastViolationType = "sast"
+	IacViolationType     = "iac"
+	SastViolationType    = "sast"
 )
 
 type ViolationType string
@@ -26,12 +26,11 @@ func (v ScaViolationIssueType) String() string {
 }
 
 type Violation struct {
-	Type       ViolationType          `json:"type"`
+	Type        ViolationType          `json:"type"`
 	ViolationId string                 `json:"violation_id"`
 	Severity    severityutils.Severity `json:"severity"`
 	// Can be used to match the related vulnerability in the scan results.
 	IssueId string `json:"issue_id"`
-
 }
 
 type MatchedPolicy struct {
