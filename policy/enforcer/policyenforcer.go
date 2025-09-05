@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jfrog/jfrog-client-go/utils/log"
+	xrayUtils "github.com/jfrog/jfrog-client-go/xray/services/utils"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
+
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/xray"
 	"github.com/jfrog/jfrog-cli-security/utils/xray/artifact"
-	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 type PolicyEnforcerViolationGenerator struct {
@@ -72,6 +75,15 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	log.Debug(fmt.Sprintf("Xray scan completed in %s seconds", time.Since(startedTimeStamp).String()))
 	// Get with API
 	log.Info("Fetching violations from Xray...")
-
+	params := xrayUtils.NewViolationsRequest().FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: p.rtRepository, Path: p.artifactPath})
+	generatedViolations, err := xrayManager.GetViolations(params)
+	if err != nil {
+		return
+	}
+	if generatedViolations.Total == 0 {
+		log.Info("No violations were found")
+	} else {
+		log.Info(fmt.Sprintf("Scans completed with %d violations", generatedViolations.Total))
+	}
 	return
 }
