@@ -57,10 +57,18 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
+	isCurationCmd       bool
+	curationCacheFolder string
+	originalDepsRepo    string
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
-	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
+	manager := &gradleDepTreeManager{
+		DepTreeManager:      NewDepTreeManager(params),
+		isCurationCmd:       params.IsCurationCmd,
+		curationCacheFolder: params.CurationCacheFolder,
+		originalDepsRepo:    params.DepsRepo,
+	}
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
 		return
@@ -98,8 +106,22 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 	if err != nil {
 		return
 	}
-	var releasesRepo string
-	releasesRepo, gdt.depsRepo, err = getRemoteRepos(gdt.depsRepo, gdt.server)
+
+	// Get repository configurations
+	releasesRepo, err := constructReleasesRemoteRepo()
+	if err != nil {
+		return
+	}
+
+	// Get dependencies repository (with pass-through ONLY for curation commands)
+	var depsRepo string
+	if gdt.isCurationCmd {
+		// Use pass-through URL for curation commands
+		depsRepo, err = getDepTreeArtifactoryRepositoryWithPassThrough(gdt.originalDepsRepo, gdt.server, true)
+	} else {
+		// Use regular URL for non-curation commands
+		depsRepo, err = getDepTreeArtifactoryRepository(gdt.DepTreeManager.depsRepo, gdt.DepTreeManager.server)
+	}
 	if err != nil {
 		return
 	}
@@ -109,24 +131,8 @@ func (gdt *gradleDepTreeManager) createDepTreeScriptAndGetDir() (tmpDir string, 
 	}
 	gradleDepTreeJarPath = ioutils.DoubleWinPathSeparator(gradleDepTreeJarPath)
 
-	depTreeInitScript := fmt.Sprintf(gradleDepTreeInitScript, releasesRepo, gradleDepTreeJarPath, gdt.depsRepo)
+	depTreeInitScript := fmt.Sprintf(gradleDepTreeInitScript, releasesRepo, gradleDepTreeJarPath, depsRepo)
 	return tmpDir, errorutils.CheckError(os.WriteFile(filepath.Join(tmpDir, gradleDepTreeInitFile), []byte(depTreeInitScript), 0666))
-}
-
-// getRemoteRepos constructs the sections of Artifactory's remote repositories in the gradle-dep-tree init script.
-// depsRemoteRepo - name of the remote repository that proxies the relevant registry, e.g. maven central.
-// server - the Artifactory server details on which the repositories reside in.
-// Returns the constructed sections.
-func getRemoteRepos(depsRepo string, server *config.ServerDetails) (string, string, error) {
-	constructedReleasesRepo, err := constructReleasesRemoteRepo()
-	if err != nil {
-		return "", "", err
-	}
-	constructedDepsRepo, err := getDepTreeArtifactoryRepository(depsRepo, server)
-	if err != nil {
-		return "", "", err
-	}
-	return constructedReleasesRepo, constructedDepsRepo, nil
 }
 
 func constructReleasesRemoteRepo() (string, error) {
@@ -160,6 +166,13 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
 		"-Dcom.jfrog.includeAllBuildFiles=true"}
+
+	// Always use temp directory for Gradle cache to isolate all downloads
+	// This ensures all packages are downloaded to temp directory and cleaned up automatically
+	gradleCacheDir := filepath.Join(depTreeDir, "gradle-cache")
+	tasks = append(tasks, fmt.Sprintf("-Dgradle.user.home=%s", depTreeDir))
+	log.Debug("Using temp directory for Gradle cache:", gradleCacheDir)
+
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
 	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
@@ -181,9 +194,32 @@ func getDepTreeArtifactoryRepository(remoteRepo string, server *config.ServerDet
 		return "", err
 	}
 
-	log.Debug("The project dependencies will be resolved from", server.ArtifactoryUrl, "from the", remoteRepo, "repository")
+	artifactoryUrl := strings.TrimSuffix(server.ArtifactoryUrl, "/")
+
 	return fmt.Sprintf(artifactoryRepository,
-		strings.TrimSuffix(server.ArtifactoryUrl, "/"),
+		artifactoryUrl,
+		remoteRepo,
+		username,
+		password), nil
+}
+
+func getDepTreeArtifactoryRepositoryWithPassThrough(remoteRepo string, server *config.ServerDetails, usePassThrough bool) (string, error) {
+	if remoteRepo == "" || server.IsEmpty() {
+		return "", nil
+	}
+	username, password, err := getArtifactoryAuthFromServer(server)
+	if err != nil {
+		return "", err
+	}
+
+	artifactoryUrl := strings.TrimSuffix(server.ArtifactoryUrl, "/")
+
+	// Add /api/curation/audit/ prefix to bypass vulnerability blocking during security scanning
+	if usePassThrough {
+		artifactoryUrl = artifactoryUrl + "/api/curation/audit/"
+	}
+	return fmt.Sprintf(artifactoryRepository,
+		artifactoryUrl,
 		remoteRepo,
 		username,
 		password), nil
