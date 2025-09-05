@@ -229,3 +229,29 @@ func TestConstructReleasesRemoteRepo(t *testing.T) {
 		}()
 	}
 }
+
+func TestCurationPassThrough(t *testing.T) {
+	server := &config.ServerDetails{
+		Url:            "https://myartifactory.com/",
+		ArtifactoryUrl: "https://myartifactory.com/artifactory",
+		AccessToken:    dummyToken,
+	}
+	remoteRepo := "test-repo"
+
+	// Test non-curation - should NOT have pass-through
+	url1, err := getDepTreeArtifactoryRepository(remoteRepo, server)
+	assert.NoError(t, err)
+	assert.Contains(t, url1, "https://myartifactory.com/artifactory/test-repo")
+	assert.NotContains(t, url1, "/api/curation/audit/")
+
+	// Test curation with pass-through - should HAVE pass-through
+	url2, err := getDepTreeArtifactoryRepositoryWithPassThrough(remoteRepo, server, true)
+	assert.NoError(t, err)
+	assert.Contains(t, url2, "/api/curation/audit/")
+
+	// Test curation without pass-through - should NOT have pass-through
+	url3, err := getDepTreeArtifactoryRepositoryWithPassThrough(remoteRepo, server, false)
+	assert.NoError(t, err)
+	assert.Contains(t, url3, "https://myartifactory.com/artifactory/test-repo")
+	assert.NotContains(t, url3, "/api/curation/audit/")
+}
