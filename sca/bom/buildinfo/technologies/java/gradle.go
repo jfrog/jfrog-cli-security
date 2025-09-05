@@ -216,7 +216,7 @@ func getDepTreeArtifactoryRepositoryWithPassThrough(remoteRepo string, server *c
 
 	// Add /api/curation/audit/ prefix to bypass vulnerability blocking during security scanning
 	if usePassThrough {
-		artifactoryUrl = artifactoryUrl + "/api/curation/audit/"
+		artifactoryUrl += "/api/curation/audit"
 	}
 	return fmt.Sprintf(artifactoryRepository,
 		artifactoryUrl,
