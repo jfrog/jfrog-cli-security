@@ -110,7 +110,7 @@ func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
 		return
 	}
 	// Upload the CycloneDx file to the JFrog repository
-	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+	if artifactPath, err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
 		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
 	return
@@ -140,24 +140,32 @@ func validateInputFile(cdxFilePath string) (err error) {
 	return
 }
 
-func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (err error) {
+func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (artifactPath string, err error) {
 	// scanResultsRepository may be the repository name and after the slash the path in the repository, we want to extract the repository name
 	repoName := strings.Split(scanResultsRepository, "/")[0]
 	if repoName == "" {
-		return fmt.Errorf("invalid repository name: %s", scanResultsRepository)
+		return "", fmt.Errorf("invalid repository name: %s", scanResultsRepository)
 	}
 	repoExists, err := artifactory.IsRepoExists(repoName, serverDetails)
 	if err != nil {
-		return fmt.Errorf("failed to check if repository %s exists: %s", repoName, err.Error())
+		return "", fmt.Errorf("failed to check if repository %s exists: %s", repoName, err.Error())
 	}
 	// If the repository doesn't exist, create it
 	if !repoExists {
 		if err = artifactory.CreateGenericLocalRepository(repoName, serverDetails, true, relatedProjectKey); err != nil {
-			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
+			return "", fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
 		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
-	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
+	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", filePath, scanResultsRepository, err)
+	}
+	if len(uploaded) == 0 {
+		return "", fmt.Errorf("no files were uploaded to repository %s", scanResultsRepository)
+	}
+	artifactPath = uploaded[0]
+	return
 }
 
 func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {

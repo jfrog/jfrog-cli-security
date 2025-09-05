@@ -1,6 +1,9 @@
 package enforcer
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/jfrog/jfrog-cli-core/v2/utils/config"
 	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
@@ -60,13 +63,15 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 		return
 	}
 	convertedViolations = []violationutils.Violation{}
-	log.Debug("Waiting for Xray scan to complete...")
+	log.Info("Waiting for Xray scans to complete...")
+	startedTimeStamp := time.Now()
 	err = artifact.WaitForArtifactScanCompletion(xrayManager, p.rtRepository, p.artifactPath, artifact.Steps(artifact.XrayScanStepViolations))
 	if err != nil {
 		return
 	}
+	log.Debug(fmt.Sprintf("Xray scan completed in %s seconds", time.Since(startedTimeStamp).String()))
 	// Get with API
-	log.Debug("Fetching violations from Xray...")
+	log.Info("Fetching violations from Xray...")
 
 	return
 }
