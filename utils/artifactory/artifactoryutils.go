@@ -87,11 +87,6 @@ func getArtifactoryRepositoryConfig(tech techutils.Technology) (repoConfig *proj
 }
 
 func UploadArtifactsByPattern(pattern string, serverDetails *config.ServerDetails, repo, relatedProjectKey string) (uploaded []string, err error) {
-	if strings.Contains(repo, "/") && !strings.HasSuffix(repo, "/") {
-		// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
-		// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
-		repo = fmt.Sprintf("%s/", repo)
-	}
 	uploadCmd := generic.NewUploadCommand()
 	uploadCmd.SetUploadConfiguration(&artifactoryUtils.UploadConfiguration{Threads: 1}).SetServerDetails(serverDetails).SetSpec(spec.NewBuilder().Pattern(pattern).Project(relatedProjectKey).Target(repo).Flat(true).BuildSpec())
 	uploadCmd.SetDetailedSummary(true)
@@ -110,6 +105,13 @@ func getArtifactsPaths(repo string, reader *content.ContentReader) (paths []stri
 	}
 	reader.Reset()
 	return
+}
+
+func AddSuffixSlashIfNeeded(path string) string {
+	if path != "" && !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
+	return path
 }
 
 func IsRepoExists(repoKey string, serverDetails *config.ServerDetails) (exists bool, err error) {

@@ -75,7 +75,7 @@ func (p *PolicyEnforcerViolationGenerator) GenerateViolations(cmdResults *result
 	log.Debug(fmt.Sprintf("Xray scan completed in %s seconds", time.Since(startedTimeStamp).String()))
 	// Get with API
 	log.Info("Fetching violations from Xray...")
-	params := xrayUtils.NewViolationsRequest().FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: p.rtRepository, Path: p.artifactPath})
+	params := xrayUtils.NewViolationsRequest().IncludeDetails(true).FilterByArtifacts(xrayUtils.ArtifactResourceFilter{Repository: p.rtRepository, Path: p.artifactPath})
 	generatedViolations, err := xrayManager.GetViolations(params)
 	if err != nil {
 		return

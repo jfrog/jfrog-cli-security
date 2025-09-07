@@ -157,7 +157,9 @@ func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *confi
 		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
-	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
+	// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
+	// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
+	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, artifactory.AddSuffixSlashIfNeeded(scanResultsRepository), relatedProjectKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", filePath, scanResultsRepository, err)
 	}
@@ -190,11 +192,4 @@ func calculateFileSHA256(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
 	return utils.Sha256Hash(string(content))
-}
-
-func getArtifactPathInRepo(filePath string, repo string) string {
-	if !strings.HasSuffix(repo, "/") {
-		repo = repo + "/"
-	}
-	return fmt.Sprintf("%s%s", repo, filepath.Base(filePath))
 }
