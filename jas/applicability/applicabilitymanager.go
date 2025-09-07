@@ -60,7 +60,7 @@ func RunApplicabilityScan(params ContextualAnalysisScanParams, scanner *jas.JasS
 		log.Debug(clientutils.GetLogMsgPrefix(params.ThreadId, false) + "We couldn't find any vulnerable dependencies. Skipping Contextual Analysis scan....")
 		return
 	}
-	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + fmt.Sprintf("Running %s scan on target...", utils.ContextualAnalysisScan.ToTextString()))
+	log.Info(clientutils.GetLogMsgPrefix(params.ThreadId, false) + fmt.Sprintf("Running %s scan on target '%s'...", utils.ContextualAnalysisScan.ToTextString(), params.Module.SourceRoot))
 	// Applicability scan does not produce violations.
 	if results, _, err = applicabilityScanManager.scanner.Run(applicabilityScanManager, params.Module); err != nil {
 		return
