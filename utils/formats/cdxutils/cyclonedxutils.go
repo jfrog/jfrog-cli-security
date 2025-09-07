@@ -20,7 +20,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 )
 
-type BOMWithSAST struct {
+type FullBOM struct {
 	cyclonedx.BOM
 	Sast []*sarif.Run `json:"sast,omitempty"`
 }

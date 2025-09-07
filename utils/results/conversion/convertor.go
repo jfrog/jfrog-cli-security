@@ -73,7 +73,7 @@ type ResultsStreamFormatParser[T interface{}] interface {
 	Get() (T, error)
 }
 
-func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cdxutils.BOMWithSAST, err error) {
+func (c *CommandResultsConvertor) ConvertToCycloneDx(cmdResults *results.SecurityCommandResults) (bom *cdxutils.FullBOM, err error) {
 	parser := cyclonedxparser.NewCmdResultsCycloneDxConverter(false)
 	return parseCommandResults(c.Params, parser, cmdResults)
 }

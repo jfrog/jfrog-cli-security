@@ -34,7 +34,7 @@ type CmdResultsCycloneDxConverter struct {
 	parseSast      bool
 
 	targetsComponent map[string]cyclonedx.Component
-	bom              *cdxutils.BOMWithSAST
+	bom              *cdxutils.FullBOM
 }
 
 func NewCmdResultsCycloneDxConverter(parseSast bool) *CmdResultsCycloneDxConverter {
@@ -43,9 +43,9 @@ func NewCmdResultsCycloneDxConverter(parseSast bool) *CmdResultsCycloneDxConvert
 	}
 }
 
-func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.BOMWithSAST, err error) {
+func (cdc *CmdResultsCycloneDxConverter) Get() (bom *cdxutils.FullBOM, err error) {
 	if cdc.bom == nil {
-		return &cdxutils.BOMWithSAST{BOM: *cyclonedx.NewBOM()}, nil
+		return &cdxutils.FullBOM{BOM: *cyclonedx.NewBOM()}, nil
 	}
 	bom = cdc.bom
 	bom.Metadata.Component, err = cdc.getMetadataComponent()
@@ -56,7 +56,7 @@ func (cdc *CmdResultsCycloneDxConverter) Reset(cmdType utils.CommandType, multiS
 	cdc.entitledForJas = entitledForJas
 	cdc.xrayVersion = xrayVersion
 	// Reset the BOM
-	cdc.bom = &cdxutils.BOMWithSAST{BOM: *cyclonedx.NewBOM()}
+	cdc.bom = &cdxutils.FullBOM{BOM: *cyclonedx.NewBOM()}
 	cdc.bom.SerialNumber = cdxutils.GetSerialNumber(multiScanId)
 	cdc.bom.Metadata = &cyclonedx.Metadata{
 		Timestamp: time.Now().Format(time.RFC3339),
