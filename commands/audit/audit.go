@@ -156,7 +156,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 	isRecursiveScan := false
 	if _, ok := auditCmd.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
 		if len(auditCmd.workingDirs) > 1 {
-			return errors.New("the 'audit' command with the 'scang' BOM generator supports only one working directory. Please provide a single working directory")
+			return errors.New("the 'audit' command with the 'Xray lib' BOM generator supports only one working directory. Please provide a single working directory")
 		}
 	} else {
 		// If no workingDirs were provided by the user, we apply a recursive scan on the root repository

@@ -100,6 +100,7 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Basic params
 	isRecursiveScan := true
 	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		// 'Xray lib' BOM generator supports only one working directory, no recursive scan (single target)
 		isRecursiveScan = false
 	}
 	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)

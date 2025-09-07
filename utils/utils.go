@@ -378,17 +378,17 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 
 func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
 	// Get JPD / Releases remote details to download the resource from.
-	artDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
 	if err != nil {
 		return err
 	}
 	// Check if the resource should be downloaded.
 	// First get the latest resource checksum from Artifactory.
-	client, httpClientDetails, err := dependencies.CreateHttpClient(artDetails)
+	client, httpClientDetails, err := dependencies.CreateHttpClient(rtDetails)
 	if err != nil {
 		return err
 	}
-	downloadUrl := artDetails.ArtifactoryUrl + remotePath
+	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
 	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
 	if err != nil {
 		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
@@ -401,7 +401,7 @@ func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir,
 	}
 	// Download & unzip the resource files
 	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", resourceName))
-	if err = dependencies.DownloadDependency(artDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
+	if err = dependencies.DownloadDependency(rtDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
 		return err
 	}
 	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
