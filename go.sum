@@ -21,6 +21,8 @@ github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be h1:9AeTilPcZAjCFI
 github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be/go.mod h1:ySMOLuWl6zY27l47sB3qLNK6tF2fkHG55UZxx8oIVo4=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPdPJAN/hZIm0C4OItdklCFmMRWYpio=
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
+github.com/attiasas/jfrog-client-go v0.0.0-20250908063929-67c20b37b3db h1:atL3ei5JZEQ8D4BnRMJRKNDYKjU0f4/DbB+d5zmcNvk=
+github.com/attiasas/jfrog-client-go v0.0.0-20250908063929-67c20b37b3db/go.mod h1:cOy7Pn34bGtjp0eWHADTRJG5Er0qVnJIz04u+NGEpcQ=
 github.com/beevik/etree v1.4.0 h1:oz1UedHRepuY3p4N5OjE0nK1WLCqtzHf25bxplKOHLs=
 github.com/beevik/etree v1.4.0/go.mod h1:cyWiXwGoasx60gHvtnEh5x8+uIjUVnjWqBvEnhnqKDA=
 github.com/bradleyjkemp/cupaloy/v2 v2.8.0 h1:any4BmKE+jGIaMpnU8YgH/I2LPiLBufr6oMMlVBbn9M=
@@ -139,8 +141,6 @@ github.com/jfrog/jfrog-cli-artifactory v0.7.1 h1:MNKrC21z/sfnIGZ9wopFEMuOHAgWPzS
 github.com/jfrog/jfrog-cli-artifactory v0.7.1/go.mod h1:tmhbLMaRjB6ENFjDTKwbqVqYAHBuZxe8vCu2iSTPGvE=
 github.com/jfrog/jfrog-cli-core/v2 v2.59.7 h1:qn4HVqP5L9GQ5py0ZeJzXkc3UXq4cHT20AJnwcco7ys=
 github.com/jfrog/jfrog-cli-core/v2 v2.59.7/go.mod h1:W6o+7kLLy7GEWhCN9I2vzjGRGeeOZzsJ0uMaKCyr1CI=
-github.com/jfrog/jfrog-client-go v1.54.7 h1:S1geo9T5ZCAb7EkXSv+NJ0K8+yhDsxlrybHTosCilIg=
-github.com/jfrog/jfrog-client-go v1.54.7/go.mod h1:cOy7Pn34bGtjp0eWHADTRJG5Er0qVnJIz04u+NGEpcQ=
 github.com/jhump/protoreflect v1.15.1 h1:HUMERORf3I3ZdX05WaQ6MIpd/NJ434hTp5YiKgfCL6c=
 github.com/jhump/protoreflect v1.15.1/go.mod h1:jD/2GMKKE6OqX8qTjhADU1e6DShO+gavG9e0Q693nKo=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
