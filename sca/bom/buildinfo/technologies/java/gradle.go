@@ -57,10 +57,14 @@ var gradleDepTreeJar []byte
 
 type gradleDepTreeManager struct {
 	DepTreeManager
+	isCurationCmd bool
 }
 
 func buildGradleDependencyTree(params *DepTreeParams) (dependencyTree []*xrayUtils.GraphNode, uniqueDeps map[string]*xray.DepTreeNode, err error) {
-	manager := &gradleDepTreeManager{DepTreeManager: NewDepTreeManager(params)}
+	manager := &gradleDepTreeManager{
+		DepTreeManager: NewDepTreeManager(params),
+		isCurationCmd:  params.IsCurationCmd,
+	}
 	outputFileContent, err := manager.runGradleDepTree()
 	if err != nil {
 		return
@@ -160,6 +164,12 @@ func (gdt *gradleDepTreeManager) execGradleDepTree(depTreeDir string) (outputFil
 		gradleNoCacheFlag,
 		fmt.Sprintf("-Dcom.jfrog.depsTreeOutputFile=%s", outputFilePath),
 		"-Dcom.jfrog.includeAllBuildFiles=true"}
+
+	// Add curation audit mode for pass-through functionality if this is a curation command
+	if gdt.isCurationCmd {
+		tasks = append(tasks, "-Dcom.jfrog.curationAuditMode=true")
+	}
+
 	log.Info("Running gradle deps tree command:", gradleExecPath, strings.Join(tasks, " "))
 	if output, err := exec.Command(gradleExecPath, tasks...).CombinedOutput(); err != nil {
 		return nil, errorutils.CheckErrorf("error running gradle-dep-tree: %s\n%s", err.Error(), string(output))
