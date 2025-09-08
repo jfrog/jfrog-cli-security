@@ -50,7 +50,7 @@ func TestGetGradleGraphFromDepTree(t *testing.T) {
 		"org.slf4j:slf4j-api:1.4.2",
 	}
 
-	manager := &gradleDepTreeManager{DepTreeManager{}}
+	manager := &gradleDepTreeManager{DepTreeManager{}, false}
 	outputFileContent, err := manager.runGradleDepTree()
 	assert.NoError(t, err)
 	depTree, uniqueDeps, err := getGraphFromDepTree(outputFileContent)
