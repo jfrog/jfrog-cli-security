@@ -5,6 +5,10 @@ import (
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
 	clientconfig "github.com/jfrog/jfrog-client-go/config"
 	"github.com/jfrog/jfrog-client-go/xray"
+
+	"github.com/jfrog/jfrog-cli-security/utils"
+	clientutils "github.com/jfrog/jfrog-client-go/utils"
+	"github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 // Options for creating an Xray service manager.
@@ -54,4 +58,12 @@ func CreateXrayServiceManagerAndGetVersion(serviceDetails *config.ServerDetails,
 		return nil, "", err
 	}
 	return xrayManager, xrayVersion, nil
+}
+
+func IsEntitled(xrayManager *xray.XrayServicesManager, xrayVersion, featureId string) (entitled bool, err error) {
+	if e := clientutils.ValidateMinimumVersion(clientutils.Xray, xrayVersion, utils.EntitlementsMinVersion); e != nil {
+		log.Debug(e)
+		return
+	}
+	return xrayManager.IsEntitled(featureId)
 }

@@ -3,6 +3,8 @@ package audit
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jfrog/gofrog/parallel"
@@ -579,12 +581,17 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}()
 		// First download the analyzer manager if needed
 		if auditParams.customAnalyzerManagerBinaryPath == "" {
-			if err := jas.DownloadAnalyzerManagerIfNeeded(threadId); err != nil {
-				return fmt.Errorf("failed to download analyzer manager: %s", err.Error())
+			if generalError = jas.DownloadAnalyzerManagerIfNeeded(threadId); generalError != nil {
+				return fmt.Errorf("failed to download analyzer manager: %s", generalError.Error())
+			}
+			if scanner.AnalyzerManager.AnalyzerManagerFullPath, generalError = jas.GetAnalyzerManagerExecutable(); generalError != nil {
+				return fmt.Errorf("failed to set analyzer manager executable path: %s", generalError.Error())
 			}
 		} else {
-			log.Debug(fmt.Sprintf(clientutils.GetLogMsgPrefix(threadId, false)+"using custom analyzer manager binary path: %s", auditParams.customAnalyzerManagerBinaryPath))
+			scanner.AnalyzerManager.AnalyzerManagerFullPath = auditParams.customAnalyzerManagerBinaryPath
+			log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + "using custom analyzer manager binary path")
 		}
+		log.Debug(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("Using analyzer manager executable at: %s", scanner.AnalyzerManager.AnalyzerManagerFullPath))
 		// Run JAS scanners for each scan target
 		for _, targetResult := range scanResults.Targets {
 			if targetResult.AppsConfigModule == nil {
@@ -593,15 +600,14 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 			}
 			appsConfigModule := *targetResult.AppsConfigModule
 			params := runner.JasRunnerParams{
-				Runner:                          auditParallelRunner,
-				ServerDetails:                   serverDetails,
-				Scanner:                         scanner,
-				CustomAnalyzerManagerBinaryPath: auditParams.customAnalyzerManagerBinaryPath,
-				Module:                          appsConfigModule,
-				ConfigProfile:                   auditParams.AuditBasicParams.GetConfigProfile(),
-				ScansToPerform:                  auditParams.ScansToPerform(),
-				SourceResultsToCompare:          scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
-				SecretsScanType:                 secrets.SecretsScannerType,
+				Runner:                 auditParallelRunner,
+				ServerDetails:          serverDetails,
+				Scanner:                scanner,
+				Module:                 appsConfigModule,
+				ConfigProfile:          auditParams.AuditBasicParams.GetConfigProfile(),
+				ScansToPerform:         auditParams.ScansToPerform(),
+				SourceResultsToCompare: scanner.GetResultsToCompareByRelativePath(utils.GetRelativePath(targetResult.Target, scanResults.GetCommonParentPath())),
+				SecretsScanType:        secrets.SecretsScannerType,
 				CvesProvider: func() (directCves []string, indirectCves []string) {
 					if len(targetResult.GetScaScansXrayResults()) > 0 {
 						// TODO: remove this once the new SCA flow with cdx is fully implemented.
@@ -612,7 +618,7 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 				},
 				ThirdPartyApplicabilityScan: auditParams.thirdPartyApplicabilityScan,
 				ApplicableScanType:          applicability.ApplicabilityScannerType,
-				SignedDescriptions:          auditParams.OutputFormat() == format.Sarif,
+				SignedDescriptions:          getSignedDescriptions(auditParams.OutputFormat()),
 				ScanResults:                 targetResult,
 				TargetOutputDir:             auditParams.scanResultsOutputDir,
 				AllowPartialResults:         auditParams.AllowPartialResults(),
@@ -625,4 +631,13 @@ func createJasScansTask(auditParallelRunner *utils.SecurityParallelRunner, scanR
 		}
 		return
 	}
+}
+
+func getSignedDescriptions(currentFormat format.OutputFormat) bool {
+	allowEmojis, err := strconv.ParseBool(os.Getenv(utils.IsAllowEmojis))
+	if err != nil {
+		// default value
+		allowEmojis = true
+	}
+	return currentFormat == format.Sarif && allowEmojis
 }
