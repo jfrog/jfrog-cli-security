@@ -125,12 +125,13 @@ require (
 )
 
 // attiasas:add_verbose_log_level
-replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250908063929-67c20b37b3db
+replace github.com/jfrog/jfrog-client-go => github.com/attiasas/jfrog-client-go v0.0.0-20250908103859-8eab83a97643
 
 // replace github.com/jfrog/jfrog-cli-core/v2 => github.com/jfrog/jfrog-cli-core/v2 dev
 
 // replace github.com/jfrog/jfrog-cli-artifactory => github.com/jfrog/jfrog-cli-artifactory main
 
-// replace github.com/jfrog/build-info-go => github.com/jfrog/build-info-go dev
+// attiasas:add_verbose_log_level
+replace github.com/jfrog/build-info-go => github.com/attiasas/build-info-go v0.0.0-20250908103108-2a651898674a
 
 // replace github.com/jfrog/froggit-go => github.com/jfrog/froggit-go master
