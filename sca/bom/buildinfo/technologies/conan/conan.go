@@ -114,7 +114,7 @@ func calculateDependencies(executablePath, workingDir string, params technologie
 		return
 	}
 
-	log.Debug("Conan 'graph info' command output:\n", string(conanGraphInfoContent))
+	log.Verbose("Conan 'graph info' command output:\n", string(conanGraphInfoContent))
 	var output conanGraphOutput
 	if err = json.Unmarshal(conanGraphInfoContent, &output); err != nil {
 		return
