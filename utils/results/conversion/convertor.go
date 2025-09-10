@@ -12,6 +12,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/summaryparser"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/tableparser"
 	"github.com/jfrog/jfrog-client-go/xray/services"
+	xscServices "github.com/jfrog/jfrog-client-go/xsc/services"
 	"github.com/owenrumney/go-sarif/v3/pkg/report/v210/sarif"
 )
 
@@ -53,7 +54,7 @@ func NewCommandResultsConvertor(params ResultConvertParams) *CommandResultsConve
 // Parse a stream of results and convert them to the desired format T
 type ResultsStreamFormatParser[T interface{}] interface {
 	// Reset the convertor to start converting a new command results
-	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, generalError error) error
+	Reset(cmdType utils.CommandType, multiScanId, xrayVersion string, entitledForJas, multipleTargets bool, gitContext *xscServices.XscGitInfoContext, generalError error) error
 	// Will be called for each scan target (indicating the current is done parsing and starting to parse a new scan)
 	ParseNewTargetResults(target results.ScanTarget, errors ...error) error
 	// TODO: This method is deprecated and only used for backward compatibility until the new BOM can contain all the information scanResponse contains.
@@ -106,7 +107,7 @@ func parseCommandResults[T interface{}](params ResultConvertParams, parser Resul
 	if params.IsMultipleRoots != nil {
 		multipleTargets = *params.IsMultipleRoots
 	}
-	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets, cmdResults.GeneralError); err != nil {
+	if err = parser.Reset(cmdResults.CmdType, cmdResults.MultiScanId, cmdResults.XrayVersion, jasEntitled, multipleTargets, cmdResults.GitContext, cmdResults.GeneralError); err != nil {
 		return
 	}
 	for _, targetScansResults := range cmdResults.Targets {

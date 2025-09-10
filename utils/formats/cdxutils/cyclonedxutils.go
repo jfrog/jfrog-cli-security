@@ -235,7 +235,7 @@ func potentialRootDependencyToRoots(bom *cyclonedx.BOM, dependency cyclonedx.Dep
 		// The component is the root
 		return append(roots, dependency)
 	}
-	// In SCANG the root can be a file or directory component (the Metadata component) and the actual roots are the component children
+	// In Xray-Lib-Plugin the root can be a file or directory component (the Metadata component) and the actual roots are the component children
 	if depComponent != nil && depComponent.Type == cyclonedx.ComponentTypeLibrary {
 		roots = append(roots, dependency)
 	} else if bom.Metadata != nil && bom.Metadata.Component != nil && bom.Metadata.Component.BOMRef == dependency.Ref {

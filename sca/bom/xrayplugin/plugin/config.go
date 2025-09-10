@@ -1,6 +1,6 @@
 package plugin
 
-// Config holds the configuration for scang library options.
+// Config holds the configuration for Xray plugin library options.
 type Config struct {
 	// The BOMRef of the scanned target, will be used at the Metadata and considered the Root.
 	BomRef string `json:"bom-ref,omitempty"`

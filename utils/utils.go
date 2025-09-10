@@ -23,6 +23,7 @@ import (
 
 	"github.com/jfrog/gofrog/datastructures"
 	"github.com/jfrog/jfrog-cli-core/v2/utils/coreutils"
+	"github.com/jfrog/jfrog-cli-core/v2/utils/dependencies"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
 	"github.com/jfrog/jfrog-client-go/utils/errorutils"
 )
@@ -379,4 +380,60 @@ func GetGitRepoUrlKey(gitRepoHttpsCloneUrl string) string {
 		return ""
 	}
 	return xscutils.GetGitRepoUrlKey(gitRepoHttpsCloneUrl)
+}
+
+func DownloadResourceFromPlatformIfNeeded(resourceName, downloadPath, targetDir, targetArtifactName string, explodeArtifact bool, threadId int) error {
+	// Get JPD / Releases remote details to download the resource from.
+	rtDetails, remotePath, err := GetReleasesRemoteDetails(resourceName, downloadPath)
+	if err != nil {
+		return err
+	}
+	// Check if the resource should be downloaded.
+	// First get the latest resource checksum from Artifactory.
+	client, httpClientDetails, err := dependencies.CreateHttpClient(rtDetails)
+	if err != nil {
+		return err
+	}
+	downloadUrl := rtDetails.ArtifactoryUrl + remotePath
+	remoteFileDetails, _, err := client.GetRemoteFileDetails(downloadUrl, &httpClientDetails)
+	if err != nil {
+		return fmt.Errorf("couldn't get remote file details for %s: %s", downloadUrl, err.Error())
+	}
+	// Find current resource checksum.
+	checksumFilePath := filepath.Join(targetDir, dependencies.ChecksumFileName)
+	if match, err := isArtifactChecksumsMatch(remoteFileDetails, checksumFilePath, true); err != nil || match {
+		// If the checksums are identical, there's no need to download.
+		return err
+	}
+	// Download & unzip the resource files
+	log.Info(clientutils.GetLogMsgPrefix(threadId, false) + fmt.Sprintf("The '%s' app is not cached locally. Downloading it now...", resourceName))
+	if err = dependencies.DownloadDependency(rtDetails, remotePath, filepath.Join(targetDir, targetArtifactName), explodeArtifact); err != nil {
+		return err
+	}
+	return dependencies.CreateChecksumFile(checksumFilePath, remoteFileDetails.Checksum.Sha256)
+}
+
+func isArtifactChecksumsMatch(remoteFileDetails *fileutils.FileDetails, localFilePath string, contentIsTheChecksum bool) (match bool, err error) {
+	if remoteFileDetails == nil {
+		return false, fmt.Errorf("remote file details are nil for %s", localFilePath)
+	}
+	// Find current checksum.
+	if exist, err := fileutils.IsFileExists(localFilePath, false); err != nil || !exist {
+		return false, err
+	}
+	// Read the file content
+	content, err := fileutils.ReadFile(localFilePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read file %s: %w", localFilePath, err)
+	}
+	if contentIsTheChecksum {
+		// File content is the checksum value, compare the local checksum with the remote one.
+		return remoteFileDetails.Checksum.Sha256 == string(content), nil
+	}
+	// File content is the actual file, calculate the checksum and compare it with the remote one.
+	sha256, err := Sha256Hash(string(content))
+	if err != nil {
+		return false, fmt.Errorf("failed to calculate the local file checksum: %w", err)
+	}
+	return remoteFileDetails.Checksum.Sha256 == sha256, nil
 }
