@@ -197,7 +197,7 @@ func (rw *ResultsWriter) printCycloneDx() error {
 		return err
 	}
 	log.Output(string(outputBytes))
-	return utils.DumpCdxWithSastContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
+	return utils.DumpFullBOMContentToFile(outputBytes, rw.outputDir, rw.getOutputFileName(), 0)
 }
 
 func (rw *ResultsWriter) getOutputFileName() string {

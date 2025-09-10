@@ -29,9 +29,9 @@ const (
 )
 
 type CmdResultsCycloneDxConverter struct {
-	entitledForJas bool
-	xrayVersion    string
-	parseSast      bool
+	entitledForJas                 bool
+	xrayVersion                    string
+	parseSastResultDirectlyIntoCDX bool
 
 	targetsComponent map[string]cyclonedx.Component
 	bom              *cdxutils.FullBOM
@@ -39,7 +39,7 @@ type CmdResultsCycloneDxConverter struct {
 
 func NewCmdResultsCycloneDxConverter(parseSast bool) *CmdResultsCycloneDxConverter {
 	return &CmdResultsCycloneDxConverter{
-		parseSast: parseSast,
+		parseSastResultDirectlyIntoCDX: parseSast,
 	}
 }
 
@@ -229,7 +229,7 @@ func (cdc *CmdResultsCycloneDxConverter) ParseSast(target results.ScanTarget, vi
 		return nil
 	}
 	source := cdc.addJasService(sast)
-	if !cdc.parseSast {
+	if !cdc.parseSastResultDirectlyIntoCDX {
 		// SAST parsing is disabled, add the runs without parsing the issues
 		cdc.bom.Sast = append(cdc.bom.Sast, results.ScanResultsToRuns(sast)...)
 		return
