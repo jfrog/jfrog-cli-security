@@ -60,15 +60,12 @@ var (
 )
 
 const (
-	ContextualAnalysisScan       SubScanType        = "contextual_analysis"
-	ScaScan                      SubScanType        = "sca"
-	IacScan                      SubScanType        = "iac"
-	SastScan                     SubScanType        = "sast"
-	SecretsScan                  SubScanType        = "secrets"
-	SecretTokenValidationScan    SubScanType        = "secrets_token_validation"
-	ViolationTypeSecurity        ViolationIssueType = "security"
-	ViolationTypeLicense         ViolationIssueType = "license"
-	ViolationTypeOperationalRisk ViolationIssueType = "operational_risk"
+	ContextualAnalysisScan    SubScanType = "contextual_analysis"
+	ScaScan                   SubScanType = "sca"
+	IacScan                   SubScanType = "iac"
+	SastScan                  SubScanType = "sast"
+	SecretsScan               SubScanType = "secrets"
+	SecretTokenValidationScan SubScanType = "secrets_token_validation"
 )
 
 var subScanTypeToText = map[SubScanType]string{
@@ -84,12 +81,6 @@ func (subScan SubScanType) ToTextString() string {
 		return text
 	}
 	return string(subScan)
-}
-
-type ViolationIssueType string
-
-func (v ViolationIssueType) String() string {
-	return string(v)
 }
 
 type SubScanType string
@@ -324,14 +315,14 @@ func ReadSbomFromFile(cdxFilePath string) (bom *cyclonedx.BOM, err error) {
 	return bom, nil
 }
 
-func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (err error) {
+func DumpCdxContentToFile(bom *cyclonedx.BOM, scanResultsOutputDir, filePrefix string, threadId int) (pathToSave string, err error) {
 	logPrefix := ""
 	if threadId >= 0 {
 		logPrefix = clientutils.GetLogMsgPrefix(threadId, false)
 	}
-	pathToSave := filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
+	pathToSave = filepath.Join(scanResultsOutputDir, fmt.Sprintf("%s_%s.cdx.json", filePrefix, GetCurrentTimeUnix()))
 	log.Debug(fmt.Sprintf("%sScans output directory was provided, saving CycloneDX SBOM to file '%s'...", logPrefix, pathToSave))
-	return SaveCdxContentToFile(pathToSave, bom)
+	return pathToSave, SaveCdxContentToFile(pathToSave, bom)
 }
 
 func SaveCdxContentToFile(pathToSave string, bom *cyclonedx.BOM) (err error) {

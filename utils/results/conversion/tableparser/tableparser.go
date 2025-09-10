@@ -9,6 +9,7 @@ import (
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/formats"
 	"github.com/jfrog/jfrog-cli-security/utils/formats/cdxutils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/conversion/simplejsonparser"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
@@ -60,39 +61,39 @@ func (tc *CmdResultsTableConverter) ParseNewTargetResults(target results.ScanTar
 	return tc.simpleJsonConvertor.ParseNewTargetResults(target, errors...)
 }
 
-func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(target results.ScanTarget, descriptors []string, violations bool, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(target, descriptors, violations, scaResponse, applicableScan...)
+func (tc *CmdResultsTableConverter) DeprecatedParseScaIssues(descriptors []string, scaResponse results.ScanResult[services.ScanResponse], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.DeprecatedParseScaIssues(descriptors, scaResponse, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(target results.ScanTarget, scaResponse results.ScanResult[services.ScanResponse]) (err error) {
-	return tc.simpleJsonConvertor.DeprecatedParseLicenses(target, scaResponse)
+func (tc *CmdResultsTableConverter) DeprecatedParseLicenses(scaResponse results.ScanResult[services.ScanResponse]) (err error) {
+	return tc.simpleJsonConvertor.DeprecatedParseLicenses(scaResponse)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbomLicenses(target results.ScanTarget, components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
-	return tc.simpleJsonConvertor.ParseSbomLicenses(target, components, dependencies...)
+func (tc *CmdResultsTableConverter) ParseSbomLicenses(components []cyclonedx.Component, dependencies ...cyclonedx.Dependency) (err error) {
+	return tc.simpleJsonConvertor.ParseSbomLicenses(components, dependencies...)
 }
 
-func (tc *CmdResultsTableConverter) ParseCVEs(target results.ScanTarget, enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseCVEs(target, enrichedSbom, applicableScan...)
+func (tc *CmdResultsTableConverter) ParseCVEs(enrichedSbom results.ScanResult[*cyclonedx.BOM], applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseCVEs(enrichedSbom, applicableScan...)
 }
 
-func (tc *CmdResultsTableConverter) ParseViolations(target results.ScanTarget, descriptors []string, violations []services.Violation, applicableScan ...results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseViolations(target, descriptors, violations, applicableScan...)
+func (tc *CmdResultsTableConverter) ParseViolations(violations ...violationutils.Violation) (err error) {
+	return tc.simpleJsonConvertor.ParseViolations(violations...)
 }
 
-func (tc *CmdResultsTableConverter) ParseSecrets(target results.ScanTarget, isViolationsResults bool, secrets []results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseSecrets(target, isViolationsResults, secrets)
+func (tc *CmdResultsTableConverter) ParseSecrets(secrets ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSecrets(secrets...)
 }
 
-func (tc *CmdResultsTableConverter) ParseIacs(target results.ScanTarget, isViolationsResults bool, iacs []results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseIacs(target, isViolationsResults, iacs)
+func (tc *CmdResultsTableConverter) ParseIacs(iacs ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseIacs(iacs...)
 }
 
-func (tc *CmdResultsTableConverter) ParseSast(target results.ScanTarget, isViolationsResults bool, sast []results.ScanResult[[]*sarif.Run]) (err error) {
-	return tc.simpleJsonConvertor.ParseSast(target, isViolationsResults, sast)
+func (tc *CmdResultsTableConverter) ParseSast(sast ...results.ScanResult[[]*sarif.Run]) (err error) {
+	return tc.simpleJsonConvertor.ParseSast(sast...)
 }
 
-func (tc *CmdResultsTableConverter) ParseSbom(_ results.ScanTarget, sbom *cyclonedx.BOM) (err error) {
+func (tc *CmdResultsTableConverter) ParseSbom(sbom *cyclonedx.BOM) (err error) {
 	if sbom == nil || sbom.Components == nil {
 		return nil
 	}

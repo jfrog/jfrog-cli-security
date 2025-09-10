@@ -10,6 +10,7 @@ import (
 	"github.com/jfrog/gofrog/datastructures"
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
 	"github.com/jfrog/jfrog-cli-security/utils"
+	"github.com/jfrog/jfrog-cli-security/utils/formats/violationutils"
 	"github.com/jfrog/jfrog-cli-security/utils/jasutils"
 	"github.com/jfrog/jfrog-cli-security/utils/techutils"
 	clientutils "github.com/jfrog/jfrog-client-go/utils"
@@ -36,6 +37,8 @@ type SecurityCommandResults struct {
 	// Results for each target in the command
 	Targets      []*TargetResults `json:"targets"`
 	targetsMutex sync.Mutex       `json:"-"`
+	// Policy violations found in the command
+	Violations []violationutils.Violation `json:"violations,omitempty"`
 	// GeneralError that occurred during the command execution
 	GeneralError error      `json:"general_error,omitempty"`
 	errorsMutex  sync.Mutex `json:"-"`
@@ -97,9 +100,8 @@ type ScaScanResults struct {
 	// Sca scan results
 	DeprecatedXrayResults []ScanResult[services.ScanResponse] `json:"xray_scan,omitempty"`
 	// Sbom (potentially, with enriched components and CVE Vulnerabilities) of the target
-	Sbom           *cyclonedx.BOM       `json:"sbom,omitempty"`
-	Violations     []services.Violation `json:"violations,omitempty"`
-	ScanStatusCode int                  `json:"status_code,omitempty"`
+	Sbom           *cyclonedx.BOM `json:"sbom,omitempty"`
+	ScanStatusCode int            `json:"status_code,omitempty"`
 }
 
 type JasScansResults struct {
@@ -314,6 +316,14 @@ func (r *SecurityCommandResults) HasFindings() bool {
 	return false
 }
 
+func (r *SecurityCommandResults) AddViolations(violations ...violationutils.Violation) *SecurityCommandResults {
+	if r.Violations == nil {
+		r.Violations = []violationutils.Violation{}
+	}
+	r.Violations = append(r.Violations, violations...)
+	return r
+}
+
 // --- Scan on a target ---
 
 func (r *SecurityCommandResults) NewScanResults(target ScanTarget) *TargetResults {
@@ -477,10 +487,9 @@ func (sr *TargetResults) ScaScanResults(errorCode int, responses ...services.Sca
 	return sr.ScaResults
 }
 
-func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM, violations ...services.Violation) *ScaScanResults {
+func (sr *TargetResults) EnrichedSbomScanResults(errorCode int, enrichedSbom *cyclonedx.BOM) *ScaScanResults {
 	// Update the existing BOM with the enriched BOM
 	sr.SetSbom(enrichedSbom)
-	sr.ScaResults.AddViolations(violations...)
 	sr.ScaResults.ScanStatusCode = errorCode
 	return sr.ScaResults
 }
@@ -511,14 +520,6 @@ func (ssr *ScaScanResults) HasFindings() bool {
 		}
 	}
 	return ssr.Sbom != nil && ssr.Sbom.Vulnerabilities != nil && len(*ssr.Sbom.Vulnerabilities) > 0
-}
-
-func (ssr *ScaScanResults) AddViolations(violations ...services.Violation) *ScaScanResults {
-	if ssr.Violations == nil {
-		ssr.Violations = []services.Violation{}
-	}
-	ssr.Violations = append(ssr.Violations, violations...)
-	return ssr
 }
 
 func (jsr *JasScansResults) AddApplicabilityScanResults(exitCode int, runs ...*sarif.Run) {

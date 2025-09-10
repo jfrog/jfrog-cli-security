@@ -3,6 +3,7 @@ package audit
 import (
 	"time"
 
+	"github.com/jfrog/jfrog-cli-security/policy"
 	"github.com/jfrog/jfrog-cli-security/sca/bom"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo"
 	"github.com/jfrog/jfrog-cli-security/sca/bom/buildinfo/technologies"
@@ -35,6 +36,10 @@ type AuditParams struct {
 	bomGenerator                    bom.SbomGenerator
 	customBomGenBinaryPath          string
 	scaScanStrategy                 scan.SbomScanStrategy
+	uploadCdxResults                bool
+	rtResultRepository              string
+	remediationService              bool
+	violationGenerator              policy.PolicyHandler
 	// Diff mode, scan only the files affected by the diff.
 	diffMode         bool
 	filesToScan      []string
@@ -281,4 +286,40 @@ func (params *AuditParams) ShouldGetFlatTreeForApplicableScan(tech techutils.Tec
 		return false
 	}
 	return tech == techutils.Pip || (params.thirdPartyApplicabilityScan && tech == techutils.Npm)
+}
+
+func (params *AuditParams) SetViolationGenerator(violationGenerator policy.PolicyHandler) *AuditParams {
+	params.violationGenerator = violationGenerator
+	return params
+}
+
+func (params *AuditParams) ViolationGenerator() policy.PolicyHandler {
+	return params.violationGenerator
+}
+
+func (params *AuditParams) SetUploadCdxResults(uploadCdxResults bool) *AuditParams {
+	params.uploadCdxResults = uploadCdxResults
+	return params
+}
+
+func (params *AuditParams) UploadCdxResults() bool {
+	return params.uploadCdxResults
+}
+
+func (params *AuditParams) SetRtResultRepository(rtResultRepository string) *AuditParams {
+	params.rtResultRepository = rtResultRepository
+	return params
+}
+
+func (params *AuditParams) RtResultRepository() string {
+	return params.rtResultRepository
+}
+
+func (params *AuditParams) SetRemediationService(remediationService bool) *AuditParams {
+	params.remediationService = remediationService
+	return params
+}
+
+func (params *AuditParams) RemediationService() bool {
+	return params.remediationService
 }

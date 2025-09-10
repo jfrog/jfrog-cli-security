@@ -62,7 +62,7 @@ func (gaCmd *GitAuditCommand) Run() (err error) {
 			return errors.Join(err, auditResults.GetErrors())
 		}
 	}
-	return sourceAudit.ProcessResultsAndOutput(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
+	return sourceAudit.OutputResultsAndCmdError(auditResults, gaCmd.getResultWriter(auditResults), gaCmd.failBuild)
 }
 
 func DetectGitInfo(wd string) (gitInfo *services.XscGitInfoContext, err error) {
@@ -92,13 +92,14 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	auditParams.SetResultsContext(resultContext)
 	log.Debug(fmt.Sprintf("Results context: %+v", resultContext))
 	// Source control params
-	auditParams.SetGitContext(&params.gitContext)
+	auditParams.SetGitContext(&params.gitContext).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
 	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
+	auditParams.SetUploadCdxResults(params.uploadResults).SetRtResultRepository(params.rtResultRepository)
 	// Cmd information
-	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
+	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetViolationGenerator(params.violationGenerator).SetRemediationService(params.remediationService)
 	// Basic params
 	isRecursiveScan := true
 	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/CycloneDX/cyclonedx-go"
 	ioUtils "github.com/jfrog/jfrog-client-go/utils/io"
 	"github.com/jfrog/jfrog-client-go/utils/io/fileutils"
 	"github.com/jfrog/jfrog-client-go/utils/log"
@@ -19,8 +20,11 @@ type UploadCycloneDxCommand struct {
 	serverDetails *config.ServerDetails
 	progress      ioUtils.ProgressMgr
 
-	fileToUpload          string
 	scanResultsRepository string
+
+	fileToUpload    string
+	contentToUpload *cyclonedx.BOM
+	filePrefix      string
 
 	projectKey string
 }
@@ -31,6 +35,16 @@ func NewUploadCycloneDxCommand() *UploadCycloneDxCommand {
 
 func (ucc *UploadCycloneDxCommand) CommandName() string {
 	return "upload-cdx"
+}
+
+func (ucc *UploadCycloneDxCommand) SetContentToUpload(bom *cyclonedx.BOM) *UploadCycloneDxCommand {
+	ucc.contentToUpload = bom
+	return ucc
+}
+
+func (ucc *UploadCycloneDxCommand) SetFilePrefix(filePrefix string) *UploadCycloneDxCommand {
+	ucc.filePrefix = filePrefix
+	return ucc
 }
 
 func (ucc *UploadCycloneDxCommand) SetFileToUpload(filePath string) *UploadCycloneDxCommand {
@@ -62,20 +76,43 @@ func (ucc *UploadCycloneDxCommand) ServerDetails() (*config.ServerDetails, error
 }
 
 func (ucc *UploadCycloneDxCommand) Run() (err error) {
-	// Validate the file is cdx
-	if err = validateInputFile(ucc.fileToUpload); err != nil {
-		return
-	}
 	// Upload the CycloneDx file to the JFrog repository
-	if err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+	if _, err = ucc.Upload(); err != nil {
 		return fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
 	}
+	// TODO: Wait for SCA to finish uploading
 	// Report the URL for the scan results
 	scanResultsUrl, err := generateURLFromPath(ucc.serverDetails.GetUrl(), ucc.scanResultsRepository, ucc.fileToUpload)
 	if err != nil {
 		return fmt.Errorf("failed to generate scan results URL: %w", err)
 	}
 	log.Output(fmt.Sprintf("Your CycloneDx file was successfully uploaded. You may view the file content in the JFrog platform, under Xray -> Scans List -> Repositories :\n%s", scanResultsUrl))
+	return
+}
+
+func (ucc *UploadCycloneDxCommand) Upload() (artifactPath string, err error) {
+	// If content to upload is provided, create a temp file and write the content to it
+	if ucc.contentToUpload != nil {
+		tempDir, err := fileutils.CreateTempDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to create temp dir: %w", err)
+		}
+		if ucc.fileToUpload, err = utils.DumpCdxContentToFile(ucc.contentToUpload, tempDir, ucc.filePrefix, 0); err != nil {
+			return "", fmt.Errorf("failed to save CycloneDx content to file: %w", err)
+		}
+		log.Debug(fmt.Sprintf("Created temp CycloneDx file: %s", ucc.fileToUpload))
+	}
+	if ucc.fileToUpload == "" {
+		return "", fmt.Errorf("no CycloneDx file or content to upload was provided")
+	}
+	// Validate the file is cdx
+	if err = validateInputFile(ucc.fileToUpload); err != nil {
+		return
+	}
+	// Upload the CycloneDx file to the JFrog repository
+	if artifactPath, err = createRepositoryIfNeededAndUploadFile(ucc.fileToUpload, ucc.serverDetails, ucc.scanResultsRepository, ucc.projectKey); err != nil {
+		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", ucc.fileToUpload, ucc.scanResultsRepository, err)
+	}
 	return
 }
 
@@ -103,24 +140,34 @@ func validateInputFile(cdxFilePath string) (err error) {
 	return
 }
 
-func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (err error) {
+func createRepositoryIfNeededAndUploadFile(filePath string, serverDetails *config.ServerDetails, scanResultsRepository, relatedProjectKey string) (artifactPath string, err error) {
 	// scanResultsRepository may be the repository name and after the slash the path in the repository, we want to extract the repository name
 	repoName := strings.Split(scanResultsRepository, "/")[0]
 	if repoName == "" {
-		return fmt.Errorf("invalid repository name: %s", scanResultsRepository)
+		return "", fmt.Errorf("invalid repository name: %s", scanResultsRepository)
 	}
 	repoExists, err := artifactory.IsRepoExists(repoName, serverDetails)
 	if err != nil {
-		return fmt.Errorf("failed to check if repository %s exists: %s", repoName, err.Error())
+		return "", fmt.Errorf("failed to check if repository %s exists: %s", repoName, err.Error())
 	}
 	// If the repository doesn't exist, create it
 	if !repoExists {
 		if err = artifactory.CreateGenericLocalRepository(repoName, serverDetails, true, relatedProjectKey); err != nil {
-			return fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
+			return "", fmt.Errorf("failed to create generic local (indexed by Xray) repository %s: %s", repoName, err.Error())
 		}
 	}
 	log.Debug(fmt.Sprintf("Uploading scan results to %s", scanResultsRepository))
-	return artifactory.UploadArtifactsByPattern(filePath, serverDetails, scanResultsRepository, relatedProjectKey)
+	// target repo is <repository name>/<repository path>, If the target path ends with a slash, the path is assumed to be a folder.
+	// Else it is assumed to be a file. so we add a slash to the end of the repo to indicate that it is a folder.
+	uploaded, err := artifactory.UploadArtifactsByPattern(filePath, serverDetails, artifactory.AddSuffixSlashIfNeeded(scanResultsRepository), relatedProjectKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file %s to repository %s: %w", filePath, scanResultsRepository, err)
+	}
+	if len(uploaded) == 0 {
+		return "", fmt.Errorf("no files were uploaded to repository %s", scanResultsRepository)
+	}
+	artifactPath = uploaded[0]
+	return
 }
 
 func generateURLFromPath(baseUrl, repoPath, filePath string) (string, error) {
