@@ -201,6 +201,7 @@ func (auditCmd *AuditCommand) Run() (err error) {
 			auditCmd.IncludeLicenses,
 			auditCmd.IncludeSbom,
 		)).
+		SetGitContext(auditCmd.GitContext()).
 		SetThirdPartyApplicabilityScan(auditCmd.thirdPartyApplicabilityScan).
 		SetThreads(auditCmd.Threads).
 		SetScansResultsOutputDir(auditCmd.scanResultsOutputDir).SetStartTime(startTime).SetMultiScanId(multiScanId)
@@ -340,6 +341,7 @@ func initAuditCmdResults(params *AuditParams) (cmdResults *results.SecurityComma
 	cmdResults.SetMultiScanId(params.GetMultiScanId())
 	cmdResults.SetStartTime(params.StartTime())
 	cmdResults.SetResultsContext(params.resultsContext)
+	cmdResults.SetGitContext(params.GitContext())
 	serverDetails, err := params.ServerDetails()
 	if err != nil {
 		return cmdResults.AddGeneralError(err, false)
