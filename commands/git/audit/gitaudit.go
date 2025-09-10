@@ -11,6 +11,7 @@ import (
 	"github.com/jfrog/jfrog-client-go/xsc/services"
 
 	sourceAudit "github.com/jfrog/jfrog-cli-security/commands/audit"
+	"github.com/jfrog/jfrog-cli-security/sca/bom/xrayplugin"
 	"github.com/jfrog/jfrog-cli-security/utils"
 	"github.com/jfrog/jfrog-cli-security/utils/results"
 	"github.com/jfrog/jfrog-cli-security/utils/results/output"
@@ -93,11 +94,16 @@ func toAuditParams(params GitAuditParams) *sourceAudit.AuditParams {
 	// Scan params
 	auditParams.SetThreads(params.threads).SetWorkingDirs([]string{params.repositoryLocalPath}).SetExclusions(params.exclusions).SetScansToPerform(params.scansToPerform)
 	// Output params
-	auditParams.SetOutputFormat(params.outputFormat)
+	auditParams.SetScansResultsOutputDir(params.outputDir).SetOutputFormat(params.outputFormat)
 	// Cmd information
 	auditParams.SetBomGenerator(params.bomGenerator).SetScaScanStrategy(params.scaScanStrategy).SetMultiScanId(params.multiScanId).SetStartTime(params.startTime)
 	// Basic params
-	auditParams.SetUseJas(true).SetIsRecursiveScan(true)
+	isRecursiveScan := true
+	if _, ok := params.bomGenerator.(*xrayplugin.XrayLibBomGenerator); ok {
+		// 'Xray lib' BOM generator supports only one working directory, no recursive scan (single target)
+		isRecursiveScan = false
+	}
+	auditParams.SetUseJas(true).SetIsRecursiveScan(isRecursiveScan)
 	return auditParams
 }
 
@@ -128,6 +134,7 @@ func (gaCmd *GitAuditCommand) getResultWriter(cmdResults *results.SecurityComman
 	}
 	return output.NewResultsWriter(cmdResults).
 		SetOutputFormat(gaCmd.outputFormat).
+		SetOutputDir(gaCmd.outputDir).
 		SetPrintExtendedTable(gaCmd.extendedTable).
 		SetExtraMessages(messages).
 		SetSubScansPerformed(gaCmd.scansToPerform)
