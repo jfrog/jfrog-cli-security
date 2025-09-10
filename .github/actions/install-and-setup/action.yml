@@ -10,18 +10,16 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Install dependencies
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
         go-version: 1.24.x
-    # - name: Setup Go with cache
-    #   uses: jfrog/.github/actions/install-go-with-cache@main
 
     - name: install ruby
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: 3.3.0
+
     - name: Install cocoapods
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
       run: gem install cocoapods
@@ -30,6 +28,7 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: "16"
+
     - name: Setup Pnpm
       uses: pnpm/action-setup@v3
       with:
@@ -40,6 +39,7 @@ runs:
       with:
         java-version: "11"
         distribution: "adopt"
+
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
       with:
@@ -49,17 +49,40 @@ runs:
       uses: nuget/setup-nuget@v2
       with:
         nuget-version: 6.11.0
+
     - name: Install dotnet
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '6.x'
 
-    - name: Install Mono on MacOS
-      run: brew install mono
+    - name: Install Mono on macOS (v2024-01-04-DEBUG)
       if: runner.os == 'macOS'
-      shell: 'bash'
+      run: |
+        echo "🚀 STARTING MONO INSTALL WITH DEBUG - VERSION 2024-01-04"
+        brew install mono
+        echo "🔍 DEBUG: Comprehensive MSBuild hunt after Mono install..."
+        echo "Checking common locations:"
+        ls -la /opt/homebrew/bin/msbuild* 2>/dev/null || echo "❌ No msbuild in /opt/homebrew/bin/"
+        ls -la /usr/local/bin/msbuild* 2>/dev/null || echo "❌ No msbuild in /usr/local/bin/"
+        ls -la /Library/Frameworks/Mono.framework/Versions/Current/Commands/msbuild* 2>/dev/null || echo "❌ No msbuild in Mono.framework"
+        
+        echo "🕵️ DEBUG: Searching for ANY msbuild on the system..."
+        find /opt/homebrew -name "*msbuild*" 2>/dev/null | head -10 || echo "No msbuild found in /opt/homebrew"
+        find /Library/Frameworks/Mono.framework -name "*msbuild*" 2>/dev/null | head -10 || echo "No msbuild found in Mono.framework"
+        
+        echo "🛤️ DEBUG: Checking what's in PATH that could be msbuild..."
+        which msbuild 2>/dev/null || echo "❌ No msbuild found in PATH"
+        
+        echo "📦 DEBUG: Moving any found msbuild to backup..."
+        sudo mv /opt/homebrew/bin/msbuild /opt/homebrew/bin/msbuild.mono.bak 2>/dev/null || echo "No msbuild to move in /opt/homebrew/bin/"
+        
+        echo "🛤️ DEBUG: Setting PATH to prioritize dotnet..."
+        echo "PATH=/usr/local/share/dotnet:$PATH" >> $GITHUB_ENV
+        echo "✅ DEBUG: PATH updated to prioritize dotnet tools!"
+      shell: bash
 
     - name: Install Mono on Linux
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y apt-transport-https dirmngr gnupg ca-certificates
@@ -67,38 +90,34 @@ runs:
         echo "deb https://download.mono-project.com/repo/ubuntu stable-focal main" | sudo tee /etc/apt/sources.list.d/mono-official-stable.list
         sudo apt-get update
         sudo apt-get install -y mono-complete
-
-      if: runner.os == 'Linux'
-      shell: 'bash'
+      shell: bash
 
     - name: Setup Python3
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
+
     - name: Setup Pipenv
       run: python -m pip install pipenv
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+
     - name: Setup Poetry
       run: python -m pip install poetry
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
+
     - name: Setup Conan
       run: |
         python -m pip install conan
         conan profile detect
       shell: ${{ runner.os == 'Windows' && 'powershell' || 'bash' }}
 
-    - name: Install Swift on Linux
-      uses: swift-actions/setup-swift@v2
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Linux'}}
-
-    - name: Install Swift on MacOS
-      run: brew install swift
-      shell: ${{ runner.os == 'macOS' && 'sh' || 'bash' || 'pwsh' }}
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'macOS'}}
+    - name: Install Swift on Linux and macOS
+      uses: SwiftyLab/setup-swift@latest
+      if: ${{ inputs.install-swift == 'true' && (runner.os == 'Linux' || runner.os == 'macOS') }}
 
     - name: Install Swift on Windows
       uses: compnerd/gha-setup-swift@v0.3.0
       with:
         branch: swift-6.1-release
         tag: 6.1-RELEASE
-      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows'}}
+      if: ${{ inputs.install-swift == 'true' && runner.os == 'Windows' }}
